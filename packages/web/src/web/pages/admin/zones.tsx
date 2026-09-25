@@ -103,10 +103,21 @@ export default function AdminZones() {
     [zonesQ.data],
   );
 
-  // init map (runs once after settings resolve so we can use companyCenter)
+  // init map (runs once after settings AND zones resolve, since the map div
+  // itself is gated behind `loadingMap = zonesQ.isLoading || settingsQ.isLoading`
+  // below — it doesn't exist in the DOM until both finish). This effect used to
+  // depend on settingsQ.isLoading alone: when settingsQ resolved before zonesQ,
+  // this ran while the div was still hidden behind the loading state, found
+  // elRef.current null, and bailed WITHOUT setting mapInitRef — and because the
+  // dependency array never changed again afterwards, the effect never re-ran
+  // once the div actually mounted. The map silently never initialized: no
+  // Leaflet container, no tiles, no zoom controls, nothing. Depending on both
+  // flags (matching the render gate exactly) makes the effect retry every time
+  // either query's loading state flips, so it always catches the div once it
+  // exists.
   const mapInitRef = useRef(false);
   useEffect(() => {
-    if (!elRef.current || mapInitRef.current || settingsQ.isLoading) return;
+    if (!elRef.current || mapInitRef.current || settingsQ.isLoading || zonesQ.isLoading) return;
     mapInitRef.current = true;
 
     const el = elRef.current as HTMLDivElement & { _leaflet_id?: number };
@@ -199,7 +210,7 @@ export default function AdminZones() {
       mapInitRef.current = false;
       setMapReady(false);
     };
-  }, [settingsQ.isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [settingsQ.isLoading, zonesQ.isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // render saved zones
   useEffect(() => {
