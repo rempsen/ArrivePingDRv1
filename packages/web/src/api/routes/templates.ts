@@ -77,9 +77,20 @@ export const templatesRoutes = new Hono<AppEnv>()
     return c.json({ template: t }, 200);
   })
   .delete("/:id", requireAuth, async (c) => {
-    await tx(c).delete(
-      schema.taskTemplates,
-      eq(schema.taskTemplates.id, c.req.param("id")),
+    const id = c.req.param("id");
+    // bookings.templateId -> task_templates.id has no ON DELETE action, so a
+    // template still referenced by a work order fails the delete with a raw
+    // FK-constraint 500 ("Server error — nothing was saved") even though the
+    // UI's own confirm copy promises "work orders already using it are
+    // unaffected." Detach existing bookings from the template first so that
+    // promise is actually true — the work order keeps its own snapshot of
+    // fields/checklist/price, it just stops pointing at a template that no
+    // longer exists.
+    await tx(c).update(
+      schema.bookings,
+      { templateId: null },
+      eq(schema.bookings.templateId, id),
     );
+    await tx(c).delete(schema.taskTemplates, eq(schema.taskTemplates.id, id));
     return c.json({ ok: true }, 200);
   });

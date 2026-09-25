@@ -34,6 +34,7 @@ import { PRIORITY_META } from "../lib/utils";
 import { ChargesEditor, chargesSummary, type Charge } from "./charges-editor";
 import { CatalogLineItems } from "./catalog-line-items";
 import { UnitLineItems } from "./unit-line-items";
+import { ClientCombobox } from "./client-combobox";
 import {
   EMPTY_RATE_MODEL,
   parseRateModel,
@@ -919,12 +920,7 @@ export function WorkOrderModal({
 
         {/* ── Core fields ── */}
         <Field label={customerNoun}>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inputCls}>
-            <option value="">Select client…</option>
-            {clients.map((c: any) => (
-              <option key={c.id} value={c.id}>{c.name} — {c.email}</option>
-            ))}
-          </select>
+          <ClientCombobox clients={clients} value={customerId} onChange={setCustomerId} noun={customerNoun} />
         </Field>
 
         <Field label="Service">
