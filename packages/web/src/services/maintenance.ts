@@ -140,7 +140,7 @@ registerTaskHandler(KIND, async (task) => {
     .select()
     .from(schema.companySettings)
     .where(eq(schema.companySettings.companyId, plan.companyId));
-  const company = cs?.name || "NVC360";
+  const company = cs?.name || "ArrivePing";
 
   // Customer text — with the property hub link so they can see the history
   // behind the recommendation instead of taking our word for it.

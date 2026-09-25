@@ -130,7 +130,7 @@ registerTaskHandler(KIND, async (task) => {
   const to = b.customerPhone || "";
   if (!to) return;
 
-  const company = cs?.name || "NVC360";
+  const company = cs?.name || "ArrivePing";
   const body =
     `${company}: thanks again for choosing us! How did we do? ` +
     `Rate your visit in 10 seconds: ${trackingUrl(b.publicToken)}`;

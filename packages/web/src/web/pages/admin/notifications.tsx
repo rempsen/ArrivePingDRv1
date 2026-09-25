@@ -750,7 +750,7 @@ function EmailBrandCard({ f, set }: { f: any; set: (k: string, v: any) => void }
           background: headerStyle === "gradient" ? `linear-gradient(135deg, ${color}, ${color}cc)` : headerStyle === "solid" ? color : "#ffffff",
           borderBottom: headerStyle === "minimal" ? "1px solid #e2e8f0" : "none",
         }}>
-          {logo ? <img src={logo} alt="" className="mx-auto max-h-9" /> : <span className="text-lg font-extrabold" style={{ color: headerStyle === "minimal" ? "#0f172a" : "#fff" }}>{f.emailFromName || "NVC 360"}</span>}
+          {logo ? <img src={logo} alt="" className="mx-auto max-h-9" /> : <span className="text-lg font-extrabold" style={{ color: headerStyle === "minimal" ? "#0f172a" : "#fff" }}>{f.emailFromName || "ArrivePing by NVC360"}</span>}
         </div>
       </div>
     </div>
@@ -824,10 +824,10 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
   const sendTest = useMutation({
     mutationFn: async () => {
       const design = [
-        { id: "h", type: "heading", text: "Test email from your NVC 360 sender" },
+        { id: "h", type: "heading", text: "Test email from your ArrivePing sender" },
         { id: "p", type: "text", text: `If you can read this, your "From" identity (${fromLine}) is delivering correctly.` },
       ];
-      const res = await api["notif-config"].email.test.$post({ json: { to: testTo, subject: "NVC 360 sender test", design } });
+      const res = await api["notif-config"].email.test.$post({ json: { to: testTo, subject: "ArrivePing sender test", design } });
       return res.json() as any;
     },
     onSuccess: (r: any) => {
@@ -843,10 +843,10 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-300"><Mail className="h-4 w-4" /> Email sender</h3>
       <p className="mb-3 text-xs text-slate-500">Controls the From name, address and Reply-to on every outgoing email for this company.</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="From name"><input aria-label="NVC360" className={inputCls} value={f.emailFromName ?? ""} onChange={(e) => set("emailFromName", e.target.value)} placeholder="NVC360" /></Field>
+        <Field label="From name"><input aria-label="ArrivePing by NVC360" className={inputCls} value={f.emailFromName ?? ""} onChange={(e) => set("emailFromName", e.target.value)} placeholder="ArrivePing by NVC360" /></Field>
         <Field label="From address"><input aria-label="contact@nvc360.com" className={inputCls} value={f.emailFromAddress ?? ""} onChange={(e) => set("emailFromAddress", e.target.value)} placeholder="contact@nvc360.com" /></Field>
         <Field label="Reply-to"><input aria-label="contact@nvc360.com" className={inputCls} value={f.emailReplyTo ?? ""} onChange={(e) => set("emailReplyTo", e.target.value)} placeholder="contact@nvc360.com" /></Field>
-        <Field label="Footer line"><input aria-label="NVC 360 · 423 Main St, Winnipeg" className={inputCls} value={f.emailFooter ?? ""} onChange={(e) => set("emailFooter", e.target.value)} placeholder="NVC 360 · 423 Main St, Winnipeg" /></Field>
+        <Field label="Footer line"><input aria-label="ArrivePing by NVC360 · 423 Main St, Winnipeg" className={inputCls} value={f.emailFooter ?? ""} onChange={(e) => set("emailFooter", e.target.value)} placeholder="ArrivePing by NVC360 · 423 Main St, Winnipeg" /></Field>
       </div>
 
       {/* live From: preview */}
@@ -1102,7 +1102,7 @@ function Channels() {
         <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-300"><MessageSquare className="h-4 w-4" /> SMS sender</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="From number"><input aria-label="+1 204 555 0100" className={inputCls} value={f.smsFromNumber} onChange={(e) => set("smsFromNumber", e.target.value)} placeholder="+1 204 555 0100" /></Field>
-          <Field label="Sender ID (alphanumeric, where supported)"><input aria-label="NVC360" className={inputCls} value={f.smsSenderId} onChange={(e) => set("smsSenderId", e.target.value)} placeholder="NVC360" /></Field>
+          <Field label="Sender ID (alphanumeric, where supported)"><input aria-label="ArrivePing" className={inputCls} value={f.smsSenderId} onChange={(e) => set("smsSenderId", e.target.value)} placeholder="ArrivePing" /></Field>
         </div>
       </div>
 

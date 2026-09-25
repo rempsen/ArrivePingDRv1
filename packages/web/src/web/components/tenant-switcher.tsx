@@ -73,7 +73,7 @@ export function TenantSwitcher() {
   const list = isSuper
     ? companies.some((c) => c.id === "default")
       ? companies
-      : [{ id: "default", name: "NVC 360 (Home)" }, ...companies]
+      : [{ id: "default", name: "ArrivePing (Home)" }, ...companies]
     : companies;
   const current = list.find((c) => c.id === active);
 

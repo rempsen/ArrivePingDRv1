@@ -73,7 +73,7 @@ export default function Index() {
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-16 pb-24 md:grid-cols-2 md:py-24 md:pb-32">
           <div>
             <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
-              <Radio className="h-3.5 w-3.5" /> NVC360 4.0 — Launching 2026
+              <Radio className="h-3.5 w-3.5" /> ArrivePing 4.0 — Launching 2026
             </span>
             <h1 className="animate-fade-up delay-1 mt-5 font-display text-5xl font-black leading-[1.04] text-white md:text-6xl">
               Make your clients{" "}
@@ -83,7 +83,7 @@ export default function Index() {
             </h1>
             <p className="animate-fade-up delay-2 mt-5 max-w-md text-lg text-slate-400">
               Live tech tracking. Automatic ETAs. Zero "where is my tech?" calls.
-              NVC360 turns every service call into a 5-star experience — and cuts
+              ArrivePing turns every service call into a 5-star experience — and cuts
               20% off your field labor while it's at it.
             </p>
             <div className="animate-fade-up delay-3 mt-8 flex flex-wrap gap-3">
@@ -119,7 +119,7 @@ export default function Index() {
             <div className="relative overflow-hidden rounded-[28px] border border-white/10 shadow-2xl shadow-black/40">
               <img
                 src="/img/nvc-doorstep.jpg"
-                alt="Technician greeting a happy customer at their door with the NVC360 app"
+                alt="Technician greeting a happy customer at their door with the ArrivePing app"
                 className="h-[360px] w-full object-cover md:h-[440px]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/30 to-transparent" />
@@ -128,7 +128,7 @@ export default function Index() {
               <div className="rounded-[20px] bg-ink-2/95 p-4">
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
                   <span className="text-xs font-bold tracking-wider text-slate-400">
-                    NVC360 DISPATCH — LIVE
+                    ARRIVEPING DISPATCH — LIVE
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-live/15 px-2 py-0.5 text-[11px] font-bold text-emerald-live">
                     <span className="relative h-1.5 w-1.5"><span className="live-ping absolute inset-0 rounded-full" /><span className="absolute inset-0 rounded-full bg-emerald-live" /></span>
@@ -191,7 +191,7 @@ export default function Index() {
           </p>
           <img
             src="/img/nvc-devices.png"
-            alt="NVC360 running across desktop dispatch, technician mobile, and client tracking views"
+            alt="ArrivePing running across desktop dispatch, technician mobile, and client tracking views"
             className="mx-auto mt-10 w-full max-w-5xl drop-shadow-[0_30px_60px_rgba(0,0,0,0.5)]"
           />
         </div>
@@ -240,7 +240,7 @@ export default function Index() {
               <div className="overflow-hidden rounded-[28px] border border-white/10 shadow-2xl shadow-black/40">
                 <img
                   src="/img/nvc-app-hand.jpg"
-                  alt="Customer following their job live in the NVC360 app from home"
+                  alt="Customer following their job live in the ArrivePing app from home"
                   className="h-[320px] w-full object-cover md:h-[400px]"
                 />
               </div>
@@ -279,7 +279,7 @@ export default function Index() {
       <section id="industries" className="mx-auto max-w-6xl px-5 py-20">
         <div className="mb-12 text-center">
           <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">Industries</span>
-          <h2 className="mt-2 font-display text-4xl font-black text-white">If you run a mobile workforce, NVC360 works for you</h2>
+          <h2 className="mt-2 font-display text-4xl font-black text-white">If you run a mobile workforce, ArrivePing works for you</h2>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
@@ -456,7 +456,7 @@ export default function Index() {
             </p>
           </div>
           <div className="relative hidden h-full min-h-[360px] md:block">
-            <img src="/img/nvc-exec.jpg" alt="Business owner checking live operations on NVC360" className="absolute inset-0 h-full w-full object-cover object-top" />
+            <img src="/img/nvc-exec.jpg" alt="Business owner checking live operations on ArrivePing" className="absolute inset-0 h-full w-full object-cover object-top" />
             <div className="absolute inset-0 bg-gradient-to-r from-ink-2 via-transparent to-transparent" />
           </div>
         </div>
@@ -465,7 +465,7 @@ export default function Index() {
       <footer className="border-t border-white/5 py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 md:flex-row">
           <Logo />
-          <p className="text-sm text-slate-500">© 2026 NVC360 · Winnipeg, MB · Field Service Management.</p>
+          <p className="text-sm text-slate-500">© 2026 ArrivePing by NVC360 · Winnipeg, MB · Field Service Management.</p>
         </div>
       </footer>
     </div>

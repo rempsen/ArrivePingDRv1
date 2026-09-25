@@ -3,7 +3,7 @@
  *
  * Given a connected `integrations` row (provider=google_drive), upload a file
  * into the tenant's Drive. We keep everything inside a single dedicated folder
- * ("NVC360 Backups") so exports are tidy and easy to find. Because we requested
+ * ("ArrivePing Backups") so exports are tidy and easy to find. Because we requested
  * the `drive.file` scope, the app can ONLY see/manage files IT created — it can
  * never read the user's other Drive content. Least-privilege by design.
  *
@@ -18,7 +18,7 @@ import { refreshTokens } from "./oauth";
 
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
-export const DEFAULT_BACKUP_FOLDER = "NVC360 Backups";
+export const DEFAULT_BACKUP_FOLDER = "ArrivePing Backups";
 
 type IntegrationRow = typeof schema.integrations.$inferSelect;
 
@@ -116,7 +116,7 @@ async function ensureFolder(
 }
 
 /**
- * Resolve a folder PATH (e.g. ["NVC360 Backups", "work-orders", "2026-06"]),
+ * Resolve a folder PATH (e.g. ["ArrivePing Backups", "work-orders", "2026-06"]),
  * creating each segment as needed. Returns the id of the deepest folder.
  */
 async function ensureFolderPath(
@@ -153,7 +153,7 @@ export async function uploadToDrive(
     name: string;
     mimeType: string;
     content: Buffer | string;
-    /** Folder segments under Drive root, e.g. ["NVC360 Backups","work-orders","2026-06"]. */
+    /** Folder segments under Drive root, e.g. ["ArrivePing Backups","work-orders","2026-06"]. */
     folderPath?: string[];
   },
 ): Promise<DriveUploadResult> {

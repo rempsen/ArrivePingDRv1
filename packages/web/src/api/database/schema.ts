@@ -633,7 +633,7 @@ export const reviews = sqliteTable("reviews", {
 export const companySettings = sqliteTable("company_settings", {
   id: text("id").primaryKey().default("default"),
   companyId: text("company_id").notNull().default("default"),
-  name: text("name").notNull().default("NVC 360"),
+  name: text("name").notNull().default("ArrivePing by NVC360"),
   legalName: text("legal_name").notNull().default(""),
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
@@ -912,7 +912,7 @@ export const notificationChannels = sqliteTable("notification_channels", {
   smsEnabled: integer("sms_enabled", { mode: "boolean" }).notNull().default(true),
   webhookEnabled: integer("webhook_enabled", { mode: "boolean" }).notNull().default(true),
   // email sender identity
-  emailFromName: text("email_from_name").notNull().default("NVC 360"),
+  emailFromName: text("email_from_name").notNull().default("ArrivePing by NVC360"),
   emailFromAddress: text("email_from_address").notNull().default(""),
   emailReplyTo: text("email_reply_to").notNull().default(""),
   emailFooter: text("email_footer").notNull().default(""),
@@ -1394,5 +1394,118 @@ export const tenantEmailDomains = sqliteTable(
   },
   (t) => ({
     companyIdx: index("ted_company_idx").on(t.companyId),
+  }),
+);
+
+/**
+ * "BMD Punch List" (Lovable) integration — generic across every hotel/property
+ * project run through the partner app, not hardcoded to one job.
+ *
+ * Mapping model (per Dan's call): ONE ArrivePing booking (Job) per hotel
+ * project, with each individual deficiency living as its own row here rather
+ * than flattened into `bookings.checklistState` — a deficiency carries far
+ * richer state (area/material/issue taxonomy, before/after photos, tech
+ * notes, sign-off) than a `{id,label,done}` checklist entry can hold, and this
+ * table is what both the push (assign) and pull (changes) sides of the sync
+ * read and write.
+ */
+
+/** One row per Lovable hotel project <-> one ArrivePing booking (Job). */
+export const punchlistProjects = sqliteTable(
+  "punchlist_projects",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull().default("default"),
+    // Lovable's own id/slug for the hotel project ("Hyatt Centric 325 Broadway").
+    externalId: text("external_id").notNull(),
+    name: text("name").notNull().default(""),
+    address: text("address").notNull().default(""),
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    customerId: text("customer_id").references(() => user.id),
+    createdAt: now(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+  },
+  (t) => ({
+    companyIdx: index("plproj_company_idx").on(t.companyId),
+    extUnique: uniqueIndex("plproj_ext_unique").on(t.companyId, t.externalId),
+  }),
+);
+
+/** One row per Lovable trade/subcontractor <-> one auto-provisioned rider (Technician). */
+export const punchlistTrades = sqliteTable(
+  "punchlist_trades",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull().default("default"),
+    // Lovable's subcontractor id if it has one, else a slug of the trade name —
+    // this is the idempotency key so "Remco Tiling" always resolves to the
+    // same technician instead of a new one per assignment.
+    externalTradeKey: text("external_trade_key").notNull(),
+    tradeName: text("trade_name").notNull().default(""),
+    riderId: text("rider_id")
+      .notNull()
+      .references(() => riders.id, { onDelete: "cascade" }),
+    contactEmail: text("contact_email").notNull().default(""),
+    contactPhone: text("contact_phone").notNull().default(""),
+    createdAt: now(),
+  },
+  (t) => ({
+    companyIdx: index("pltrade_company_idx").on(t.companyId),
+    keyUnique: uniqueIndex("pltrade_key_unique").on(t.companyId, t.externalTradeKey),
+  }),
+);
+
+/** A single deficiency (punch list line item) inside a hotel project's Job. */
+export const deficiencies = sqliteTable(
+  "deficiencies",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull().default("default"),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => punchlistProjects.id, { onDelete: "cascade" }),
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    // Lovable's own deficiency id — the idempotency key for the assign push.
+    externalId: text("external_id").notNull(),
+    floor: text("floor").notNull().default(""),
+    location: text("location").notNull().default(""), // room number etc.
+    area: text("area").notNull().default(""), // Entry/vestibule, Main room, Bathroom, ...
+    material: text("material").notNull().default(""), // Vinyl plank, Floor tile, Grout & caulk, ...
+    issueType: text("issue_type").notNull().default(""), // Lippage, Chipped/cracked, ...
+    assessment: text("assessment").notNull().default(""), // must_fix | needs_review | acceptable
+    description: text("description").notNull().default(""),
+    tradeName: text("trade_name").notNull().default(""), // raw "assign to" label from Lovable
+    riderId: text("rider_id").references(() => riders.id),
+    dueDate: integer("due_date", { mode: "timestamp_ms" }),
+    // open | in_progress | done — the ArrivePing-side working status this
+    // integration owns and reports back to Lovable.
+    status: text("status").notNull().default("open"),
+    photosBefore: text("photos_before").notNull().default("[]"), // JSON string[] — Lovable-hosted URLs from assignment
+    photosAfter: text("photos_after").notNull().default("[]"), // JSON string[] — captured in ArrivePing, synced back
+    technicianNotes: text("technician_notes").notNull().default(""),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    signOffName: text("sign_off_name").notNull().default(""),
+    signOffAt: integer("sign_off_at", { mode: "timestamp_ms" }),
+    // Lovable's own "last updated" timestamp for this deficiency, so a push
+    // never clobbers ArrivePing-side progress with a stale re-send.
+    sourceUpdatedAt: integer("source_updated_at", { mode: "timestamp_ms" }),
+    createdAt: now(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date()),
+  },
+  (t) => ({
+    companyIdx: index("defic_company_idx").on(t.companyId),
+    extUnique: uniqueIndex("defic_ext_unique").on(t.companyId, t.externalId),
+    bookingIdx: index("defic_booking_idx").on(t.bookingId),
+    // the poll query: everything this tenant changed since a cursor
+    pollIdx: index("defic_poll_idx").on(t.companyId, t.updatedAt),
   }),
 );

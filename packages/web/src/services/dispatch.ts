@@ -196,7 +196,7 @@ export const TEMPLATE_VARS: { key: keyof Vars; label: string }[] = [
 
 /** Sample values used for live preview in the template editor. */
 const SAMPLE_VARS: Vars = {
-  company: "NVC 360",
+  company: "ArrivePing by NVC360",
   service: "Furnace Tune-Up",
   jobName: "Furnace Tune-Up",
   jobNumber: "A1B2C3",
@@ -207,10 +207,10 @@ const SAMPLE_VARS: Vars = {
   eta: 12,
   price: "149.00",
   shortId: "A1B2C3",
-  trackUrl: "https://nvc360.app/t/abc123",
-  bookingUrl: "https://nvc360.app/t/abc123",
+  trackUrl: "https://arriveping.com/t/abc123",
+  bookingUrl: "https://arriveping.com/t/abc123",
   workerNoun: "Technician",
-  propertyUrl: "https://nvc360.app/p/abc123def456",
+  propertyUrl: "https://arriveping.com/p/abc123def456",
   delayMins: 20,
   newWhen: "2:50 PM",
 };
@@ -222,7 +222,7 @@ export function defaultTemplateFor(event: NvcEvent, recipient: Recipient): strin
 
 /** Render a template against sample data for preview. Empty => empty.
  *  `company` overrides SAMPLE_VARS.company so previews reflect the active
- *  tenant (e.g. "BMD Materials") instead of always showing "NVC 360". */
+ *  tenant (e.g. "BMD Materials") instead of always showing "ArrivePing by NVC360". */
 export function interpolateSample(tpl: string, company?: string): string {
   return interpolate(tpl, company ? { ...SAMPLE_VARS, company } : SAMPLE_VARS);
 }
@@ -245,8 +245,8 @@ export async function renderDesignPreview(companyId: string, blocks: EmailBlock[
   const cfg = await channelConfig(companyId);
   const companyName = cfg?.emailFromName || SAMPLE_VARS.company;
   // {{company}} inside block text/tokens must reflect the ACTIVE tenant, not the
-  // hardcoded sample — otherwise switching tenants (e.g. NVC360 -> BMD Materials)
-  // leaves stale copy like "reply to this email, NVC360" in another company's emails.
+  // hardcoded sample — otherwise switching tenants (e.g. ArrivePing -> BMD Materials)
+  // leaves stale copy like "reply to this email, ArrivePing" in another company's emails.
   const vars: Vars = { ...SAMPLE_VARS, company: companyName };
   const brand: EmailBrand = {
     company: companyName,
@@ -398,7 +398,7 @@ async function context(bookingId: string) {
     /* ignore */
   }
   const vars: Vars = {
-    company: co?.name || "NVC360",
+    company: co?.name || "ArrivePing by NVC360",
     service: svc?.name || b.title || "service",
     jobName: b.title || svc?.name || "service",
     jobNumber: b.id.slice(0, 6).toUpperCase(),
@@ -721,7 +721,7 @@ export async function provisionNotificationBranding(input: {
     .where(eq(schema.notificationChannels.companyId, input.companyId));
   const footer = buildEmailFooter(input);
   const values = {
-    emailFromName: input.name || "NVC 360",
+    emailFromName: input.name || "ArrivePing by NVC360",
     emailReplyTo: input.email?.trim() || "",
     emailFooter: footer,
     emailLogoUrl: input.logoUrl?.trim() || "",

@@ -138,6 +138,6 @@ export function enrouteSms(opts: {
   company?: string;
 }): string {
   const eta = opts.etaMins ? ` ETA ~${opts.etaMins} min.` : "";
-  const co = opts.company || "NVC360";
+  const co = opts.company || "ArrivePing";
   return `${co}: Your technician ${opts.techName} is on the way!${eta} Track live, see ETA & message them: ${trackingUrl(opts.token)}`;
 }

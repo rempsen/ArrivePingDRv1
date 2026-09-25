@@ -8,7 +8,7 @@ import { switchCompany } from "../lib/tenant";
 /**
  * "Company X wants to add you to their team."
  *
- * This page is ONLY for people who already have an NVC360 login — a technician
+ * This page is ONLY for people who already have an ArrivePing login — a technician
  * being added to a second company's roster. There is deliberately no password
  * field anywhere on it: they accept using the account they already have, which
  * is what stops the inviting company from gaining any control over their
@@ -146,7 +146,7 @@ export default function JoinCompany() {
 
             <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
               <p className="text-xs leading-relaxed text-slate-400">
-                You already have an NVC360 account
+                You already have an ArrivePing account
                 {invite?.email ? (
                   <>
                     {" "}

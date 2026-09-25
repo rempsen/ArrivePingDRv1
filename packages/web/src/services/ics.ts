@@ -5,7 +5,7 @@
  *  - "Add to Google / Outlook" web links
  */
 
-const PRODID = "-//NVC360//Dispatch//EN";
+const PRODID = "-//ArrivePing//Dispatch//EN";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -79,7 +79,7 @@ export function buildEvent(ev: CalEvent): string {
   lines.push(`STATUS:${ev.status ?? "CONFIRMED"}`);
   if (ev.organizer?.email) {
     lines.push(
-      `ORGANIZER;CN=${esc(ev.organizer.name ?? "NVC360")}:mailto:${ev.organizer.email}`,
+      `ORGANIZER;CN=${esc(ev.organizer.name ?? "ArrivePing")}:mailto:${ev.organizer.email}`,
     );
   }
   lines.push("SEQUENCE:0", "TRANSP:OPAQUE");
@@ -109,7 +109,7 @@ export function buildCalendar(events: CalEvent[], opts: CalendarOpts = {}): stri
     `PRODID:${PRODID}`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:${esc(opts.name ?? "NVC360 Schedule")}`,
+    `X-WR-CALNAME:${esc(opts.name ?? "ArrivePing Schedule")}`,
     `X-WR-TIMEZONE:UTC`,
     `REFRESH-INTERVAL;VALUE=DURATION:PT${refresh}M`,
     `X-PUBLISHED-TTL:PT${refresh}M`,

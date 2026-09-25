@@ -10,7 +10,7 @@ import { getIndustryPreset } from "../../services/industry-presets";
  * "Technician". Use `noun`/`nounPlural` for any user-facing label that refers
  * to the worker who goes out to the job.
  *
- * Cached for the session (settings rarely change); falls back to sane NVC360
+ * Cached for the session (settings rarely change); falls back to sane ArrivePing
  * defaults while loading or for unauthenticated views.
  */
 export interface TenantBrand {
@@ -46,7 +46,7 @@ const DEFAULTS: TenantBrand = {
   brandColor: "#06B6D4",
   accentColor: "#0e7490",
   logo: "",
-  name: "NVC 360",
+  name: "ArrivePing",
   tagline: "",
   industry: "",
   industryOther: "",

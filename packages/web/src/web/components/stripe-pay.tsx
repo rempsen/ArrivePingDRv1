@@ -208,7 +208,7 @@ function PayForm({
       <div className="mt-6 flex flex-col items-center gap-2 py-6">
         <CheckCircle2 className="h-12 w-12 text-green-500" />
         <p className="font-bold text-white">Payment received</p>
-        <p className="text-sm text-slate-500">Thank you from the NVC 360 team.</p>
+        <p className="text-sm text-slate-500">Thank you from the ArrivePing team.</p>
       </div>
     );
   }

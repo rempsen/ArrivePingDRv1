@@ -24,7 +24,7 @@ export default function JoinTech() {
 
   const data = lookup.data as any;
   const valid = data?.invite;
-  const company = data?.company || "NVC360";
+  const company = data?.company || "ArrivePing";
   const workerNoun = (data?.workerNoun as string) || "Technician";
 
   async function submit(e: React.FormEvent) {

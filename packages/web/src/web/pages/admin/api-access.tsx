@@ -136,7 +136,7 @@ export default function AdminApiAccess() {
     return JSON.stringify(
       {
         mcpServers: {
-          nvc360: {
+          arriveping: {
             type: "http",
             url: mcpUrl,
             headers: { Authorization: "Bearer nvc_YOUR_KEY_HERE" },
@@ -147,7 +147,7 @@ export default function AdminApiAccess() {
       2,
     );
   }, [mcpUrl]);
-  const claudeCli = `claude mcp add --transport http nvc360 ${mcpUrl} --header "Authorization: Bearer nvc_YOUR_KEY_HERE"`;
+  const claudeCli = `claude mcp add --transport http arriveping ${mcpUrl} --header "Authorization: Bearer nvc_YOUR_KEY_HERE"`;
 
   if (keysQ.isLoading || scopesQ.isLoading) return <FullLoader />;
   const keys = keysQ.data?.keys ?? [];
@@ -156,7 +156,7 @@ export default function AdminApiAccess() {
     <PageWrap>
       <PageHead
         title="API & MCP"
-        subtitle="Issue API keys and connect external agents (Claude Code, MCP clients) to NVC360."
+        subtitle="Issue API keys and connect external agents (Claude Code, MCP clients) to ArrivePing."
         actions={
           <BtnPrimary onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" /> New API key

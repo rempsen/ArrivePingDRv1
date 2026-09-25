@@ -14,6 +14,7 @@
 /** Hosts that are the actual product. Anything else public is "staging". */
 const PRODUCTION_HOSTS = [
   "uberize.ai",
+  "arriveping.com",
   "nvc360.com",
   "nvc360.app",
 ];

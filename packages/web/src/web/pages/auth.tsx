@@ -199,7 +199,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
           </form>
 
           <p className="mt-5 text-center text-sm text-slate-500">
-            {isSignUp ? "Already have an account? " : "New to NVC360? "}
+            {isSignUp ? "Already have an account? " : "New to ArrivePing? "}
             <Link
               to={isSignUp ? "/sign-in" : "/sign-up"}
               className="inline-flex min-h-[32px] items-center px-1 font-semibold text-cyan-glow hover:underline"

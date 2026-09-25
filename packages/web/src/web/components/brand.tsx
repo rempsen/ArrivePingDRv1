@@ -18,7 +18,7 @@ export function Logo({
       <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-deep shadow-lg shadow-brand/30">
         <img
           src="/nvc-logo-white.png"
-          alt="NVC360"
+          alt="ArrivePing"
           className="h-7 w-7 object-contain"
         />
       </span>
@@ -29,7 +29,7 @@ export function Logo({
             light ? "text-white" : "text-slate-900",
           )}
         >
-          NVC<span className="text-brand">360</span>
+          Arrive<span className="text-brand">Ping</span>
         </span>
       )}
     </Link>

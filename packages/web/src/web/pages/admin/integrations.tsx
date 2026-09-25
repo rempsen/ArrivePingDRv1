@@ -195,7 +195,7 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
   const [showFolder, setShowFolder] = useState(false);
 
   // Folder settings (root name + subfolder toggles)
-  const [folderName, setFolderName] = useState("NVC360 Backups");
+  const [folderName, setFolderName] = useState("ArrivePing Backups");
   const [byDataset, setByDataset] = useState(true);
   const [byMonth, setByMonth] = useState(true);
   const [savedMsg, setSavedMsg] = useState("");
@@ -207,7 +207,7 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
         const r = await fetch("/api/integrations/drive/settings", { headers: apiHeaders() });
         const j = await r.json();
         if (r.ok) {
-          setFolderName(j.folderName ?? "NVC360 Backups");
+          setFolderName(j.folderName ?? "ArrivePing Backups");
           setByDataset(j.subfolderByDataset !== false);
           setByMonth(j.subfolderByMonth !== false);
         }
@@ -233,7 +233,7 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
 
   // Live preview of where files will land
   const month = new Date().toISOString().slice(0, 7);
-  const previewPath = [folderName || "NVC360 Backups", byDataset ? dataset : null, byMonth ? month : null]
+  const previewPath = [folderName || "ArrivePing Backups", byDataset ? dataset : null, byMonth ? month : null]
     .filter(Boolean).join(" / ");
 
   const run = useMutation({
@@ -336,7 +336,7 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-semibold text-slate-400">Main folder name</span>
                   <input value={folderName} onChange={(e) => setFolderName(e.target.value)} maxLength={80}
-                    placeholder="NVC360 Backups" aria-label="Main folder name"
+                    placeholder="ArrivePing Backups" aria-label="Main folder name"
                     className="w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white" />
                 </label>
                 <label className="flex items-center gap-2 text-xs text-slate-300">

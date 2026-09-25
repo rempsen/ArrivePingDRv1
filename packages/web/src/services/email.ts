@@ -8,7 +8,7 @@ import { verifiedDomainsForCompany } from "./email-domains";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
-const FALLBACK_FROM = "NVC360 <onboarding@resend.dev>";
+const FALLBACK_FROM = "ArrivePing by NVC360 <onboarding@resend.dev>";
 const FROM = process.env.EMAIL_FROM || FALLBACK_FROM;
 
 export interface EmailAttachment {
@@ -103,7 +103,7 @@ export interface TenantEmailBrand {
   brandColor?: string; // header gradient + button color
 }
 
-const FALLBACK_BRAND: TenantEmailBrand = { company: "NVC360", logoUrl: "", brandColor: BRAND };
+const FALLBACK_BRAND: TenantEmailBrand = { company: "ArrivePing by NVC360", logoUrl: "", brandColor: BRAND };
 
 export function resolveLogo(url?: string): string {
   if (!url) return "";
@@ -153,7 +153,7 @@ export async function resolveFromAddress(companyId: string): Promise<SenderIdent
 /**
  * Resolve a tenant's email brand by companyId. Prefers the notification-channel
  * email identity (logo/color), falling back to the company_settings brand, then
- * to the NVC360 default. Safe to call with undefined — returns the default.
+ * to the ArrivePing default. Safe to call with undefined — returns the default.
  */
 export async function loadEmailBrand(companyId?: string): Promise<TenantEmailBrand> {
   if (!companyId) return FALLBACK_BRAND;
@@ -204,7 +204,7 @@ function shell(title: string, bodyHtml: string, cta?: { label: string; url: stri
   const logo = resolveLogo(brand.logoUrl);
 
   // Logo always sits above the name. With a logo: image + name underneath.
-  // Without a logo: name only (styled), preserving the NVC360 look as fallback.
+  // Without a logo: name only (styled), preserving the ArrivePing look as fallback.
   const header = logo
     ? `<div style="text-align:center;margin-bottom:20px">
         <img src="${logo}" alt="${esc(company)}" style="height:46px;max-width:240px;display:block;margin:0 auto 8px"/>
@@ -310,7 +310,7 @@ function addToCalendar(d: BookingEmailData, brand: TenantEmailBrand = FALLBACK_B
     dt.getUTCFullYear() + pad(dt.getUTCMonth() + 1) + pad(dt.getUTCDate()) +
     "T" + pad(dt.getUTCHours()) + pad(dt.getUTCMinutes()) + pad(dt.getUTCSeconds()) + "Z";
   const title = `${d.serviceName} appointment`;
-  const details = `${brand.company || "NVC360"} service appointment${d.riderName ? ` with ${d.riderName}` : ""}.`;
+  const details = `${brand.company || "ArrivePing by NVC360"} service appointment${d.riderName ? ` with ${d.riderName}` : ""}.`;
   const g = `https://calendar.google.com/calendar/render?` + new URLSearchParams({
     action: "TEMPLATE", text: title, dates: `${z(start)}/${z(end)}`, details, location: d.address,
   }).toString();
@@ -332,7 +332,7 @@ function addToCalendar(d: BookingEmailData, brand: TenantEmailBrand = FALLBACK_B
  * (company name + logo from Grab Brand Assets + brand color). The brand is
  * applied uniformly via shell(), so the tenant's logo always appears at the top
  * of the email, just above their name. When no brand is passed it falls back to
- * the NVC360 default — but callers should always pass one (see loadEmailBrand).
+ * the ArrivePing default — but callers should always pass one (see loadEmailBrand).
  */
 export const emailTemplates = {
   passwordReset(d: { name?: string; url: string }, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
@@ -381,7 +381,7 @@ export const emailTemplates = {
     };
   },
   jobCompleted(d: BookingEmailData, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
-    const co = brand.company || "NVC360";
+    const co = brand.company || "ArrivePing by NVC360";
     const body = `<p>Hi ${d.customerName}, your ${d.serviceName} appointment is <b style="color:#16a34a">complete</b>. Thank you for choosing ${esc(co)}!</p>
       <p style="margin-top:12px">We'd love your feedback — rate your experience in the app.</p>`;
     return {
@@ -403,7 +403,7 @@ export const emailTemplates = {
     };
   },
   receipt(d: BookingEmailData, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
-    const co = brand.company || "NVC360";
+    const co = brand.company || "ArrivePing by NVC360";
     const body = `<p>Hi ${d.customerName}, here's your receipt for ${d.serviceName}.</p>
       <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:14px">
         ${detailRow("Invoice", d.invoiceNumber || "")}
