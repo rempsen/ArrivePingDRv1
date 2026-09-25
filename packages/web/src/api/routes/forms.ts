@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { requireAdmin, tx } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { putObject } from "../lib/storage";
+import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; name?: string };
@@ -135,8 +136,7 @@ export const formsRoutes = new Hono<AppEnv>()
   .get("/", requireAdmin, async (c) => {
     const rows = await tx(c).select(schema.intakeForms);
     rows.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-    const base =
-      process.env.APP_URL?.replace(/\/$/, "") || new URL(c.req.url).origin.replace(/\/$/, "");
+    const base = publicOrigin(c);
     return c.json({ forms: rows.map(mask), publicBase: base }, 200);
   })
 

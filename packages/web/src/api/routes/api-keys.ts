@@ -6,6 +6,7 @@ import { generateApiKey, generatePublicKey } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { z } from "zod";
 import { jsonBody, shortText } from "../lib/validate";
+import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
 
 /**
@@ -74,9 +75,7 @@ export const apiKeysRoutes = new Hono<AppEnv>()
 
   // MCP connection info for the UI (URL + Claude Code config snippet)
   .get("/mcp-info", requireAdmin, (c) => {
-    const base =
-      process.env.APP_URL?.replace(/\/$/, "") ||
-      new URL(c.req.url).origin.replace(/\/$/, "");
+    const base = publicOrigin(c);
     return c.json(
       {
         mcpUrl: `${base}/api/mcp`,
