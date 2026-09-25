@@ -13,25 +13,26 @@ export function Logo({
   light?: boolean;
   showText?: boolean;
 }) {
-  return (
-    <Link to={to} className={cn("inline-flex items-center gap-2.5 py-1 lg:py-0", className)}>
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-deep shadow-lg shadow-brand/30">
+  // Official ArrivePing wordmark lockups (transparent, pick by surface —
+  // never rebuild the mark as a separate icon + styled text).
+  if (!showText) {
+    return (
+      <Link to={to} className={cn("inline-flex items-center py-1 lg:py-0", className)}>
         <img
-          src="/nvc-logo-white.png"
+          src={light ? "/arriveping-icon-light.png" : "/arriveping-icon-dark.png"}
           alt="ArrivePing"
-          className="h-7 w-7 object-contain"
+          className="h-9 w-9 rounded-xl object-contain"
         />
-      </span>
-      {showText && (
-        <span
-          className={cn(
-            "font-display text-xl font-extrabold tracking-tight",
-            light ? "text-white" : "text-slate-900",
-          )}
-        >
-          Arrive<span className="text-brand">Ping</span>
-        </span>
-      )}
+      </Link>
+    );
+  }
+  return (
+    <Link to={to} className={cn("inline-flex items-center py-1 lg:py-0", className)}>
+      <img
+        src={light ? "/arriveping-logo-light.png" : "/arriveping-logo-dark.png"}
+        alt="ArrivePing"
+        className="h-8 w-auto object-contain"
+      />
     </Link>
   );
 }
