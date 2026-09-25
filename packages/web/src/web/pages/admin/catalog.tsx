@@ -81,6 +81,14 @@ export default function AdminCatalog() {
     queryFn: async () => (await api.catalog.$get({ query: {} })).json(),
   });
 
+  // Same shared category list the modal's "Category" field and Form Builder
+  // use — needed here too so every known category gets its own section (and
+  // its own "+ Add item" button) even before it has a single item in it.
+  const categoriesQ = useQuery({
+    queryKey: ["form-categories"],
+    queryFn: async () => (await api.catalog.categories.$get()).json(),
+  });
+
   const del = useMutation({
     mutationFn: async (id: string) => api.catalog[":id"].$delete({ param: { id } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["catalog"] }),
@@ -115,6 +123,12 @@ export default function AdminCatalog() {
     assembly: all.filter((r) => r.kind === "assembly").length,
   };
 
+  // The full, shared category list (same one the "Manage categories" modal
+  // and the New Item "Category" field use) — every catalog item's category
+  // must already be one of these. Used below so a brand-new category shows
+  // up as its own section (ready to add into) even before it holds an item.
+  const categoryOptions: string[] = ((categoriesQ.data as any)?.categories ?? []).map((c: any) => c.name);
+
   // Group into cascading category sections — a client picking parts to build
   // an assembly (or an admin scanning a big catalog) works category-first,
   // not photo-first: "Flooring" collapses/expands to reveal its items rather
@@ -125,7 +139,15 @@ export default function AdminCatalog() {
   // (React error #310, "Rendered more hooks than during the previous
   // render"). `list`/`counts` right above already follow this same
   // recompute-every-render pattern for the same reason.
+  // Unfiltered browsing shows every known category — including brand-new,
+  // empty ones — so there's always somewhere to click "+ Add item" into.
+  // An active search or kind filter only shows categories with a match,
+  // so results aren't cluttered with empty folders.
+  const showEmptyCategories = kind === "all" && !q;
   const groupMap = new Map<string, Row[]>();
+  if (showEmptyCategories) {
+    for (const c of categoryOptions) groupMap.set(c, []);
+  }
   for (const r of list) {
     const arr = groupMap.get(r.category) ?? [];
     arr.push(r);
@@ -211,20 +233,22 @@ export default function AdminCatalog() {
           rows.forEach((r) => kindTally[r.kind]++);
           return (
             <div key={category} className="overflow-hidden rounded-xl border border-white/5 nvc-card">
-              <button
-                onClick={() => setCollapsed((c) => ({ ...c, [category]: isOpen }))}
-                className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-white/[0.03]"
-              >
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
-                )}
-                <span className="font-bold text-white">{category}</span>
-                <span className="text-xs text-slate-500">
-                  {rows.length} item{rows.length !== 1 ? "s" : ""}
-                </span>
-                <div className="ml-auto flex items-center gap-1.5">
+              <div className="flex w-full items-center gap-2.5 px-4 py-3 hover:bg-white/[0.03]">
+                <button
+                  onClick={() => setCollapsed((c) => ({ ...c, [category]: isOpen }))}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  {isOpen ? (
+                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
+                  )}
+                  <span className="truncate font-bold text-white">{category}</span>
+                  <span className="shrink-0 text-xs text-slate-500">
+                    {rows.length} item{rows.length !== 1 ? "s" : ""}
+                  </span>
+                </button>
+                <div className="flex shrink-0 items-center gap-1.5">
                   {(["service", "product", "assembly"] as CatalogKind[]).map(
                     (k) =>
                       kindTally[k] > 0 && (
@@ -236,10 +260,33 @@ export default function AdminCatalog() {
                         </span>
                       )
                   )}
+                  {/* Add straight into this category — the section you're
+                      looking at is the one you expect "+" to add to, not a
+                      global button that always resets to "General". */}
+                  <button
+                    onClick={() => setEditing({ ...EMPTY, category })}
+                    aria-label={`Add item to ${category}`}
+                    title={`Add item to ${category}`}
+                    className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-brand/20 hover:text-cyan-glow"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-              </button>
+              </div>
               {isOpen && (
                 <div className="divide-y divide-white/5 border-t border-white/5">
+                  {rows.length === 0 && (
+                    <div className="px-4 py-4 text-center text-xs text-slate-600">
+                      No items yet — click{" "}
+                      <button
+                        onClick={() => setEditing({ ...EMPTY, category })}
+                        className="font-semibold text-cyan-glow hover:underline"
+                      >
+                        + Add item
+                      </button>{" "}
+                      to add the first one.
+                    </div>
+                  )}
                   {rows.map((r) => {
                     const M = KIND_META[r.kind];
                     const price = r.resolvedUnitPrice ?? 0;
