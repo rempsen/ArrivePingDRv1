@@ -73,7 +73,7 @@ export default function Index() {
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-16 pb-24 md:grid-cols-2 md:py-24 md:pb-32">
           <div>
             <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
-              <Radio className="h-3.5 w-3.5" /> ArrivePing 4.0 — Launching 2026
+              <Radio className="h-3.5 w-3.5" /> ArrivePing Platform — Launching Nationally, November 2026
             </span>
             <h1 className="animate-fade-up delay-1 mt-5 font-display text-5xl font-black leading-[1.04] text-white md:text-6xl">
               Make your clients{" "}
