@@ -49,8 +49,16 @@ export function RouteHistoryMap({
       zoomControl: true,
       attributionControl: false,
     }).setView([pings[0]?.lat ?? 0, pings[0]?.lng ?? 0], 13);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    // Esri "World Dark Gray Base" — keyless raster tiles (no API key / account required).
+    // Replaces CARTO's basemaps.cartocdn.com, which now requires a paid/free API key and
+    // stamps unauthenticated requests with an "API KEY REQUIRED" watermark across every tile.
+    // maxNativeZoom: 16 — Esri's cache for this layer has no real imagery past
+    // z16 in most areas; deeper requests 404 into a generic "Map data not yet
+    // available" placeholder tile. Leaflet upscales the z16 tile instead of
+    // requesting past it, so zooming in past 16 still shows the map, just softer.
+    L.tileLayer("https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 19,
+      maxNativeZoom: 16,
     }).addTo(map);
     mapRef.current = map;
     return () => {
