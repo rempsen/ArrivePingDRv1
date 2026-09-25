@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useConfirm } from "../../components/confirm-dialog";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -160,15 +160,37 @@ export default function SchedulerPage() {
   // live half-hour time preview while dragging over a week/day column
   const [hoverTime, setHoverTime] = useState<{ key: string; mins: number } | null>(null);
 
-  // day time window the column represents (7:00 AM -> 8:00 PM)
-  const DAY_START_MIN = 7 * 60;
-  const DAY_END_MIN = 20 * 60;
+  // day time window the column represents (6:00 AM -> 9:00 PM) — widened from
+  // the old 7-8 window so early/late field-service jobs get real real-estate
+  // instead of being squeezed off-screen.
+  const DAY_START_MIN = 6 * 60;
+  const DAY_END_MIN = 21 * 60;
+  const DAY_SPAN_MIN = DAY_END_MIN - DAY_START_MIN;
+  // pixels-per-hour for the week/day grid. This is the single dial that makes
+  // the calendar the size it should be: at 88px/hr the 15-hour window renders
+  // ~1,320px tall — roughly 3x the old flat 420px stack — so there's real room
+  // for hour gridlines, a live now-line, and full job detail per slot.
+  const HOUR_PX = 88;
+  const GRID_PX = (DAY_SPAN_MIN / 60) * HOUR_PX;
+  const hourMarks = Array.from(
+    { length: DAY_SPAN_MIN / 60 + 1 },
+    (_, k) => DAY_START_MIN + k * 60,
+  );
+
+  // live "now" line — ticks every 30s so a dispatcher watching the board sees
+  // it actually crawl down the day instead of freezing at page-load time.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const nowMins = now.getHours() * 60 + now.getMinutes();
 
   // map a cursor Y within a day column to a snapped half-hour time (minutes from midnight)
   function timeFromOffset(el: HTMLElement, clientY: number): number {
     const rect = el.getBoundingClientRect();
     const frac = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
-    const raw = DAY_START_MIN + frac * (DAY_END_MIN - DAY_START_MIN);
+    const raw = DAY_START_MIN + frac * DAY_SPAN_MIN;
     const snapped = Math.round(raw / 30) * 30; // 30-min blocks
     return Math.min(DAY_END_MIN, Math.max(DAY_START_MIN, snapped));
   }
@@ -179,6 +201,38 @@ export default function SchedulerPage() {
     const ampm = h >= 12 ? "PM" : "AM";
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+  }
+
+  // Lay overlapping jobs on a day out into side-by-side lanes (like a real
+  // calendar) instead of one blind vertical stack — greedy interval-lane
+  // assignment, then a pairwise pass to size each chip to how many lanes its
+  // own overlap cluster actually needs.
+  function layoutDayJobs(jobs: any[]) {
+    const items = jobs.map((b) => {
+      const start = new Date(b.scheduledAt as any).getTime();
+      const durMin = b.service?.durationMins || 60;
+      return { b, start, end: start + durMin * 60_000, durMin, lane: 0 };
+    });
+    const laneEnds: number[] = [];
+    for (const it of items) {
+      let assigned = laneEnds.findIndex((end) => end <= it.start);
+      if (assigned === -1) {
+        assigned = laneEnds.length;
+        laneEnds.push(it.end);
+      } else {
+        laneEnds[assigned] = it.end;
+      }
+      it.lane = assigned;
+    }
+    return items.map((it) => {
+      let cols = it.lane + 1;
+      for (const other of items) {
+        if (other !== it && other.start < it.end && it.start < other.end) {
+          cols = Math.max(cols, other.lane + 1);
+        }
+      }
+      return { ...it, cols };
+    });
   }
 
   // drop onto a day -> default 9:00 AM (month view / no time grid)
@@ -536,15 +590,22 @@ export default function SchedulerPage() {
                     }}
                     onDragLeave={() => setOverDay((v) => (v === dayKey ? null : v))}
                     onDrop={() => dropOnDay(d)}
-                    className={`min-h-[92px] border-b border-r border-white/5 p-1.5 text-left transition hover:bg-white/[0.03] ${inMonth ? "" : "opacity-40"} ${overDay === dayKey ? "drop-active" : ""}`}
+                    className={`min-h-[176px] border-b border-r border-white/5 p-2 text-left transition hover:bg-white/[0.03] ${inMonth ? "" : "opacity-40"} ${overDay === dayKey ? "drop-active" : ""}`}
                   >
-                    <span
-                      className={`inline-grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${sameDay(d, today) ? "bg-brand text-white" : "text-slate-400"}`}
-                    >
-                      {d.getDate()}
-                    </span>
-                    <div className="mt-1 space-y-1">
-                      {jobs.slice(0, 3).map((b) => (
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`inline-grid h-7 w-7 place-items-center rounded-full text-sm font-semibold ${sameDay(d, today) ? "bg-brand text-white" : "text-slate-400"}`}
+                      >
+                        {d.getDate()}
+                      </span>
+                      {jobs.length > 0 && (
+                        <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
+                          {jobs.length} job{jobs.length === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 space-y-1">
+                      {jobs.slice(0, 5).map((b) => (
                         <div tabIndex={0}
                           key={b.id}
                           // nested clickable chip inside an already-clickable
@@ -564,18 +625,30 @@ export default function SchedulerPage() {
                               openJob(b);
                             }
                           }}
-                          className="group/chip flex cursor-pointer items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] font-medium text-white hover:brightness-125"
+                          className="group/chip flex cursor-pointer items-center gap-1.5 truncate rounded-md border-l-2 px-1.5 py-1 text-[11px] font-medium text-white hover:brightness-125"
                           style={{
-                            background: `${PRIORITY_META[b.priority]?.color ?? "#3b82f6"}33`,
+                            borderColor: PRIORITY_META[b.priority]?.color ?? "#3b82f6",
+                            background: `${PRIORITY_META[b.priority]?.color ?? "#3b82f6"}22`,
                           }}
                         >
+                          {b.rider && (
+                            <TechAvatar
+                              name={b.rider.name}
+                              photoUrl={(b.rider as any).photoUrl}
+                              color={b.rider.color}
+                              className="h-4 w-4 shrink-0"
+                              textClassName="text-[8px]"
+                            />
+                          )}
                           <span className="truncate">
-                            {new Date(
-                              b.scheduledAt as any,
-                            ).toLocaleTimeString([], {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}{" "}
+                            <span className="font-bold text-cyan-glow">
+                              {new Date(
+                                b.scheduledAt as any,
+                              ).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>{" "}
                             {b.title || b.service?.name}
                           </span>
                           <button
@@ -592,9 +665,9 @@ export default function SchedulerPage() {
                           </button>
                         </div>
                       ))}
-                      {jobs.length > 3 && (
+                      {jobs.length > 5 && (
                         <p className="px-1 text-[10px] text-slate-500">
-                          +{jobs.length - 3} more
+                          +{jobs.length - 5} more
                         </p>
                       )}
                     </div>
@@ -603,160 +676,239 @@ export default function SchedulerPage() {
               })}
             </div>
           ) : (
-            <div
-              className={`hidden lg:grid ${calView === "day" ? "grid-cols-1" : "grid-cols-7"}`}
-            >
-              {calDays.map((d, i) => {
-                const jobs = jobsOn(d);
-                const dayKey = d.toISOString().slice(0, 10);
-                return (
-                  <div
+            <div className="hidden lg:block">
+              {/* sticky day-of-week header row, aligned over the time gutter */}
+              <div
+                className="sticky top-0 z-20 grid border-b border-white/5 bg-ink-2"
+                style={{
+                  gridTemplateColumns: `52px repeat(${calDays.length}, 1fr)`,
+                }}
+              >
+                <div />
+                {calDays.map((d, i) => (
+                  <button
                     key={i}
-                    className={`border-r border-white/5 last:border-r-0 transition ${overDay === dayKey ? "drop-active" : ""}`}
+                    onClick={() => {
+                      const dt = new Date(d);
+                      dt.setHours(9, 0, 0, 0);
+                      setNewDate(dt);
+                    }}
+                    className="flex items-center justify-between border-l border-white/5 px-2 py-2 hover:bg-white/[0.03]"
                   >
-                    <button
-                      onClick={() => {
-                        const dt = new Date(d);
-                        dt.setHours(9, 0, 0, 0);
-                        setNewDate(dt);
-                      }}
-                      className="flex w-full items-center justify-between border-b border-white/5 px-2 py-2 hover:bg-white/[0.03]"
+                    <span className="text-[11px] font-semibold uppercase text-slate-500">
+                      {DOW[d.getDay()]}
+                    </span>
+                    <span
+                      className={`grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${sameDay(d, today) ? "bg-brand text-white" : "text-slate-300"}`}
                     >
-                      <span className="text-[11px] font-semibold uppercase text-slate-500">
-                        {DOW[d.getDay()]}
-                      </span>
-                      <span
-                        className={`grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${sameDay(d, today) ? "bg-brand text-white" : "text-slate-300"}`}
+                      {d.getDate()}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* scrollable hourly body — tall enough to show real gridlines
+                  and full job detail, capped so the page doesn't run forever */}
+              <div className="max-h-[760px] overflow-y-auto">
+                <div
+                  className="relative grid"
+                  style={{
+                    gridTemplateColumns: `52px repeat(${calDays.length}, 1fr)`,
+                    height: `${GRID_PX}px`,
+                  }}
+                >
+                  {/* time gutter: hour labels, shared by every day column */}
+                  <div className="relative">
+                    {hourMarks.map((mins) => (
+                      <div
+                        key={mins}
+                        className="absolute right-1.5 -translate-y-1/2 text-[10px] font-medium text-slate-500"
+                        style={{ top: `${((mins - DAY_START_MIN) / 60) * HOUR_PX}px` }}
                       >
-                        {d.getDate()}
-                      </span>
-                    </button>
-                    {/* time-aware drop grid: drag a job here to place it at a half-hour block */}
-                    <div
-                      onDragOver={(e) => {
-                        if (!calDragId) return;
-                        e.preventDefault();
-                        setOverDay(dayKey);
-                        setHoverTime({
-                          key: dayKey,
-                          mins: timeFromOffset(e.currentTarget as HTMLElement, e.clientY),
-                        });
-                      }}
-                      onDragLeave={() => {
-                        setOverDay((v) => (v === dayKey ? null : v));
-                        setHoverTime((v) => (v?.key === dayKey ? null : v));
-                      }}
-                      onDrop={(e) => {
-                        const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);
-                        dropOnDayAtTime(d, mins);
-                      }}
-                      className="relative min-h-[420px] space-y-1.5 p-1.5"
-                    >
-                      {/* half-hour gridlines while dragging */}
-                      {calDragId && (
+                        {fmtMins(mins)}
+                      </div>
+                    ))}
+                  </div>
+
+                  {calDays.map((d, i) => {
+                    const jobs = jobsOn(d);
+                    const laid = layoutDayJobs(jobs);
+                    const dayKey = d.toISOString().slice(0, 10);
+                    const isToday = sameDay(d, today);
+                    return (
+                      <div
+                        key={i}
+                        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+                        onClick={(e) => {
+                          if (e.target !== e.currentTarget || calDragId) return;
+                          const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);
+                          const dt = new Date(d);
+                          dt.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+                          setNewDate(dt);
+                        }}
+                        onDragOver={(e) => {
+                          if (!calDragId) return;
+                          e.preventDefault();
+                          setOverDay(dayKey);
+                          setHoverTime({
+                            key: dayKey,
+                            mins: timeFromOffset(e.currentTarget as HTMLElement, e.clientY),
+                          });
+                        }}
+                        onDragLeave={() => {
+                          setOverDay((v) => (v === dayKey ? null : v));
+                          setHoverTime((v) => (v?.key === dayKey ? null : v));
+                        }}
+                        onDrop={(e) => {
+                          const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);
+                          dropOnDayAtTime(d, mins);
+                        }}
+                        title="Click a time to add a work order there"
+                        className={`relative cursor-pointer border-l border-white/5 transition ${overDay === dayKey ? "drop-active" : ""}`}
+                      >
+                        {/* persistent hour / half-hour gridlines — always on,
+                            not just while dragging, so the grid reads as a
+                            real calendar at rest */}
                         <div className="pointer-events-none absolute inset-0">
-                          {Array.from(
-                            { length: (DAY_END_MIN - DAY_START_MIN) / 30 + 1 },
-                            (_, k) => {
-                              const mins = DAY_START_MIN + k * 30;
-                              const top = `${(k / ((DAY_END_MIN - DAY_START_MIN) / 30)) * 100}%`;
-                              const onHour = mins % 60 === 0;
-                              return (
-                                <div
-                                  key={k}
-                                  className={`absolute left-0 right-0 border-t ${onHour ? "border-white/10" : "border-white/[0.04]"}`}
-                                  style={{ top }}
-                                >
-                                  {onHour && (
-                                    <span className="absolute -top-1.5 left-0.5 text-[8px] text-slate-600">
-                                      {fmtMins(mins)}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            },
-                          )}
+                          {Array.from({ length: DAY_SPAN_MIN / 30 + 1 }, (_, k) => {
+                            const mins = DAY_START_MIN + k * 30;
+                            const onHour = mins % 60 === 0;
+                            return (
+                              <div
+                                key={k}
+                                className={`absolute left-0 right-0 border-t ${onHour ? "border-white/[0.07]" : "border-white/[0.03]"}`}
+                                style={{ top: `${(k * 30 / 60) * HOUR_PX}px` }}
+                              />
+                            );
+                          })}
                         </div>
-                      )}
-                      {/* live placement indicator */}
-                      {calDragId && hoverTime?.key === dayKey && (
-                        <div
-                          className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
-                          style={{
-                            top: `${((hoverTime.mins - DAY_START_MIN) / (DAY_END_MIN - DAY_START_MIN)) * 100}%`,
-                          }}
-                        >
-                          <div className="h-0.5 flex-1 bg-brand" />
-                          <span className="rounded bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-                            {fmtMins(hoverTime.mins)}
-                          </span>
-                        </div>
-                      )}
-                      {jobs.length === 0 ? (
-                        <button
-                          onClick={() => {
-                            const dt = new Date(d);
-                            dt.setHours(9, 0, 0, 0);
-                            setNewDate(dt);
-                          }}
-                          className="grid h-16 w-full place-items-center rounded-lg border border-dashed border-white/10 text-[11px] text-slate-600 hover:border-brand/40 hover:text-slate-400"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      ) : (
-                        jobs.map((b) => (
-                          <div tabIndex={0}
-                            key={b.id}
-                            // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
-                            role="button"
-                            onClick={() => openJob(b)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                openJob(b);
-                              }
-                            }}
-                            title="Click to edit"
-                            className="group/chip relative block w-full cursor-pointer rounded-lg border-l-2 bg-ink-3/60 p-2 text-left transition hover:bg-ink-3"
+
+                        {/* live "now" line */}
+                        {isToday && nowMins >= DAY_START_MIN && nowMins <= DAY_END_MIN && (
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 z-10 flex items-center gap-1"
+                            style={{ top: `${((nowMins - DAY_START_MIN) / 60) * HOUR_PX}px` }}
+                          >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+                            <div className="h-px flex-1 bg-rose-400/70" />
+                          </div>
+                        )}
+
+                        {/* live drag placement indicator */}
+                        {calDragId && hoverTime?.key === dayKey && (
+                          <div
+                            className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
                             style={{
-                              borderColor:
-                                PRIORITY_META[b.priority]?.color ?? "#3b82f6",
+                              top: `${((hoverTime.mins - DAY_START_MIN) / 60) * HOUR_PX}px`,
                             }}
                           >
-                            <button
-                              type="button"
-                              aria-label="Delete work order"
-                              title="Delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeJob(b);
-                              }}
-                              className="absolute right-1 top-1 hidden rounded p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 group-hover/chip:block"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                            <p className="text-[11px] font-bold text-cyan-glow">
-                              {new Date(b.scheduledAt as any).toLocaleTimeString(
-                                [],
-                                { hour: "numeric", minute: "2-digit" },
-                              )}
-                            </p>
-                            <p className="truncate pr-5 text-xs font-semibold text-white">
-                              {b.title || b.service?.name}
-                            </p>
-                            <p className="truncate text-[10px] text-slate-500">
-                              {b.customer?.name}
-                            </p>
-                            <div className="mt-1">
-                              <StatusBadge status={b.status} />
-                            </div>
+                            <div className="h-0.5 flex-1 bg-brand" />
+                            <span className="rounded bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
+                              {fmtMins(hoverTime.mins)}
+                            </span>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                        )}
+
+                        {jobs.length === 0 ? (
+                          <div className="pointer-events-none absolute inset-x-1.5 top-1.5 rounded-lg border border-dashed border-white/10 py-1.5 text-center text-[10px] text-slate-600">
+                            Click a time to add
+                          </div>
+                        ) : (
+                          laid.map(({ b, start, durMin, lane, cols }) => {
+                            const startOfDay = new Date(start);
+                            const startMinsOfDay = startOfDay.getHours() * 60 + startOfDay.getMinutes();
+                            const clampedStart = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, startMinsOfDay));
+                            const topPx = ((clampedStart - DAY_START_MIN) / 60) * HOUR_PX;
+                            const rawHeightPx = (Math.min(durMin, DAY_END_MIN - clampedStart) / 60) * HOUR_PX;
+                            const heightPx = Math.max(rawHeightPx, 30);
+                            const compact = heightPx < 54;
+                            const widthPct = 100 / cols;
+                            const leftPct = lane * widthPct;
+                            return (
+                              <div tabIndex={0}
+                                key={b.id}
+                                // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
+                                role="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openJob(b);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    openJob(b);
+                                  }
+                                }}
+                                title="Click to edit"
+                                className="group/chip absolute z-[5] cursor-pointer overflow-hidden rounded-lg border-l-2 bg-ink-3/90 text-left shadow-sm transition hover:z-20 hover:bg-ink-3"
+                                style={{
+                                  top: `${topPx}px`,
+                                  height: `${heightPx}px`,
+                                  left: `calc(${leftPct}% + 2px)`,
+                                  width: `calc(${widthPct}% - 4px)`,
+                                  borderColor: PRIORITY_META[b.priority]?.color ?? "#3b82f6",
+                                  padding: compact ? "3px 6px" : "6px 8px",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  aria-label="Delete work order"
+                                  title="Delete"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeJob(b);
+                                  }}
+                                  className="absolute right-1 top-1 hidden rounded p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 group-hover/chip:block"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                                {compact ? (
+                                  <p className="truncate pr-4 text-[10px] font-semibold text-white">
+                                    <span className="font-bold text-cyan-glow">
+                                      {fmtMins(startMinsOfDay)}
+                                    </span>{" "}
+                                    {b.title || b.service?.name}
+                                  </p>
+                                ) : (
+                                  <>
+                                    <p className="text-[10px] font-bold text-cyan-glow">
+                                      {fmtMins(startMinsOfDay)} – {fmtMins(startMinsOfDay + durMin)}
+                                    </p>
+                                    <p className="truncate pr-4 text-xs font-semibold text-white">
+                                      {b.title || b.service?.name}
+                                    </p>
+                                    {b.customer?.name && (
+                                      <p className="truncate text-[10px] text-slate-500">
+                                        {b.customer.name}
+                                      </p>
+                                    )}
+                                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                                      <StatusBadge status={b.status} />
+                                      {b.rider && (
+                                        <span className="flex items-center gap-1 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                                          <TechAvatar
+                                            name={b.rider.name}
+                                            photoUrl={(b.rider as any).photoUrl}
+                                            color={b.rider.color}
+                                            className="h-3.5 w-3.5"
+                                            textClassName="text-[7px]"
+                                          />
+                                          {b.rider.name}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
