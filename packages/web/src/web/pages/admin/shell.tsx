@@ -263,8 +263,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen overflow-x-hidden bg-ink text-slate-200">
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[228px] flex-col border-r border-white/[0.06] bg-ink-2 md:flex">
-        <div className="flex h-16 items-center border-b border-white/5 px-5">
-          <Logo to="/admin" imgClassName="h-10" />
+        <div className="flex h-24 items-center border-b border-white/5 px-5">
+          <Logo to="/admin" imgClassName="h-20" />
         </div>
         <TenantSwitcher />
         {/* nvc-fade-b: the nav list is taller than the viewport on a laptop, so
@@ -277,7 +277,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* mobile top bar with hamburger */}
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/5 bg-ink-2 px-4 md:hidden">
+      <header className="sticky top-0 z-30 flex h-24 items-center justify-between border-b border-white/5 bg-ink-2 px-4 md:hidden">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setDrawerOpen(true)}
@@ -286,7 +286,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Logo to="/admin" imgClassName="h-9" />
+          <Logo to="/admin" imgClassName="h-20" />
         </div>
       </header>
 
@@ -299,8 +299,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             onClick={() => setDrawerOpen(false)}
           />
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/5 bg-ink-2 shadow-2xl">
-            <div className="flex h-16 items-center justify-between gap-2 border-b border-white/5 px-4">
-              <Logo to="/admin" imgClassName="h-10" />
+            <div className="flex h-24 items-center justify-between gap-2 border-b border-white/5 px-4">
+              <Logo to="/admin" imgClassName="h-20" />
               <button
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close menu"
