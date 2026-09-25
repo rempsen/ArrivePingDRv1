@@ -4,11 +4,13 @@ import { STATUS_META } from "../lib/utils";
 
 export function Logo({
   className,
+  imgClassName,
   to = "/",
   light = true,
   showText = true,
 }: {
   className?: string;
+  imgClassName?: string;
   to?: string;
   light?: boolean;
   showText?: boolean;
@@ -21,7 +23,7 @@ export function Logo({
         <img
           src={light ? "/arriveping-icon-light.png" : "/arriveping-icon-dark.png"}
           alt="ArrivePing"
-          className="h-9 w-9 rounded-xl object-contain"
+          className={cn("h-9 w-9 rounded-xl object-contain", imgClassName)}
         />
       </Link>
     );
@@ -31,7 +33,7 @@ export function Logo({
       <img
         src={light ? "/arriveping-logo-light.png" : "/arriveping-logo-dark.png"}
         alt="ArrivePing"
-        className="h-8 w-auto object-contain"
+        className={cn("h-8 w-auto object-contain", imgClassName)}
       />
     </Link>
   );

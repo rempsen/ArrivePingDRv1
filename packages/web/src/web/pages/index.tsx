@@ -26,7 +26,7 @@ function Nav() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-ink/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <Logo />
+        <Logo imgClassName="h-14" />
         <nav className="hidden items-center gap-8 text-sm font-medium text-slate-400 md:flex">
           <a href="#features" className="hover:text-brand">Platform</a>
           <a href="#how" className="hover:text-brand">How it works</a>
@@ -441,6 +441,7 @@ export default function Index() {
         <div className="relative grid items-center gap-8 overflow-hidden rounded-[28px] border border-brand/20 bg-gradient-to-br from-ink-2 to-ink shadow-2xl nvc-grid-bg md:grid-cols-2">
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-brand/20 blur-2xl" />
           <div className="px-8 py-14 text-center md:text-left">
+            <Logo imgClassName="h-11 md:mx-0 mx-auto" className="mb-6 justify-center md:justify-start" />
             <h2 className="font-display text-4xl font-black text-white">Become a founding client.</h2>
             <p className="mt-3 max-w-md text-slate-400 md:mx-0 mx-auto">Reduce field costs by 20%. Eliminate the 4-hour window. Make your clients love you.</p>
             <div className="mt-8 flex flex-wrap justify-center gap-3 md:justify-start">
@@ -464,7 +465,7 @@ export default function Index() {
 
       <footer className="border-t border-white/5 py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 md:flex-row">
-          <Logo />
+          <Logo imgClassName="h-12" />
           <p className="text-sm text-slate-500">© 2026 ArrivePing by NVC360 · Winnipeg, MB · Field Service Management.</p>
         </div>
       </footer>
