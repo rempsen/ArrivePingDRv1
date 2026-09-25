@@ -18,6 +18,10 @@ import {
   Layers,
   Upload,
   Loader2,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
 } from "lucide-react";
 import {
   itemUnitCost,
@@ -37,10 +41,13 @@ type Row = CatalogItem & {
   createdAt?: unknown;
 };
 
-const KIND_META: Record<CatalogKind, { label: string; icon: typeof Package; tint: string }> = {
-  service: { label: "Service", icon: Wrench, tint: "text-cyan-glow" },
-  product: { label: "Product", icon: Package, tint: "text-emerald-400" },
-  assembly: { label: "Assembly", icon: Layers, tint: "text-amber-400" },
+const KIND_META: Record<
+  CatalogKind,
+  { label: string; short: string; icon: typeof Package; tint: string; chip: string }
+> = {
+  service: { label: "Service", short: "SVC", icon: Wrench, tint: "text-cyan-glow", chip: "bg-cyan-glow/15 text-cyan-glow" },
+  product: { label: "Product", short: "PRD", icon: Package, tint: "text-emerald-400", chip: "bg-emerald-400/15 text-emerald-400" },
+  assembly: { label: "Assembly", short: "ASM", icon: Layers, tint: "text-amber-400", chip: "bg-amber-400/15 text-amber-400" },
 };
 
 const UNITS = ["each", "job", "hour", "sqft", "sqm", "ft", "m", "box", "set", "gal", "L"];
@@ -67,6 +74,7 @@ export default function AdminCatalog() {
   const [editing, setEditing] = useState<Partial<Row> | null>(null);
   const [kind, setKind] = useState<"all" | CatalogKind>("all");
   const [q, setQ] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const catalog = useQuery({
     queryKey: ["catalog"],
@@ -107,6 +115,31 @@ export default function AdminCatalog() {
     assembly: all.filter((r) => r.kind === "assembly").length,
   };
 
+  // Group into cascading category sections — a client picking parts to build
+  // an assembly (or an admin scanning a big catalog) works category-first,
+  // not photo-first: "Flooring" collapses/expands to reveal its items rather
+  // than forcing a scroll through one giant photo grid.
+  // Plain computation (not useMemo) — this function already has an early
+  // `return <FullLoader />` above for catalog.isLoading, and calling a hook
+  // after a conditional return changes the hook count between renders
+  // (React error #310, "Rendered more hooks than during the previous
+  // render"). `list`/`counts` right above already follow this same
+  // recompute-every-render pattern for the same reason.
+  const groupMap = new Map<string, Row[]>();
+  for (const r of list) {
+    const arr = groupMap.get(r.category) ?? [];
+    arr.push(r);
+    groupMap.set(r.category, arr);
+  }
+  const grouped = Array.from(groupMap.entries())
+    .map(([category, rows]) => [
+      category,
+      rows.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)),
+    ] as [string, Row[]])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  const allCollapsed = grouped.every(([c]) => collapsed[c]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 pb-24 md:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -142,7 +175,7 @@ export default function AdminCatalog() {
                 kind === k ? "bg-brand text-white" : "text-slate-400 hover:text-white"
               }`}
             >
-              {k === "all" ? "All" : KIND_META[k].label + "s"}{" "}
+              {k === "all" ? "All" : k === "assembly" ? "Assemblies" : KIND_META[k].label + "s"}{" "}
               <span className="opacity-60">{counts[k]}</span>
             </button>
           ))}
@@ -156,75 +189,135 @@ export default function AdminCatalog() {
             className="w-64 rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand"
           />
         </div>
+        <button
+          onClick={() =>
+            setCollapsed(allCollapsed ? {} : Object.fromEntries(grouped.map(([c]) => [c, true])))
+          }
+          className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10"
+        >
+          {allCollapsed ? <ChevronsDown className="h-3.5 w-3.5" /> : <ChevronsUp className="h-3.5 w-3.5" />}
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {list.map((r) => {
-          const M = KIND_META[r.kind];
-          const Icon = M.icon;
-          const price = r.resolvedUnitPrice ?? 0;
-          const cost = r.resolvedUnitCost ?? 0;
-          const margin = r.resolvedMarginPct ?? marginPct(cost, price);
+      {/* Category-first, text-forward list. Each category is a collapsible
+          section — a dropdown-style cascade rather than a photo grid — so
+          scanning or building from a large catalog means opening the
+          category you need, not scrolling past dozens of thumbnails. */}
+      <div className="space-y-2">
+        {grouped.map(([category, rows]) => {
+          const isOpen = !collapsed[category];
+          const kindTally = { service: 0, product: 0, assembly: 0 } as Record<CatalogKind, number>;
+          rows.forEach((r) => kindTally[r.kind]++);
           return (
-            <div key={r.id} className="overflow-hidden rounded-2xl border border-white/5 nvc-card">
-              <StoredImage
-                src={r.image}
-                className="h-28 w-full object-cover"
-                fallback={
-                  <div className="grid h-28 w-full place-items-center bg-white/5">
-                    <Icon className={`h-8 w-8 ${M.tint} opacity-40`} />
-                  </div>
-                }
-              />
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="truncate font-bold text-white">{r.name}</h3>
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${M.tint}`}>
-                      <Icon className="h-3 w-3" /> {M.label} · {r.category}
-                    </span>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="font-extrabold text-white">{money(price)}</div>
-                    <span className="text-[10px] text-slate-500">/{r.unit}</span>
-                  </div>
+            <div key={category} className="overflow-hidden rounded-xl border border-white/5 nvc-card">
+              <button
+                onClick={() => setCollapsed((c) => ({ ...c, [category]: isOpen }))}
+                className="flex w-full items-center gap-2.5 px-4 py-3 text-left hover:bg-white/[0.03]"
+              >
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
+                )}
+                <span className="font-bold text-white">{category}</span>
+                <span className="text-xs text-slate-500">
+                  {rows.length} item{rows.length !== 1 ? "s" : ""}
+                </span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  {(["service", "product", "assembly"] as CatalogKind[]).map(
+                    (k) =>
+                      kindTally[k] > 0 && (
+                        <span
+                          key={k}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${KIND_META[k].chip}`}
+                        >
+                          {kindTally[k]} {KIND_META[k].short}
+                        </span>
+                      )
+                  )}
                 </div>
-                <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
-                  <span>cost {money(cost)}</span>
-                  <span
-                    className={
-                      margin >= 30 ? "text-emerald-400" : margin >= 10 ? "text-amber-400" : "text-red-400"
-                    }
-                  >
-                    {margin}% margin
-                  </span>
-                  {!r.taxable && <span className="text-slate-600">no tax</span>}
+              </button>
+              {isOpen && (
+                <div className="divide-y divide-white/5 border-t border-white/5">
+                  {rows.map((r) => {
+                    const M = KIND_META[r.kind];
+                    const price = r.resolvedUnitPrice ?? 0;
+                    const cost = r.resolvedUnitCost ?? 0;
+                    const margin = r.resolvedMarginPct ?? marginPct(cost, price);
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02]"
+                      >
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${M.chip}`}>
+                          {M.short}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="truncate text-sm font-semibold text-white">{r.name}</span>
+                            {r.sku && <span className="shrink-0 text-[11px] text-slate-500">#{r.sku}</span>}
+                          </div>
+                          {r.description && (
+                            <div className="truncate text-xs text-slate-500">{r.description}</div>
+                          )}
+                        </div>
+                        <span className="hidden w-14 shrink-0 text-right text-xs text-slate-500 sm:block">
+                          /{r.unit}
+                        </span>
+                        <span className="hidden w-20 shrink-0 text-right text-xs text-slate-500 md:block">
+                          cost {money(cost)}
+                        </span>
+                        <span className="w-20 shrink-0 text-right text-sm font-bold text-white">
+                          {money(price)}
+                        </span>
+                        <span
+                          className={`hidden w-16 shrink-0 text-right text-xs font-semibold lg:block ${
+                            margin >= 30 ? "text-emerald-400" : margin >= 10 ? "text-amber-400" : "text-red-400"
+                          }`}
+                        >
+                          {margin}%
+                        </span>
+                        {!r.taxable && (
+                          <span className="hidden shrink-0 text-[10px] text-slate-600 xl:block">no tax</span>
+                        )}
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            onClick={() => setEditing(r)}
+                            aria-label={`Edit ${r.name}`}
+                            title={`Edit ${r.name}`}
+                            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (
+                                await confirm({
+                                  title: `Archive "${r.name}"?`,
+                                  message: "It stays on past work orders but can't be added to new ones.",
+                                  confirmLabel: "Archive",
+                                })
+                              )
+                                del.mutate(r.id);
+                            }}
+                            aria-label={`Archive ${r.name}`}
+                            title={`Archive ${r.name}`}
+                            className="grid h-8 w-8 place-items-center rounded-lg text-red-400/70 hover:bg-red-500/10 hover:text-red-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => setEditing(r)}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white/5 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Edit
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (await confirm({ title: `Archive "${r.name}"?`, message: "It stays on past work orders but can't be added to new ones.", confirmLabel: "Archive" }))
-                        del.mutate(r.id);
-                    }}
-                    aria-label={`Archive ${r.name}`}
-                    title={`Archive ${r.name}`}
-                    className="grid w-10 place-items-center rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           );
         })}
-        {list.length === 0 && (
-          <div className="col-span-full grid place-items-center rounded-2xl border border-dashed border-white/10 py-16 text-sm text-slate-500">
+        {grouped.length === 0 && (
+          <div className="grid place-items-center rounded-2xl border border-dashed border-white/10 py-16 text-sm text-slate-500">
             No items match.
           </div>
         )}
@@ -260,6 +353,10 @@ function CatalogModal({
   const isEdit = !!row.id;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  // Cascading category → item picker for assembly components: pick a
+  // category first to narrow a big catalog down, then pick the item —
+  // two small text dropdowns instead of one long list or a photo grid.
+  const [addCategory, setAddCategory] = useState("");
 
   // Shared category list — same source as the Form Builder template category
   // dropdown, so admins manage categories once and see them everywhere.
@@ -364,6 +461,10 @@ function CatalogModal({
   }
 
   const componentChoices = allItems.filter((i) => i.kind !== "assembly" && i.id !== form.id);
+  const componentCategories = Array.from(new Set(componentChoices.map((i) => i.category))).sort();
+  const filteredComponentChoices = addCategory
+    ? componentChoices.filter((i) => i.category === addCategory)
+    : componentChoices;
 
   return (
     <div
@@ -580,18 +681,34 @@ function CatalogModal({
                     </div>
                   )}
                 </div>
-                <select
-                  value=""
-                  onChange={(e) => e.target.value && addComponent(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">+ Add component…</option>
-                  {componentChoices.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {KIND_META[i.kind].label}: {i.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="space-y-1.5">
+                  <select
+                    value={addCategory}
+                    onChange={(e) => setAddCategory(e.target.value)}
+                    className={inputCls}
+                    aria-label="Filter by category"
+                  >
+                    <option value="">All categories</option>
+                    {componentCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value=""
+                    onChange={(e) => e.target.value && addComponent(e.target.value)}
+                    className={inputCls}
+                    aria-label="Add component"
+                  >
+                    <option value="">+ Add component… ({filteredComponentChoices.length})</option>
+                    {filteredComponentChoices.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {KIND_META[i.kind].label}: {i.name} — {money(itemUnitPrice(i, lookup))}/{i.unit}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <Field label="Override price (optional)">
                   <div className="flex items-center gap-2">
                     <button

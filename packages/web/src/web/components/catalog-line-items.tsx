@@ -31,9 +31,12 @@ export function CatalogLineItems({
 }) {
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
 
   const totals = sumLineItems(lineItems);
+  const categories = Array.from(new Set(items.map((i) => i.category))).sort();
   const filtered = items.filter((i) => {
+    if (cat && i.category !== cat) return false;
     if (!q) return true;
     const s = q.toLowerCase();
     return (
@@ -63,15 +66,30 @@ export function CatalogLineItems({
 
       {picking && (
         <div className="mb-3 rounded-lg border border-white/10 bg-ink-2 p-2">
-          <div className="relative mb-2">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-            <input
-              aria-label="Search catalog"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search catalog…"
-              className="w-full rounded-md border border-white/10 bg-ink px-2.5 py-1.5 pl-8 text-sm outline-none focus:border-brand"
-            />
+          <div className="mb-2 flex gap-1.5">
+            <select
+              aria-label="Filter by category"
+              value={cat}
+              onChange={(e) => setCat(e.target.value)}
+              className="w-28 shrink-0 rounded-md border border-white/10 bg-ink px-2 py-1.5 text-xs outline-none focus:border-brand"
+            >
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <input
+                aria-label="Search catalog"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search catalog…"
+                className="w-full rounded-md border border-white/10 bg-ink px-2.5 py-1.5 pl-8 text-sm outline-none focus:border-brand"
+              />
+            </div>
           </div>
           <div className="max-h-52 space-y-1 overflow-y-auto">
             {filtered.map((i) => {
