@@ -7,6 +7,7 @@ import { attachMembership, isMember } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { auth } from "../auth";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
+import { logoDims } from "../../services/email-render";
 import { sendSms } from "../../services/sms";
 
 import { z } from "zod";
@@ -122,8 +123,9 @@ export const invitesRoutes = new Hono<AppEnv>()
     const accent = brand.brandColor || "#06B6D4";
     // Tenant logo always sits above the company name in the header.
     const logoSrc = resolveLogo(brand.logoUrl);
+    const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
     const logoBlock = logoSrc
-      ? `<img src="${logoSrc}" alt="${company}" style="height:40px;max-width:220px;display:block;margin:0 auto 8px"/>
+      ? `<img src="${logoSrc}" alt="${company}" style="height:${logoH}px;max-width:${logoMaxW}px;display:block;margin:0 auto 8px"/>
          <div style="color:#fff;font-size:15px;font-weight:700;text-align:center">${company}</div>`
       : `<div style="color:#fff;font-size:18px;font-weight:800;text-align:center">${company}</div>`;
 

@@ -11,7 +11,7 @@ import { db } from "../api/database";
 import * as schema from "../api/database/schema";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "./email";
-import { renderEmailDesign, designToText, type EmailBlock, type EmailBrand } from "./email-render";
+import { renderEmailDesign, designToText, logoDims, type EmailBlock, type EmailBrand } from "./email-render";
 import { verifiedDomainsForCompany } from "./email-domains";
 import { pickSender } from "./sender";
 import { sendSms, trackingUrl } from "./sms";
@@ -251,6 +251,7 @@ export async function renderDesignPreview(companyId: string, blocks: EmailBlock[
   const brand: EmailBrand = {
     company: companyName,
     logoUrl: cfg?.emailLogoUrl || "",
+    logoHeight: cfg?.emailLogoHeight || undefined,
     brandColor: cfg?.emailBrandColor || "#06B6D4",
     headerStyle: (cfg?.emailHeaderStyle as any) || "gradient",
     bgColor: cfg?.emailBgColor || "#f1f5f9",
@@ -268,6 +269,7 @@ export async function sendDesignTest(companyId: string, to: string, subject: str
   const brand: EmailBrand = {
     company: companyName,
     logoUrl: cfg?.emailLogoUrl || "",
+    logoHeight: cfg?.emailLogoHeight || undefined,
     brandColor: cfg?.emailBrandColor || "#06B6D4",
     headerStyle: (cfg?.emailHeaderStyle as any) || "gradient",
     bgColor: cfg?.emailBgColor || "#f1f5f9",
@@ -517,6 +519,7 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
     const emailBrand: EmailBrand = {
       company: vars.company,
       logoUrl: chanCfg?.emailLogoUrl || "",
+      logoHeight: chanCfg?.emailLogoHeight || undefined,
       brandColor: chanCfg?.emailBrandColor || "#06B6D4",
       headerStyle: (chanCfg?.emailHeaderStyle as any) || "gradient",
       bgColor: chanCfg?.emailBgColor || "#f1f5f9",
@@ -640,9 +643,10 @@ function emailHtml(
 ): string {
   const color = brand?.brandColor || "#06B6D4";
   const logo = absUrl(brand?.logoUrl || "");
+  const { height: logoH, maxWidth: logoMaxW } = logoDims(brand?.logoHeight);
   // Header: tenant logo when we have one, else the company name wordmark.
   const header = logo
-    ? `<img src="${logo}" alt="${v.company}" style="max-height:40px;max-width:200px;display:block" />`
+    ? `<img src="${logo}" alt="${v.company}" style="max-height:${logoH}px;max-width:${logoMaxW}px;display:block" />`
     : `<div style="color:#fff;font-size:18px;font-weight:800">${v.company}</div>`;
   const headerBg = logo
     ? "#ffffff"

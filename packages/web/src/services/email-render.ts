@@ -19,12 +19,29 @@ export type EmailBlock =
 export interface EmailBrand {
   company: string;
   logoUrl?: string;
+  // header logo height in px. Unset/0 renders at the DEFAULT_LOGO_HEIGHT default.
+  logoHeight?: number;
   brandColor?: string;
   headerStyle?: "gradient" | "solid" | "minimal";
   bgColor?: string;
   footer?: string;
   // base origin to resolve relative logo paths (e.g. /uploads/x.png)
   origin?: string;
+}
+
+/**
+ * Header logo used to render at a hardcoded 40px tall everywhere. Doubled to
+ * 80px as the new baseline default (Dan: "make it twice as large as it is
+ * now"), applied automatically to every tenant that hasn't picked a custom
+ * size yet — see emailLogoHeight on notification_channels.
+ */
+export const DEFAULT_LOGO_HEIGHT = 80;
+// Keep the header logo's max-width proportional to its height, same ratio the
+// old hardcoded 40px/220px pair used, so wide logos never get cropped oddly
+// as the size control moves.
+export function logoDims(height?: number): { height: number; maxWidth: number } {
+  const h = height && height > 0 ? height : DEFAULT_LOGO_HEIGHT;
+  return { height: h, maxWidth: Math.round(h * 5.5) };
 }
 
 const esc = (s: string) =>
@@ -109,8 +126,9 @@ export function renderEmailDesign(
         : "background:#ffffff;border-bottom:1px solid #e2e8f0";
   const headerColor = style === "minimal" ? "#0f172a" : "#ffffff";
 
+  const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
   const brandMark = logo
-    ? `<img src="${logo}" alt="${esc(brand.company)}" style="height:40px;max-width:220px;display:inline-block"/>`
+    ? `<img src="${logo}" alt="${esc(brand.company)}" style="height:${logoH}px;max-width:${logoMaxW}px;display:inline-block"/>`
     : `<span style="font-size:24px;font-weight:800;color:${headerColor};letter-spacing:-0.5px">${esc(brand.company)}</span>`;
 
   const body = (blocks || []).map((b) => renderBlock(b, brand, interpolate)).join("");

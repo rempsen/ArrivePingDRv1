@@ -12,6 +12,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
+import { logoDims } from "../../services/email-render";
 
 const SITE = (process.env.WEBSITE_URL || "http://localhost:4200").replace(/\/$/, "");
 
@@ -38,10 +39,11 @@ export async function sendJoinCompanyInvite(a: {
   const brand = await loadEmailBrand(a.companyId);
   const accent = brand.brandColor || "#06B6D4";
   const logoSrc = resolveLogo(brand.logoUrl);
+  const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
   const link = `${SITE}/join-company/${a.membershipId}`;
 
   const logoBlock = logoSrc
-    ? `<img src="${logoSrc}" alt="${company}" style="height:40px;max-width:220px;display:block;margin:0 auto 8px"/>
+    ? `<img src="${logoSrc}" alt="${company}" style="height:${logoH}px;max-width:${logoMaxW}px;display:block;margin:0 auto 8px"/>
        <div style="color:#fff;font-size:15px;font-weight:700;text-align:center">${company}</div>`
     : `<div style="color:#fff;font-size:18px;font-weight:800;text-align:center">${company}</div>`;
 

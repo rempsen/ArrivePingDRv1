@@ -1,0 +1,1 @@
+ALTER TABLE `notification_channels` ADD `email_logo_height` integer DEFAULT 0 NOT NULL;

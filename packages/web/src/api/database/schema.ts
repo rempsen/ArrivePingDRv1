@@ -930,6 +930,7 @@ export const notificationChannels = sqliteTable("notification_channels", {
   quietChannels: text("quiet_channels").notNull().default("sms,email"), // csv of channels affected
   // ---- branded HTML email identity (applies to every email template) ----
   emailLogoUrl: text("email_logo_url").notNull().default(""), // header logo (uploaded file path or external URL)
+  emailLogoHeight: integer("email_logo_height").notNull().default(0), // header logo height in px; 0 = auto (renders at the 80px default)
   emailBrandColor: text("email_brand_color").notNull().default("#06B6D4"), // header gradient + button color
   emailHeaderStyle: text("email_header_style").notNull().default("gradient"), // gradient | solid | minimal
   emailBgColor: text("email_bg_color").notNull().default("#f1f5f9"), // outer page background

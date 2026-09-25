@@ -722,6 +722,21 @@ function EmailBrandCard({ f, set }: { f: any; set: (k: string, v: any) => void }
           </div>
           <input aria-label="…or paste a logo URL" className={`${inputCls} mt-1.5 text-xs`} value={logo} onChange={(e) => set("emailLogoUrl", e.target.value)} placeholder="…or paste a logo URL" />
           <input aria-label="File upload" ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <label htmlFor="brand-logo-height" className="shrink-0 text-[11px] font-semibold text-slate-500">Logo size</label>
+            <input
+              id="brand-logo-height"
+              aria-label="Logo height in pixels"
+              type="number"
+              min={20}
+              max={400}
+              className={`${inputCls} h-8 text-xs`}
+              value={f.emailLogoHeight || ""}
+              onChange={(e) => set("emailLogoHeight", e.target.value ? Math.round(Number(e.target.value)) : 0)}
+              placeholder="80"
+            />
+            <span className="shrink-0 text-[11px] text-slate-500">px tall (blank = 80px default)</span>
+          </div>
         </div>
 
         {/* color + style */}

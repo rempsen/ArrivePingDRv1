@@ -256,10 +256,16 @@ export function EmailEditor({
  * the Email Designer, and the raw event templates all read the same value.
  * No need to drop an Image block into the body to get a logo at the top.
  * -------------------------------------------------------------------------- */
+// Header logo used to render at a hardcoded 40px tall everywhere on the
+// backend — mirrored here so the placeholder/blank-input default this panel
+// shows always matches what an unset size actually renders at.
+const DEFAULT_LOGO_HEIGHT = 80;
+
 function HeaderLogoPanel({ onChange }: { onChange: () => void }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
+  const [heightDraft, setHeightDraft] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const cfg = useQuery({
@@ -267,11 +273,24 @@ function HeaderLogoPanel({ onChange }: { onChange: () => void }) {
     queryFn: async () => (await api["notif-config"].channels.$get()).json(),
   });
   const logo = (cfg.data as any)?.channels?.emailLogoUrl || "";
+  const savedHeight = Number((cfg.data as any)?.channels?.emailLogoHeight || 0);
+
+  // Local draft trails the server value until the user edits it, same pattern
+  // React Query components elsewhere in this file use for a debounced field.
+  useEffect(() => { setHeightDraft(savedHeight > 0 ? String(savedHeight) : ""); }, [savedHeight]);
 
   const saveLogo = useMutation({
-    mutationFn: async (emailLogoUrl: string) => (await api["notif-config"].channels.$patch({ json: { emailLogoUrl } })).json(),
+    mutationFn: async (patch: { emailLogoUrl?: string; emailLogoHeight?: number }) =>
+      (await api["notif-config"].channels.$patch({ json: patch })).json(),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["notif-channels"] }); onChange(); },
   });
+
+  const applyHeight = () => {
+    const n = heightDraft.trim() ? Math.round(Number(heightDraft)) : 0;
+    if (heightDraft.trim() && (!Number.isFinite(n) || n < 20 || n > 400)) return; // leave invalid input alone, don't save garbage
+    if (n === savedHeight) return;
+    saveLogo.mutate({ emailLogoHeight: n });
+  };
 
   const upload = async (file: File) => {
     setUploading(true);
@@ -303,7 +322,7 @@ function HeaderLogoPanel({ onChange }: { onChange: () => void }) {
             {uploading ? "Uploading…" : "Upload logo"}
           </button>
           {logo && (
-            <button onClick={() => saveLogo.mutate("")} className="w-full rounded-md border border-white/10 text-[10px] font-semibold text-slate-400 hover:text-red-400">
+            <button onClick={() => saveLogo.mutate({ emailLogoUrl: "" })} className="w-full rounded-md border border-white/10 text-[10px] font-semibold text-slate-400 hover:text-red-400">
               Remove
             </button>
           )}
@@ -319,13 +338,35 @@ function HeaderLogoPanel({ onChange }: { onChange: () => void }) {
           placeholder="…or paste a logo URL"
         />
         <button
-          onClick={() => { if (urlDraft.trim()) { saveLogo.mutate(urlDraft.trim()); setUrlDraft(""); } }}
+          onClick={() => { if (urlDraft.trim()) { saveLogo.mutate({ emailLogoUrl: urlDraft.trim() }); setUrlDraft(""); } }}
           disabled={!urlDraft.trim() || saveLogo.isPending}
           className="shrink-0 rounded-lg border border-white/10 bg-ink px-2.5 text-xs font-semibold text-slate-300 hover:text-cyan-glow disabled:opacity-40"
         >
           Set
         </button>
       </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <label htmlFor="logo-height" className="shrink-0 text-[10px] font-semibold text-slate-500">
+          Logo size
+        </label>
+        <input
+          id="logo-height"
+          aria-label="Logo height in pixels"
+          type="number"
+          min={20}
+          max={400}
+          className={`${inputCls} h-7 text-xs`}
+          value={heightDraft}
+          onChange={(e) => setHeightDraft(e.target.value)}
+          onBlur={applyHeight}
+          onKeyDown={(e) => { if (e.key === "Enter") { (e.target as HTMLInputElement).blur(); } }}
+          placeholder={String(DEFAULT_LOGO_HEIGHT)}
+        />
+        <span className="shrink-0 text-[10px] text-slate-500">px tall</span>
+      </div>
+      <p className="mt-1 text-[10px] leading-relaxed text-slate-600">
+        Height in pixels for the header bar. Blank = {DEFAULT_LOGO_HEIGHT}px default.
+      </p>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { fmtInZone } from "../shared/tz";
 import { pickSender, pickRetrySender, type SenderIdentity } from "./sender";
 import { verifiedDomainsForCompany } from "./email-domains";
+import { logoDims } from "./email-render";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -100,6 +101,7 @@ const INK = "#0B1120";
 export interface TenantEmailBrand {
   company: string; // display name shown under the logo
   logoUrl?: string; // header logo (uploaded path like /uploads/x.png or absolute URL)
+  logoHeight?: number; // header logo height in px; unset/0 = auto default
   brandColor?: string; // header gradient + button color
 }
 
@@ -171,7 +173,7 @@ export async function loadEmailBrand(companyId?: string): Promise<TenantEmailBra
     const company = (cs?.name || "").trim() || FALLBACK_BRAND.company;
     const logoUrl = (chan?.emailLogoUrl || cs?.logo || "").trim();
     const brandColor = (chan?.emailBrandColor || cs?.brandColor || BRAND).trim();
-    return { company, logoUrl, brandColor };
+    return { company, logoUrl, logoHeight: chan?.emailLogoHeight || undefined, brandColor };
   } catch (e) {
     console.error("loadEmailBrand failed", e);
     return FALLBACK_BRAND;
@@ -202,12 +204,13 @@ function shell(title: string, bodyHtml: string, cta?: { label: string; url: stri
   const accent = brand.brandColor || BRAND;
   const company = brand.company || FALLBACK_BRAND.company;
   const logo = resolveLogo(brand.logoUrl);
+  const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
 
   // Logo always sits above the name. With a logo: image + name underneath.
   // Without a logo: name only (styled), preserving the ArrivePing look as fallback.
   const header = logo
     ? `<div style="text-align:center;margin-bottom:20px">
-        <img src="${logo}" alt="${esc(company)}" style="height:46px;max-width:240px;display:block;margin:0 auto 8px"/>
+        <img src="${logo}" alt="${esc(company)}" style="height:${logoH}px;max-width:${logoMaxW}px;display:block;margin:0 auto 8px"/>
         <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:-0.2px">${esc(company)}</div>
       </div>`
     : `<div style="text-align:center;margin-bottom:20px">

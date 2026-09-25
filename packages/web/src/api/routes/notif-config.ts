@@ -20,6 +20,7 @@ import { jsonBody,
   bool,
   hexColor,
   outboundUrl,
+  pixelSize,
 } from "../lib/validate";
 
 const EVENTS = Object.keys(EVENT_META) as NvcEvent[];
@@ -123,6 +124,9 @@ const ChannelsPatch = z
     quietEnd: hhmm("Quiet hours end"),
     quietChannels: z.string().trim().max(120),
     emailLogoUrl: z.string().trim().max(2_000),
+    // Header logo height in px. 0 = auto (renders at the shared default —
+    // see DEFAULT_LOGO_HEIGHT in email-render.ts).
+    emailLogoHeight: z.union([z.literal(0), pixelSize("Logo height", 20, 400)]),
     emailBrandColor: z.union([hexColor("Brand colour"), z.literal("")]),
     emailHeaderStyle: z.enum(["gradient", "solid", "plain", "logo"], {
       error: "Header style must be gradient, solid, plain or logo",

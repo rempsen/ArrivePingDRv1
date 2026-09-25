@@ -116,6 +116,19 @@ export const durationMins = z
   .min(1, "Duration must be at least 1 minute")
   .max(43_200, "Duration can't exceed 30 days");
 
+/**
+ * A pixel size for a rendered image (e.g. an email header logo). 0 means
+ * "unset / use the default" — callers treat 0 the same as not sending the
+ * field at all, so a control can be reset back to auto without a separate
+ * "clear" action.
+ */
+export const pixelSize = (label = "Size", min = 1, max = 2_000) =>
+  z
+    .number({ message: `${label} must be a number` })
+    .int(`${label} must be a whole number of pixels`)
+    .min(min, `${label} must be at least ${min}px`)
+    .max(max, `${label} can't exceed ${max}px`);
+
 /** Required human-entered short text. */
 export const shortText = (label: string, max = 200) =>
   z
