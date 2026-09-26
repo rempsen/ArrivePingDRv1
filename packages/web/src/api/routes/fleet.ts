@@ -71,6 +71,11 @@ export const fleetRoutes = new Hono<AppEnv>()
           and(
             eq(schema.bookings.riderId, r.id),
             inArray(schema.bookings.status, ACTIVE_STATUSES),
+            // An archived job only gets deletedAt set, never a status change
+            // (so restoring it is exact) — without this a deleted job stuck
+            // in an active status pins a tech as "on a job" that no longer
+            // exists on the live map forever.
+            isNull(schema.bookings.deletedAt),
           ),
         ).catch(() => []);
         activeAll.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
@@ -117,7 +122,7 @@ export const fleetRoutes = new Hono<AppEnv>()
   .get("/pending", requireAuth, async (c) => {
     const rows = await tx(c).select(
       schema.bookings,
-      eq(schema.bookings.status, "pending"),
+      and(eq(schema.bookings.status, "pending"), isNull(schema.bookings.deletedAt)),
     );
     return c.json({ pending: rows }, 200);
   })
