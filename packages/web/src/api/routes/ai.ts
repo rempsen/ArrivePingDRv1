@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../database";
 import * as schema from "../database/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx } from "../middleware/auth";
 import {
   AVG_KMH,
@@ -107,6 +107,7 @@ export const aiRoutes = new Hono<AppEnv>()
       and(
         eq(schema.bookings.riderId, techId),
         inArray(schema.bookings.status, ["assigned", "enroute"]),
+        isNull(schema.bookings.deletedAt),
       ),
     );
 

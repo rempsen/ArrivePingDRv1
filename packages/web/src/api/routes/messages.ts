@@ -119,6 +119,10 @@ export const messagesRoutes = new Hono<AppEnv>()
           eq(schema.bookings.status, "enroute"),
           eq(schema.bookings.status, "in_progress"),
         ),
+        // Archiving only sets deletedAt, never status — without this a
+        // deleted job stuck in a live status keeps hijacking this tech's
+        // "current job" thread forever.
+        isNull(schema.bookings.deletedAt),
       ),
     );
     const active = activeAll.slice(0, 1);

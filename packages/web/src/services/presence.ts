@@ -1,6 +1,6 @@
 import { db } from "../api/database";
 import * as schema from "../api/database/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
 
 /**
@@ -81,6 +81,10 @@ export async function reconcileRiderStatus(companyId: string, riderId: string): 
       and(
         eq(schema.bookings.riderId, riderId),
         inArray(schema.bookings.status, ACTIVE_JOB_STATUSES as unknown as string[]),
+        // An archived job keeps its status (only deletedAt is set, so
+        // restoring it is exact) — without this a deleted job stuck in an
+        // active status locks the tech "busy" forever with no job to clear it.
+        isNull(schema.bookings.deletedAt),
       ),
     )
   ).map((b) => ({ id: b.id, status: b.status, assignStatus: b.assignStatus, scheduledAt: b.scheduledAt }));

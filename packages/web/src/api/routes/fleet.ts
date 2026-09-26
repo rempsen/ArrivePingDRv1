@@ -167,6 +167,7 @@ export const fleetRoutes = new Hono<AppEnv>()
       and(
         eq(schema.bookings.riderId, techId),
         inArray(schema.bookings.status, ACTIVE_STATUSES),
+        isNull(schema.bookings.deletedAt),
       ),
     );
     activeAll.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
