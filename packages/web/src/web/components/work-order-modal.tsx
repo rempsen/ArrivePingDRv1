@@ -24,6 +24,7 @@ import {
   Clock,
   Navigation,
   MapPin,
+  ClipboardList,
 } from "lucide-react";
 import { apiHeaders } from "../lib/api";
 import { ok } from "../lib/api-ok";
@@ -1346,6 +1347,7 @@ export function WorkOrderModal({
       {/* ── Job Photos (only visible when editing an existing booking) ── */}
       {isEdit && editBooking?.id && (
         <div className="mt-4 space-y-4">
+          <PunchlistPanel bookingId={editBooking.id} />
           <JobPhotosPanel bookingId={editBooking.id} />
           <FieldRecordPanel bookingId={editBooking.id} />
         </div>
@@ -1373,6 +1375,140 @@ export function WorkOrderModal({
       danger
     />
     </>
+  );
+}
+
+// ─── Punch List Panel ────────────────────────────────────────────────────────
+// Deficiencies synced in from the BMD Punch List integration (routes/punchlist.ts)
+// for a hotel-project job. Hidden entirely when the booking has none — most
+// jobs never touch this feature. The office can watch trade progress and
+// nudge status here; the actual field work (notes, after-photos, sign-off)
+// happens on the technician's phone.
+
+function PunchlistPanel({ bookingId }: { bookingId: string }) {
+  const qc = useQueryClient();
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  const q = useQuery({
+    queryKey: ["punchlist-deficiencies", bookingId],
+    queryFn: async () => {
+      const res = await fetch(`/api/punchlist/bookings/${bookingId}/deficiencies`, { headers: apiHeaders() });
+      if (!res.ok) return { deficiencies: [] as any[] };
+      return (await res.json()) as { deficiencies: any[] };
+    },
+    refetchInterval: 20000, // catch technician updates from the field without a manual refresh
+  });
+
+  const patch = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetch(`/api/punchlist/deficiencies/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...apiHeaders() },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error(`update failed (${res.status})`);
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["punchlist-deficiencies", bookingId] }),
+  });
+
+  const list = q.data?.deficiencies ?? [];
+  if (!q.isLoading && list.length === 0) return null;
+
+  const statusStyle = (s: string) =>
+    s === "done"
+      ? "bg-emerald-500/15 text-emerald-400"
+      : s === "in_progress"
+        ? "bg-amber-500/15 text-amber-400"
+        : "bg-slate-500/15 text-slate-400";
+
+  return (
+    <div>
+      <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+        <ClipboardList className="h-4 w-4 text-brand" />
+        Punch List
+        {list.length > 0 && (
+          <span className="ml-1 rounded-full bg-brand/20 px-2 py-0.5 text-[10px] font-bold text-brand">{list.length}</span>
+        )}
+        <span className="text-[10px] font-normal text-slate-500">synced from BMD Punch List</span>
+      </p>
+      {q.isLoading ? (
+        <p className="py-3 text-center text-xs text-slate-600">Loading…</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((d: any) => {
+            let before: string[] = [];
+            let after: string[] = [];
+            try { before = JSON.parse(d.photosBefore || "[]"); } catch { /* ignore malformed */ }
+            try { after = JSON.parse(d.photosAfter || "[]"); } catch { /* ignore malformed */ }
+            return (
+              <div key={d.id} className="rounded-xl border border-white/10 bg-ink-3 p-3">
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-white">
+                    {[d.floor, d.location, d.area].filter(Boolean).join(" · ") || `Deficiency ${d.externalId}`}
+                  </p>
+                  <select
+                    aria-label="Deficiency status"
+                    value={d.status}
+                    disabled={patch.isPending}
+                    onChange={(e) => patch.mutate({ id: d.id, status: e.target.value })}
+                    className={`cursor-pointer rounded-md border-none px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${statusStyle(d.status)}`}
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="done">Done</option>
+                  </select>
+                </div>
+                {(d.material || d.issueType) && (
+                  <p className="text-xs text-slate-400">{[d.material, d.issueType].filter(Boolean).join(" · ")}</p>
+                )}
+                {d.description && <p className="mt-1 text-xs text-slate-300">{d.description}</p>}
+                {d.tradeName && <p className="mt-1.5 text-[11px] text-slate-500">Trade: {d.tradeName}</p>}
+                {d.technicianNotes && (
+                  <p className="mt-1.5 rounded-lg bg-white/[0.03] px-2 py-1.5 text-[11px] text-slate-300">
+                    {d.technicianNotes}
+                  </p>
+                )}
+                {(before.length > 0 || after.length > 0) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {before.map((u, i) => (
+                      <button key={`b${i}`} type="button" onClick={() => setLightbox(u)} className="h-10 w-10 overflow-hidden rounded border border-white/10" title="Before photo">
+                        <img src={u} className="h-full w-full object-cover" alt="Before" />
+                      </button>
+                    ))}
+                    {after.map((u, i) => (
+                      <button key={`a${i}`} type="button" onClick={() => setLightbox(u)} className="h-10 w-10 overflow-hidden rounded border border-emerald-500/40" title="After photo">
+                        <img src={u} className="h-full w-full object-cover" alt="After" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {d.signOffName && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-emerald-400">Signed off by {d.signOffName}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {lightbox && (
+        <dialog
+          open
+          aria-label="Punch list photo viewer"
+          onCancel={() => setLightbox(null)}
+          className="fixed inset-0 z-[9999] m-0 flex h-full w-full max-h-none max-w-none items-center justify-center bg-black/90 p-4 backdrop-blur-sm border-none"
+        >
+          <button type="button" aria-label="Close photo viewer" onClick={() => setLightbox(null)} className="fixed inset-0 h-full w-full cursor-default border-none bg-transparent" />
+          <button type="button" onClick={() => setLightbox(null)} className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20">
+            <X className="h-5 w-5" />
+          </button>
+          <button type="button" onClick={(e) => e.stopPropagation()} className="relative z-10 border-none bg-transparent p-0 cursor-default" aria-label="Full size photo">
+            <img src={lightbox} alt="Full size view" className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain shadow-2xl" />
+          </button>
+        </dialog>
+      )}
+    </div>
   );
 }
 

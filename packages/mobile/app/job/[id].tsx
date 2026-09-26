@@ -50,6 +50,7 @@ import {
   Microphone,
   Stop,
   HandPalm,
+  ClipboardText,
 } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { useCustomerNoun, useJobNoun } from "../../lib/use-brand";
@@ -135,6 +136,12 @@ export default function JobDetail() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const voiceSupported = isVoiceNoteSupported();
+  // BMD Punch List: which deficiency's notes box is expanded, and which one
+  // is currently uploading an after-photo (only one at a time — mirrors the
+  // job-level `uploading` flag above).
+  const [defExpanded, setDefExpanded] = useState<string | null>(null);
+  const [defNoteDraft, setDefNoteDraft] = useState<Record<string, string>>({});
+  const [defUploading, setDefUploading] = useState<string | null>(null);
 
   const job = useQuery({
     queryKey: ["job", id],
@@ -195,6 +202,74 @@ export default function JobDetail() {
       return (await res.json()).photos as any[];
     },
   });
+
+  // BMD Punch List: deficiencies synced onto this job from the hotel-project
+  // integration. Empty for the overwhelming majority of jobs — the block
+  // renders nothing in that case (see `deficiencies.length > 0` below).
+  const deficiencies = useQuery({
+    queryKey: ["punchlist-deficiencies", id],
+    queryFn: async () => {
+      const res = await fetch(`${API}/api/punchlist/bookings/${id}/deficiencies`, { headers: authHeaders() });
+      if (!res.ok) return [] as any[];
+      return ((await res.json()).deficiencies ?? []) as any[];
+    },
+    refetchInterval: 30000,
+  });
+
+  const patchDeficiency = useMutation({
+    mutationFn: async ({ defId, body }: { defId: string; body: Record<string, unknown> }) => {
+      const res = await fetch(`${API}/api/punchlist/deficiencies/${defId}`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["punchlist-deficiencies", id] }),
+    onError: (e: any) => Alert.alert("Couldn't update", e?.message || "Try again"),
+  });
+
+  async function captureAfterPhoto(defId: string) {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Camera needed", "Allow camera to attach a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setDefUploading(defId);
+    try {
+      const form = new FormData();
+      form.append("file", {
+        uri: asset.uri,
+        name: asset.fileName || "punchlist.jpg",
+        type: asset.mimeType || "image/jpeg",
+      } as any);
+      const res = await fetch(`${API}/api/punchlist/deficiencies/${defId}/photos`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: form,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      await qc.invalidateQueries({ queryKey: ["punchlist-deficiencies", id] });
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message || "Try again");
+    } finally {
+      setDefUploading(null);
+    }
+  }
+
+  function signOffDeficiency(defId: string) {
+    Alert.alert("Sign off this item?", "This marks the repair as inspected and complete under your name.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign off",
+        onPress: () => patchDeficiency.mutate({ defId, body: { markSignedOff: true, status: "done" } }),
+      },
+    ]);
+  }
 
   const setStatus = useMutation({
     mutationFn: async (status: string) => {
@@ -1118,6 +1193,127 @@ export default function JobDetail() {
             </View>
           )}
 
+          {/* Punch List — deficiencies synced from the BMD Punch List hotel-
+              project integration (routes/punchlist.ts). Renders nothing for
+              the overwhelming majority of jobs, which have none. */}
+          {(deficiencies.data?.length ?? 0) > 0 && (
+            <View style={s.block}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <ClipboardText color={C.brand} size={18} weight="fill" />
+                <Text style={s.blockTitle}>Punch List</Text>
+                <Text style={s.checkProgress}>
+                  {deficiencies.data!.filter((d: any) => d.status === "done").length}/{deficiencies.data!.length}
+                </Text>
+              </View>
+              {deficiencies.data!.map((d: any) => {
+                let after: string[] = [];
+                try { after = JSON.parse(d.photosAfter || "[]"); } catch { /* ignore malformed */ }
+                const label = [d.floor, d.location, d.area].filter(Boolean).join(" · ") || `Deficiency ${d.externalId}`;
+                const expanded = defExpanded === d.id;
+                return (
+                  <View key={d.id} style={s.defCard}>
+                    <Pressable
+                      onPress={() => setDefExpanded(expanded ? null : d.id)}
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${label}, ${d.status}`}
+                    >
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={s.defTitle}>{label}</Text>
+                        {(d.material || d.issueType) && (
+                          <Text style={s.defMeta}>{[d.material, d.issueType].filter(Boolean).join(" · ")}</Text>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          s.defStatusPill,
+                          d.status === "done" ? { backgroundColor: C.greenBg, borderColor: C.green } : null,
+                          d.status === "in_progress" ? { backgroundColor: "rgba(245,158,11,0.15)", borderColor: "#f59e0b" } : null,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            s.defStatusTxt,
+                            d.status === "done" && { color: C.green },
+                            d.status === "in_progress" && { color: "#f59e0b" },
+                          ]}
+                        >
+                          {d.status === "in_progress" ? "In progress" : d.status === "done" ? "Done" : "Open"}
+                        </Text>
+                      </View>
+                    </Pressable>
+
+                    {expanded && (
+                      <View style={{ marginTop: 10, gap: 10 }}>
+                        {!!d.description && <Text style={s.defDesc}>{d.description}</Text>}
+                        {!!d.tradeName && <Text style={s.defMeta}>Trade: {d.tradeName}</Text>}
+
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          {(["open", "in_progress", "done"] as const).map((st) => (
+                            <Pressable
+                              key={st}
+                              onPress={() => patchDeficiency.mutate({ defId: d.id, body: { status: st } })}
+                              style={[s.phaseChip, d.status === st && s.phaseChipOn]}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Mark ${st === "in_progress" ? "in progress" : st}`}
+                            >
+                              <Text style={[s.phaseTxt, d.status === st && s.phaseTxtOn]}>
+                                {st === "in_progress" ? "In progress" : st[0]!.toUpperCase() + st.slice(1)}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+
+                        <TextInput
+                          style={[s.msgInput, { minHeight: 60, paddingTop: 10 }]}
+                          placeholder="Notes for the office…"
+                          placeholderTextColor={C.muted}
+                          value={defNoteDraft[d.id] ?? d.technicianNotes ?? ""}
+                          onChangeText={(t) => setDefNoteDraft((p) => ({ ...p, [d.id]: t }))}
+                          onBlur={() => {
+                            const val = defNoteDraft[d.id];
+                            if (val !== undefined && val !== d.technicianNotes) {
+                              patchDeficiency.mutate({ defId: d.id, body: { technicianNotes: val } });
+                            }
+                          }}
+                          multiline
+                          textAlignVertical="top"
+                        />
+
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                          <Pressable onPress={() => captureAfterPhoto(d.id)} style={s.photoBtn} disabled={defUploading === d.id}>
+                            {defUploading === d.id
+                              ? <ActivityIndicator color={C.brand} size="small" />
+                              : <Camera color={C.brand} size={16} weight="fill" />}
+                            <Text style={s.photoBtnTxt}>{defUploading === d.id ? "Uploading…" : "After photo"}</Text>
+                          </Pressable>
+                          {!d.signOffName ? (
+                            <Pressable onPress={() => signOffDeficiency(d.id)} style={s.photoBtn}>
+                              <CheckCircle color={C.green} size={16} weight="fill" />
+                              <Text style={[s.photoBtnTxt, { color: C.green }]}>Sign off</Text>
+                            </Pressable>
+                          ) : (
+                            <Text style={[s.defMeta, { color: C.green }]}>Signed off by {d.signOffName}</Text>
+                          )}
+                        </View>
+
+                        {after.length > 0 && (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <View style={{ flexDirection: "row", gap: 8 }}>
+                              {after.map((u: string, i: number) => (
+                                <Image key={i} source={{ uri: assetUrl(u) }} style={s.thumb} />
+                              ))}
+                            </View>
+                          </ScrollView>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
           {/* Photos — tagged before / during / after so the set stands up as
               proof of condition if the customer disputes anything later. */}
           <View style={s.block}>
@@ -1791,6 +1987,12 @@ const s = StyleSheet.create({
   photoBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   photoBtnTxt: { color: C.brand, fontSize: 13, fontWeight: "700" },
   thumb: { width: 96, height: 96, borderRadius: R.control, backgroundColor: C.bg3 },
+  defCard: { backgroundColor: C.bg3, borderRadius: R.control, borderWidth: 1, borderColor: C.border, padding: 12, marginTop: 8 },
+  defTitle: { color: C.text, fontSize: 14, fontWeight: "700" },
+  defMeta: { color: C.muted, fontSize: 12, marginTop: 2 },
+  defDesc: { color: C.sub, fontSize: 13, lineHeight: 18 },
+  defStatusPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: "transparent" },
+  defStatusTxt: { color: C.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
   emptyPhoto: { color: C.muted, fontSize: 13, marginTop: 8 },
   bubble: { maxWidth: "82%", borderRadius: R.card, paddingHorizontal: 13, paddingVertical: 9 },
   bubbleMine: { backgroundColor: C.brand, alignSelf: "flex-end" },

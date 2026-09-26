@@ -135,9 +135,12 @@ export function usePushNotifications() {
     registerPushToken();
 
     // Cold start: app opened from a notification tap.
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      routeFromNotification(response?.notification.request.content.data as any);
-    });
+    // TMP-TEST-GUARD: not available on web, remove before shipping if reverted.
+    if (Platform.OS !== "web") {
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        routeFromNotification(response?.notification.request.content.data as any);
+      });
+    }
 
     // Warm tap: user taps a notification while app is running/backgrounded.
     responseListener.current =

@@ -55,6 +55,7 @@ import { teamRoutes } from "./routes/team";
 import { superadminRoutes } from "./routes/superadmin";
 import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
+import { punchlistRoutes } from "./routes/punchlist";
 
 
 // CORS allowlist: comma-separated origins in CORS_ORIGINS. "*" allows all
@@ -303,7 +304,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/mcp", mcpRoutes)
   .route("/me", meRoutes)
   .route("/team", teamRoutes)
-  .route("/superadmin", superadminRoutes);
+  .route("/superadmin", superadminRoutes)
+  .route("/punchlist", punchlistRoutes);
 
 export type AppType = typeof app;
 export default app;

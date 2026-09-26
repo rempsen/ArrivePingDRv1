@@ -47,6 +47,8 @@ export const SCOPE_CATALOG = [
   { id: "logs:read", label: "Read audit logs", group: "Logs" },
   { id: "messages:write", label: "Send messages / notifications", group: "Comms" },
   { id: "export:read", label: "Export / read all data", group: "Export" },
+  { id: "punchlist:write", label: "Push punch-list deficiency assignments (creates jobs/technicians)", group: "Punch List" },
+  { id: "punchlist:read", label: "Read punch-list status/photo/sign-off updates", group: "Punch List" },
 ] as const;
 
 function mask(row: typeof schema.apiKeys.$inferSelect) {

@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true
     },
     "extra": {
-      "apiUrl": "https://uberize.ai",
+      "apiUrl": "http://localhost:4200",
       "applicationId": "nvc360-bgyv8cj",
       "eas": {
         "projectId": "6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"

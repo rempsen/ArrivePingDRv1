@@ -7,16 +7,17 @@
 import { useState } from "react";
 import { toast } from "../../components/toast";
 import { useParams, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Clock, Route as RouteIcon, Camera, FileText, Receipt,
-  DollarSign, Phone, Mail, MapPin, Pencil, Download, X,
+  DollarSign, Phone, Mail, MapPin, Pencil, Download, X, Archive, Loader2, ClipboardList,
 } from "lucide-react";
 import { PageWrap } from "../../components/brand";
 import { FullLoader } from "../../components/loader";
 import { apiHeaders } from "../../lib/api";
 import { money, fmtDate } from "../../lib/utils";
 import { useAuth } from "../../hooks/use-auth";
+import { useConfirm } from "../../components/confirm-dialog";
 import { RouteHistoryMap } from "../../components/route-history-map";
 import { WorkOrderModal } from "../../components/work-order-modal";
 
@@ -72,13 +73,112 @@ function Card({ title, icon, children, right }: { title: string; icon: React.Rea
   );
 }
 
+/** Read-only punch-list summary for the finished-job report — same data as
+ *  the dispatcher's editable panel on the work-order modal, minus the status
+ *  editing (this page is a historical record, not a working job). Renders
+ *  nothing when the job carries no punch-list deficiencies. */
+function PunchlistCard({ bookingId }: { bookingId: string }) {
+  const q = useQuery({
+    queryKey: ["punchlist-deficiencies", bookingId],
+    queryFn: () => jget<{ deficiencies: any[] }>(`/api/punchlist/bookings/${bookingId}/deficiencies`),
+  });
+  const list = q.data?.deficiencies ?? [];
+  if (!q.isLoading && list.length === 0) return null;
+
+  const statusStyle = (s: string) =>
+    s === "done"
+      ? "bg-emerald-500/15 text-emerald-400"
+      : s === "in_progress"
+        ? "bg-amber-500/15 text-amber-400"
+        : "bg-slate-500/15 text-slate-400";
+
+  return (
+    <Card
+      title="Punch List"
+      icon={<ClipboardList className="h-4 w-4 text-brand" />}
+      right={list.length > 0 ? <span className="rounded-full bg-brand/20 px-2 py-0.5 text-[10px] font-bold text-brand">{list.length}</span> : undefined}
+    >
+      {q.isLoading ? (
+        <p className="py-2 text-center text-xs text-slate-600">Loading…</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((d: any) => (
+            <div key={d.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">
+                  {[d.floor, d.location, d.area].filter(Boolean).join(" · ") || `Deficiency ${d.externalId}`}
+                </p>
+                <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${statusStyle(d.status)}`}>
+                  {d.status === "done" ? "Done" : d.status === "in_progress" ? "In progress" : "Open"}
+                </span>
+              </div>
+              {(d.material || d.issueType) && (
+                <p className="text-xs text-slate-400">{[d.material, d.issueType].filter(Boolean).join(" · ")}</p>
+              )}
+              {d.description && <p className="mt-1 text-xs text-slate-300">{d.description}</p>}
+              {d.tradeName && <p className="mt-1.5 text-[11px] text-slate-500">Trade: {d.tradeName}</p>}
+              {d.technicianNotes && (
+                <p className="mt-1.5 rounded-lg bg-white/[0.03] px-2 py-1.5 text-[11px] text-slate-300">{d.technicianNotes}</p>
+              )}
+              {d.signOffName && (
+                <p className="mt-1.5 text-[11px] font-semibold text-emerald-400">Signed off by {d.signOffName}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function JobReportPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { role } = useAuth();
   const canEditAnyway = role === "admin" || role === "superadmin";
+  // Archiving is the same soft-delete already offered on the Jobs list for
+  // every staff role that can see it there (admin/superadmin/dispatcher) — a
+  // finished, no-longer-relevant job (a test booking, a duplicate) had no way
+  // off this page short of "Edit anyway", which only edits fields and can't
+  // touch status. This gives the office an actual way to get it out of the
+  // active list from wherever they're looking at it, without hard-deleting
+  // the record — it can still be restored from the archive.
+  const canArchive = role === "admin" || role === "superadmin" || role === "dispatcher";
   const [editOpen, setEditOpen] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const qc = useQueryClient();
+
+  const archive = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/jobs/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: apiHeaders(),
+      });
+      if (!res.ok) throw new Error(`archive failed (${res.status})`);
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobSearch"] });
+      toast({ kind: "success", key: "job-archived", message: "Job archived — restore it from the archive any time." });
+      navigate("/admin/work-orders");
+    },
+    onError: (err: unknown) => {
+      toast({ kind: "error", key: "job-archive-failed", message: "Couldn't archive this job. Please try again.", detail: err instanceof Error ? err.message : undefined });
+    },
+  });
+
+  async function handleArchive() {
+    if (
+      await confirm({
+        title: "Archive this work order?",
+        message: "It moves to the archive and can be restored later. Use this for old test bookings or jobs that no longer belong on the active list.",
+        confirmLabel: "Archive",
+      })
+    )
+      archive.mutate();
+  }
 
   const q = useQuery({
     queryKey: ["job-report", id],
@@ -138,6 +238,16 @@ export default function JobReportPage() {
               title="This job is completed — only use this to correct a genuine mistake"
             >
               <Pencil className="h-3.5 w-3.5" /> Edit anyway
+            </button>
+          )}
+          {canArchive && (
+            <button
+              onClick={handleArchive}
+              disabled={archive.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-rose-500/40 hover:text-rose-400 disabled:opacity-60"
+              title="Move this job to the archive — for old test bookings or jobs that don't belong on the active list"
+            >
+              {archive.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />} Archive
             </button>
           )}
         </div>
@@ -211,6 +321,8 @@ export default function JobReportPage() {
               <p className="py-4 text-center text-sm text-slate-500">No photos attached to this job.</p>
             )}
           </Card>
+
+          <PunchlistCard bookingId={id!} />
 
           <Card title="Notes" icon={<FileText className="h-4 w-4 text-brand" />}>
             <p className="whitespace-pre-wrap text-sm text-slate-300">{j.notes || "No notes recorded for this job."}</p>
