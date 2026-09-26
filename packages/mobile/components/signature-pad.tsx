@@ -56,6 +56,7 @@ export function SignaturePad({
   onSubmit,
   submitting,
   colors,
+  onDrawStateChange,
 }: {
   /** Resolves when the signature has been persisted. */
   onSubmit: (payload: {
@@ -66,6 +67,13 @@ export function SignaturePad({
   }) => Promise<void>;
   submitting?: boolean;
   colors: { bg: string; card: string; text: string; muted: string; brand: string; line: string };
+  /**
+   * Fires true the instant a finger touches the pad, false the instant it
+   * lifts (or the gesture is cancelled). The parent screen uses this to turn
+   * its own ScrollView off for that window — see the note on the
+   * PanResponder below for why that matters.
+   */
+  onDrawStateChange?: (drawing: boolean) => void;
 }) {
   const [strokes, setStrokes] = useState<Point[][]>([]);
   const [name, setName] = useState("");
@@ -75,9 +83,27 @@ export function SignaturePad({
   const pan = useMemo(
     () =>
       PanResponder.create({
+        // This pad usually sits inside a ScrollView (the job screen). A plain
+        // "should set" responder only wins the JS touch-responder race — the
+        // ScrollView's own native UIScrollView pan gesture recognizer runs
+        // independently on the native side and can still start scrolling on
+        // the same touch, especially on the first move of a stroke. That's
+        // what made signing feel unreliable: half the strokes were partially
+        // eaten by the page trying to scroll underneath the finger.
+        //
+        // The capture variants below win the responder at touch-start rather
+        // than waiting for a move, and refusing termination stops the
+        // ScrollView from reclaiming the touch mid-stroke. Combined with the
+        // job screen setting scrollEnabled={false} on its ScrollView for the
+        // duration (via onDrawStateChange), the pad now gets the touch
+        // exclusively for the whole gesture.
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (e) => {
+          onDrawStateChange?.(true);
           current.current = [[e.nativeEvent.locationX, e.nativeEvent.locationY]];
           setStrokes((s) => [...s, current.current]);
         },
@@ -91,9 +117,14 @@ export function SignaturePad({
         },
         onPanResponderRelease: () => {
           current.current = [];
+          onDrawStateChange?.(false);
+        },
+        onPanResponderTerminate: () => {
+          current.current = [];
+          onDrawStateChange?.(false);
         },
       }),
-    [],
+    [onDrawStateChange],
   );
 
   const hasInk = strokes.some((st) => st.length > 1);

@@ -136,6 +136,11 @@ export default function JobDetail() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const voiceSupported = isVoiceNoteSupported();
+  // True while a finger is actually drawing on the signature pad. The page
+  // ScrollView is disabled for that window — see the "Customer sign-off"
+  // block below for why (nested PanResponder vs. the ScrollView's own native
+  // pan gesture recognizer fighting over the same touch).
+  const [signing, setSigning] = useState(false);
   // BMD Punch List: which deficiency's notes box is expanded, and which one
   // is currently uploading an after-photo (only one at a time — mirrors the
   // job-level `uploading` flag above).
@@ -741,7 +746,22 @@ export default function JobDetail() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={80}
       >
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+          // iOS lets a vertical ScrollView drift horizontally mid-gesture
+          // unless it's told to lock to whichever axis the touch started in.
+          // That side-to-side drift is what was making the page feel "loose"
+          // while scrolling, and made it fight the signature pad below for
+          // touch ownership. directionalLockEnabled is iOS-only; harmless no-op
+          // on Android, which doesn't have this diagonal-scroll behavior.
+          directionalLockEnabled
+          alwaysBounceHorizontal={false}
+          // Belt-and-suspenders: while a finger is mid-stroke on the signature
+          // pad, the page itself can't scroll at all, so the pad gets every
+          // touch event with zero competition.
+          scrollEnabled={!signing}
+        >
           <View style={s.statusRow}>
             <StatusBadge status={j.status} />
             <Text style={s.price}>{money(j.price)}</Text>
@@ -1397,6 +1417,7 @@ export default function JobDetail() {
                 <SignaturePad
                   submitting={savingSig}
                   onSubmit={submitSignature}
+                  onDrawStateChange={setSigning}
                   colors={{ bg: C.bg, card: C.bg3, text: C.text, muted: C.muted, brand: C.brand, line: C.border }}
                 />
               </View>
