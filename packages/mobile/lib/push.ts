@@ -134,8 +134,9 @@ export function usePushNotifications() {
   useEffect(() => {
     registerPushToken();
 
-    // Cold start: app opened from a notification tap.
-    // TMP-TEST-GUARD: not available on web, remove before shipping if reverted.
+    // Cold start: app opened from a notification tap. This API has no web
+    // implementation in Expo (native-only), so calling it unconditionally
+    // throws on the web build — guard to native platforms only.
     if (Platform.OS !== "web") {
       Notifications.getLastNotificationResponseAsync().then((response) => {
         routeFromNotification(response?.notification.request.content.data as any);
