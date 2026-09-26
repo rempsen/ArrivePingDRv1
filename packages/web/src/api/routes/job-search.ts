@@ -391,12 +391,14 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     if (format === "json") {
       return fileResponse(JSON.stringify({ ...enriched, raw: b }, null, 2), `${pre}-job-${jobNumber(b.id)}-${stamp}.json`, "application/json");
     }
-    // PDF: vertical label/value sheet (one column = label, one = value)
+    // PDF: vertical label/value sheet (one column = label, one = value),
+    // grouped into named sections (group carried from JOB_COLUMNS) so the
+    // report reads as a structured document instead of one 29-row dump.
     const rows = JOB_COLUMNS.map((col) => {
       let v: any = (enriched as any)[col.key];
       if (col.kind === "date" && v) v = fmtDetailDate(v);
       if (col.kind === "money" && v != null) v = `$${Number(v).toFixed(2)}`;
-      return { field: col.label, value: v ?? "" };
+      return { field: col.label, value: v ?? "", group: col.group };
     });
     // parse ad-hoc per-unit line items (kind === "unit") for the internal pay breakdown
     let unitLines: JobUnitLine[] = [];

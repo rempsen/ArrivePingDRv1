@@ -208,7 +208,7 @@ export async function tenantFilePrefix(companyId: string): Promise<string> {
 }
 
 export async function buildJobPdf(
-  details: { field: string; value: any }[],
+  details: { field: string; value: any; group?: string }[],
   unitLines: JobUnitLine[],
   title: string,
   subtitle?: string,
@@ -264,6 +264,18 @@ export async function buildJobPdf(
   };
 
   // --- branded header ---
+  // Right-aligned helper — every "print this flush against the right margin"
+  // spot (generated-on stamp, footer page numbers) needs its own width
+  // measurement, so one small helper instead of repeating widthOfTextAtSize
+  // + subtraction at each call site.
+  const drawRight = (text: string, yy: number, size: number, f = font, color = muted) => {
+    const w = f.widthOfTextAtSize(text, size);
+    dt(text, { x: pageW - margin - w, y: yy, size, font: f, color });
+  };
+  const generatedOn = new Date().toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
   let logoImg: any = null;
   if (brand?.logo) {
     try {
@@ -276,38 +288,72 @@ export async function buildJobPdf(
     } catch { /* no logo — header just skips it */ }
   }
   const headerTop = y;
+  // A logo image is almost always a full wordmark already (scraped from the
+  // tenant's own site) — printing the tenant name a second time next to it
+  // just doubles up the same text. Only fall back to a plain text lockup
+  // when there is no logo to show at all.
+  let headerH = 20;
   if (logoImg) {
-    const maxH = 34, maxW = 110;
+    const maxH = 34, maxW = 150;
     const scale = Math.min(maxW / logoImg.width, maxH / logoImg.height, 1);
     const w = logoImg.width * scale, h = logoImg.height * scale;
     page.drawImage(logoImg, { x: margin, y: headerTop - h, width: w, height: h });
-    if (brand?.name) dt(brand.name, { x: margin + w + 10, y: headerTop - h / 2 - 4, size: 12, font: bold, color: ink });
-    y -= Math.max(h, 20) + 14;
+    headerH = h;
   } else if (brand?.name) {
-    dt(brand.name, { x: margin, y: y - 4, size: 12, font: bold, color: ink });
-    y -= 22;
+    dt(brand.name, { x: margin, y: headerTop - 14, size: 13, font: bold, color: ink });
+    headerH = 20;
   }
+  // Right side of the header: a small "generated on" stamp, invoice-style —
+  // gives the report a document-of-record feel instead of a raw data dump.
+  drawRight(`Generated ${generatedOn}`, headerTop - headerH / 2 - 3, 7.5, font, muted);
+  y -= Math.max(headerH, 20) + 14;
   page.drawLine({ start: { x: margin, y }, end: { x: pageW - margin, y }, thickness: 2, color: brandColor });
-  y -= 20;
-
-  dt(title, { x: margin, y: y - 4, size: 17, font: bold, color: brandColor });
-  y -= 24;
-  if (subtitle) { dt(String(subtitle).slice(0, 90), { x: margin, y, size: 9, font, color: muted }); y -= 14; }
-  dt("INTERNAL COPY — includes tech pay. Not for the customer.", { x: margin, y, size: 8, font: bold, color: rgb(0.78, 0.25, 0.16) });
   y -= 22;
 
-  // --- details label/value block ---
-  sectionHeader("Job Details");
-  const labelW = 150;
-  details.forEach((r, ri) => {
-    ensure(20);
-    if (ri % 2 === 0) page.drawRectangle({ x: margin, y: y - 11, width: usableW, height: 14, color: rgb(0.96, 0.97, 0.98) });
-    dt(String(r.field).slice(0, 32), { x: margin + 4, y: y - 8, size: 8, font: bold, color: rgb(0.25, 0.3, 0.36) });
-    const val = String(r.value ?? "");
-    dt(val.length > 70 ? val.slice(0, 68) + "…" : val, { x: margin + labelW, y: y - 8, size: 8, font, color: ink });
-    y -= 14;
+  dt("JOB REPORT", { x: margin, y, size: 8, font: bold, color: muted });
+  y -= 15;
+  dt(title, { x: margin, y: y - 4, size: 17, font: bold, color: brandColor });
+  y -= 24;
+  if (subtitle) { dt(String(subtitle).slice(0, 90), { x: margin, y, size: 9, font, color: muted }); y -= 16; }
+  // "Internal copy" as a bordered callout rather than a bare line of red
+  // text — reads as a deliberate document notice, not an error message.
+  const noticeText = "INTERNAL COPY — includes technician pay. Not for the customer.";
+  const noticeW = bold.widthOfTextAtSize(noticeText, 8) + 16;
+  page.drawRectangle({
+    x: margin, y: y - 15, width: noticeW, height: 18,
+    color: rgb(0.99, 0.94, 0.93), borderColor: rgb(0.86, 0.55, 0.48), borderWidth: 0.75,
   });
-  y -= 18;
+  dt(noticeText, { x: margin + 8, y: y - 10, size: 8, font: bold, color: rgb(0.7, 0.22, 0.15) });
+  y -= 30;
+
+  // --- details, grouped into named sections (carried via each row's
+  // `group`) instead of one 29-row undifferentiated list. Falls back to a
+  // single "Job Details" section if the caller didn't tag groups. ---
+  const GROUP_TITLE: Record<string, string> = {
+    summary: "Job Overview",
+    detail: "Financials & Time Tracking",
+  };
+  const groups: { key: string; rows: typeof details }[] = [];
+  for (const r of details) {
+    const key = r.group || "details";
+    let g = groups.find((x) => x.key === key);
+    if (!g) { g = { key, rows: [] }; groups.push(g); }
+    g.rows.push(r);
+  }
+  const labelW = 150;
+  groups.forEach((g) => {
+    ensure(40);
+    sectionHeader(GROUP_TITLE[g.key] || "Job Details");
+    g.rows.forEach((r, ri) => {
+      ensure(20);
+      if (ri % 2 === 0) page.drawRectangle({ x: margin, y: y - 11, width: usableW, height: 14, color: rgb(0.96, 0.97, 0.98) });
+      dt(String(r.field).slice(0, 32), { x: margin + 4, y: y - 8, size: 8, font: bold, color: rgb(0.25, 0.3, 0.36) });
+      const val = String(r.value ?? "");
+      dt(val.length > 70 ? val.slice(0, 68) + "…" : val, { x: margin + labelW, y: y - 8, size: 8, font, color: ink });
+      y -= 14;
+    });
+    y -= 16;
+  });
 
   // --- route section ---
   // Primary: a REAL street-level basemap (Google Static Maps, scale=2) with the
@@ -484,6 +530,19 @@ export async function buildJobPdf(
     }
     if (col !== 0) y -= cellH + 24;
   }
+
+  // --- footer on every page: brand name + page count, so a printed or
+  // re-shuffled multi-page report can still be identified and reordered. ---
+  const allPages = doc.getPages();
+  allPages.forEach((p, i) => {
+    const footerY = 24;
+    p.drawLine({ start: { x: margin, y: footerY + 10 }, end: { x: pageW - margin, y: footerY + 10 }, thickness: 0.5, color: rgb(0.88, 0.9, 0.93) });
+    const left = [brand?.name, "Internal job report"].filter(Boolean).join(" · ");
+    if (left) p.drawText(left, { x: margin, y: footerY, size: 7, font, color: muted });
+    const pageLabel = `Page ${i + 1} of ${allPages.length}`;
+    const pw = font.widthOfTextAtSize(pageLabel, 7);
+    p.drawText(pageLabel, { x: pageW - margin - pw, y: footerY, size: 7, font, color: muted });
+  });
 
   const bytes = await doc.save();
   return Buffer.from(bytes);
