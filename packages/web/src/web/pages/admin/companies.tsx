@@ -28,6 +28,7 @@ import {
   Wand2,
   Hammer,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 type Company = {
@@ -96,6 +97,11 @@ export default function CompaniesPage() {
   const [err, setErr] = useState("");
   // AI brand-scout state — null until the admin grabs assets.
   const [brand, setBrand] = useState<BrandProposal | null>(null);
+  // Delete-company flow — type the exact name to confirm, since this wipes
+  // the whole tenant (bookings, riders, catalog, users...) irreversibly.
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteErr, setDeleteErr] = useState("");
   const setBrandField = <K extends keyof BrandProposal>(
     k: K,
     v: BrandProposal[K],
@@ -151,6 +157,26 @@ export default function CompaniesPage() {
       setErr("");
     },
     onError: (e: any) => setErr(e.message),
+  });
+
+  const deleteCompany = useMutation({
+    mutationFn: async () => {
+      if (!deleteTarget) return;
+      const res = await api.superadmin.companies[":id"].$delete({
+        param: { id: deleteTarget.id },
+        json: { confirmName: deleteConfirmName },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error((d as any).message || "Failed");
+      return d;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["superadmin", "companies"] });
+      setDeleteTarget(null);
+      setDeleteConfirmName("");
+      setDeleteErr("");
+    },
+    onError: (e: any) => setDeleteErr(e.message),
   });
 
   // "Grab Brand Assets" — scrape the website and propose brand data to review.
@@ -325,23 +351,78 @@ export default function CompaniesPage() {
                 >
                   {co.status}
                 </span>
-                {isActive ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand/15 px-3 py-1.5 text-xs font-semibold text-cyan-glow">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Active
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => switchCompany(co.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-brand hover:text-brand"
-                  >
-                    <LogIn className="h-3.5 w-3.5" /> Switch to
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {co.id !== "default" && (
+                    <button
+                      onClick={() => {
+                        setDeleteTarget(co);
+                        setDeleteConfirmName("");
+                        setDeleteErr("");
+                      }}
+                      title="Delete company"
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-500 transition hover:border-red-500/40 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {isActive ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand/15 px-3 py-1.5 text-xs font-semibold text-cyan-glow">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Active
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => switchCompany(co.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-brand hover:text-brand"
+                    >
+                      <LogIn className="h-3.5 w-3.5" /> Switch to
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Delete-company confirmation — type the exact name, this is irreversible */}
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete company"
+        size="sm"
+        footer={
+          <>
+            <BtnGhost onClick={() => setDeleteTarget(null)}>Cancel</BtnGhost>
+            <button
+              onClick={() => deleteCompany.mutate()}
+              disabled={
+                deleteCompany.isPending || deleteConfirmName !== (deleteTarget?.name ?? "")
+              }
+              className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-40"
+            >
+              {deleteCompany.isPending ? "Deleting…" : "Delete permanently"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-300">
+            This permanently deletes <strong>{deleteTarget?.name}</strong> and every
+            booking, rider, customer, form, template, and invoice it owns. This
+            cannot be undone.
+          </p>
+          <Field label={`Type "${deleteTarget?.name ?? ""}" to confirm`}>
+            <input
+              autoFocus
+              className={inputCls}
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              placeholder={deleteTarget?.name ?? ""}
+            />
+          </Field>
+          {deleteErr && <p className="text-sm text-red-400">{deleteErr}</p>}
+        </div>
+      </Modal>
 
       <Modal
         open={open}
