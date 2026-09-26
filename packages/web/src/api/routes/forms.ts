@@ -45,6 +45,14 @@ const slugify = (s: string) =>
 const genAccessCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 /**
+ * Platform-wide default PIN for a brand-new work-order intake form, across
+ * every tenant. Every tenant's admin can still change it per-form from the
+ * form editor's "Shared access code (PIN)" field (or click Generate for a
+ * random one) — this is only what a form starts with before anyone edits it.
+ */
+const DEFAULT_ACCESS_CODE = "123456";
+
+/**
  * Normalize stored fields to the rich shape. Backward-compatible with the old
  * [{key,label,enabled,required}] format — fills in id/type/width.
  */
@@ -178,7 +186,7 @@ export const formsRoutes = new Hono<AppEnv>()
       active: b.active === false ? false : true,
       createdBy: me?.id ?? "",
       formType,
-      accessCode: formType === "work_order" ? (b.accessCode ? String(b.accessCode) : genAccessCode()) : "",
+      accessCode: formType === "work_order" ? (b.accessCode ? String(b.accessCode) : DEFAULT_ACCESS_CODE) : "",
       allowTechAssign: b.allowTechAssign === false ? false : true,
       updatedAt: new Date(),
     });

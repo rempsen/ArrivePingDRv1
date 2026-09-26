@@ -1071,6 +1071,10 @@ export const intakeForms = sqliteTable("intake_forms", {
   formType: text("form_type").notNull().default("lead"),
   // shared employee access code for work_order forms (not a login — a simple
   // shared PIN so the link alone isn't enough to create real work orders).
+  // The column default here only applies if a row is ever inserted without
+  // stamping this field explicitly; the platform-wide default new forms
+  // actually get ("123456", editable per-form in the form editor) lives in
+  // DEFAULT_ACCESS_CODE in routes/forms.ts.
   accessCode: text("access_code").notNull().default(""),
   // work_order forms only: whether the employee submitting is allowed to pick
   // a technician + exact schedule time, or must leave it for a dispatcher.
