@@ -340,7 +340,7 @@ export default function SchedulerPage() {
   const today = new Date();
 
   return (
-    <PageWrap>
+    <PageWrap wide>
       <WorkOrderModal
         open={newDate !== null}
         defaultDate={newDate ?? undefined}

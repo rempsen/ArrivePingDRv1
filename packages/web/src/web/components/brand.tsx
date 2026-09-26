@@ -39,10 +39,14 @@ export function Logo({
   );
 }
 
-/** Standard padded content wrapper for dispatcher console pages */
-export function PageWrap({ children }: { children: React.ReactNode }) {
+/** Standard padded content wrapper for dispatcher console pages.
+ *  `wide` bumps the cap from max-w-6xl (72rem) to max-w-[86rem] — ~20%
+ *  wider — for pages like the Scheduler calendar where the default width
+ *  crowds day cells and truncates job chips. Opt-in per page so every
+ *  other admin page keeps its current width. */
+export function PageWrap({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 pb-24 md:px-8">{children}</div>
+    <div className={`mx-auto px-4 py-6 pb-24 md:px-8 ${wide ? "max-w-[86rem]" : "max-w-6xl"}`}>{children}</div>
   );
 }
 
