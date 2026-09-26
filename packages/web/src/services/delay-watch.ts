@@ -154,6 +154,14 @@ export async function listDelays(companyId: string) {
     and(
       isNotNull(schema.bookings.delayFlaggedAt),
       inArray(schema.bookings.status, LIVE_STATUSES),
+      // Archiving a job only sets deletedAt — it deliberately leaves status
+      // alone (see job-search.ts) so a restored job comes back exactly as it
+      // was. Without this filter a deleted job stuck in a "live" status (e.g.
+      // archived mid-drive) stayed on this board forever: invisible on every
+      // other screen (they all filter deletedAt) but still flagged here, still
+      // re-flagging itself, and still eligible for the auto-send text. Found
+      // live on a BMD test job in Sep 2026.
+      isNull(schema.bookings.deletedAt),
     ),
   );
   const policy = await delayPolicyFor(companyId);
@@ -228,6 +236,11 @@ export async function sweepDelays(now: Date = new Date()): Promise<{
             inArray(schema.bookings.status, LIVE_STATUSES),
             gte(schema.bookings.scheduledAt, new Date(nowMs - LOOKBACK_MS)),
             lte(schema.bookings.scheduledAt, new Date(nowMs + LOOKAHEAD_MS)),
+            // See the matching note in listDelays: a deleted job can sit in a
+            // "live" status forever, and without this the sweep keeps
+            // re-flagging it and can even auto-text a customer about a job
+            // that's already been archived.
+            isNull(schema.bookings.deletedAt),
           ),
         );
 
