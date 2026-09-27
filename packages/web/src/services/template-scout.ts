@@ -292,7 +292,8 @@ function padToMinimum(templates: StarterTemplate[], input: TemplateScoutInput, m
 }
 
 /**
- * Generate 2-3 tailored work-order templates. Never throws — returns the
+ * Generate 4-6 tailored work-order templates (schema-enforced minimum of 4,
+ * per the product rule at the top of this file). Never throws — returns the
  * fallback set on any failure so tenant provisioning continues.
  */
 export async function scoutStarterTemplates(input: TemplateScoutInput): Promise<StarterTemplate[]> {
@@ -348,7 +349,12 @@ Tailor everything to ${input.name}'s actual line of work. Each template must ser
     });
 
     const templates: StarterTemplate[] = (object.templates || [])
-      .slice(0, 3)
+      // Schema guarantees 4-6 templates; keep all of them — a stale slice(0,3)
+      // here used to throw away everything past the 3rd, which silently
+      // dropped the ICP-specific 4th+ template the prompt explicitly asks
+      // for and always tripped the < 4 padding path below with generic
+      // fallback templates instead.
+      .slice(0, 6)
       .map((t) => {
         const category = (t.category || "Service").trim();
         return {
