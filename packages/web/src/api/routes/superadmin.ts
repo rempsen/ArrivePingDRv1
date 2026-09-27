@@ -94,6 +94,115 @@ export const superadminRoutes = new Hono<AppEnv>()
     return c.json({ company: row }, 200);
   })
 
+  // ---- permanently delete a tenant + every row it owns -------------------
+  // Irreversible. Guarded by a type-the-company-name confirmation on the
+  // client (enforced server-side too via `confirmName`) since this wipes a
+  // tenant's entire history: bookings, riders, catalog, forms, templates,
+  // invoices, users... everything stamped with this companyId. "default" is
+  // the platform's own bootstrap tenant and can never be deleted this way.
+  .delete("/companies/:id", requireSuperadmin, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const id = c.req.param("id");
+    if (id === "default")
+      return c.json({ message: "The default tenant can't be deleted" }, 400);
+
+    const [co] = await db
+      .select()
+      .from(schema.companies)
+      .where(eq(schema.companies.id, id));
+    if (!co) return c.json({ message: "Not found" }, 404);
+
+    const body = await c.req.json().catch(() => ({}));
+    const confirmName = String(body.confirmName ?? "").trim();
+    if (confirmName !== co.name)
+      return c.json(
+        { message: `Type "${co.name}" to confirm — this cannot be undone` },
+        400,
+      );
+
+    // Tear down in child -> parent order so no FK (task_templates.id,
+    // riders.id, bookings.id, ...) is ever dropped while something still
+    // points at it — the same NO-ACTION landmine that made deleting a single
+    // work-order template with real bookings 500 (see templates.ts DELETE).
+    const eqCo = (col: any) => eq(col, id);
+
+    // 1) everything hanging off a booking
+    await db.delete(schema.jobPhotos).where(eqCo(schema.jobPhotos.companyId));
+    await db.delete(schema.messages).where(eqCo(schema.messages.companyId));
+    await db.delete(schema.trackingPings).where(eqCo(schema.trackingPings.companyId));
+    await db.delete(schema.bookingOptionSelections).where(eqCo(schema.bookingOptionSelections.companyId));
+    await db.delete(schema.notifications).where(eqCo(schema.notifications.companyId));
+    await db.delete(schema.reviews).where(eqCo(schema.reviews.companyId));
+    await db.delete(schema.invoices).where(eqCo(schema.invoices.companyId));
+    await db.delete(schema.paymentLedger).where(eqCo(schema.paymentLedger.companyId));
+    await db.delete(schema.intakeSubmissions).where(eqCo(schema.intakeSubmissions.companyId));
+
+    // 2) bookings themselves — safe now that every child row is gone
+    await db.delete(schema.bookings).where(eqCo(schema.bookings.companyId));
+
+    // 3) catalog / templates / options — nothing left referencing them
+    await db.delete(schema.optionCategoryItems).where(eqCo(schema.optionCategoryItems.companyId));
+    await db.delete(schema.optionCategories).where(eqCo(schema.optionCategories.companyId));
+    await db.delete(schema.catalogItems).where(eqCo(schema.catalogItems.companyId));
+    await db.delete(schema.taskTemplates).where(eqCo(schema.taskTemplates.companyId));
+
+    // 4) riders — their booking/message/review references are already gone
+    await db.delete(schema.techShifts).where(eqCo(schema.techShifts.companyId));
+    await db.delete(schema.payouts).where(eqCo(schema.payouts.companyId));
+    await db.delete(schema.pushTokens).where(eqCo(schema.pushTokens.companyId));
+    await db.delete(schema.riders).where(eqCo(schema.riders.companyId));
+    await db.delete(schema.services).where(eqCo(schema.services.companyId));
+
+    // 5) everything else tenant-scoped, no ordering constraints left
+    await db.delete(schema.entityTags).where(eqCo(schema.entityTags.companyId));
+    await db.delete(schema.tags).where(eqCo(schema.tags.companyId));
+    await db.delete(schema.customFieldValues).where(eqCo(schema.customFieldValues.companyId));
+    await db.delete(schema.customFields).where(eqCo(schema.customFields.companyId));
+    await db.delete(schema.attachments).where(eqCo(schema.attachments.companyId));
+    await db.delete(schema.serviceZones).where(eqCo(schema.serviceZones.companyId));
+    await db.delete(schema.formCategories).where(eqCo(schema.formCategories.companyId));
+    await db.delete(schema.automationRules).where(eqCo(schema.automationRules.companyId));
+    await db.delete(schema.integrations).where(eqCo(schema.integrations.companyId));
+    await db.delete(schema.skillLibrary).where(eqCo(schema.skillLibrary.companyId));
+    await db.delete(schema.notificationRules).where(eqCo(schema.notificationRules.companyId));
+    await db.delete(schema.notificationChannels).where(eqCo(schema.notificationChannels.companyId));
+    await db.delete(schema.emailTemplates).where(eqCo(schema.emailTemplates.companyId));
+    await db.delete(schema.webhookEndpoints).where(eqCo(schema.webhookEndpoints.companyId));
+    await db.delete(schema.notificationDeliveries).where(eqCo(schema.notificationDeliveries.companyId));
+    await db.delete(schema.techInvites).where(eqCo(schema.techInvites.companyId));
+    await db.delete(schema.apiKeys).where(eqCo(schema.apiKeys.companyId));
+    await db.delete(schema.intakeForms).where(eqCo(schema.intakeForms.companyId));
+
+    // 6) sending domains — also deregister from Resend, not just the DB row
+    const domains = await db
+      .select()
+      .from(schema.tenantEmailDomains)
+      .where(eqCo(schema.tenantEmailDomains.companyId));
+    for (const d of domains) await removeDomain(d.id).catch(() => {});
+
+    await db.delete(schema.auditLog).where(eqCo(schema.auditLog.companyId));
+    await db.delete(schema.companySettings).where(eqCo(schema.companySettings.companyId));
+
+    // 7) users last — cascades their sessions/accounts (and anything else
+    //    still keyed off user.id) automatically via the FK's ON DELETE CASCADE
+    await db.delete(schema.user).where(eqCo(schema.user.companyId));
+
+    // 8) the tenant row itself
+    await db.delete(schema.companies).where(eq(schema.companies.id, id));
+
+    invalidateCompanyCache();
+    await audit({
+      actorId: me?.id,
+      actorName: me?.name,
+      action: "delete",
+      entityType: "company",
+      entityId: id,
+      summary: `Deleted tenant "${co.name}" (${id}) and all of its data`,
+    });
+
+    return c.json({ ok: true }, 200);
+  })
+
   // ---- AI brand scout: scrape a website -> structured brand proposal ----
   // No DB writes. The admin reviews/edits the result, then submits it as the
   // `brand` payload on POST /companies (or PATCH for an existing tenant).
