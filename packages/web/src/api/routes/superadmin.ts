@@ -9,7 +9,7 @@ import type { AppEnv } from "../env";
  * the tenant facade.
  */
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
@@ -127,6 +127,13 @@ export const superadminRoutes = new Hono<AppEnv>()
     // work-order template with real bookings 500 (see templates.ts DELETE).
     const eqCo = (col: any) => eq(col, id);
 
+    // 0) punchlist deficiencies — reference riders (NO ACTION), bookings and
+    //    punchlistProjects (both CASCADE); deleted first so nothing downstream
+    //    of them ever gets a chance to be pulled out from under them
+    await db.delete(schema.deficiencies).where(eqCo(schema.deficiencies.companyId));
+    // punchlist trades — reference riders (CASCADE); explicit, not relied on
+    await db.delete(schema.punchlistTrades).where(eqCo(schema.punchlistTrades.companyId));
+
     // 1) everything hanging off a booking
     await db.delete(schema.jobPhotos).where(eqCo(schema.jobPhotos.companyId));
     await db.delete(schema.messages).where(eqCo(schema.messages.companyId));
@@ -137,6 +144,15 @@ export const superadminRoutes = new Hono<AppEnv>()
     await db.delete(schema.invoices).where(eqCo(schema.invoices.companyId));
     await db.delete(schema.paymentLedger).where(eqCo(schema.paymentLedger.companyId));
     await db.delete(schema.intakeSubmissions).where(eqCo(schema.intakeSubmissions.companyId));
+    // job timeline + reschedule/cancel requests — reference bookings (CASCADE)
+    await db.delete(schema.jobEvents).where(eqCo(schema.jobEvents.companyId));
+    await db.delete(schema.bookingChangeRequests).where(eqCo(schema.bookingChangeRequests.companyId));
+    // scheduled reminder/automation jobs — reference bookings AND properties
+    // (both CASCADE); must go before both
+    await db.delete(schema.scheduledTasks).where(eqCo(schema.scheduledTasks.companyId));
+    // punchlist projects — reference bookings (CASCADE, NOT NULL) and user
+    // (NO ACTION); their deficiencies are already gone (step 0 above)
+    await db.delete(schema.punchlistProjects).where(eqCo(schema.punchlistProjects.companyId));
 
     // 2) bookings themselves — safe now that every child row is gone
     await db.delete(schema.bookings).where(eqCo(schema.bookings.companyId));
@@ -147,12 +163,21 @@ export const superadminRoutes = new Hono<AppEnv>()
     await db.delete(schema.catalogItems).where(eqCo(schema.catalogItems.companyId));
     await db.delete(schema.taskTemplates).where(eqCo(schema.taskTemplates.companyId));
 
-    // 4) riders — their booking/message/review references are already gone
+    // maintenance plans — reference services (NO ACTION), properties (CASCADE)
+    // and user (NO ACTION); must go before all three are torn down below
+    await db.delete(schema.maintenancePlans).where(eqCo(schema.maintenancePlans.companyId));
+
+    // 4) riders — their booking/message/review/deficiency/trade references
+    //    are already gone
     await db.delete(schema.techShifts).where(eqCo(schema.techShifts.companyId));
     await db.delete(schema.payouts).where(eqCo(schema.payouts.companyId));
     await db.delete(schema.pushTokens).where(eqCo(schema.pushTokens.companyId));
     await db.delete(schema.riders).where(eqCo(schema.riders.companyId));
     await db.delete(schema.services).where(eqCo(schema.services.companyId));
+
+    // properties — reference user (NO ACTION); scheduledTasks and
+    // maintenancePlans (both of which reference properties) are already gone
+    await db.delete(schema.properties).where(eqCo(schema.properties.companyId));
 
     // 5) everything else tenant-scoped, no ordering constraints left
     await db.delete(schema.entityTags).where(eqCo(schema.entityTags.companyId));
@@ -184,11 +209,44 @@ export const superadminRoutes = new Hono<AppEnv>()
     await db.delete(schema.auditLog).where(eqCo(schema.auditLog.companyId));
     await db.delete(schema.companySettings).where(eqCo(schema.companySettings.companyId));
 
-    // 7) users last — cascades their sessions/accounts (and anything else
-    //    still keyed off user.id) automatically via the FK's ON DELETE CASCADE
-    await db.delete(schema.user).where(eqCo(schema.user.companyId));
+    // 7) memberships at THIS company — a person can work for several
+    //    companies at once (see lib/memberships.ts), so this only ends their
+    //    relationship with the tenant being deleted, never their login.
+    await db.delete(schema.memberships).where(eqCo(schema.memberships.companyId));
 
-    // 8) the tenant row itself
+    // 8) users whose HOME company is the one being deleted. Mirrors
+    //    detachMembership()'s own rule: never destroy a login that still
+    //    works elsewhere. A user with a remaining active membership at
+    //    another company gets their home company moved there instead of
+    //    being deleted; only a user with no memberships left anywhere else
+    //    is actually removed (which cascades their sessions/accounts via the
+    //    FK's ON DELETE CASCADE).
+    const homeUsers = await db
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eqCo(schema.user.companyId));
+    for (const u of homeUsers) {
+      const [remaining] = await db
+        .select({ companyId: schema.memberships.companyId })
+        .from(schema.memberships)
+        .where(
+          and(
+            eq(schema.memberships.userId, u.id),
+            eq(schema.memberships.status, "active"),
+            ne(schema.memberships.companyId, id),
+          ),
+        );
+      if (remaining) {
+        await db
+          .update(schema.user)
+          .set({ companyId: remaining.companyId })
+          .where(eq(schema.user.id, u.id));
+      } else {
+        await db.delete(schema.user).where(eq(schema.user.id, u.id));
+      }
+    }
+
+    // 9) the tenant row itself
     await db.delete(schema.companies).where(eq(schema.companies.id, id));
 
     invalidateCompanyCache();
