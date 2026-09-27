@@ -8,9 +8,23 @@
  * `status === "verified"` — see services/email.ts + dispatch.ts send guard.
  */
 import { Resend } from "resend";
-import { db } from "../api/database";
+import { sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { eq } from "drizzle-orm";
+
+/**
+ * sdb (BYPASSRLS) is used throughout this file's rowId-keyed operations:
+ * they're driven by superadmin routes (which are inherently cross-tenant —
+ * approving/removing ANY tenant's domain by id) and by notif-config.ts,
+ * which already re-validates the row belongs to the caller's own tenant via
+ * `tx(c).selectOne(...)` before ever passing the id down here. Re-deriving
+ * companyId scoping a second time at this layer would just be redundant.
+ * `rowsNeedingPoll` is the same story — a background sweep across every
+ * tenant's domains. `verifiedDomainsForCompany`, below, is the one function
+ * here that actually carries a companyId, so it goes through `tdb(companyId)`
+ * and stays properly tenant-scoped instead of bypassing RLS.
+ */
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -69,7 +83,7 @@ export function resendAvailable() {
  */
 export async function createDomainInResend(rowId: string) {
   if (!resend) throw new Error("RESEND_API_KEY not configured");
-  const [row] = await db
+  const [row] = await sdb
     .select()
     .from(schema.tenantEmailDomains)
     .where(eq(schema.tenantEmailDomains.id, rowId))
@@ -106,7 +120,7 @@ export async function createDomainInResend(rowId: string) {
     domainData = data;
   }
   const records = normalizeRecords(domainData?.records);
-  const [updated] = await db
+  const [updated] = await sdb
     .update(schema.tenantEmailDomains)
     .set({
       resendDomainId: domainId!,
@@ -125,7 +139,7 @@ export async function createDomainInResend(rowId: string) {
  */
 export async function syncStatus(rowId: string) {
   if (!resend) throw new Error("RESEND_API_KEY not configured");
-  const [row] = await db
+  const [row] = await sdb
     .select()
     .from(schema.tenantEmailDomains)
     .where(eq(schema.tenantEmailDomains.id, rowId))
@@ -134,7 +148,7 @@ export async function syncStatus(rowId: string) {
   if (!row.resendDomainId) return row;
   const { data, error } = await resend.domains.get(row.resendDomainId);
   if (error) {
-    await db
+    await sdb
       .update(schema.tenantEmailDomains)
       .set({ lastCheckedAt: new Date() })
       .where(eq(schema.tenantEmailDomains.id, rowId));
@@ -150,7 +164,7 @@ export async function syncStatus(rowId: string) {
         `Outbound mail for this tenant is falling back to the platform sender until DNS is fixed.`,
     );
   }
-  const [updated] = await db
+  const [updated] = await sdb
     .update(schema.tenantEmailDomains)
     .set({
       status: nextStatus,
@@ -179,7 +193,7 @@ export async function syncStatus(rowId: string) {
  */
 export async function triggerVerify(rowId: string) {
   if (!resend) throw new Error("RESEND_API_KEY not configured");
-  const [row] = await db
+  const [row] = await sdb
     .select()
     .from(schema.tenantEmailDomains)
     .where(eq(schema.tenantEmailDomains.id, rowId))
@@ -198,7 +212,7 @@ export async function triggerVerify(rowId: string) {
 
 /** Delete the domain in Resend (best-effort) and remove the DB row. */
 export async function removeDomain(rowId: string) {
-  const [row] = await db
+  const [row] = await sdb
     .select()
     .from(schema.tenantEmailDomains)
     .where(eq(schema.tenantEmailDomains.id, rowId))
@@ -207,7 +221,7 @@ export async function removeDomain(rowId: string) {
   if (resend && row.resendDomainId) {
     await resend.domains.remove(row.resendDomainId).catch(() => {});
   }
-  await db.delete(schema.tenantEmailDomains).where(eq(schema.tenantEmailDomains.id, rowId));
+  await sdb.delete(schema.tenantEmailDomains).where(eq(schema.tenantEmailDomains.id, rowId));
 }
 
 /**
@@ -215,10 +229,7 @@ export async function removeDomain(rowId: string) {
  * guard to decide whether a tenant's custom from-address may be honored.
  */
 export async function verifiedDomainsForCompany(companyId: string): Promise<string[]> {
-  const rows = await db
-    .select()
-    .from(schema.tenantEmailDomains)
-    .where(eq(schema.tenantEmailDomains.companyId, companyId));
+  const rows = await tdb(companyId).select(schema.tenantEmailDomains);
   return rows.filter((r) => r.status === "verified").map((r) => r.domain.toLowerCase());
 }
 
@@ -254,7 +265,9 @@ export function needsPoll(row: PollRow, now: number = Date.now()): boolean {
 
 /** All rows due for a status check — unsettled every tick, settled every RECHECK_MS. */
 export async function rowsNeedingPoll() {
-  const rows = await db.select().from(schema.tenantEmailDomains);
+  // Background sweep across every tenant's domains — inherently cross-tenant,
+  // same as the rowId-keyed operations above.
+  const rows = await sdb.select().from(schema.tenantEmailDomains);
   const now = Date.now();
   return rows.filter((r) => needsPoll(r, now));
 }
