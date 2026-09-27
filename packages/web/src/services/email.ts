@@ -1,7 +1,6 @@
 import { Resend } from "resend";
-import { db } from "../api/database";
 import * as schema from "../api/database/schema";
-import { eq } from "drizzle-orm";
+import { tdb } from "../api/database/tenant";
 import { fmtInZone } from "../shared/tz";
 import { pickSender, pickRetrySender, type SenderIdentity } from "./sender";
 import { verifiedDomainsForCompany } from "./email-domains";
@@ -132,16 +131,8 @@ export function resolveLogo(url?: string): string {
  */
 export async function resolveFromAddress(companyId: string): Promise<SenderIdentity> {
   try {
-    const [[chan], verified] = await Promise.all([
-      db
-        .select({
-          emailFromName: schema.notificationChannels.emailFromName,
-          emailFromAddress: schema.notificationChannels.emailFromAddress,
-          emailReplyTo: schema.notificationChannels.emailReplyTo,
-        })
-        .from(schema.notificationChannels)
-        .where(eq(schema.notificationChannels.companyId, companyId))
-        .limit(1),
+    const [chan, verified] = await Promise.all([
+      tdb(companyId).selectOne(schema.notificationChannels),
       verifiedDomainsForCompany(companyId).catch((): string[] => []),
     ]);
     if (!chan) return {};
@@ -160,16 +151,11 @@ export async function resolveFromAddress(companyId: string): Promise<SenderIdent
 export async function loadEmailBrand(companyId?: string): Promise<TenantEmailBrand> {
   if (!companyId) return FALLBACK_BRAND;
   try {
-    const [chan] = await db
-      .select()
-      .from(schema.notificationChannels)
-      .where(eq(schema.notificationChannels.companyId, companyId))
-      .limit(1);
-    const [cs] = await db
-      .select()
-      .from(schema.companySettings)
-      .where(eq(schema.companySettings.companyId, companyId))
-      .limit(1);
+    const t = tdb(companyId);
+    const [chan, cs] = await Promise.all([
+      t.selectOne(schema.notificationChannels),
+      t.selectOne(schema.companySettings),
+    ]);
     const company = (cs?.name || "").trim() || FALLBACK_BRAND.company;
     const logoUrl = (chan?.emailLogoUrl || cs?.logo || "").trim();
     const brandColor = (chan?.emailBrandColor || cs?.brandColor || BRAND).trim();

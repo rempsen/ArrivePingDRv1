@@ -8,9 +8,10 @@
  * property hub. Never throw from here; a bad address must not block saving a
  * work order.
  */
-import { db } from "../api/database";
+import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
-import { and, eq } from "drizzle-orm";
+import { tdb } from "../api/database/tenant";
+import { eq } from "drizzle-orm";
 
 /**
  * Dedupe key for an address.
@@ -80,15 +81,11 @@ export async function resolveProperty(opts: {
     // Guard against junk: a 2-character "address" is noise, not a property.
     if (addressNormalized.length < 4) return null;
 
-    const [existing] = await db
-      .select()
-      .from(schema.properties)
-      .where(
-        and(
-          eq(schema.properties.companyId, opts.companyId),
-          eq(schema.properties.addressNormalized, addressNormalized),
-        ),
-      );
+    const t = tdb(opts.companyId);
+    const existing = await t.selectOne(
+      schema.properties,
+      eq(schema.properties.addressNormalized, addressNormalized),
+    );
 
     if (existing) {
       // Backfill coordinates / customer if we've learned them since. Properties
@@ -101,25 +98,18 @@ export async function resolveProperty(opts: {
       }
       if (Object.keys(patch).length) {
         patch.updatedAt = new Date();
-        await db
-          .update(schema.properties)
-          .set(patch)
-          .where(eq(schema.properties.id, existing.id));
+        await t.update(schema.properties, patch, eq(schema.properties.id, existing.id));
       }
       return { id: existing.id, publicToken: existing.publicToken };
     }
 
-    const [created] = await db
-      .insert(schema.properties)
-      .values({
-        companyId: opts.companyId,
-        addressNormalized,
-        addressDisplay: opts.address.trim(),
-        lat: opts.lat ?? null,
-        lng: opts.lng ?? null,
-        customerId: opts.customerId || null,
-      })
-      .returning();
+    const [created] = await t.insert(schema.properties, {
+      addressNormalized,
+      addressDisplay: opts.address.trim(),
+      lat: opts.lat ?? null,
+      lng: opts.lng ?? null,
+      customerId: opts.customerId || null,
+    });
 
     return created ? { id: created.id, publicToken: created.publicToken } : null;
   } catch (e) {
@@ -132,7 +122,9 @@ export async function resolveProperty(opts: {
 /** Attach a booking to its property, resolving/creating the property as needed. */
 export async function linkBookingToProperty(bookingId: string): Promise<string | null> {
   try {
-    const [b] = await db
+    // sdb: only a bookingId is known here, so the tenant hasn't been resolved
+    // yet — this is the one lookup that must happen before switching to tdb.
+    const [b] = await sdb
       .select()
       .from(schema.bookings)
       .where(eq(schema.bookings.id, bookingId));
@@ -148,10 +140,11 @@ export async function linkBookingToProperty(bookingId: string): Promise<string |
     });
     if (!prop) return null;
 
-    await db
-      .update(schema.bookings)
-      .set({ propertyId: prop.id })
-      .where(eq(schema.bookings.id, bookingId));
+    await tdb(b.companyId).update(
+      schema.bookings,
+      { propertyId: prop.id },
+      eq(schema.bookings.id, bookingId),
+    );
     return prop.id;
   } catch (e) {
     console.error("[properties] linkBooking failed", e);

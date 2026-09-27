@@ -1,4 +1,4 @@
-import { db } from "../api/database";
+import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { eq, inArray } from "drizzle-orm";
 import { log } from "../api/lib/logger";
@@ -35,9 +35,16 @@ interface ExpoTicket {
   details?: { error?: string };
 }
 
-/** Look up all active push tokens for a user. */
+/**
+ * Look up all active push tokens for a user.
+ *
+ * sdb (BYPASSRLS): this leaf notification helper is called from several
+ * places (dispatch, messages, notify) purely with a userId — the caller's
+ * request-scoped tenant isn't threaded through here. Safe because the
+ * predicate below is an exact userId match, not a cross-tenant scan.
+ */
 async function tokensForUser(userId: string): Promise<string[]> {
-  const rows = await db
+  const rows = await sdb
     .select({ token: schema.pushTokens.token })
     .from(schema.pushTokens)
     .where(eq(schema.pushTokens.userId, userId));
@@ -48,7 +55,7 @@ async function tokensForUser(userId: string): Promise<string[]> {
 async function pruneTokens(tokens: string[]) {
   if (!tokens.length) return;
   try {
-    await db
+    await sdb
       .delete(schema.pushTokens)
       .where(inArray(schema.pushTokens.token, tokens));
     log.info("pruned invalid push tokens", { count: tokens.length });

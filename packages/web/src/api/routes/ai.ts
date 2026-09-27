@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx } from "../middleware/auth";
@@ -32,10 +31,7 @@ export const aiRoutes = new Hono<AppEnv>()
 
     // names come from the linked user rows
     const userRows = techs.length
-      ? await db
-          .select({ id: schema.user.id, name: schema.user.name })
-          .from(schema.user)
-          .where(inArray(schema.user.id, techs.map((r) => r.userId)))
+      ? await t.select(schema.user, inArray(schema.user.id, techs.map((r) => r.userId)))
       : [];
     const names = new Map(userRows.map((u) => [u.id, u.name]));
 

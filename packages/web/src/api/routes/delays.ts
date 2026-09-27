@@ -8,13 +8,12 @@ import type { AppEnv } from "../env";
  * or muted, before the automatic notice goes out on its own.
  */
 import { Hono } from "hono";
-import { requireAdmin, tenantId } from "../middleware/auth";
+import { requireAdmin, tenantId, tx } from "../middleware/auth";
 import { jsonBody } from "../lib/validate";
 import { audit } from "../lib/audit";
 import { z } from "zod";
-import { db } from "../database";
 import * as schema from "../database/schema";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   listDelays,
   pendingDelayCount,
@@ -45,10 +44,7 @@ export const delaysRoutes = new Hono<AppEnv>()
     const co = tenantId(c);
     const u = c.get("user") as SessionUser;
     const bookingId = c.req.param("bookingId");
-    const [b] = await db
-      .select()
-      .from(schema.bookings)
-      .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.companyId, co)));
+    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
     if (!b) return c.json({ message: "Work order not found" }, 404);
 
     // Re-run the evaluator rather than trusting a number from the browser: a
@@ -104,10 +100,7 @@ export const delaysRoutes = new Hono<AppEnv>()
     const u = c.get("user") as SessionUser;
     const bookingId = c.req.param("bookingId");
     const { muted } = c.req.valid("json");
-    const [b] = await db
-      .select()
-      .from(schema.bookings)
-      .where(and(eq(schema.bookings.id, bookingId), eq(schema.bookings.companyId, co)));
+    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
     if (!b) return c.json({ message: "Work order not found" }, 404);
 
     await muteDelay(co, bookingId, muted);

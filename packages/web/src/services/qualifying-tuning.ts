@@ -14,8 +14,8 @@
  * returns a summary so the caller can log/report it and move on.
  */
 import { eq } from "drizzle-orm";
-import { db } from "../api/database";
 import * as schema from "../api/database/schema";
+import { tdb } from "../api/database/tenant";
 import { EMPTY_RATE_MODEL, type RateModel } from "../shared/pricing";
 
 /** Canonical shape of `company_settings.qualifying_profile` (JSON text column). */
@@ -118,10 +118,8 @@ export async function applyQualifyingTuning(
   }
 
   try {
-    const templates = await db
-      .select()
-      .from(schema.taskTemplates)
-      .where(eq(schema.taskTemplates.companyId, companyId));
+    const tdbc = tdb(companyId);
+    const templates = await tdbc.select(schema.taskTemplates);
 
     if (!templates.length) {
       summary.reason = "no templates to tune";
@@ -141,17 +139,18 @@ export async function applyQualifyingTuning(
       );
 
       if (rushTemplates.length > 0) {
-        for (const t of rushTemplates) {
-          const rm = parseRateModel(t.rateModel);
+        for (const tpl of rushTemplates) {
+          const rm = parseRateModel(tpl.rateModel);
           const tuned = multiplyRateModel(rm, mult);
           const noteTag = `[Priority/after-hours rate: ${qualifying.emergencyMultiplierPct}% of standard, applied from onboarding]`;
-          const description = t.description.includes(noteTag)
-            ? t.description
-            : `${t.description} ${noteTag}`.trim();
-          await db
-            .update(schema.taskTemplates)
-            .set({ rateModel: JSON.stringify(tuned), description })
-            .where(eq(schema.taskTemplates.id, t.id));
+          const description = tpl.description.includes(noteTag)
+            ? tpl.description
+            : `${tpl.description} ${noteTag}`.trim();
+          await tdbc.update(
+            schema.taskTemplates,
+            { rateModel: JSON.stringify(tuned), description },
+            eq(schema.taskTemplates.id, tpl.id),
+          );
           summary.emergencyTemplatesTuned++;
         }
       } else {
@@ -180,8 +179,7 @@ export async function applyQualifyingTuning(
         const rm = parseRateModel(baseTemplate.rateModel);
         const tuned = multiplyRateModel(rm, mult);
         const noteTag = `[Priority/after-hours rate: ${qualifying.emergencyMultiplierPct}% of standard, applied from onboarding]`;
-        await db.insert(schema.taskTemplates).values({
-          companyId,
+        await tdbc.insert(schema.taskTemplates, {
           name: "Emergency / After-Hours Call",
           category: "Emergency",
           icon: "alert-triangle",
@@ -213,8 +211,7 @@ export async function applyQualifyingTuning(
           ...baseChecklist,
           { id: crypto.randomUUID(), label: "Log readings/notes for next visit", required: false },
         ];
-        await db.insert(schema.taskTemplates).values({
-          companyId,
+        await tdbc.insert(schema.taskTemplates, {
           name: "Maintenance Plan Visit",
           category: "Maintenance",
           icon: "calendar-check",

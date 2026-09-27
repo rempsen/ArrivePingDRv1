@@ -12,8 +12,8 @@
  * tokens before uploading.
  * ------------------------------------------------------------------------- */
 import { eq } from "drizzle-orm";
-import { db } from "../api/database";
 import * as schema from "../api/database/schema";
+import { tdb } from "../api/database/tenant";
 import { refreshTokens } from "./oauth";
 
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
@@ -40,16 +40,17 @@ async function freshAccessToken(row: IntegrationRow): Promise<string> {
   }
   try {
     const t = await refreshTokens("google_drive", row.refreshToken);
-    await db
-      .update(schema.integrations)
-      .set({
+    await tdb(row.companyId).update(
+      schema.integrations,
+      {
         accessToken: t.accessToken,
         refreshToken: t.refreshToken || row.refreshToken,
         expiresAt: t.expiresAt ? new Date(t.expiresAt) : row.expiresAt,
         scope: t.scope || row.scope,
         lastSyncAt: new Date(),
-      })
-      .where(eq(schema.integrations.id, row.id));
+      },
+      eq(schema.integrations.id, row.id),
+    );
     return t.accessToken;
   } catch (e: any) {
     // "invalid_grant" means Google has permanently revoked this refresh token —
@@ -61,10 +62,11 @@ async function freshAccessToken(row: IntegrationRow): Promise<string> {
     // silently failing on every export attempt.
     const msg = String(e?.message || "");
     if (msg.includes("invalid_grant")) {
-      await db
-        .update(schema.integrations)
-        .set({ status: "error" })
-        .where(eq(schema.integrations.id, row.id));
+      await tdb(row.companyId).update(
+        schema.integrations,
+        { status: "error" },
+        eq(schema.integrations.id, row.id),
+      );
       throw new Error("drive_reauth_required");
     }
     throw e;

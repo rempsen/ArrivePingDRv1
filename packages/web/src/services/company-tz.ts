@@ -6,8 +6,7 @@
  * otherwise be a settings read on a hot path. A tenant changing their time zone
  * takes effect within a minute.
  */
-import { eq } from "drizzle-orm";
-import { db } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { DEFAULT_TZ, safeTimeZone } from "../shared/tz";
 
@@ -21,11 +20,7 @@ export async function companyTimeZone(companyId: string): Promise<string> {
 
   let tz = DEFAULT_TZ;
   try {
-    const [row] = await db
-      .select({ timezone: schema.companySettings.timezone })
-      .from(schema.companySettings)
-      .where(eq(schema.companySettings.companyId, companyId))
-      .limit(1);
+    const row = await tdb(companyId).selectOne(schema.companySettings);
     tz = safeTimeZone(row?.timezone);
   } catch {
     // Settings unreadable (missing row, DB blip) — never fail the caller over

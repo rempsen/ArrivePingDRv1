@@ -10,8 +10,8 @@
  * to the caller (superadmin) at provisioning time and never stored in plaintext.
  */
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "../database";
 import * as schema from "../database/schema";
+import { tdb } from "../database/tenant";
 import { generateApiKey, generatePublicKey } from "../middleware/auth";
 
 /** Stable label for the auto-issued per-tenant key, so we can detect it. */
@@ -25,18 +25,11 @@ export const DEFAULT_PUBLIC_KEY_LABEL = "Default form key (auto)";
  * Used to keep provisioning + backfill idempotent.
  */
 export async function hasActiveSecretKey(companyId: string): Promise<boolean> {
-  const rows = await db
-    .select()
-    .from(schema.apiKeys)
-    .where(
-      and(
-        eq(schema.apiKeys.companyId, companyId),
-        eq(schema.apiKeys.keyType, "secret"),
-        isNull(schema.apiKeys.revokedAt),
-      ),
-    )
-    .limit(1);
-  return rows.length > 0;
+  const row = await tdb(companyId).selectOne(
+    schema.apiKeys,
+    and(eq(schema.apiKeys.keyType, "secret"), isNull(schema.apiKeys.revokedAt)),
+  );
+  return !!row;
 }
 
 /**
@@ -50,19 +43,15 @@ export async function issueDefaultTenantKey(opts: {
   label?: string;
 }): Promise<{ id: string; prefix: string; raw: string }> {
   const gen = await generateApiKey();
-  const [row] = await db
-    .insert(schema.apiKeys)
-    .values({
-      companyId: opts.companyId,
-      label: opts.label ?? DEFAULT_KEY_LABEL,
-      hashedKey: gen.hashed,
-      prefix: gen.prefix,
-      keyType: "secret",
-      scopes: "*", // full access — but locked to this one tenant
-      createdBy: opts.createdBy ?? "",
-      createdByName: opts.createdByName ?? "system",
-    })
-    .returning();
+  const [row] = await tdb(opts.companyId).insert(schema.apiKeys, {
+    label: opts.label ?? DEFAULT_KEY_LABEL,
+    hashedKey: gen.hashed,
+    prefix: gen.prefix,
+    keyType: "secret",
+    scopes: "*", // full access — but locked to this one tenant
+    createdBy: opts.createdBy ?? "",
+    createdByName: opts.createdByName ?? "system",
+  });
   return { id: row.id, prefix: row.prefix, raw: gen.raw };
 }
 
@@ -77,17 +66,10 @@ export async function ensureDefaultPublicKey(opts: {
   createdBy?: string;
   createdByName?: string;
 }): Promise<{ id: string; prefix: string; publicKey: string; created: boolean }> {
-  const [existing] = await db
-    .select()
-    .from(schema.apiKeys)
-    .where(
-      and(
-        eq(schema.apiKeys.companyId, opts.companyId),
-        eq(schema.apiKeys.keyType, "public"),
-        isNull(schema.apiKeys.revokedAt),
-      ),
-    )
-    .limit(1);
+  const existing = await tdb(opts.companyId).selectOne(
+    schema.apiKeys,
+    and(eq(schema.apiKeys.keyType, "public"), isNull(schema.apiKeys.revokedAt)),
+  );
   if (existing) {
     return {
       id: existing.id,
@@ -97,20 +79,16 @@ export async function ensureDefaultPublicKey(opts: {
     };
   }
   const gen = await generatePublicKey();
-  const [row] = await db
-    .insert(schema.apiKeys)
-    .values({
-      companyId: opts.companyId,
-      label: DEFAULT_PUBLIC_KEY_LABEL,
-      hashedKey: gen.hashed,
-      prefix: gen.prefix,
-      keyType: "public",
-      publicKey: gen.raw, // browser-safe; persisted for re-display & form binding
-      scopes: "forms:submit",
-      createdBy: opts.createdBy ?? "",
-      createdByName: opts.createdByName ?? "system",
-    })
-    .returning();
+  const [row] = await tdb(opts.companyId).insert(schema.apiKeys, {
+    label: DEFAULT_PUBLIC_KEY_LABEL,
+    hashedKey: gen.hashed,
+    prefix: gen.prefix,
+    keyType: "public",
+    publicKey: gen.raw, // browser-safe; persisted for re-display & form binding
+    scopes: "forms:submit",
+    createdBy: opts.createdBy ?? "",
+    createdByName: opts.createdByName ?? "system",
+  });
   return { id: row.id, prefix: row.prefix, publicKey: gen.raw, created: true };
 }
 
@@ -124,17 +102,10 @@ export async function ensureDefaultTenantKey(opts: {
   createdByName?: string;
 }): Promise<{ companyId: string; created: boolean; prefix: string; raw?: string }> {
   if (await hasActiveSecretKey(opts.companyId)) {
-    const [row] = await db
-      .select()
-      .from(schema.apiKeys)
-      .where(
-        and(
-          eq(schema.apiKeys.companyId, opts.companyId),
-          eq(schema.apiKeys.keyType, "secret"),
-          isNull(schema.apiKeys.revokedAt),
-        ),
-      )
-      .limit(1);
+    const row = await tdb(opts.companyId).selectOne(
+      schema.apiKeys,
+      and(eq(schema.apiKeys.keyType, "secret"), isNull(schema.apiKeys.revokedAt)),
+    );
     return { companyId: opts.companyId, created: false, prefix: row?.prefix ?? "" };
   }
   const k = await issueDefaultTenantKey(opts);

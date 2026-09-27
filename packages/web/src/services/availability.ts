@@ -10,8 +10,8 @@
  * warning that can't be computed must never stop the office from booking work.
  */
 import { and, eq, gte, isNull, lte, ne } from "drizzle-orm";
-import { db } from "../api/database";
 import * as schema from "../api/database/schema";
+import { tdb } from "../api/database/tenant";
 import { TERMINAL_STATUSES } from "../shared/job-status";
 import {
   findOverlappingJob,
@@ -45,31 +45,26 @@ const WINDOW_MS = 25 * 60 * 60 * 1000;
 
 async function serviceMinutes(companyId: string, serviceId?: string | null): Promise<number | null> {
   if (!serviceId) return null;
-  const [svc] = await db
-    .select({ durationMins: schema.services.durationMins })
-    .from(schema.services)
-    .where(and(eq(schema.services.companyId, companyId), eq(schema.services.id, serviceId)))
-    .limit(1);
+  const svc = await tdb(companyId).selectOne(schema.services, eq(schema.services.id, serviceId));
   return svc?.durationMins ?? null;
 }
 
 async function techLabel(companyId: string, riderId: string): Promise<string> {
-  const [row] = await db
-    .select({ name: schema.user.name })
-    .from(schema.riders)
-    .innerJoin(schema.user, eq(schema.user.id, schema.riders.userId))
-    .where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.id, riderId)))
-    .limit(1);
+  const t = tdb(companyId);
+  const [row] = await t.transaction((tx) =>
+    tx
+      .select({ name: schema.user.name })
+      .from(schema.riders)
+      .innerJoin(schema.user, eq(schema.user.id, schema.riders.userId))
+      .where(t.scope(schema.riders, eq(schema.riders.id, riderId)))
+      .limit(1),
+  );
   return (row?.name ?? "").trim();
 }
 
 async function workerNoun(companyId: string): Promise<string> {
-  const [row] = await db
-    .select({ noun: schema.companySettings.workerNoun })
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId))
-    .limit(1);
-  return (row?.noun || "technician").toLowerCase();
+  const row = await tdb(companyId).selectOne(schema.companySettings);
+  return (row?.workerNoun || "technician").toLowerCase();
 }
 
 export async function findAvailabilityBlock(
@@ -83,32 +78,37 @@ export async function findAvailabilityBlock(
   if (!Number.isFinite(start)) return null;
 
   try {
+    const t = tdb(companyId);
     const tz = await companyTimeZone(companyId);
     const durationMins = jobMinutes(input.durationMins ?? (await serviceMinutes(companyId, input.serviceId)));
 
     // The tech's other live work anywhere near this time. Archived (soft-deleted),
     // completed and cancelled jobs are not clashes.
-    const rows = await db
-      .select({
-        id: schema.bookings.id,
-        riderId: schema.bookings.riderId,
-        scheduledAt: schema.bookings.scheduledAt,
-        status: schema.bookings.status,
-        title: schema.bookings.title,
-        durationMins: schema.services.durationMins,
-      })
-      .from(schema.bookings)
-      .leftJoin(schema.services, eq(schema.services.id, schema.bookings.serviceId))
-      .where(
-        and(
-          eq(schema.bookings.companyId, companyId),
-          eq(schema.bookings.riderId, riderId),
-          isNull(schema.bookings.deletedAt),
-          gte(schema.bookings.scheduledAt, new Date(start - WINDOW_MS)),
-          lte(schema.bookings.scheduledAt, new Date(start + WINDOW_MS)),
-          ...TERMINAL_STATUSES.map((s) => ne(schema.bookings.status, s)),
+    const rows = await t.transaction((tx) =>
+      tx
+        .select({
+          id: schema.bookings.id,
+          riderId: schema.bookings.riderId,
+          scheduledAt: schema.bookings.scheduledAt,
+          status: schema.bookings.status,
+          title: schema.bookings.title,
+          durationMins: schema.services.durationMins,
+        })
+        .from(schema.bookings)
+        .leftJoin(schema.services, eq(schema.services.id, schema.bookings.serviceId))
+        .where(
+          t.scope(
+            schema.bookings,
+            and(
+              eq(schema.bookings.riderId, riderId),
+              isNull(schema.bookings.deletedAt),
+              gte(schema.bookings.scheduledAt, new Date(start - WINDOW_MS)),
+              lte(schema.bookings.scheduledAt, new Date(start + WINDOW_MS)),
+              ...TERMINAL_STATUSES.map((s) => ne(schema.bookings.status, s)),
+            ),
+          ),
         ),
-      );
+    );
 
     const others: JobSlot[] = rows.map((r) => ({
       id: r.id,
@@ -132,19 +132,16 @@ export async function findAvailabilityBlock(
       };
     }
 
-    const shiftRows = await db
-      .select()
-      .from(schema.techShifts)
-      .where(
-        and(
-          eq(schema.techShifts.companyId, companyId),
-          eq(schema.techShifts.riderId, riderId),
-          eq(schema.techShifts.kind, "timeoff"),
-          // A day either side covers every zone offset.
-          gte(schema.techShifts.date, new Date(start - 48 * 60 * 60 * 1000)),
-          lte(schema.techShifts.date, new Date(start + 48 * 60 * 60 * 1000)),
-        ),
-      );
+    const shiftRows = await t.select(
+      schema.techShifts,
+      and(
+        eq(schema.techShifts.riderId, riderId),
+        eq(schema.techShifts.kind, "timeoff"),
+        // A day either side covers every zone offset.
+        gte(schema.techShifts.date, new Date(start - 48 * 60 * 60 * 1000)),
+        lte(schema.techShifts.date, new Date(start + 48 * 60 * 60 * 1000)),
+      ),
+    );
 
     const off = findTimeOff(
       { riderId, scheduledAt: start },

@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx, tenantId } from "../middleware/auth";
@@ -205,10 +204,7 @@ export const trackingRoutes = new Hono<AppEnv>()
     if (b.riderId) {
       const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
       if (r) {
-        const [ru] = await db
-          .select()
-          .from(schema.user)
-          .where(eq(schema.user.id, r.userId));
+        const ru = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
         rider = {
           id: r.id,
           name: ru?.name,

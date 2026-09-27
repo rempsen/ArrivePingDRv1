@@ -10,7 +10,7 @@
  * construction: it only looks at bookings in a live status whose promised time
  * is inside a bounded window, not the whole table.
  */
-import { db } from "../api/database";
+import { sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { and, eq, gte, lte, inArray, isNotNull, isNull } from "drizzle-orm";
@@ -37,20 +37,14 @@ const LOOKBACK_MS = 8 * 60 * 60_000;
 const LOOKAHEAD_MS = 2 * 60 * 60_000;
 
 export async function delayPolicyFor(companyId: string): Promise<DelayPolicy> {
-  const [row] = await db
-    .select({
-      enabled: schema.companySettings.delayNoticeEnabled,
-      thresholdMins: schema.companySettings.delayNoticeThresholdMins,
-      autoSendAfterMins: schema.companySettings.delayNoticeAutoSendAfterMins,
-    })
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId))
-    .limit(1);
+  const row = await tdb(companyId).selectOne(schema.companySettings);
   if (!row) return { ...DEFAULT_DELAY_POLICY };
   return {
-    enabled: !!row.enabled,
-    thresholdMins: Number(row.thresholdMins ?? DEFAULT_DELAY_POLICY.thresholdMins),
-    autoSendAfterMins: Number(row.autoSendAfterMins ?? DEFAULT_DELAY_POLICY.autoSendAfterMins),
+    enabled: !!row.delayNoticeEnabled,
+    thresholdMins: Number(row.delayNoticeThresholdMins ?? DEFAULT_DELAY_POLICY.thresholdMins),
+    autoSendAfterMins: Number(
+      row.delayNoticeAutoSendAfterMins ?? DEFAULT_DELAY_POLICY.autoSendAfterMins,
+    ),
   };
 }
 
@@ -211,7 +205,10 @@ export async function sweepDelays(now: Date = new Date()): Promise<{
   const result = { flagged: 0, notified: 0, cleared: 0 };
   const nowMs = now.getTime();
   try {
-    const companies = await db
+    // sdb (BYPASSRLS): the cron sweep is deliberately cross-tenant — it walks
+    // every company's settings once a minute, then reconciles each one
+    // scoped to its own company below.
+    const companies = await sdb
       .select({
         companyId: schema.companySettings.companyId,
         enabled: schema.companySettings.delayNoticeEnabled,

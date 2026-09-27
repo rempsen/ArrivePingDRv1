@@ -1,4 +1,4 @@
-import { db } from "../api/database";
+import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
@@ -135,7 +135,9 @@ export async function reconcileRiderStatus(companyId: string, riderId: string): 
  * set, then reconciles each one scoped to its own company.
  */
 export async function reconcileAllRiders(): Promise<void> {
-  const rows = await db
+  // sdb (BYPASSRLS): deliberately cross-tenant boot/cron sweep, see doc
+  // comment above — reads riders across every company before re-scoping.
+  const rows = await sdb
     .select({ id: schema.riders.id, companyId: schema.riders.companyId })
     .from(schema.riders);
   await Promise.all(rows.map((r) => reconcileRiderStatus(r.companyId, r.id)));

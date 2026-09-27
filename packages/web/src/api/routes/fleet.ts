@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx } from "../middleware/auth";
@@ -60,11 +59,9 @@ export const fleetRoutes = new Hono<AppEnv>()
     const techs = await t.select(schema.riders);
     const result = (await Promise.allSettled(
       techs.map(async (r): Promise<FleetTech> => {
-        const [ru] = await db
-          .select()
-          .from(schema.user)
-          .where(eq(schema.user.id, r.userId))
-          .catch(() => [undefined]);
+        const ru = await t
+          .selectOne(schema.user, eq(schema.user.id, r.userId))
+          .catch(() => undefined);
         // current active work order for this tech
         const activeAll = await t.select(
           schema.bookings,
@@ -132,10 +129,7 @@ export const fleetRoutes = new Hono<AppEnv>()
     const { body } = c.req.valid("json");
     const r = await tx(c).selectOne(schema.riders, eq(schema.riders.id, techId));
     if (!r) return c.json({ message: "Technician not found" }, 404);
-    const [ru] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, r.userId));
+    const ru = await tx(c).selectOne(schema.user, eq(schema.user.id, r.userId));
     const phone = r.phone || ru?.phone || "";
     if (!phone) return c.json({ message: "No phone number on file" }, 400);
     const res = await sendSms(phone, body);
