@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { db } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { resolvePublicKey, hashApiKey } from "../middleware/auth";
 import { putObject } from "../lib/storage";
 import { rateLimit, keyByIp } from "../lib/rate-limit";
@@ -196,11 +196,7 @@ function clientIp(c: any): string {
 }
 
 async function loadForm(companyId: string, slug: string) {
-  const [row] = await db
-    .select()
-    .from(schema.intakeForms)
-    .where(and(eq(schema.intakeForms.companyId, companyId), eq(schema.intakeForms.slug, slug)))
-    .limit(1);
+  const row = await tdb(companyId).selectOne(schema.intakeForms, eq(schema.intakeForms.slug, slug));
   return row || null;
 }
 
@@ -301,11 +297,7 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     // include the public key prefix so the browser can submit (the page reads it)
     let publicKey = "";
     if (form.publicKeyId) {
-      const [k] = await db
-        .select()
-        .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.id, form.publicKeyId))
-        .limit(1);
+      const k = await t.selectOne(schema.apiKeys, eq(schema.apiKeys.id, form.publicKeyId));
       // NOTE: we cannot return the raw key (it's hashed). The page submits using
       // the key embedded at build/share time; here we only confirm one is bound.
       if (k && k.keyType === "public" && !k.revokedAt) publicKey = k.prefix;
@@ -372,10 +364,7 @@ export const publicFormsRoutes = new Hono<AppEnv>()
 
     const q = (c.req.query("q") || "").trim().toLowerCase();
     if (q.length < 2) return c.json({ clients: [] }, 200);
-    const rows = await db
-      .select()
-      .from(schema.user)
-      .where(and(eq(schema.user.companyId, companyId), eq(schema.user.role, "customer")));
+    const rows = await tdb(companyId).select(schema.user, eq(schema.user.role, "customer"));
     const matches = rows
       .filter((u) =>
         u.name?.toLowerCase().includes(q) ||
@@ -396,9 +385,10 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     if (!checkAccessCode(form, c)) return c.json({ message: "Invalid access code" }, 401);
     if (!form.allowTechAssign) return c.json({ riders: [] }, 200);
 
-    const rows = await tdb(companyId).select(schema.riders);
+    const t = tdb(companyId);
+    const rows = await t.select(schema.riders);
     const out = await Promise.all(rows.map(async (r) => {
-      const [u] = await db.select().from(schema.user).where(eq(schema.user.id, r.userId)).limit(1);
+      const u = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
       return { id: r.id, name: u?.name || "Technician", skillClass: r.skillClass, status: r.status };
     }));
     return c.json({ riders: out }, 200);
@@ -584,10 +574,8 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     // submission always lands as a real booking/lead. Admins can rename, price,
     // or split it later in Catalog → Services.
     if (!svc) {
-      const [created] = await db
-        .insert(schema.services)
-        .values({
-          companyId,
+      const created = await t
+        .insert(schema.services, {
           name: "General Request",
           category: "general",
           description: "Auto-created to capture intake form requests. Rename or customize in Catalog → Services.",
@@ -596,9 +584,8 @@ export const publicFormsRoutes = new Hono<AppEnv>()
           durationMins: 60,
           active: true,
         })
-        .returning()
         .catch(() => [] as (typeof schema.services.$inferSelect)[]);
-      svc = created;
+      svc = created[0];
     }
     if (!svc) return c.json({ message: "We couldn't process your request right now. Please try again shortly." }, 503);
     svcId = svc.id;
@@ -613,33 +600,26 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       const uid = crypto.randomUUID();
       // email must be globally unique on the user table; namespace if missing/clash
       const safeEmail = email || `lead-${uid.slice(0, 8)}@${companyId}.intake.local`;
-      const ins = await db
-        .insert(schema.user)
-        .values({
+      const ins = await t
+        .insert(schema.user, {
           id: uid,
           name: name || "Website lead",
           email: safeEmail,
           role: "customer",
-          companyId,
           phone: phone || null,
           address: address || null,
         })
-        .returning()
         .catch(async () => {
           // email collision across tenants -> create with namespaced email
           const uid2 = crypto.randomUUID();
-          return db
-            .insert(schema.user)
-            .values({
-              id: uid2,
-              name: name || "Website lead",
-              email: `lead-${uid2.slice(0, 8)}+${companyId}@intake.local`,
-              role: "customer",
-              companyId,
-              phone: phone || null,
-              address: address || null,
-            })
-            .returning();
+          return t.insert(schema.user, {
+            id: uid2,
+            name: name || "Website lead",
+            email: `lead-${uid2.slice(0, 8)}+${companyId}@intake.local`,
+            role: "customer",
+            phone: phone || null,
+            address: address || null,
+          });
         });
       customer = ins[0];
       // Without a membership the new client would not show on this company's
@@ -808,15 +788,15 @@ async function submitWorkOrder(c: any, companyId: string, form: typeof schema.in
     if (!customer) {
       const uid = crypto.randomUUID();
       const safeEmail = email || `client-${uid.slice(0, 8)}@${companyId}.workorder.local`;
-      const ins = await db.insert(schema.user).values({
-        id: uid, name, email: safeEmail, role: "customer", companyId,
+      const ins = await t.insert(schema.user, {
+        id: uid, name, email: safeEmail, role: "customer",
         phone: phone || null, address: address || null,
-      }).returning().catch(async () => {
+      }).catch(async () => {
         const uid2 = crypto.randomUUID();
-        return db.insert(schema.user).values({
+        return t.insert(schema.user, {
           id: uid2, name, email: `client-${uid2.slice(0, 8)}+${companyId}@workorder.local`,
-          role: "customer", companyId, phone: phone || null, address: address || null,
-        }).returning();
+          role: "customer", phone: phone || null, address: address || null,
+        });
       });
       customer = ins[0];
       // Without a membership the new client would not show on this company's
@@ -834,7 +814,7 @@ async function submitWorkOrder(c: any, companyId: string, form: typeof schema.in
     // one place that still did.
     return c.json({ message: "Client not found" }, 404);
   }
-  const [cu] = await db.select().from(schema.user).where(eq(schema.user.id, customerId));
+  const cu = await t.selectOne(schema.user, eq(schema.user.id, customerId));
   if (!cu) return c.json({ message: "Client not found" }, 404);
 
   // ---- service ----
