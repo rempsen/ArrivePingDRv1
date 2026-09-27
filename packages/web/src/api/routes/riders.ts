@@ -1,12 +1,12 @@
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
-import { attachMembership, isMember, findUserByEmail, detachMembership } from "../lib/memberships";
+import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { putObject, deleteObject } from "../lib/storage";
 import { z } from "zod";
@@ -184,30 +184,21 @@ export const ridersRoutes = new Hono<AppEnv>()
   .get("/", requireAuth, async (c) => {
     const cidList = tenantId(c);
     const rows = await tx(c).select(schema.riders);
-    // Memberships tell us which of these people also work elsewhere, and who
-    // still has a pending invite (they can't see this company's jobs yet).
-    const memberRows = await db
-      .select()
-      .from(schema.memberships)
-      .where(eq(schema.memberships.companyId, cidList));
-    const memberByUser = new Map(memberRows.map((m) => [m.userId, m]));
-    const enriched = await Promise.all(
-      rows.map(async (r) => {
-        const [ru] = await db
-          .select()
-          .from(schema.user)
-          .where(eq(schema.user.id, r.userId));
-        const m = memberByUser.get(r.userId);
-        return {
-          ...r,
-          name: ru?.name,
-          email: ru?.email,
-          phone: ru?.phone,
-          membershipStatus: m?.status ?? "active",
-          isShared: !!ru && ru.companyId !== cidList,
-        };
-      }),
-    );
+    // Reuses the same members+users join team.ts's roster is built from —
+    // it already carries membership status and cross-company "isShared".
+    const users = await usersForCompany(cidList);
+    const byUserId = new Map(users.map((u) => [u.id, u]));
+    const enriched = rows.map((r) => {
+      const ru = byUserId.get(r.userId);
+      return {
+        ...r,
+        name: ru?.name,
+        email: ru?.email,
+        phone: ru?.phone,
+        membershipStatus: ru?.membershipStatus ?? "active",
+        isShared: ru?.isShared ?? false,
+      };
+    });
     return c.json({ riders: enriched }, 200);
   })
   // create a technician (admin): user(role=rider) + rider profile
@@ -275,13 +266,11 @@ export const ridersRoutes = new Hono<AppEnv>()
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
     }
-    const [u] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.email, email));
+    const u = await findUserByEmail(email);
     if (!u) return c.json({ message: "Failed to create user" }, 500);
-    // ensure role/phone persisted
-    await db
+    // ensure role/phone persisted — first-time stamp of this brand-new
+    // login's home company, same pattern as team.ts's create path.
+    await sdb
       .update(schema.user)
       .set({ role: "rider", phone: phone ?? "", companyId: cid })
       .where(eq(schema.user.id, u.id));
@@ -335,7 +324,7 @@ export const ridersRoutes = new Hono<AppEnv>()
     // Reject a duplicate email BEFORE writing anything, or the unique index on
     // user.email throws and the client gets a bare 500.
     if (b.email) {
-      const [clash] = await db.select().from(schema.user).where(eq(schema.user.email, b.email));
+      const clash = await findUserByEmail(b.email);
       if (clash && clash.id !== existing.userId)
         return c.json({ message: "Email already in use" }, 409);
     }
@@ -354,17 +343,17 @@ export const ridersRoutes = new Hono<AppEnv>()
     // Keep the linked user record in sync. The GET endpoint reads name/email/phone
     // from the user table, so these MUST be written there too or edits appear to revert.
     if (r && (b.name || b.email || "phone" in b)) {
-      await db.update(schema.user)
-        .set({
+      await tx(c).update(
+        schema.user,
+        {
           ...(b.name && { name: b.name }),
           ...(b.email && { email: b.email }),
           ...("phone" in b && { phone: b.phone ?? "" }),
-        })
-        .where(eq(schema.user.id, r.userId));
+        },
+        eq(schema.user.id, r.userId),
+      );
     }
-    const [ru] = r
-      ? await db.select().from(schema.user).where(eq(schema.user.id, r.userId))
-      : [];
+    const ru = r ? await tx(c).selectOne(schema.user, eq(schema.user.id, r.userId)) : undefined;
     return c.json(
       { rider: r ? { ...r, name: ru?.name, email: ru?.email, phone: ru?.phone } : r },
       200,
@@ -430,14 +419,14 @@ export const ridersRoutes = new Hono<AppEnv>()
     // to wipe that person's access — and their login itself — at every OTHER
     // company they work for too, the instant one company removed them.
     // Mirrors the same check already used in admin.ts's user-delete route.
-    const memberOf = await db
+    const memberOf = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.userId, r.userId));
     if (memberOf.length > 1) {
       await detachMembership(r.userId, cid);
     } else {
-      await db.delete(schema.user).where(eq(schema.user.id, r.userId));
+      await t.delete(schema.user, eq(schema.user.id, r.userId));
     }
     return c.json({ ok: true }, 200);
   })

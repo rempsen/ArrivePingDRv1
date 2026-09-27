@@ -6,7 +6,7 @@
 // the booking and the existing billing pipeline (recomputeBooking) recomputes
 // subtotal/tax/total — no separate pricing math.
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
@@ -35,8 +35,9 @@ const SubmitBody = z.object({
   signatureName: shortText("Signature name", 120),
 });
 
+// Pre-tenant: the public token itself is what resolves the company.
 async function resolveByToken(token: string) {
-  const [b] = await db
+  const [b] = await sdb
     .select()
     .from(schema.bookings)
     .where(eq(schema.bookings.publicToken, token));
@@ -60,7 +61,7 @@ export const optionSelectionsRoutes = new Hono<AppEnv>()
     if (!b) return c.json({ message: "Not found" }, 404);
 
     const t = tdb(b.companyId);
-    const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, b.companyId));
+    const [co] = await sdb.select().from(schema.companies).where(eq(schema.companies.id, b.companyId));
     const cats = sortByOrder((await t.select(schema.optionCategories)).filter((x) => x.active));
     const items = (await t.select(schema.optionCategoryItems)).filter((x) => x.active);
     const byCategory = new Map<string, typeof items>();

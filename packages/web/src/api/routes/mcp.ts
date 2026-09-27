@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { db } from "../database";
 import { tdb, type TenantDb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and, gte, lte, like } from "drizzle-orm";
@@ -194,26 +193,30 @@ const TOOLS: ToolDef[] = [
       const conds = [] as any[];
       if (a.status) conds.push(eq(schema.riders.status, String(a.status)));
       if (a.skillClass) conds.push(eq(schema.riders.skillClass, String(a.skillClass)));
-      const rows = await db
-        .select({
-          id: schema.riders.id,
-          userId: schema.riders.userId,
-          name: userTable.name,
-          email: userTable.email,
-          phone: schema.riders.phone,
-          status: schema.riders.status,
-          skillClass: schema.riders.skillClass,
-          skills: schema.riders.skills,
-          rating: schema.riders.rating,
-          completedJobs: schema.riders.completedJobs,
-          lat: schema.riders.lat,
-          lng: schema.riders.lng,
-          locationUpdatedAt: schema.riders.locationUpdatedAt,
-          approval: schema.riders.approval,
-        })
-        .from(schema.riders)
-        .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
-        .where(t.scope(schema.riders, conds.length ? and(...conds) : undefined));
+      // Hand-written join, so it must run inside t.transaction() — that's
+      // what actually sets the RLS session var backing t.scope()'s predicate.
+      const rows = await t.transaction((tx) =>
+        tx
+          .select({
+            id: schema.riders.id,
+            userId: schema.riders.userId,
+            name: userTable.name,
+            email: userTable.email,
+            phone: schema.riders.phone,
+            status: schema.riders.status,
+            skillClass: schema.riders.skillClass,
+            skills: schema.riders.skills,
+            rating: schema.riders.rating,
+            completedJobs: schema.riders.completedJobs,
+            lat: schema.riders.lat,
+            lng: schema.riders.lng,
+            locationUpdatedAt: schema.riders.locationUpdatedAt,
+            approval: schema.riders.approval,
+          })
+          .from(schema.riders)
+          .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
+          .where(t.scope(schema.riders, conds.length ? and(...conds) : undefined)),
+      );
       return { count: rows.length, technicians: rows };
     },
   },
@@ -230,11 +233,15 @@ const TOOLS: ToolDef[] = [
     handler: async (a, t) => {
       const conds = [eq(userTable.role, "customer"), eq(userTable.companyId, t.companyId)] as any[];
       if (a.search) conds.push(like(userTable.name, `%${a.search}%`));
-      const rows = await db
-        .select({ id: userTable.id, name: userTable.name, email: userTable.email, phone: userTable.phone, address: userTable.address, createdAt: userTable.createdAt })
-        .from(userTable)
-        .where(and(...conds))
-        .limit(Math.min(num(a.limit, 50)!, 200));
+      // `user` is RLS-enforced, so this raw query must run inside a
+      // transaction that has stamped app.tenant_id, or the policy zeroes it.
+      const rows = await t.transaction((tx) =>
+        tx
+          .select({ id: userTable.id, name: userTable.name, email: userTable.email, phone: userTable.phone, address: userTable.address, createdAt: userTable.createdAt })
+          .from(userTable)
+          .where(and(...conds))
+          .limit(Math.min(num(a.limit, 50)!, 200)),
+      );
       return { count: rows.length, clients: rows };
     },
   },
@@ -244,11 +251,13 @@ const TOOLS: ToolDef[] = [
     scope: "clients:read",
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
     handler: async (a, t) => {
-      const [client] = await db
-        .select()
-        .from(userTable)
-        .where(and(eq(userTable.id, String(a.id)), eq(userTable.companyId, t.companyId)))
-        .limit(1);
+      const [client] = await t.transaction((tx) =>
+        tx
+          .select()
+          .from(userTable)
+          .where(and(eq(userTable.id, String(a.id)), eq(userTable.companyId, t.companyId)))
+          .limit(1),
+      );
       if (!client) throw new Error("client not found");
       const jobs = (await t.select(schema.bookings, eq(schema.bookings.customerId, client.id))).sort(
         (x, y) => (y.scheduledAt?.getTime() ?? 0) - (x.scheduledAt?.getTime() ?? 0),
@@ -266,10 +275,12 @@ const TOOLS: ToolDef[] = [
       required: ["name", "email"],
     },
     handler: async (a, t) => {
-      const [client] = await db
-        .insert(userTable)
-        .values({ id: crypto.randomUUID(), companyId: t.companyId, name: String(a.name), email: String(a.email), phone: a.phone ?? null, address: a.address ?? null, role: "customer", emailVerified: false, createdAt: new Date(), updatedAt: new Date() } as any)
-        .returning();
+      const [client] = await t.transaction((tx) =>
+        tx
+          .insert(userTable)
+          .values({ id: crypto.randomUUID(), companyId: t.companyId, name: String(a.name), email: String(a.email), phone: a.phone ?? null, address: a.address ?? null, role: "customer", emailVerified: false, createdAt: new Date(), updatedAt: new Date() } as any)
+          .returning(),
+      );
       // Clients are scoped by membership now — without this row the client
       // would not appear on this company's client list.
       await attachMembership({ userId: client.id, companyId: t.companyId, role: "customer", status: "active" });
@@ -289,11 +300,13 @@ const TOOLS: ToolDef[] = [
     handler: async (a, t) => {
       const patch: Record<string, unknown> = { updatedAt: new Date() };
       for (const k of ["name", "email", "phone", "address"]) if (k in a) patch[k] = a[k];
-      const [client] = await db
-        .update(userTable)
-        .set(patch)
-        .where(and(eq(userTable.id, String(a.id)), eq(userTable.companyId, t.companyId)))
-        .returning();
+      const [client] = await t.transaction((tx) =>
+        tx
+          .update(userTable)
+          .set(patch)
+          .where(and(eq(userTable.id, String(a.id)), eq(userTable.companyId, t.companyId)))
+          .returning(),
+      );
       if (!client) throw new Error("client not found");
       await audit({ companyId: t.companyId, actorName: "API/MCP", action: "update", entityType: "client", entityId: client.id, summary: `Updated client via MCP` });
       return { client };
@@ -360,11 +373,13 @@ const TOOLS: ToolDef[] = [
       if (a.since) conds.push(gte(schema.bookings.scheduledAt, new Date(a.since)));
       if (a.until) conds.push(lte(schema.bookings.scheduledAt, new Date(a.until)));
       const jobs = await t.select(schema.bookings, and(...conds));
-      const techs = await db
-        .select({ id: schema.riders.id, name: userTable.name, rating: schema.riders.rating })
-        .from(schema.riders)
-        .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
-        .where(t.scope(schema.riders));
+      const techs = await t.transaction((tx) =>
+        tx
+          .select({ id: schema.riders.id, name: userTable.name, rating: schema.riders.rating })
+          .from(schema.riders)
+          .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
+          .where(t.scope(schema.riders)),
+      );
       const stats = techs.map((t) => {
         const mine = jobs.filter((j) => j.riderId === t.id);
         return {
@@ -516,20 +531,24 @@ const TOOLS: ToolDef[] = [
         job_photos: schema.jobPhotos,
       };
       if (a.entity === "clients") {
-        const rows = await db
-          .select()
-          .from(userTable)
-          .where(and(eq(userTable.role, "customer"), eq(userTable.companyId, t.companyId)))
-          .limit(limit);
+        const rows = await t.transaction((tx) =>
+          tx
+            .select()
+            .from(userTable)
+            .where(and(eq(userTable.role, "customer"), eq(userTable.companyId, t.companyId)))
+            .limit(limit),
+        );
         return { entity: "clients", count: rows.length, rows };
       }
       if (a.entity === "technicians") {
-        const rows = await db
-          .select()
-          .from(schema.riders)
-          .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
-          .where(t.scope(schema.riders))
-          .limit(limit);
+        const rows = await t.transaction((tx) =>
+          tx
+            .select()
+            .from(schema.riders)
+            .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
+            .where(t.scope(schema.riders))
+            .limit(limit),
+        );
         return { entity: "technicians", count: rows.length, rows };
       }
       const table = map[String(a.entity)];

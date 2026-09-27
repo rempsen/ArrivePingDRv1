@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { db, sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx } from "../middleware/auth";
@@ -215,7 +215,10 @@ export const integrationsRoutes = new Hono<AppEnv>()
         const info = await cfg.accountInfo(tokens, raw);
         label = info.label; externalId = info.externalId;
       }
-      await db.update(schema.integrations).set({
+      // Pre-tenant: the provider redirect carries no request/tenant context,
+      // only the integration row id the OAuth-state map resolved. `sdb` is
+      // the deliberate escape hatch for exactly this.
+      await sdb.update(schema.integrations).set({
         status: "connected",
         accountLabel: label,
         accessToken: tokens.accessToken,
@@ -227,7 +230,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
       }).where(eq(schema.integrations.id, st.integrationId));
       return c.body(popupResult(true, `${cfg.name} linked as ${label}.`));
     } catch (e: any) {
-      await db.update(schema.integrations).set({ status: "error" }).where(eq(schema.integrations.id, st.integrationId));
+      await sdb.update(schema.integrations).set({ status: "error" }).where(eq(schema.integrations.id, st.integrationId));
       return c.body(popupResult(false, e?.message === "missing_credentials" ? "App credentials missing." : "Token exchange failed."));
     }
   })

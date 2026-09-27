@@ -1,9 +1,10 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
-import { attachMembership, isMember } from "../lib/memberships";
+import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { auth } from "../auth";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
@@ -49,18 +50,12 @@ const SITE = (process.env.WEBSITE_URL || "http://localhost:4200").replace(/\/$/,
 
 /** Company display name for a given company, used in invite emails/SMS. */
 async function companyName(companyId: string): Promise<string> {
-  const [co] = await db
-    .select()
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId));
+  const co = await tdb(companyId).selectOne(schema.companySettings);
   return co?.name || "ArrivePing";
 }
 
 async function companyBrand(companyId: string): Promise<{ name: string; workerNoun: string }> {
-  const [co] = await db
-    .select()
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId));
+  const co = await tdb(companyId).selectOne(schema.companySettings);
   return { name: co?.name || "ArrivePing", workerNoun: co?.workerNoun || "Technician" };
 }
 
@@ -75,7 +70,7 @@ export const invitesRoutes = new Hono<AppEnv>()
   .post("/", requireAdmin, jsonBody(InviteCreate), async (c) => {
     const u = c.get("user") as SessionUser;
     const b = c.req.valid("json");
-    const [exists] = await db.select().from(schema.user).where(eq(schema.user.email, b.email));
+    const exists = await findUserByEmail(b.email);
     if (exists) {
       // They already have an ArrivePing login — probably a contract technician who
       // works for another company. Don't ask them to create a second account
@@ -169,9 +164,10 @@ export const invitesRoutes = new Hono<AppEnv>()
   })
 
   // ---- PUBLIC: look up an invite by token (for the join page) ----
-  // No request user/tenant context — the invite token resolves its own company.
+  // No request user/tenant context yet — the invite token itself resolves the
+  // company, so this has to run on the BYPASSRLS system connection.
   .get("/lookup/:token", async (c) => {
-    const [inv] = await db.select().from(schema.techInvites).where(eq(schema.techInvites.token, c.req.param("token")));
+    const [inv] = await sdb.select().from(schema.techInvites).where(eq(schema.techInvites.token, c.req.param("token")));
     if (!inv || inv.status !== "pending") return c.json({ message: "Invite not found or already used" }, 404);
     const brand = await companyBrand(inv.companyId);
     return c.json({ invite: { email: inv.email, name: inv.name, skillClass: inv.skillClass }, company: brand.name, workerNoun: brand.workerNoun }, 200);
@@ -180,10 +176,11 @@ export const invitesRoutes = new Hono<AppEnv>()
   .post("/accept/:token", jsonBody(InviteAccept), async (c) => {
     const token = c.req.param("token");
     const { name, password, phone } = c.req.valid("json");
-    const [inv] = await db.select().from(schema.techInvites).where(eq(schema.techInvites.token, token));
+    // Pre-tenant: the token itself is what resolves the company.
+    const [inv] = await sdb.select().from(schema.techInvites).where(eq(schema.techInvites.token, token));
     if (!inv || inv.status !== "pending") return c.json({ message: "Invite not found or already used" }, 404);
 
-    const [exists] = await db.select().from(schema.user).where(eq(schema.user.email, inv.email));
+    const exists = await findUserByEmail(inv.email);
     if (exists) return c.json({ message: "Account already exists — please sign in" }, 409);
 
     try {
@@ -193,10 +190,12 @@ export const invitesRoutes = new Hono<AppEnv>()
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
     }
-    const [u] = await db.select().from(schema.user).where(eq(schema.user.email, inv.email));
+    const u = await findUserByEmail(inv.email);
     if (!u) return c.json({ message: "Failed to create account" }, 500);
-    // The new tech belongs to the inviting company — stamp tenant onto the user row.
-    await db.update(schema.user).set({ role: "rider", phone: phone || inv.phone || "", companyId: inv.companyId }).where(eq(schema.user.id, u.id));
+    // The new tech belongs to the inviting company — stamp tenant onto the
+    // user row for the first time. Deliberately cross-tenant/pre-membership,
+    // same as the equivalent stamp in team.ts's create path.
+    await sdb.update(schema.user).set({ role: "rider", phone: phone || inv.phone || "", companyId: inv.companyId }).where(eq(schema.user.id, u.id));
     // The membership is what actually grants them their role at this company.
     await attachMembership({
       userId: u.id,
@@ -207,8 +206,8 @@ export const invitesRoutes = new Hono<AppEnv>()
     });
 
     const palette = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
-    await db.insert(schema.riders).values({
-      companyId: inv.companyId,
+    const t = tdb(inv.companyId);
+    await t.insert(schema.riders, {
       userId: u.id,
       phone: phone || inv.phone || "",
       skillClass: inv.skillClass || "General",
@@ -216,6 +215,6 @@ export const invitesRoutes = new Hono<AppEnv>()
       status: "available",
       approval: "active",
     });
-    await db.update(schema.techInvites).set({ status: "accepted", acceptedAt: new Date() }).where(eq(schema.techInvites.id, inv.id));
+    await t.update(schema.techInvites, { status: "accepted", acceptedAt: new Date() }, eq(schema.techInvites.id, inv.id));
     return c.json({ ok: true, email: inv.email }, 200);
   });

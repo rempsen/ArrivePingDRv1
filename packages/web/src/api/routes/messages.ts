@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { db } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and, or, isNull, inArray, notInArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
+import { usersForCompany } from "../lib/memberships";
 import { sendSms, trackingUrl } from "../../services/sms";
 import { sendPush } from "../../services/push";
 import { publishMsg, subscribeMsg } from "../../services/realtime";
@@ -47,10 +47,7 @@ async function unreadDirectCountForRider(companyId: string, riderId: string): Pr
  * tenants).
  */
 async function officeUsersForNotify(companyId: string) {
-  return db
-    .select()
-    .from(schema.user)
-    .where(and(inArray(schema.user.role, ["admin", "superadmin"]), eq(schema.user.companyId, companyId)));
+  return tdb(companyId).select(schema.user, inArray(schema.user.role, ["admin", "superadmin"]));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -225,8 +222,8 @@ export const messagesRoutes = new Hono<AppEnv>()
     const t = tx(c);
     const cId = tenantId(c);
     const riders = await t.select(schema.riders);
-    // scope the id->name lookup to this tenant's users (global table, explicit filter)
-    const users = await db.select().from(schema.user).where(eq(schema.user.companyId, cId));
+    // id->name lookup, including techs shared in from another home company.
+    const users = await usersForCompany(cId);
     const userById = new Map(users.map((u) => [u.id, u]));
 
     // all direct messages (no booking)
@@ -234,14 +231,8 @@ export const messagesRoutes = new Hono<AppEnv>()
     all.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
 
     // fetch tags for all riders in this company
-    const allEntityTags = await db
-      .select({ entityId: schema.entityTags.entityId, tagId: schema.entityTags.tagId })
-      .from(schema.entityTags)
-      .where(and(eq(schema.entityTags.companyId, cId), eq(schema.entityTags.entityType, "tech")));
-    const allTags = await db
-      .select()
-      .from(schema.tags)
-      .where(eq(schema.tags.companyId, cId));
+    const allEntityTags = await t.select(schema.entityTags, eq(schema.entityTags.entityType, "tech"));
+    const allTags = await t.select(schema.tags);
     const tagById = new Map(allTags.map((tg) => [tg.id, tg]));
     // map riderId -> tags array
     const riderTagsMap = new Map<string, Array<{ id: string; label: string; color: string }>>();
@@ -302,10 +293,7 @@ export const messagesRoutes = new Hono<AppEnv>()
     // marking-as-read as a side effect of fetching silently cleared unread
     // state before a dispatcher ever actually looked. See mark-read below.
 
-    const [u] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, rider.userId));
+    const u = await t.selectOne(schema.user, eq(schema.user.id, rider.userId));
 
     return c.json(
       {
@@ -397,16 +385,10 @@ export const messagesRoutes = new Hono<AppEnv>()
     if (target.type === "available") {
       riders = riders.filter((r) => r.status === "available");
     } else if (target.type === "tag" && target.tagId) {
-      const taggedEntityIds = await db
-        .select({ entityId: schema.entityTags.entityId })
-        .from(schema.entityTags)
-        .where(
-          and(
-            eq(schema.entityTags.companyId, cId),
-            eq(schema.entityTags.entityType, "tech"),
-            eq(schema.entityTags.tagId, target.tagId),
-          ),
-        );
+      const taggedEntityIds = await t.select(
+        schema.entityTags,
+        and(eq(schema.entityTags.entityType, "tech"), eq(schema.entityTags.tagId, target.tagId)),
+      );
       const ids = new Set(taggedEntityIds.map((e) => e.entityId));
       riders = riders.filter((r) => ids.has(r.id));
     } else if (target.type === "skillClass" && target.skillClass) {
@@ -462,11 +444,7 @@ export const messagesRoutes = new Hono<AppEnv>()
 
   // GET /api/messages/tags — return tech-scoped tags for broadcast targeting
   .get("/tags", requireAdmin, async (c) => {
-    const cId = tenantId(c);
-    const techTags = await db
-      .select()
-      .from(schema.tags)
-      .where(and(eq(schema.tags.companyId, cId)));
+    const techTags = await tx(c).select(schema.tags);
     // include all tags (both + tech scope)
     const filtered = techTags.filter((t) => t.scope === "tech" || t.scope === "both");
     return c.json({ tags: filtered }, 200);
@@ -525,7 +503,7 @@ export const messagesRoutes = new Hono<AppEnv>()
 
     const riders = await t.select(schema.riders);
     const ridersById = new Map(riders.map((r) => [r.id, r]));
-    const users = await db.select().from(schema.user).where(eq(schema.user.companyId, cId));
+    const users = await usersForCompany(cId);
     const userById = new Map(users.map((u) => [u.id, u]));
 
     const bookingIds = [...new Set(all.map((m) => m.bookingId).filter(Boolean) as string[])];
@@ -827,10 +805,7 @@ export const messagesRoutes = new Hono<AppEnv>()
                 body,
               });
             }
-            const [ru] = await db
-              .select()
-              .from(schema.user)
-              .where(eq(schema.user.id, r.userId));
+            const ru = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
             const techPhone = r.phone || ru?.phone || "";
             if (techPhone && b.publicToken) {
               const who = m.senderName || "Customer";
