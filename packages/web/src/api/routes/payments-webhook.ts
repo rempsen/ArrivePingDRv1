@@ -120,6 +120,13 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
         log.info("stripe webhook ignored event", { type: event.type });
     }
   } catch (err) {
+    // The idempotency key above was written BEFORE processing, so Stripe's
+    // retry after this 500 would otherwise hit the replay guard above and be
+    // swallowed as `{ duplicate: true }` — the failed sync/refund/dispute
+    // update would then never actually apply, permanently, even though Stripe
+    // considers the retry delivered. Delete the marker so the retry Stripe
+    // sends after a 500 actually reprocesses the event instead of no-op'ing.
+    await db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.key, event.id));
     log.error("stripe webhook handler error", { type: event.type, err: (err as Error).message });
     return c.json({ error: "handler error" }, 500);
   }
