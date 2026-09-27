@@ -15,7 +15,8 @@
  */
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../api/database";
+import { db, sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { auth } from "../api/auth";
 import { invalidateCompanyCache } from "../api/middleware/auth";
@@ -154,6 +155,8 @@ export function slugify(s: string): string {
  */
 export async function loadIcpKnowledge(industry: string) {
   if (!industry || industry === "other") return null;
+  // icp_knowledge_base is a GLOBAL reference table keyed by industry, not by
+  // company (no companyId column) — plain db is correct here.
   const [row] = await db
     .select()
     .from(schema.icpKnowledgeBase)
@@ -194,30 +197,27 @@ export async function seedCatalogForCompany(
 
   const keyToId: Record<string, string> = {};
   let inserted = 0;
+  const t = tdb(companyId);
 
   // Pass 1 — non-assemblies (so their ids exist for component resolution).
   for (const it of items) {
     if (it.kind === "assembly") continue;
-    const [row] = await db
-      .insert(schema.catalogItems)
-      .values({
-        companyId,
-        kind: it.kind,
-        name: it.name,
-        sku: it.sku,
-        category: it.category,
-        description: it.description,
-        image: it.image,
-        unit: it.unit,
-        unitCost: it.unitCost,
-        markupPct: it.markupPct,
-        priceMode: "auto",
-        unitPrice: 0,
-        taxable: it.taxable,
-        components: "[]",
-        active: true,
-      })
-      .returning({ id: schema.catalogItems.id });
+    const [row] = await t.insert(schema.catalogItems, {
+      kind: it.kind,
+      name: it.name,
+      sku: it.sku,
+      category: it.category,
+      description: it.description,
+      image: it.image,
+      unit: it.unit,
+      unitCost: it.unitCost,
+      markupPct: it.markupPct,
+      priceMode: "auto",
+      unitPrice: 0,
+      taxable: it.taxable,
+      components: "[]",
+      active: true,
+    });
     if (row) {
       keyToId[it.key] = row.id;
       inserted++;
@@ -233,26 +233,22 @@ export async function seedCatalogForCompany(
         return itemId ? { itemId, qty: c.qty } : null;
       })
       .filter((c): c is { itemId: string; qty: number } => c !== null);
-    const [row] = await db
-      .insert(schema.catalogItems)
-      .values({
-        companyId,
-        kind: "assembly",
-        name: it.name,
-        sku: it.sku,
-        category: it.category,
-        description: it.description,
-        image: it.image,
-        unit: it.unit,
-        unitCost: 0,
-        markupPct: 0,
-        priceMode: "auto",
-        unitPrice: 0,
-        taxable: it.taxable,
-        components: JSON.stringify(components),
-        active: true,
-      })
-      .returning({ id: schema.catalogItems.id });
+    const [row] = await t.insert(schema.catalogItems, {
+      kind: "assembly",
+      name: it.name,
+      sku: it.sku,
+      category: it.category,
+      description: it.description,
+      image: it.image,
+      unit: it.unit,
+      unitCost: 0,
+      markupPct: 0,
+      priceMode: "auto",
+      unitPrice: 0,
+      taxable: it.taxable,
+      components: JSON.stringify(components),
+      active: true,
+    });
     if (row) {
       keyToId[it.key] = row.id;
       inserted++;
@@ -276,24 +272,20 @@ export async function seedOptionCatalogForCompany(
   if (!categories || categories.length === 0) return 0;
 
   let inserted = 0;
+  const t = tdb(companyId);
   for (let i = 0; i < categories.length; i++) {
     const cat = categories[i];
-    const [catRow] = await db
-      .insert(schema.optionCategories)
-      .values({
-        companyId,
-        name: cat.name,
-        description: cat.description,
-        sortOrder: i,
-        active: true,
-      })
-      .returning({ id: schema.optionCategories.id });
+    const [catRow] = await t.insert(schema.optionCategories, {
+      name: cat.name,
+      description: cat.description,
+      sortOrder: i,
+      active: true,
+    });
     if (!catRow) continue;
     inserted++;
     for (let j = 0; j < cat.tiers.length; j++) {
       const tier = cat.tiers[j];
-      await db.insert(schema.optionCategoryItems).values({
-        companyId,
+      await t.insert(schema.optionCategoryItems, {
         categoryId: catRow.id,
         tierLabel: tier.tierLabel,
         name: tier.name,
@@ -322,12 +314,17 @@ export async function ensureUser(opts: {
   role: string;
   companyId: string;
 }): Promise<{ id: string; reused: boolean }> {
-  const [existing] = await db
+  // Cross-tenant by-email lookup (the whole point is to find/reuse a user who
+  // may already belong to a DIFFERENT company) and — when found — a deliberate
+  // reassignment of their home companyId. Both are genuinely cross-tenant
+  // admin operations, so this function uses sdb (BYPASSRLS) throughout rather
+  // than tdb(opts.companyId).
+  const [existing] = await sdb
     .select()
     .from(schema.user)
     .where(eq(schema.user.email, opts.email));
   if (existing) {
-    await db
+    await sdb
       .update(schema.user)
       .set({ role: opts.role, companyId: opts.companyId, name: opts.name })
       .where(eq(schema.user.id, existing.id));
@@ -347,12 +344,12 @@ export async function ensureUser(opts: {
       role: opts.role,
     } as any,
   });
-  const [u] = await db
+  const [u] = await sdb
     .select()
     .from(schema.user)
     .where(eq(schema.user.email, opts.email));
   if (!u) throw new Error(`could not find user after signup: ${opts.email}`);
-  await db
+  await sdb
     .update(schema.user)
     .set({ role: opts.role, companyId: opts.companyId })
     .where(eq(schema.user.id, u.id));
@@ -417,7 +414,7 @@ export async function provisionCompany(
   const slug = slugify(String(b.slug ?? "") || name);
   if (!slug) throw Err.badRequest("Could not derive a valid slug");
 
-  // reject collision with an existing tenant
+  // reject collision with an existing tenant. companies is GLOBAL — plain db.
   const [dupe] = await db
     .select()
     .from(schema.companies)
@@ -435,9 +432,11 @@ export async function provisionCompany(
   const managerName = String(b.managerName ?? "").trim() || `${name} Manager`;
   const wantManager = Boolean(managerEmail && managerPassword);
 
-  // guard: emails not already in use
+  // guard: emails not already in use. Pre-tenant, cross-company by-email
+  // lookup (the new company doesn't exist yet) — sdb, same rationale as
+  // ensureUser() above.
   for (const email of [adminEmail, ...(wantManager ? [managerEmail] : [])]) {
-    const [u] = await db.select().from(schema.user).where(eq(schema.user.email, email));
+    const [u] = await sdb.select().from(schema.user).where(eq(schema.user.email, email));
     if (u) throw Err.conflict(`Email already in use: ${email}`);
   }
 
@@ -454,7 +453,9 @@ export async function provisionCompany(
   // handled gracefully for the rest.
   const icpKnowledge = await loadIcpKnowledge(resolvedIndustry).catch(() => null);
 
-  // 1) insert the tenant row (id = slug = companyId)
+  // 1) insert the tenant row (id = slug = companyId). companies is GLOBAL —
+  //    plain db. Everything below that seeds THIS tenant's own tables uses
+  //    tdb(slug), now that the tenant id is settled.
   await db.insert(schema.companies).values({
     id: slug,
     name,
@@ -466,6 +467,7 @@ export async function provisionCompany(
     status: "active",
     createdBy: actor.id ?? "",
   });
+  const t = tdb(slug);
 
   // 2) seed the tenant's company_settings row (PK = slug to avoid collision).
   //    Fold in any reviewed AI brand data (from "Grab Brand Assets" / the
@@ -484,9 +486,8 @@ export async function provisionCompany(
       return "";
     }
   };
-  await db.insert(schema.companySettings).values({
+  await t.insert(schema.companySettings, {
     id: slug,
-    companyId: slug,
     name,
     email: str(brand.email, String(b.contactEmail ?? "").trim()),
     phone: str(brand.phone, String(b.phone ?? "").trim()),
@@ -600,8 +601,7 @@ export async function provisionCompany(
       let i = 2;
       while (usedSlugs.has(s)) s = `${f.slug}-${i++}`;
       usedSlugs.add(s);
-      await db.insert(schema.intakeForms).values({
-        companyId: slug,
+      await t.insert(schema.intakeForms, {
         slug: s,
         title: f.title,
         intro: f.intro,
@@ -639,18 +639,17 @@ export async function provisionCompany(
       brandColor: str(brand.primaryColor, "#06B6D4"),
       knowledge: icpKnowledge,
     });
-    for (const t of tpls) {
-      await db.insert(schema.taskTemplates).values({
-        companyId: slug,
-        name: t.name,
-        category: t.category,
-        icon: t.icon,
-        color: t.color,
-        description: t.description,
-        fields: JSON.stringify(t.fields),
-        checklist: JSON.stringify(t.checklist),
-        estimatedMins: t.estimatedMins,
-        rateModel: JSON.stringify(t.rateModel),
+    for (const tpl of tpls) {
+      await t.insert(schema.taskTemplates, {
+        name: tpl.name,
+        category: tpl.category,
+        icon: tpl.icon,
+        color: tpl.color,
+        description: tpl.description,
+        fields: JSON.stringify(tpl.fields),
+        checklist: JSON.stringify(tpl.checklist),
+        estimatedMins: tpl.estimatedMins,
+        rateModel: JSON.stringify(tpl.rateModel),
         active: true,
       });
     }
@@ -677,8 +676,7 @@ export async function provisionCompany(
         knowledge: icpKnowledge,
       });
       for (const s of tailored) {
-        await db.insert(schema.services).values({
-          companyId: slug,
+        await t.insert(schema.services, {
           name: s.name,
           category: s.category,
           durationMins: s.durationMins,
