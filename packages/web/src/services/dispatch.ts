@@ -7,7 +7,8 @@
  * tech / office), and delivers across in-app, email, SMS, and webhook — logging
  * every delivery for the admin Notifications module.
  */
-import { db } from "../api/database";
+import { db, sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "./email";
@@ -241,11 +242,7 @@ export function interpolateSample(tpl: string, company?: string): string {
  * the legacy `id="default"` singleton is gone.
  */
 async function channelConfig(companyId: string) {
-  const [cfg] = await db
-    .select()
-    .from(schema.notificationChannels)
-    .where(eq(schema.notificationChannels.companyId, companyId));
-  return cfg;
+  return tdb(companyId).selectOne(schema.notificationChannels);
 }
 
 /** Render a full branded email design against sample data — for the live editor preview. */
@@ -344,8 +341,8 @@ async function logDelivery(row: {
   detail?: string;
 }) {
   try {
-    await db.insert(schema.notificationDeliveries).values({
-      companyId: row.companyId,
+    // row.companyId is already resolved by the caller — tenant-scoped write.
+    await tdb(row.companyId).insert(schema.notificationDeliveries, {
       event: row.event,
       bookingId: row.bookingId ?? null,
       recipient: row.recipient,
@@ -361,18 +358,22 @@ async function logDelivery(row: {
 
 /** Resolve everything we need to message about a booking. Tenant is the booking's companyId. */
 async function context(bookingId: string) {
-  const [b] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, bookingId));
+  // Pre-tenant lookup: fireEvent is called with only a bookingId, before any
+  // tenant is known. Every lookup after this one resolves companyId and goes
+  // through tdb(companyId).
+  const [b] = await sdb.select().from(schema.bookings).where(eq(schema.bookings.id, bookingId));
   if (!b) return null;
   const companyId = b.companyId;
-  const [svc] = await db.select().from(schema.services).where(eq(schema.services.id, b.serviceId));
-  const [cust] = await db.select().from(schema.user).where(eq(schema.user.id, b.customerId));
+  const t = tdb(companyId);
+  const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
+  const cust = await t.selectOne(schema.user, eq(schema.user.id, b.customerId));
   let rider: any = null;
   let riderUser: any = null;
   if (b.riderId) {
-    [rider] = await db.select().from(schema.riders).where(eq(schema.riders.id, b.riderId));
-    if (rider) [riderUser] = await db.select().from(schema.user).where(eq(schema.user.id, rider.userId));
+    rider = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
+    if (rider) riderUser = await t.selectOne(schema.user, eq(schema.user.id, rider.userId));
   }
-  const [co] = await db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, companyId));
+  const co = await t.selectOne(schema.companySettings);
   // Format in the COMPANY's timezone, not the server's. Every appointment time
   // in every outgoing SMS and email flows through here, so a bare
   // toLocaleString quoted UTC to a Winnipeg customer — the same bug that was
@@ -398,10 +399,7 @@ async function context(bookingId: string) {
   let propToken = "";
   try {
     if (b.propertyId) {
-      const [prop] = await db
-        .select()
-        .from(schema.properties)
-        .where(eq(schema.properties.id, b.propertyId));
+      const prop = await t.selectOne(schema.properties, eq(schema.properties.id, b.propertyId));
       propToken = prop?.publicToken ?? "";
     }
   } catch {
@@ -433,17 +431,11 @@ async function context(bookingId: string) {
 
 /** Find admin/office users to notify within a company. */
 async function officeUsers(companyId: string) {
-  return db
-    .select()
-    .from(schema.user)
-    .where(and(eq(schema.user.role, "admin"), eq(schema.user.companyId, companyId)));
+  return tdb(companyId).select(schema.user, eq(schema.user.role, "admin"));
 }
 
 async function activeWebhooks(companyId: string, event: string) {
-  const eps = await db
-    .select()
-    .from(schema.webhookEndpoints)
-    .where(and(eq(schema.webhookEndpoints.active, true), eq(schema.webhookEndpoints.companyId, companyId)));
+  const eps = await tdb(companyId).select(schema.webhookEndpoints, eq(schema.webhookEndpoints.active, true));
   return eps.filter((e) => e.events === "*" || e.events.split(",").map((s) => s.trim()).includes(event));
 }
 
@@ -501,14 +493,13 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
       console.error("[dispatch] automation/review hook failed", e);
     }
 
-    const rules = await db
-      .select()
-      .from(schema.notificationRules)
-      .where(and(
-        eq(schema.notificationRules.companyId, companyId),
+    const rules = await tdb(companyId).select(
+      schema.notificationRules,
+      and(
         eq(schema.notificationRules.event, event),
         eq(schema.notificationRules.enabled, true),
-      ));
+      ),
+    );
 
     // per-company channel gates (master switches + quiet hours)
     const [allowInApp, allowEmail, allowSms, allowWebhook] = await Promise.all([
@@ -557,8 +548,7 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
       for (const t of targets) {
         // in-app
         if (rule.inApp && allowInApp && t.userId) {
-          await db.insert(schema.notifications).values({
-            companyId,
+          await tdb(companyId).insert(schema.notifications, {
             userId: t.userId,
             bookingId: b.id,
             type: meta.notifType,
@@ -729,10 +719,8 @@ export async function provisionNotificationBranding(input: {
   email?: string;
   website?: string;
 }) {
-  const [existing] = await db
-    .select()
-    .from(schema.notificationChannels)
-    .where(eq(schema.notificationChannels.companyId, input.companyId));
+  const t = tdb(input.companyId);
+  const existing = await t.selectOne(schema.notificationChannels);
   const footer = buildEmailFooter(input);
   const values = {
     emailFromName: input.name || "ArrivePing by NVC360",
@@ -743,14 +731,10 @@ export async function provisionNotificationBranding(input: {
     updatedAt: new Date(),
   };
   if (existing) {
-    await db
-      .update(schema.notificationChannels)
-      .set(values)
-      .where(eq(schema.notificationChannels.id, existing.id));
+    await t.update(schema.notificationChannels, values, eq(schema.notificationChannels.id, existing.id));
   } else {
-    await db.insert(schema.notificationChannels).values({
+    await t.insert(schema.notificationChannels, {
       id: input.companyId,
-      companyId: input.companyId,
       ...values,
     });
   }
@@ -826,17 +810,14 @@ const BASE_RULES: RuleSeed[] = [
  */
 export async function ensureEventRules(companyId: string, event: NvcEvent) {
   try {
-    const existing = await db
-      .select()
-      .from(schema.notificationRules)
-      .where(and(
-        eq(schema.notificationRules.companyId, companyId),
-        eq(schema.notificationRules.event, event),
-      ))
-      .limit(1);
+    const t = tdb(companyId);
+    const existing = await t.select(
+      schema.notificationRules,
+      eq(schema.notificationRules.event, event),
+    );
     if (existing.length) return;
     const seeds = BASE_RULES.filter((r) => r.event === event);
-    for (const d of seeds) await db.insert(schema.notificationRules).values({ ...d, companyId });
+    for (const d of seeds) await t.insert(schema.notificationRules, { ...d });
     if (seeds.length)
       console.log("[dispatch] backfilled", seeds.length, "rules for", event, "on", companyId);
   } catch (e) {
@@ -856,14 +837,12 @@ export type NotificationCopyOverrides = Partial<
 
 /** Seed the default rule matrix on first run for a company (idempotent). */
 export async function seedNotificationRules(companyId: string, copy?: NotificationCopyOverrides) {
-  const existing = await db
-    .select()
-    .from(schema.notificationRules)
-    .where(eq(schema.notificationRules.companyId, companyId))
-    .limit(1);
+  const t = tdb(companyId);
+  const existing = await t.select(schema.notificationRules);
   if (existing.length) return;
   // sensible defaults, then adjusted per-ICP (see notification-presets.ts)
   const base: RuleSeed[] = BASE_RULES.slice();
+  // companies is a GLOBAL table (see GLOBAL_TABLES) — plain db is correct here.
   const [company] = await db
     .select({ industry: schema.companies.industry })
     .from(schema.companies)
@@ -876,7 +855,7 @@ export async function seedNotificationRules(companyId: string, copy?: Notificati
     const template = override?.sms?.trim() || "";
     const emailSubject = override?.emailSubject?.trim() || "";
     if (template || emailSubject) brandedCount++;
-    await db.insert(schema.notificationRules).values({ ...d, companyId, template, emailSubject });
+    await t.insert(schema.notificationRules, { ...d, template, emailSubject });
   }
   console.log(
     "[dispatch] seeded", defaults.length, "notification rules for", companyId,
