@@ -16,7 +16,7 @@
  * this should run from ONE worker (or a DB-level scheduled job / cron) to avoid
  * every replica issuing the same DELETE.
  */
-import { db } from "../api/database";
+import { db, sdb } from "../api/database";
 import { sql } from "drizzle-orm";
 import { log, captureException } from "../api/lib/logger";
 
@@ -29,8 +29,13 @@ export async function purgeOldPings(): Promise<number> {
   try {
     // batch-delete to avoid long write locks
     let total = 0;
+    // tracking_pings is tenant-owned (RLS-enforced), but this sweep runs
+    // across EVERY tenant's pings at once with no single companyId to scope
+    // it to — a background job, not a per-request tenant context. Plain db
+    // would silently delete zero rows here (no app.tenant_id set), so this
+    // deliberately uses sdb (BYPASSRLS).
     for (let i = 0; i < 50; i++) {
-      const res: any = await db.execute(
+      const res: any = await sdb.execute(
         sql`DELETE FROM tracking_pings WHERE id IN (
           SELECT tp.id FROM tracking_pings tp
           LEFT JOIN bookings b ON b.id = tp.booking_id
@@ -55,6 +60,7 @@ export async function purgeOldPings(): Promise<number> {
 export async function purgeOldIdempotencyKeys(): Promise<void> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   try {
+    // idempotency_keys is a GLOBAL table (see GLOBAL_TABLES) — plain db.
     await db.execute(sql`DELETE FROM idempotency_keys WHERE created_at < ${cutoff}`);
   } catch (e) {
     captureException(e, { job: "purgeOldIdempotencyKeys" });

@@ -147,6 +147,7 @@ async function loadDbCredentials() {
   if (_credCache && Date.now() - _credCache.at < 5_000) return _credCache.map;
   const map: Record<string, { clientId: string; clientSecret: string; enabled: boolean }> = {};
   try {
+    // oauth_app_credentials is a GLOBAL table (see GLOBAL_TABLES) — plain db.
     const rows = await db.select().from(oauthAppCredentials);
     for (const r of rows) {
       map[r.provider] = { clientId: r.clientId, clientSecret: r.clientSecret, enabled: r.enabled };
