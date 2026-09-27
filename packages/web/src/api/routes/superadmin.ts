@@ -4,13 +4,24 @@ import type { AppEnv } from "../env";
  *
  * The `companies` table IS the tenant catalog: each row's `id` (slug) becomes
  * the companyId stamped on every tenant-owned record. These endpoints are
- * guarded by `requireSuperadmin` (the only role allowed cross-tenant access),
- * and use the raw `db` handle because `companies` is GLOBAL — never scoped by
- * the tenant facade.
+ * guarded by `requireSuperadmin` (the only role allowed cross-tenant access).
+ *
+ * Three DB handles are in play here, deliberately:
+ *  - `db` — plain, for the GLOBAL `companies` table only.
+ *  - `tdb(id)` — for a normal tenant-scoped read/write against ONE known
+ *    tenant (e.g. patching that tenant's companySettings row).
+ *  - `sdb` (BYPASSRLS) — for the superadmin-only cross-tenant operations
+ *    below that a normal tenant-scoped call can't do at all: the full
+ *    tenant-teardown delete (explicit companyId filters across dozens of
+ *    tables, not tdb()'s auto-scoping — RLS with no tenant context set would
+ *    silently delete zero rows), the email-domains queue (lists/mutates rows
+ *    across EVERY tenant at once), and moving a user's home company during
+ *    teardown.
  */
 import { Hono } from "hono";
 import { eq, and, ne } from "drizzle-orm";
-import { db } from "../database";
+import { db, sdb } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
 import { audit } from "../lib/audit";
@@ -130,89 +141,89 @@ export const superadminRoutes = new Hono<AppEnv>()
     // 0) punchlist deficiencies — reference riders (NO ACTION), bookings and
     //    punchlistProjects (both CASCADE); deleted first so nothing downstream
     //    of them ever gets a chance to be pulled out from under them
-    await db.delete(schema.deficiencies).where(eqCo(schema.deficiencies.companyId));
+    await sdb.delete(schema.deficiencies).where(eqCo(schema.deficiencies.companyId));
     // punchlist trades — reference riders (CASCADE); explicit, not relied on
-    await db.delete(schema.punchlistTrades).where(eqCo(schema.punchlistTrades.companyId));
+    await sdb.delete(schema.punchlistTrades).where(eqCo(schema.punchlistTrades.companyId));
 
     // 1) everything hanging off a booking
-    await db.delete(schema.jobPhotos).where(eqCo(schema.jobPhotos.companyId));
-    await db.delete(schema.messages).where(eqCo(schema.messages.companyId));
-    await db.delete(schema.trackingPings).where(eqCo(schema.trackingPings.companyId));
-    await db.delete(schema.bookingOptionSelections).where(eqCo(schema.bookingOptionSelections.companyId));
-    await db.delete(schema.notifications).where(eqCo(schema.notifications.companyId));
-    await db.delete(schema.reviews).where(eqCo(schema.reviews.companyId));
-    await db.delete(schema.invoices).where(eqCo(schema.invoices.companyId));
-    await db.delete(schema.paymentLedger).where(eqCo(schema.paymentLedger.companyId));
-    await db.delete(schema.intakeSubmissions).where(eqCo(schema.intakeSubmissions.companyId));
+    await sdb.delete(schema.jobPhotos).where(eqCo(schema.jobPhotos.companyId));
+    await sdb.delete(schema.messages).where(eqCo(schema.messages.companyId));
+    await sdb.delete(schema.trackingPings).where(eqCo(schema.trackingPings.companyId));
+    await sdb.delete(schema.bookingOptionSelections).where(eqCo(schema.bookingOptionSelections.companyId));
+    await sdb.delete(schema.notifications).where(eqCo(schema.notifications.companyId));
+    await sdb.delete(schema.reviews).where(eqCo(schema.reviews.companyId));
+    await sdb.delete(schema.invoices).where(eqCo(schema.invoices.companyId));
+    await sdb.delete(schema.paymentLedger).where(eqCo(schema.paymentLedger.companyId));
+    await sdb.delete(schema.intakeSubmissions).where(eqCo(schema.intakeSubmissions.companyId));
     // job timeline + reschedule/cancel requests — reference bookings (CASCADE)
-    await db.delete(schema.jobEvents).where(eqCo(schema.jobEvents.companyId));
-    await db.delete(schema.bookingChangeRequests).where(eqCo(schema.bookingChangeRequests.companyId));
+    await sdb.delete(schema.jobEvents).where(eqCo(schema.jobEvents.companyId));
+    await sdb.delete(schema.bookingChangeRequests).where(eqCo(schema.bookingChangeRequests.companyId));
     // scheduled reminder/automation jobs — reference bookings AND properties
     // (both CASCADE); must go before both
-    await db.delete(schema.scheduledTasks).where(eqCo(schema.scheduledTasks.companyId));
+    await sdb.delete(schema.scheduledTasks).where(eqCo(schema.scheduledTasks.companyId));
     // punchlist projects — reference bookings (CASCADE, NOT NULL) and user
     // (NO ACTION); their deficiencies are already gone (step 0 above)
-    await db.delete(schema.punchlistProjects).where(eqCo(schema.punchlistProjects.companyId));
+    await sdb.delete(schema.punchlistProjects).where(eqCo(schema.punchlistProjects.companyId));
 
     // 2) bookings themselves — safe now that every child row is gone
-    await db.delete(schema.bookings).where(eqCo(schema.bookings.companyId));
+    await sdb.delete(schema.bookings).where(eqCo(schema.bookings.companyId));
 
     // 3) catalog / templates / options — nothing left referencing them
-    await db.delete(schema.optionCategoryItems).where(eqCo(schema.optionCategoryItems.companyId));
-    await db.delete(schema.optionCategories).where(eqCo(schema.optionCategories.companyId));
-    await db.delete(schema.catalogItems).where(eqCo(schema.catalogItems.companyId));
-    await db.delete(schema.taskTemplates).where(eqCo(schema.taskTemplates.companyId));
+    await sdb.delete(schema.optionCategoryItems).where(eqCo(schema.optionCategoryItems.companyId));
+    await sdb.delete(schema.optionCategories).where(eqCo(schema.optionCategories.companyId));
+    await sdb.delete(schema.catalogItems).where(eqCo(schema.catalogItems.companyId));
+    await sdb.delete(schema.taskTemplates).where(eqCo(schema.taskTemplates.companyId));
 
     // maintenance plans — reference services (NO ACTION), properties (CASCADE)
     // and user (NO ACTION); must go before all three are torn down below
-    await db.delete(schema.maintenancePlans).where(eqCo(schema.maintenancePlans.companyId));
+    await sdb.delete(schema.maintenancePlans).where(eqCo(schema.maintenancePlans.companyId));
 
     // 4) riders — their booking/message/review/deficiency/trade references
     //    are already gone
-    await db.delete(schema.techShifts).where(eqCo(schema.techShifts.companyId));
-    await db.delete(schema.payouts).where(eqCo(schema.payouts.companyId));
-    await db.delete(schema.pushTokens).where(eqCo(schema.pushTokens.companyId));
-    await db.delete(schema.riders).where(eqCo(schema.riders.companyId));
-    await db.delete(schema.services).where(eqCo(schema.services.companyId));
+    await sdb.delete(schema.techShifts).where(eqCo(schema.techShifts.companyId));
+    await sdb.delete(schema.payouts).where(eqCo(schema.payouts.companyId));
+    await sdb.delete(schema.pushTokens).where(eqCo(schema.pushTokens.companyId));
+    await sdb.delete(schema.riders).where(eqCo(schema.riders.companyId));
+    await sdb.delete(schema.services).where(eqCo(schema.services.companyId));
 
     // properties — reference user (NO ACTION); scheduledTasks and
     // maintenancePlans (both of which reference properties) are already gone
-    await db.delete(schema.properties).where(eqCo(schema.properties.companyId));
+    await sdb.delete(schema.properties).where(eqCo(schema.properties.companyId));
 
     // 5) everything else tenant-scoped, no ordering constraints left
-    await db.delete(schema.entityTags).where(eqCo(schema.entityTags.companyId));
-    await db.delete(schema.tags).where(eqCo(schema.tags.companyId));
-    await db.delete(schema.customFieldValues).where(eqCo(schema.customFieldValues.companyId));
-    await db.delete(schema.customFields).where(eqCo(schema.customFields.companyId));
-    await db.delete(schema.attachments).where(eqCo(schema.attachments.companyId));
-    await db.delete(schema.serviceZones).where(eqCo(schema.serviceZones.companyId));
-    await db.delete(schema.formCategories).where(eqCo(schema.formCategories.companyId));
-    await db.delete(schema.automationRules).where(eqCo(schema.automationRules.companyId));
-    await db.delete(schema.integrations).where(eqCo(schema.integrations.companyId));
-    await db.delete(schema.skillLibrary).where(eqCo(schema.skillLibrary.companyId));
-    await db.delete(schema.notificationRules).where(eqCo(schema.notificationRules.companyId));
-    await db.delete(schema.notificationChannels).where(eqCo(schema.notificationChannels.companyId));
-    await db.delete(schema.emailTemplates).where(eqCo(schema.emailTemplates.companyId));
-    await db.delete(schema.webhookEndpoints).where(eqCo(schema.webhookEndpoints.companyId));
-    await db.delete(schema.notificationDeliveries).where(eqCo(schema.notificationDeliveries.companyId));
-    await db.delete(schema.techInvites).where(eqCo(schema.techInvites.companyId));
-    await db.delete(schema.apiKeys).where(eqCo(schema.apiKeys.companyId));
-    await db.delete(schema.intakeForms).where(eqCo(schema.intakeForms.companyId));
+    await sdb.delete(schema.entityTags).where(eqCo(schema.entityTags.companyId));
+    await sdb.delete(schema.tags).where(eqCo(schema.tags.companyId));
+    await sdb.delete(schema.customFieldValues).where(eqCo(schema.customFieldValues.companyId));
+    await sdb.delete(schema.customFields).where(eqCo(schema.customFields.companyId));
+    await sdb.delete(schema.attachments).where(eqCo(schema.attachments.companyId));
+    await sdb.delete(schema.serviceZones).where(eqCo(schema.serviceZones.companyId));
+    await sdb.delete(schema.formCategories).where(eqCo(schema.formCategories.companyId));
+    await sdb.delete(schema.automationRules).where(eqCo(schema.automationRules.companyId));
+    await sdb.delete(schema.integrations).where(eqCo(schema.integrations.companyId));
+    await sdb.delete(schema.skillLibrary).where(eqCo(schema.skillLibrary.companyId));
+    await sdb.delete(schema.notificationRules).where(eqCo(schema.notificationRules.companyId));
+    await sdb.delete(schema.notificationChannels).where(eqCo(schema.notificationChannels.companyId));
+    await sdb.delete(schema.emailTemplates).where(eqCo(schema.emailTemplates.companyId));
+    await sdb.delete(schema.webhookEndpoints).where(eqCo(schema.webhookEndpoints.companyId));
+    await sdb.delete(schema.notificationDeliveries).where(eqCo(schema.notificationDeliveries.companyId));
+    await sdb.delete(schema.techInvites).where(eqCo(schema.techInvites.companyId));
+    await sdb.delete(schema.apiKeys).where(eqCo(schema.apiKeys.companyId));
+    await sdb.delete(schema.intakeForms).where(eqCo(schema.intakeForms.companyId));
 
     // 6) sending domains — also deregister from Resend, not just the DB row
-    const domains = await db
+    const domains = await sdb
       .select()
       .from(schema.tenantEmailDomains)
       .where(eqCo(schema.tenantEmailDomains.companyId));
     for (const d of domains) await removeDomain(d.id).catch(() => {});
 
-    await db.delete(schema.auditLog).where(eqCo(schema.auditLog.companyId));
-    await db.delete(schema.companySettings).where(eqCo(schema.companySettings.companyId));
+    await sdb.delete(schema.auditLog).where(eqCo(schema.auditLog.companyId));
+    await sdb.delete(schema.companySettings).where(eqCo(schema.companySettings.companyId));
 
     // 7) memberships at THIS company — a person can work for several
     //    companies at once (see lib/memberships.ts), so this only ends their
     //    relationship with the tenant being deleted, never their login.
-    await db.delete(schema.memberships).where(eqCo(schema.memberships.companyId));
+    await sdb.delete(schema.memberships).where(eqCo(schema.memberships.companyId));
 
     // 8) users whose HOME company is the one being deleted. Mirrors
     //    detachMembership()'s own rule: never destroy a login that still
@@ -221,12 +232,12 @@ export const superadminRoutes = new Hono<AppEnv>()
     //    being deleted; only a user with no memberships left anywhere else
     //    is actually removed (which cascades their sessions/accounts via the
     //    FK's ON DELETE CASCADE).
-    const homeUsers = await db
+    const homeUsers = await sdb
       .select({ id: schema.user.id })
       .from(schema.user)
       .where(eqCo(schema.user.companyId));
     for (const u of homeUsers) {
-      const [remaining] = await db
+      const [remaining] = await sdb
         .select({ companyId: schema.memberships.companyId })
         .from(schema.memberships)
         .where(
@@ -237,12 +248,12 @@ export const superadminRoutes = new Hono<AppEnv>()
           ),
         );
       if (remaining) {
-        await db
+        await sdb
           .update(schema.user)
           .set({ companyId: remaining.companyId })
           .where(eq(schema.user.id, u.id));
       } else {
-        await db.delete(schema.user).where(eq(schema.user.id, u.id));
+        await sdb.delete(schema.user).where(eq(schema.user.id, u.id));
       }
     }
 
@@ -326,10 +337,7 @@ export const superadminRoutes = new Hono<AppEnv>()
           ? brand.socials
           : JSON.stringify(brand.socials);
 
-    await db
-      .update(schema.companySettings)
-      .set(set)
-      .where(eq(schema.companySettings.companyId, id));
+    await tdb(id).update(schema.companySettings, set);
     await audit({
       actorId: me?.id,
       actorName: me?.name,
@@ -339,10 +347,7 @@ export const superadminRoutes = new Hono<AppEnv>()
       summary: `Applied AI brand assets to "${co.name}"`,
       companyId: id,
     });
-    const [row] = await db
-      .select()
-      .from(schema.companySettings)
-      .where(eq(schema.companySettings.companyId, id));
+    const row = await tdb(id).selectOne(schema.companySettings);
     // re-sync the branded email/SMS identity from the freshly-applied brand
     if (row)
       await provisionNotificationBranding({
@@ -425,7 +430,8 @@ export const superadminRoutes = new Hono<AppEnv>()
   // ---- email sending domains (cross-tenant approval queue) ----
   // All submitted domains across every tenant, newest first.
   .get("/email-domains", requireSuperadmin, async (c) => {
-    const rows = await db.select().from(schema.tenantEmailDomains);
+    // Cross-tenant approval queue — every tenant's domains at once, so sdb.
+    const rows = await sdb.select().from(schema.tenantEmailDomains);
     const companies = await db.select().from(schema.companies);
     const nameById = new Map(companies.map((co) => [co.id, co.name]));
     const domains = rows
@@ -442,7 +448,9 @@ export const superadminRoutes = new Hono<AppEnv>()
   .post("/email-domains/:id/approve", requireSuperadmin, async (c) => {
     const me = c.get("user") as SessionUser;
     const id = c.req.param("id");
-    const [row] = await db
+    // Superadmin cross-tenant lookup by the domain row's own id (not a
+    // companyId), same rationale as the GET list above — sdb.
+    const [row] = await sdb
       .select()
       .from(schema.tenantEmailDomains)
       .where(eq(schema.tenantEmailDomains.id, id))
@@ -469,7 +477,9 @@ export const superadminRoutes = new Hono<AppEnv>()
   // Force a verify re-check from the superadmin console.
   .post("/email-domains/:id/verify", requireSuperadmin, async (c) => {
     const id = c.req.param("id");
-    const [row] = await db
+    // Superadmin cross-tenant lookup by the domain row's own id (not a
+    // companyId), same rationale as the GET list above — sdb.
+    const [row] = await sdb
       .select()
       .from(schema.tenantEmailDomains)
       .where(eq(schema.tenantEmailDomains.id, id))
@@ -485,7 +495,9 @@ export const superadminRoutes = new Hono<AppEnv>()
   .delete("/email-domains/:id", requireSuperadmin, async (c) => {
     const me = c.get("user") as SessionUser;
     const id = c.req.param("id");
-    const [row] = await db
+    // Superadmin cross-tenant lookup by the domain row's own id (not a
+    // companyId), same rationale as the GET list above — sdb.
+    const [row] = await sdb
       .select()
       .from(schema.tenantEmailDomains)
       .where(eq(schema.tenantEmailDomains.id, id))
