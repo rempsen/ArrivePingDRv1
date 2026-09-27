@@ -1,6 +1,6 @@
 import { usersForCompany } from "../lib/memberships";
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tenantId } from "../middleware/auth";
@@ -197,10 +197,7 @@ function absoluteUrl(url: string, baseUrl: string): string {
  *  tenant's. Falls back to "nvc360" only when the tenant has no name set. */
 export async function tenantFilePrefix(companyId: string): Promise<string> {
   try {
-    const [row] = await db
-      .select({ name: schema.companySettings.name })
-      .from(schema.companySettings)
-      .where(eq(schema.companySettings.companyId, companyId));
+    const row = await tdb(companyId).selectOne(schema.companySettings);
     return slugifyName(row?.name) || "nvc360";
   } catch {
     return "nvc360";
@@ -581,11 +578,11 @@ export async function loadDataset(dataset: string, t: TenantDb): Promise<Record<
     const bs = await t.select(schema.bookings);
     return Promise.all(bs.map(async (b) => {
       const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
-      const [cu] = await db.select().from(schema.user).where(eq(schema.user.id, b.customerId));
+      const [cu] = await sdb.select().from(schema.user).where(eq(schema.user.id, b.customerId));
       let tech = "";
       if (b.riderId) {
         const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
-        if (r) { const [ru] = await db.select().from(schema.user).where(eq(schema.user.id, r.userId)); tech = ru?.name ?? ""; }
+        if (r) { const [ru] = await sdb.select().from(schema.user).where(eq(schema.user.id, r.userId)); tech = ru?.name ?? ""; }
       }
       return {
         id: b.id, title: b.title, service: svc?.name ?? "", client: cu?.name ?? "", clientPhone: b.customerPhone,
@@ -597,7 +594,7 @@ export async function loadDataset(dataset: string, t: TenantDb): Promise<Record<
   if (dataset === "technicians") {
     const ts = await t.select(schema.riders);
     return Promise.all(ts.map(async (tr) => {
-      const [ru] = await db.select().from(schema.user).where(eq(schema.user.id, tr.userId));
+      const [ru] = await sdb.select().from(schema.user).where(eq(schema.user.id, tr.userId));
       return { id: tr.id, name: ru?.name ?? "", email: ru?.email ?? "", phone: tr.phone || ru?.phone || "", vehicle: tr.vehicle, skillClass: tr.skillClass, skills: tr.skills, status: tr.status, rating: tr.rating, completedJobs: tr.completedJobs };
     }));
   }

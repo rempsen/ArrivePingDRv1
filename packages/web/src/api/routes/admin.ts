@@ -1,7 +1,7 @@
 import { usersForCompany, attachMembership, isMember, findUserByEmail, detachMembership } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { Hono } from "hono";
-import { db } from "../database";
+import { db, sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin, tenantId, tx } from "../middleware/auth";
@@ -316,12 +316,11 @@ export const adminRoutes = new Hono<AppEnv>()
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
     }
-    const [u] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.email, email));
+    const u = await findUserByEmail(email);
     if (!u) return c.json({ message: "Failed to create user" }, 500);
-    await db
+    // First-time stamp of this brand-new login's home company — must run on
+    // the BYPASSRLS system connection (see team.ts's identical create path).
+    await sdb
       .update(schema.user)
       .set({
         role: r,
@@ -358,19 +357,21 @@ export const adminRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const b = c.req.valid("json");
     const me = c.get("user") as SessionUser;
-    const [target] = await db.select().from(schema.user).where(eq(schema.user.id, id));
+    const cid = tenantId(c);
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     // Membership, not user.companyId: a client shared with another company is
     // still legitimately ours to edit.
-    if (!target || !(await isMember(id, tenantId(c))))
+    if (!target || !(await isMember(id, cid)))
       return c.json({ message: "Not found" }, 404);
     // Editing an admin-tier account requires superadmin.
     if (isAdminRole(target.role) && !isSuperadmin(me.role))
       return c.json({ message: "Only a superadmin can modify admin-level accounts" }, 403);
 
     // Taking an email that already belongs to somebody else used to hit the
-    // unique index and surface as a bare 500.
+    // unique index and surface as a bare 500. Email uniqueness is GLOBAL
+    // (login identity), so this lookup is deliberately cross-tenant.
     if (b.email && b.email !== target.email) {
-      const [clash] = await db.select().from(schema.user).where(eq(schema.user.email, b.email));
+      const clash = await findUserByEmail(b.email);
       if (clash && clash.id !== id) return c.json({ message: "Email already in use" }, 409);
     }
 
@@ -388,9 +389,9 @@ export const adminRoutes = new Hono<AppEnv>()
     if (addresses !== undefined) updates.addresses = JSON.stringify(addresses);
     if (contacts !== undefined) updates.contacts = JSON.stringify(contacts);
     if (Object.keys(updates).length > 0) {
-      await db.update(schema.user).set(updates).where(eq(schema.user.id, id));
+      await tx(c).update(schema.user, updates, eq(schema.user.id, id));
     }
-    const [u] = await db.select().from(schema.user).where(eq(schema.user.id, id));
+    const u = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     return c.json({
       user: u && {
         ...u,
@@ -407,14 +408,16 @@ export const adminRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const me = c.get("user") as SessionUser;
     const { password: newPw } = c.req.valid("json");
-    const [target] = await db.select().from(schema.user).where(eq(schema.user.id, id));
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     if (!target || !(await isMember(id, tenantId(c))))
       return c.json({ message: "Not found" }, 404);
     // A person who works for several companies has ONE password. Letting this
     // company reset it would hand them control of that person's account at
     // every other company — the exact takeover the invite flow exists to
-    // prevent. They must use "forgot password" themselves instead.
-    const memberOf = await db
+    // prevent. They must use "forgot password" themselves instead. Counting
+    // memberships ACROSS ALL companies is deliberately cross-tenant, so this
+    // runs on the BYPASSRLS system connection.
+    const memberOf = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.userId, id));
@@ -481,11 +484,8 @@ export const adminRoutes = new Hono<AppEnv>()
     const me = c.get("user") as SessionUser;
     if (me.id === id)
       return c.json({ message: "You cannot delete your own account" }, 400);
-    const [target] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, id));
     const cid = tenantId(c);
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     if (!target || !(await isMember(id, cid)))
       return c.json({ message: "Not found" }, 404);
     // Deleting an admin-tier account requires superadmin.
@@ -495,8 +495,10 @@ export const adminRoutes = new Hono<AppEnv>()
     await tx(c).delete(schema.riders, eq(schema.riders.userId, id));
 
     // If they also work for another company, deleting the user row would wipe
-    // them from that company's records too. Only end OUR relationship.
-    const memberOf = await db
+    // them from that company's records too. Only end OUR relationship. Counting
+    // memberships ACROSS ALL companies is deliberately cross-tenant, so this
+    // runs on the BYPASSRLS system connection.
+    const memberOf = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.userId, id));
@@ -513,6 +515,6 @@ export const adminRoutes = new Hono<AppEnv>()
       );
     }
 
-    await db.delete(schema.user).where(eq(schema.user.id, id));
+    await sdb.delete(schema.user).where(eq(schema.user.id, id));
     return c.json({ ok: true, deletedAccount: true }, 200);
   });

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -42,7 +42,7 @@ async function eventFor(
 ): Promise<CalEvent> {
   const t = tdb(companyId);
   const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
-  const [cust] = await db
+  const [cust] = await sdb
     .select()
     .from(schema.user)
     .where(eq(schema.user.id, b.customerId));
@@ -50,7 +50,7 @@ async function eventFor(
   if (b.riderId) {
     const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
     if (r) {
-      const [ru] = await db.select().from(schema.user).where(eq(schema.user.id, r.userId));
+      const [ru] = await sdb.select().from(schema.user).where(eq(schema.user.id, r.userId));
       techName = ru?.name ?? "";
     }
   }
@@ -87,11 +87,11 @@ export const calendarRoutes = new Hono<AppEnv>()
   // Return (creating if needed) the current user's personal feed URLs.
   .get("/feed", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    const [row] = await db.select().from(schema.user).where(eq(schema.user.id, u.id));
+    const [row] = await sdb.select().from(schema.user).where(eq(schema.user.id, u.id));
     let token = (row as any)?.calendarToken as string | null;
     if (!token) {
       token = ensureToken(null);
-      await db
+      await sdb
         .update(schema.user)
         .set({ calendarToken: token } as any)
         .where(eq(schema.user.id, u.id));
@@ -114,7 +114,7 @@ export const calendarRoutes = new Hono<AppEnv>()
   .post("/feed/regenerate", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
     const token = ensureToken(null);
-    await db
+    await sdb
       .update(schema.user)
       .set({ calendarToken: token } as any)
       .where(eq(schema.user.id, u.id));
@@ -126,7 +126,7 @@ export const calendarRoutes = new Hono<AppEnv>()
     const file = c.req.param("file");
     const token = file.replace(/\.ics$/i, "");
     if (!token || token.length < 10) return c.text("Not found", 404);
-    const [u] = await db
+    const [u] = await sdb
       .select()
       .from(schema.user)
       .where(eq(schema.user.calendarToken as any, token));
