@@ -35,4 +35,11 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-export type Role = "customer" | "rider" | "admin" | "superadmin";
+export type Role =
+  | "customer"
+  | "rider"
+  | "admin"
+  | "superadmin"
+  | "manager"
+  | "dispatcher"
+  | "project_manager";

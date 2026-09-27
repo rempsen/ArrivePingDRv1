@@ -389,6 +389,7 @@ export interface ProvisionResult {
     services: number;
     catalogItems: number;
     optionCategories: number;
+    notificationCopyBranded: number;
   };
 }
 

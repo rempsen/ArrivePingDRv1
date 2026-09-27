@@ -30,7 +30,13 @@ jobs:
 
       - name: Typecheck (web — the hardened surface; gates the build)
         working-directory: packages/web
-        run: bunx tsc --noEmit
+        # NOTE: plain `tsc --noEmit` is a no-op here — the root tsconfig.json
+        # is solution-style ("files": [] + project references to
+        # tsconfig.app.json/tsconfig.node.json) and tsc only follows
+        # references in build mode. Must pass -b or this step silently
+        # checks zero files and always exits 0. --force skips the
+        # tsbuildinfo cache so every run does a full check.
+        run: bunx tsc -b --force --noEmit
 
       - name: Typecheck (mobile + desktop — non-blocking backlog)
         run: bun run typecheck

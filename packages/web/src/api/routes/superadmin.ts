@@ -12,7 +12,7 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { db } from "../database";
 import * as schema from "../database/schema";
-import { requireSuperadmin } from "../middleware/auth";
+import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { ensureDefaultTenantKey } from "../lib/tenant-keys";
 import { scoutBrand } from "../../services/brand-scout";
@@ -75,6 +75,7 @@ const BrandScoutBody = z.object({
 });
 
 const BrandPatchBody = z.object({ brand: BrandProposal });
+const DeleteCompanyBody = z.object({ confirmName: optText(200) });
 
 export const superadminRoutes = new Hono<AppEnv>()
   // ---- list all tenants -------------------------------------------------
@@ -100,7 +101,7 @@ export const superadminRoutes = new Hono<AppEnv>()
   // tenant's entire history: bookings, riders, catalog, forms, templates,
   // invoices, users... everything stamped with this companyId. "default" is
   // the platform's own bootstrap tenant and can never be deleted this way.
-  .delete("/companies/:id", requireSuperadmin, async (c) => {
+  .delete("/companies/:id", requireSuperadmin, jsonBody(DeleteCompanyBody), async (c) => {
     const me = c.get("user") as SessionUser;
     const id = c.req.param("id");
     if (id === "default")
@@ -112,8 +113,8 @@ export const superadminRoutes = new Hono<AppEnv>()
       .where(eq(schema.companies.id, id));
     if (!co) return c.json({ message: "Not found" }, 404);
 
-    const body = await c.req.json().catch(() => ({}));
-    const confirmName = String(body.confirmName ?? "").trim();
+    const { confirmName: rawConfirmName } = c.req.valid("json");
+    const confirmName = String(rawConfirmName ?? "").trim();
     if (confirmName !== co.name)
       return c.json(
         { message: `Type "${co.name}" to confirm — this cannot be undone` },
