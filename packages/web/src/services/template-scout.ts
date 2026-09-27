@@ -1,22 +1,29 @@
 /**
- * Template Scout — generates 2-3 industry-appropriate WORK-ORDER templates for
- * a brand-new tenant during provisioning ("Grab Brand Assets" onboarding).
+ * Template Scout — generates a MINIMUM of 4 industry-appropriate WORK-ORDER
+ * templates for a brand-new tenant during provisioning (the literal Form
+ * Builder feature, "Grab Brand Assets" onboarding, and the public signup
+ * flow all funnel through here).
  *
  * These are the drag-and-drop Form Builder outputs (task_templates), NOT the
  * public intake forms (see form-scout.ts). Each template captures how that
  * industry actually runs a job on site: the fields a worker fills in, an
  * on-site checklist, an estimated duration, and a sensible pricing/rate model.
  *
- * Per the product rule, every company gets a spread covering the three core
- * workflows wherever they apply:
+ * Per the product rule, every company gets AT LEAST 4 templates, covering the
+ * three core workflows wherever they apply, plus at least one ICP-specific
+ * extra pulled from IndustryPreset.templates / the deep ICP research:
  *   - a RESIDENTIAL workflow template
  *   - a COMMERCIAL workflow template
  *   - a SERVICE / maintenance workflow template
+ *   - one or more ICP-specific workflows (e.g. "Coach Certification Tracking"
+ *     for a sports club, "Off-Rent Inspection" for equipment rental)
  * The model adapts the names + fields to the specific trade (e.g. a building-
  * materials supplier gets delivery/quote/bulk-order flavored templates).
  *
- * Everything degrades gracefully: if the model is unavailable or returns junk,
- * we fall back to three generic templates so provisioning never blocks.
+ * Everything degrades gracefully: if the model is unavailable or returns too
+ * few usable templates, missing slots are padded from the generic fallback
+ * set (never duplicating a name the model already produced) so every tenant
+ * ends up with >=4 templates and provisioning never blocks.
  */
 import { generateObject } from "ai";
 import { z } from "zod";
@@ -70,6 +77,7 @@ export interface IcpKnowledge {
   workflowNotes?: string | null;
   terminologyNotes?: string | null;
   toneRefinement?: string | null;
+  notificationRefinement?: string | null;
   complianceNotes?: string | null;
 }
 
@@ -99,6 +107,7 @@ function knowledgeBlock(k: IcpKnowledge | null | undefined): string {
   if (k.terminologyNotes) lines.push(`Industry terminology to use: ${k.terminologyNotes}`);
   if (k.complianceNotes) lines.push(`Compliance/regulatory considerations: ${k.complianceNotes}`);
   if (k.toneRefinement) lines.push(`Tone refinement: ${k.toneRefinement}`);
+  if (k.notificationRefinement) lines.push(`Notification/workflow triggers this ICP actually cares about (useful signal for which ICP-specific template to add): ${k.notificationRefinement}`);
   if (!lines.length) return "";
   return `\n\nDEEP INDUSTRY RESEARCH (trade publications / standards bodies — reflect this in field choices, checklist items, and terminology, it is more authoritative than generic assumptions):\n${lines.join("\n")}`;
 }
@@ -125,7 +134,7 @@ const TemplateSchema = z.object({
         category: z
           .string()
           .describe(
-            "One of: Residential, Commercial, Service. Use these unless a trade-specific bucket fits much better.",
+            "One of: Residential, Commercial, Service, or an ICP-specific bucket (e.g. 'Warranty', 'Rentals', 'Programs') when that fits the industry much better than the three generic ones.",
           ),
         description: z.string().describe("One sentence describing when a worker uses this template"),
         estimatedMins: z.number().int().min(15).max(600).describe("Typical on-site duration in minutes"),
@@ -160,9 +169,11 @@ const TemplateSchema = z.object({
         rateModel: RateSchema.describe("A realistic pricing/rate model for this template in this industry"),
       }),
     )
-    .min(2)
-    .max(3)
-    .describe("2-3 distinct work-order templates covering residential, commercial and service workflows"),
+    .min(4)
+    .max(6)
+    .describe(
+      "4-6 distinct work-order templates: the residential, commercial, and service workflows wherever they apply to this industry, PLUS at least one ICP-specific workflow that a generic trades platform would never think of.",
+    ),
 });
 
 function normFields(fields: { type: FieldType; label: string; required?: boolean }[]): TemplateField[] {
@@ -181,7 +192,7 @@ function iconFor(category: string): string {
   return ICON_BY_CATEGORY[category.toLowerCase()] ?? "clipboard-list";
 }
 
-/** Three generic templates so provisioning never fails. */
+/** Four generic templates so provisioning never fails on fewer than the guaranteed minimum. */
 export function fallbackStarterTemplates(input: TemplateScoutInput): StarterTemplate[] {
   const color = input.brandColor || "#0ea5e9";
   const mk = (
@@ -246,7 +257,38 @@ export function fallbackStarterTemplates(input: TemplateScoutInput): StarterTemp
       ["Inspect equipment", "Perform service", "Record readings", "Note any follow-ups", "Get sign-off"],
       { ...EMPTY_RATE_MODEL, flatRate: 95, includedMinutes: 45, timeRate: 85, timeUnit: "hour" },
     ),
+    mk(
+      "Emergency / Rush Call",
+      "Service",
+      "Urgent or after-hours call that jumps the queue and carries a rush premium.",
+      75,
+      [
+        { type: "select", label: "Urgency reason", required: true },
+        { type: "text", label: "Issue description", required: true },
+        ...contact,
+      ],
+      ["Confirm rush premium with customer", "Assess the issue", "Complete or stabilize the work", "Photograph the result", "Get sign-off"],
+      { ...EMPTY_RATE_MODEL, flatRate: 175, includedMinutes: 45, timeRate: 140, timeUnit: "hour", minCharge: 175 },
+    ),
   ];
+}
+
+/**
+ * Pad a set of AI-generated templates up to the guaranteed minimum of 4 using
+ * the generic fallback set, skipping any fallback whose name collides
+ * (case-insensitively) with a template the model already produced.
+ */
+function padToMinimum(templates: StarterTemplate[], input: TemplateScoutInput, min = 4): StarterTemplate[] {
+  if (templates.length >= min) return templates;
+  const haveNames = new Set(templates.map((t) => t.name.toLowerCase()));
+  const padded = [...templates];
+  for (const fb of fallbackStarterTemplates(input)) {
+    if (padded.length >= min) break;
+    if (haveNames.has(fb.name.toLowerCase())) continue;
+    padded.push(fb);
+    haveNames.add(fb.name.toLowerCase());
+  }
+  return padded;
 }
 
 /**
@@ -288,11 +330,12 @@ THEY CALL THEIR FIELD WORKERS: ${noun}
 THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedTemplates}${research}
 
 The PRIMARY INDUSTRY (ICP) above is the main driver — let it shape the template names, fields, checklists, and rate models first; use the services/website only as secondary detail. Match the TONE guidance above in field labels and checklist phrasing where natural.
-First, reason about what this company actually does and the industry's best-practice job workflows. Then design 2-3 DISTINCT work-order templates. Wherever it applies to this business, cover the three core workflows:
+First, reason about what this company actually does and the industry's best-practice job workflows. Then design a MINIMUM OF 4, up to 6, DISTINCT work-order templates. Wherever it applies to this business, cover the three core workflows:
   1. a RESIDENTIAL workflow (work at a customer's home),
   2. a COMMERCIAL workflow (work at a business / contract job site),
   3. a SERVICE / maintenance workflow (inspection, recurring service, repair).
 If a workflow truly doesn't apply to this trade, replace it with a template that does (e.g. a building-materials supplier might use 'Residential Delivery', 'Commercial / Bulk Delivery', 'Will-Call Pickup & Loadout').
+Then add AT LEAST ONE MORE template that is genuinely specific to this ICP, not a generic trades template — pull the idea from the SUGGESTED TEMPLATE INTENTS list and/or the deep industry research above (e.g. a sports club needs a 'Coach Certification Tracking' or 'Program Enrollment' template, an equipment-rental shop needs an 'Off-Rent Inspection' template, a property manager needs a 'Unit Turn' template). This is the template that proves the platform actually understands this trade, not just trades in general.
 
 For EACH template:
 - Give it a clear name and set category to Residential, Commercial, or Service.
@@ -329,12 +372,18 @@ Tailor everything to ${input.name}'s actual line of work. Each template must ser
       })
       .filter((t) => t.fields.length >= 3);
 
-    if (templates.length < 2) {
-      log.warn("template-scout: model returned too few usable templates; using fallback", {
+    if (templates.length === 0) {
+      log.warn("template-scout: model returned no usable templates; using fallback", {
+        company: input.name,
+      });
+      return fallbackStarterTemplates(input);
+    }
+    if (templates.length < 4) {
+      log.warn("template-scout: model returned fewer than the guaranteed minimum; padding from fallback", {
         company: input.name,
         got: templates.length,
       });
-      return fallbackStarterTemplates(input);
+      return padToMinimum(templates, input);
     }
     return templates;
   } catch (e) {

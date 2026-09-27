@@ -81,22 +81,22 @@ function defaultMessage(event: NvcEvent, recipient: Recipient, v: Vars): string 
   switch (event) {
     case "created":
       if (recipient === "client") return `${co}: We've received your request for ${v.service}. We'll confirm a technician shortly.`;
-      return `${co}: New work order #${v.shortId} — ${v.service} at ${v.address}.`;
+      return `${co}: New ${v.jobNoun.toLowerCase()} #${v.shortId} — ${v.service} at ${v.address}.`;
     case "assigned":
       if (recipient === "tech") return `${co}: New job offer — ${v.service} at ${v.address} on ${v.when}. Open the app to accept or decline.`;
       if (recipient === "client") return `${co}: ${v.techName} has been assigned to your ${v.service} appointment.`;
-      return `${co}: ${v.techName} assigned to work order #${v.shortId}.`;
+      return `${co}: ${v.techName} assigned to ${v.jobNoun.toLowerCase()} #${v.shortId}.`;
     case "accepted":
       if (recipient === "client") return `${co}: ${v.techName} accepted your ${v.service} job and is scheduled for ${v.when}.`;
-      return `${co}: ${v.techName} accepted work order #${v.shortId}.`;
+      return `${co}: ${v.techName} accepted ${v.jobNoun.toLowerCase()} #${v.shortId}.`;
     case "declined":
-      return `${co}: ${v.techName} declined work order #${v.shortId}. It's back in the dispatch queue.`;
+      return `${co}: ${v.techName} declined ${v.jobNoun.toLowerCase()} #${v.shortId}. It's back in the dispatch queue.`;
     case "released":
-      return `${co}: ${v.techName} can no longer do work order #${v.shortId} (${v.service} at ${v.address}). It's unassigned and back in the dispatch queue — needs a new tech.`;
+      return `${co}: ${v.techName} can no longer do ${v.jobNoun.toLowerCase()} #${v.shortId} (${v.service} at ${v.address}). It's unassigned and back in the dispatch queue — needs a new tech.`;
     case "enroute":
       if (recipient === "client")
         return `${co}: Your technician ${v.techName} is on the way!${v.eta ? ` ETA ~${v.eta} min.` : ""} Track live, see ETA & message them: ${v.trackUrl}`;
-      return `${co}: ${v.techName} is en route to work order #${v.shortId}.`;
+      return `${co}: ${v.techName} is en route to ${v.jobNoun.toLowerCase()} #${v.shortId}.`;
     case "arrived":
       if (recipient === "client") return `${co}: ${v.techName} has arrived at your location.`;
       return `${co}: ${v.techName} arrived on site for #${v.shortId}.`;
@@ -112,13 +112,13 @@ function defaultMessage(event: NvcEvent, recipient: Recipient, v: Vars): string 
         );
       return `${co}: #${v.shortId} completed by ${v.techName}.`;
     case "cancelled":
-      return `${co}: Work order #${v.shortId} (${v.service}) was cancelled.`;
+      return `${co}: ${v.jobNoun} #${v.shortId} (${v.service}) was cancelled.`;
     case "change_requested":
       if (recipient === "client")
         return `${co}: We've got your request for the ${v.service} appointment on ${v.when}. The office will confirm shortly — nothing has changed yet.`;
       if (recipient === "tech")
-        return `${co}: The customer asked to change work order #${v.shortId} (${v.service} on ${v.when}). Dispatch is reviewing it.`;
-      return `${co}: Customer change request on work order #${v.shortId} — ${v.service} at ${v.address}, currently ${v.when}. Needs a decision.`;
+        return `${co}: The ${v.customerNoun.toLowerCase()} asked to change ${v.jobNoun.toLowerCase()} #${v.shortId} (${v.service} on ${v.when}). Dispatch is reviewing it.`;
+      return `${co}: ${v.customerNoun} change request on ${v.jobNoun.toLowerCase()} #${v.shortId} — ${v.service} at ${v.address}, currently ${v.when}. Needs a decision.`;
     case "change_declined":
       if (recipient === "client")
         return `${co}: We weren't able to make that change — your ${v.service} appointment stays as booked for ${v.when}. Call us if that doesn't work.`;
@@ -140,8 +140,8 @@ function defaultMessage(event: NvcEvent, recipient: Recipient, v: Vars): string 
           `Sorry to hold you up. Live status: ${v.trackUrl}`
         );
       if (recipient === "tech")
-        return `${co}: #${v.shortId} (${v.address}) is now ~${v.delayMins} min late — the customer has been told you're arriving closer to ${v.newWhen}.`;
-      return `${co}: #${v.shortId} is running ~${v.delayMins} min late (${v.service} at ${v.address}, promised ${v.when}). Customer notified.`;
+        return `${co}: #${v.shortId} (${v.address}) is now ~${v.delayMins} min late — the ${v.customerNoun.toLowerCase()} has been told you're arriving closer to ${v.newWhen}.`;
+      return `${co}: #${v.shortId} is running ~${v.delayMins} min late (${v.service} at ${v.address}, promised ${v.when}). ${v.customerNoun} notified.`;
     case "receipt":
       return `${co}: Receipt for ${v.service} — $${v.price}. Thank you!`;
   }
@@ -162,6 +162,10 @@ interface Vars {
   trackUrl: string;
   bookingUrl: string;
   workerNoun: string;
+  /** Tenant's terminology for a job/work order, e.g. "Session" for a sports club. */
+  jobNoun: string;
+  /** Tenant's terminology for a customer, e.g. "Member" for a sports club. */
+  customerNoun: string;
   /** Permanent, no-login property service-history hub. "" when unlinked. */
   propertyUrl: string;
   /** Rounded minutes late — only meaningful on a `delayed` notice. */
@@ -190,6 +194,8 @@ export const TEMPLATE_VARS: { key: keyof Vars; label: string }[] = [
   { key: "trackUrl", label: "Live tracking link" },
   { key: "bookingUrl", label: "Booking link" },
   { key: "propertyUrl", label: "Property service-history link" },
+  { key: "jobNoun", label: "Tenant's word for a job/work order (e.g. \"Session\")" },
+  { key: "customerNoun", label: "Tenant's word for a customer (e.g. \"Member\")" },
   { key: "delayMins", label: "Minutes late (running-late notice)" },
   { key: "newWhen", label: "Revised arrival time (running-late notice)" },
 ];
@@ -210,6 +216,8 @@ const SAMPLE_VARS: Vars = {
   trackUrl: "https://arriveping.com/t/abc123",
   bookingUrl: "https://arriveping.com/t/abc123",
   workerNoun: "Technician",
+  jobNoun: "Job",
+  customerNoun: "Customer",
   propertyUrl: "https://arriveping.com/p/abc123def456",
   delayMins: 20,
   newWhen: "2:50 PM",
@@ -414,6 +422,8 @@ async function context(bookingId: string) {
     trackUrl: trackingUrl(b.publicToken),
     bookingUrl: trackingUrl(b.publicToken),
     workerNoun: co?.workerNoun || "Technician",
+    jobNoun: co?.jobNoun || "Job",
+    customerNoun: co?.customerNoun || "Customer",
     propertyUrl: propToken ? propertyUrl(propToken) : "",
     delayMins,
     newWhen,
@@ -834,8 +844,18 @@ export async function ensureEventRules(companyId: string, event: NvcEvent) {
   }
 }
 
+/**
+ * Branded per-tenant copy overrides, keyed `${event}:${recipient}` — produced
+ * by notification-copy-scout.ts at signup. Optional: a tenant with no scout
+ * result (or a company created before this existed) just gets the generic
+ * copy already in defaultMessage().
+ */
+export type NotificationCopyOverrides = Partial<
+  Record<string, { sms?: string; emailSubject?: string }>
+>;
+
 /** Seed the default rule matrix on first run for a company (idempotent). */
-export async function seedNotificationRules(companyId: string) {
+export async function seedNotificationRules(companyId: string, copy?: NotificationCopyOverrides) {
   const existing = await db
     .select()
     .from(schema.notificationRules)
@@ -850,8 +870,17 @@ export async function seedNotificationRules(companyId: string) {
     .where(eq(schema.companies.id, companyId))
     .limit(1);
   const defaults = applyNotificationOverrides(base, company?.industry);
+  let brandedCount = 0;
   for (const d of defaults) {
-    await db.insert(schema.notificationRules).values({ ...d, companyId });
+    const override = copy?.[`${d.event}:${d.recipient}`];
+    const template = override?.sms?.trim() || "";
+    const emailSubject = override?.emailSubject?.trim() || "";
+    if (template || emailSubject) brandedCount++;
+    await db.insert(schema.notificationRules).values({ ...d, companyId, template, emailSubject });
   }
-  console.log("[dispatch] seeded", defaults.length, "notification rules for", companyId, "(industry:", company?.industry || "none", ")");
+  console.log(
+    "[dispatch] seeded", defaults.length, "notification rules for", companyId,
+    "(industry:", company?.industry || "none", ")",
+    brandedCount ? `— ${brandedCount} with branded copy` : "— generic copy (no scout result)",
+  );
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `companies` ADD `onboarding_completed_at` integer;

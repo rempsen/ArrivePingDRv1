@@ -670,6 +670,13 @@ export const companySettings = sqliteTable("company_settings", {
   hours: text("hours").notNull().default(""), // JSON string: [{day,open,close}] or freeform
   services: text("services").notNull().default(""), // JSON string: string[]
   socials: text("socials").notNull().default(""), // JSON string: {facebook,instagram,...}
+  // Freeform "where we do work" description read off the scraped site (a
+  // service-area page, an "areas we serve" list, city names in the footer)
+  // or filled in during the AI onboarding conversation. Precise geofenced
+  // auto-arrive radii stay a separate, deliberate Service Zones setup step —
+  // this is just the starting context so a new tenant isn't staring at a
+  // blank zones page. See services/company-provisioning.ts.
+  serviceArea: text("service_area").notNull().default(""),
   geofenceRadiusM: integer("geofence_radius_m").notNull().default(150), // auto-arrive radius from job address (meters)
   // ── Review requests ────────────────────────────────────────────────────
   // A completed job schedules ONE review-request SMS this many minutes later
@@ -699,6 +706,15 @@ export const companySettings = sqliteTable("company_settings", {
   delayNoticeEnabled: integer("delay_notice_enabled", { mode: "boolean" }).notNull().default(true),
   delayNoticeThresholdMins: integer("delay_notice_threshold_mins").notNull().default(15),
   delayNoticeAutoSendAfterMins: integer("delay_notice_auto_send_after_mins").notNull().default(10),
+  // ── Qualifying profile (onboarding chat) ────────────────────────────────
+  // JSON blob captured by the post-signup onboarding chat's qualifying
+  // questions (technician/vehicle counts, jobs/day, maintenance-plan and
+  // emergency-premium posture, plus ICP-specific Q&A the agent designed
+  // itself). See services/onboarding-qualifying.ts for the shape. "{}" =
+  // never asked / tenant skipped. Best-effort context for future features
+  // (capacity-aware suggestions, rush pricing) — never load-bearing for
+  // provisioning, which already ran before this exists.
+  qualifyingProfile: text("qualifying_profile").notNull().default("{}"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
   createdAt: now(),
 }, (t) => ({
@@ -1133,6 +1149,13 @@ export const companies = sqliteTable("companies", {
   industryOther: text("industry_other").notNull().default(""), // free-text business description when industry="other" (no preset fits)
   status: text("status").notNull().default("active"), // active | suspended
   createdBy: text("created_by").notNull().default(""), // superadmin user id
+  // When the AI-assisted onboarding conversation finished (or was skipped) for
+  // this tenant. NULL = the "finish setting up" chat should surface on the
+  // admin's next login — set by either the `finish_onboarding` chat tool or
+  // the "I'll finish this later" skip button (api/routes/onboarding.ts).
+  // Pre-existing tenants are backfilled to non-null at migration time so this
+  // new experience only ever appears for tenants provisioned after it shipped.
+  onboardingCompletedAt: integer("onboarding_completed_at", { mode: "timestamp_ms" }),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
   createdAt: now(),
 });

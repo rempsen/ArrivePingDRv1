@@ -26,6 +26,7 @@ const PropertyPublic = lazyRoute(() => import("./pages/property-public"));
 const IntakeForm = lazyRoute(() => import("./pages/intake-form"));
 const JoinTech = lazyRoute(() => import("./pages/join-tech"));
 const JoinCompany = lazyRoute(() => import("./pages/join-company"));
+const SignupCompanyPage = lazyRoute(() => import("./pages/signup-company"));
 const CustomerApp = lazyRoute(() => import("./pages/customer"));
 const RiderApp = lazyRoute(() => import("./pages/rider"));
 const AdminApp = lazyRoute(() => import("./pages/admin"));
@@ -105,6 +106,7 @@ function App() {
           <Route path="/" component={Index} />
           <Route path="/sign-in">{() => <AuthPage mode="sign-in" />}</Route>
           <Route path="/sign-up">{() => <AuthPage mode="sign-up" />}</Route>
+          <Route path="/get-started" component={SignupCompanyPage} />
           <Route path="/forgot-password" component={ForgotPasswordPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/t/:token" component={TrackPublic} />

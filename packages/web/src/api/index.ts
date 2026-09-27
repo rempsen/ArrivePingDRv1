@@ -56,6 +56,7 @@ import { superadminRoutes } from "./routes/superadmin";
 import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
 import { punchlistRoutes } from "./routes/punchlist";
+import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
 
 
 // CORS allowlist: comma-separated origins in CORS_ORIGINS. "*" allows all
@@ -163,6 +164,10 @@ const app = new Hono<{ Variables: Variables }>()
   // NOT CORS). Mounted before basePath/authMiddleware so it stays unauthenticated.
   .use("/api/public/*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "X-Public-Key"] }))
   .route("/api/public/forms", publicFormsRoutes)
+  // PUBLIC self-serve onboarding — scrape-on-URL-entry + tenant signup.
+  // Unauthenticated by design (nobody has a login yet); each op has its own
+  // IP-keyed rate limiter (see routes/onboarding.ts).
+  .route("/api/public/onboarding", onboardingPublicRoutes)
   // PUBLIC object proxy — streams a stored file (S3 or local) without auth so
   // <img> tags, public tracking pages and outbound email logos load anywhere.
   // The bucket itself stays private; only objects whose key is known load.
@@ -305,7 +310,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/me", meRoutes)
   .route("/team", teamRoutes)
   .route("/superadmin", superadminRoutes)
-  .route("/punchlist", punchlistRoutes);
+  .route("/punchlist", punchlistRoutes)
+  .route("/onboarding", onboardingRoutes);
 
 export type AppType = typeof app;
 export default app;

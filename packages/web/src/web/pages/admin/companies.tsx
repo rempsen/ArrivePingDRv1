@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/use-auth";
@@ -29,6 +29,17 @@ import {
   Hammer,
   Loader2,
 } from "lucide-react";
+
+/** Loose "is this at least a domain" check — gates the auto-scout so it
+ * doesn't fire on every keystroke of "a", "ac", "acm…". Mirrors the same
+ * check on the public self-serve signup page so both flows feel identical. */
+function looksLikeDomain(v: string): boolean {
+  const s = v.trim();
+  if (s.length < 4) return false;
+  return /^(https?:\/\/)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}([/?#].*)?$/i.test(s);
+}
+
+const AUTO_SCOUT_DEBOUNCE_MS = 900;
 
 type Company = {
   id: string;
@@ -94,8 +105,11 @@ export default function CompaniesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [err, setErr] = useState("");
-  // AI brand-scout state — null until the admin grabs assets.
+  // AI brand-scout state — null until the site has been scraped (auto, or
+  // via the manual "Grab Brand Assets" fallback below).
   const [brand, setBrand] = useState<BrandProposal | null>(null);
+  const [scoutedFor, setScoutedFor] = useState(""); // last website string we actually scouted
+  const scoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const setBrandField = <K extends keyof BrandProposal>(
     k: K,
     v: BrandProposal[K],
@@ -148,6 +162,7 @@ export default function CompaniesPage() {
       setOpen(false);
       setForm({ ...EMPTY });
       setBrand(null);
+      setScoutedFor("");
       setErr("");
     },
     onError: (e: any) => setErr(e.message),
@@ -165,6 +180,7 @@ export default function CompaniesPage() {
     },
     onSuccess: (p) => {
       setBrand(p);
+      setScoutedFor(form.website.trim());
       // pre-fill contact fields + the AI-suggested ICP from what we learned,
       // if the admin hasn't already picked something. Still fully overridable
       // — this is a suggestion, not a lock-in.
@@ -179,6 +195,26 @@ export default function CompaniesPage() {
     },
     onError: (e: any) => setErr(e.message),
   });
+
+  // Auto-fire the moment the website field settles into something that
+  // looks like a real domain — same behavior as the public self-serve
+  // signup flow, so internal provisioning "almost ready to use" feels
+  // identical whether Dan's team does it or a customer does it themselves.
+  // The "Grab Brand Assets" button stays as the manual re-scrape fallback.
+  useEffect(() => {
+    if (!open) return;
+    if (scoutTimerRef.current) clearTimeout(scoutTimerRef.current);
+    const site = form.website.trim();
+    if (!looksLikeDomain(site) || site === scoutedFor || scout.isPending) return;
+    scoutTimerRef.current = setTimeout(() => {
+      setErr("");
+      scout.mutate();
+    }, AUTO_SCOUT_DEBOUNCE_MS);
+    return () => {
+      if (scoutTimerRef.current) clearTimeout(scoutTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.website, open]);
 
   if (role !== "superadmin")
     return (
@@ -198,7 +234,7 @@ export default function CompaniesPage() {
         title="Companies"
         subtitle="Provision and switch between B2B tenants. Each company is fully isolated."
         actions={
-          <BtnPrimary onClick={() => { setForm({ ...EMPTY }); setBrand(null); setErr(""); setOpen(true); }}>
+          <BtnPrimary onClick={() => { setForm({ ...EMPTY }); setBrand(null); setScoutedFor(""); setErr(""); setOpen(true); }}>
             <Plus className="h-4 w-4" /> New Company
           </BtnPrimary>
         }
@@ -491,12 +527,16 @@ export default function CompaniesPage() {
             >
               {scout.isPending ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Reading their website & brand…</>
+              ) : brand ? (
+                <><Sparkles className="h-4 w-4" /> Re-scan this site</>
               ) : (
                 <><Sparkles className="h-4 w-4" /> Grab Brand Assets</>
               )}
             </button>
             <p className="mt-2 text-center text-[11px] text-slate-500">
-              AI scans the site for colors, logo, services & the right name for their field staff.
+              {scout.isPending
+                ? "AI scans the site for colors, logo, services & the right name for their field staff."
+                : "Fires automatically once a website is typed above — use this button to re-scan or fill it in yourself."}
             </p>
 
             {brand && (

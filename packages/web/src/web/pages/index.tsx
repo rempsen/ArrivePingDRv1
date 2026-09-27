@@ -48,7 +48,7 @@ function Nav() {
                 Sign in
               </Link>
               <Link
-                to="/sign-up"
+                to="/get-started"
                 className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-ink shadow-lg shadow-brand/30 transition hover:bg-cyan-glow"
               >
                 Request Demo
@@ -88,7 +88,7 @@ export default function Index() {
             </p>
             <div className="animate-fade-up delay-3 mt-8 flex flex-wrap gap-3">
               <Link
-                to="/sign-up"
+                to="/get-started"
                 className="inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 font-semibold text-ink shadow-xl shadow-brand/40 transition hover:bg-cyan-glow"
               >
                 Get Started <ArrowRight className="h-4 w-4" />
@@ -419,7 +419,7 @@ export default function Index() {
                 </li>
               </ul>
               <Link
-                to="/sign-up"
+                to="/get-started"
                 className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold transition ${
                   tier.featured
                     ? "bg-brand text-ink shadow-lg shadow-brand/40 hover:bg-cyan-glow"
@@ -445,7 +445,7 @@ export default function Index() {
             <h2 className="font-display text-4xl font-black text-white">Become a founding client.</h2>
             <p className="mt-3 max-w-md text-slate-400 md:mx-0 mx-auto">Reduce field costs by 20%. Eliminate the 4-hour window. Make your clients love you.</p>
             <div className="mt-8 flex flex-wrap justify-center gap-3 md:justify-start">
-              <Link to="/sign-up" className="inline-flex items-center gap-2 rounded-full bg-brand px-8 py-3.5 font-semibold text-ink shadow-xl shadow-brand/40 transition hover:bg-cyan-glow">
+              <Link to="/get-started" className="inline-flex items-center gap-2 rounded-full bg-brand px-8 py-3.5 font-semibold text-ink shadow-xl shadow-brand/40 transition hover:bg-cyan-glow">
                 Request Demo <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/sign-in" className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-8 py-3.5 font-semibold text-slate-200 transition hover:border-brand">

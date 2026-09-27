@@ -15,4 +15,6 @@ export const MODELS = {
   text: "anthropic/claude-sonnet-4.6",
   /** Vision — "sees" a website screenshot for colors + logo. */
   vision: "google/gemini-3.1-pro-preview",
+  /** Deep reasoning — ICP-expert qualifying chat, high-stakes generation. */
+  reasoning: "anthropic/claude-opus-4.6",
 } as const;

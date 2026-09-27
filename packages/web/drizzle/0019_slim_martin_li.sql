@@ -1,0 +1,1 @@
+ALTER TABLE `company_settings` ADD `qualifying_profile` text DEFAULT '{}' NOT NULL;

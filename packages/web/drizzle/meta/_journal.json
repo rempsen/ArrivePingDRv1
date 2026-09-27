@@ -120,6 +120,27 @@
       "when": 1790372493250,
       "tag": "0016_certain_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1790463662287,
+      "tag": "0017_even_morg",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1790464761606,
+      "tag": "0018_silent_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1790470587596,
+      "tag": "0019_slim_martin_li",
+      "breakpoints": true
     }
   ]
 }

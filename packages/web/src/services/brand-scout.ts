@@ -38,6 +38,10 @@ export interface BrandProposal {
   jobNounPlural: string | null;
   tagline: string | null;
   description: string | null;
+  // Freeform "where do you do work" guess, read off a service-area page, an
+  // "areas we serve" list, or city names mentioned in the footer/contact
+  // section. Null when the site gives no signal either way.
+  serviceArea: string | null;
   services: string[];
   hours: string | null;
   address: string | null;
@@ -277,6 +281,12 @@ const TextSchema = z.object({
     .describe("Up to 8 services they offer")
     .default([]),
   hours: z.string().describe("Business hours as plain text").nullable(),
+  serviceArea: z
+    .string()
+    .describe(
+      "Where this business actually does work, in plain English — e.g. 'Winnipeg and the Capital Region, up to 50km out' or 'Greater Toronto Area'. Read off a service-area/coverage page, an 'areas we serve' list, or city names mentioned in the footer/contact section. Null if the site gives no signal either way — do not guess from the mailing address alone.",
+    )
+    .nullable(),
   address: z.string().describe("Physical address").nullable(),
   email: z.string().describe("Contact email").nullable(),
   phone: z.string().describe("Contact phone").nullable(),
@@ -330,6 +340,7 @@ export async function scoutBrand(
     jobNounPlural: null,
     tagline: null,
     description: null,
+    serviceArea: null,
     services: [],
     hours: null,
     address: null,
@@ -449,6 +460,7 @@ PAGE TEXT:\n${textSample(html)}`,
     jobNounPlural: text?.jobNounPlural ?? null,
     tagline: text?.tagline ?? null,
     description: text?.companyDescription ?? null,
+    serviceArea: text?.serviceArea ?? null,
     services: text?.services ?? [],
     hours: text?.hours ?? null,
     address: text?.address ?? null,

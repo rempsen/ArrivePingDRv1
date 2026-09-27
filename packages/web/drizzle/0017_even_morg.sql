@@ -1,0 +1,1 @@
+ALTER TABLE `company_settings` ADD `service_area` text DEFAULT '' NOT NULL;

@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 import { Link, useLocation } from "wouter";
 import { Logo } from "../../components/brand";
 import { DispatchMessenger } from "../../components/dispatch-messenger";
+import { OnboardingChat } from "../../components/onboarding-chat";
 import { TenantSwitcher } from "../../components/tenant-switcher";
 import { useAuth } from "../../hooks/use-auth";
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
@@ -322,6 +323,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       {/* persistent dispatch messaging — available on every admin screen */}
       <DispatchMessenger />
+      {/* First-login finishing-touches chat for any freshly-provisioned
+          tenant (self-serve or superadmin-built alike). Renders nothing once
+          companies.onboardingCompletedAt is set. */}
+      <OnboardingChat />
     </div>
   );
 }
