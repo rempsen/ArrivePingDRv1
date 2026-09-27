@@ -11,17 +11,16 @@
 import { eq } from "drizzle-orm";
 import { db } from "../database";
 import * as schema from "../database/schema";
+import { tdb } from "../database/tenant";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
 import { logoDims } from "../../services/email-render";
 
 const SITE = (process.env.WEBSITE_URL || "http://localhost:4200").replace(/\/$/, "");
 
 async function companyDisplayName(companyId: string): Promise<string> {
-  const [co] = await db
-    .select()
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId));
+  const co = await tdb(companyId).selectOne(schema.companySettings);
   if (co?.name) return co.name;
+  // companies is GLOBAL — plain db, no RLS policy needed.
   const [reg] = await db
     .select()
     .from(schema.companies)

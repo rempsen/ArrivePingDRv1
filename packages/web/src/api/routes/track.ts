@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { sendSms, trackingUrl } from "../../services/sms";
 import { computeRoute } from "./geo";
 import { trackLimiter, trackWriteLimiter } from "../lib/rate-limit";
@@ -22,7 +22,8 @@ const TrackMessageBody = z.object({ body: z.unknown(), senderName: z.unknown() }
 // Resolve a booking by its public token, enforcing expiry. Returns null when
 // the token is unknown OR has expired (PII link safety).
 async function resolveByToken(token: string) {
-  const [b] = await db
+  // sdb: public link, tenant is not known until the token resolves it.
+  const [b] = await sdb
     .select()
     .from(schema.bookings)
     .where(eq(schema.bookings.publicToken, token));
@@ -149,10 +150,7 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   if (b.riderId) {
     const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
     if (r) {
-      const [ru] = await db
-        .select()
-        .from(schema.user)
-        .where(eq(schema.user.id, r.userId));
+      const ru = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
       tech = {
         name: ru?.name,
         phone: r.phone || ru?.phone || "",
@@ -240,10 +238,7 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   // service history for this address from any single job.
   let propertyLink: string | null = null;
   if (b.propertyId) {
-    const [prop] = await db
-      .select()
-      .from(schema.properties)
-      .where(eq(schema.properties.id, b.propertyId));
+    const prop = await t.selectOne(schema.properties, eq(schema.properties.id, b.propertyId));
     if (prop) propertyLink = propertyUrl(prop.publicToken);
   }
 
@@ -485,10 +480,7 @@ export const trackRoutes = new Hono<AppEnv>()
           body,
         });
         // forward to the tech as an SMS with a link back to the live thread
-        const [ru] = await db
-          .select()
-          .from(schema.user)
-          .where(eq(schema.user.id, r.userId));
+        const ru = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
         const techPhone = r.phone || ru?.phone || "";
         if (techPhone && b.publicToken) {
           const who = m.senderName || "Customer";
@@ -512,15 +504,10 @@ export const trackRoutes = new Hono<AppEnv>()
     // page never surfaced anywhere in admin — it just sat in the thread.
     // Scoped to THIS booking's tenant only; never notify across tenants.
     try {
-      const admins = await db
-        .select()
-        .from(schema.user)
-        .where(
-          and(
-            inArray(schema.user.role, ["admin", "superadmin"]),
-            eq(schema.user.companyId, b.companyId),
-          ),
-        );
+      const admins = await t.select(
+        schema.user,
+        inArray(schema.user.role, ["admin", "superadmin"]),
+      );
       for (const admin of admins) {
         await t.insert(schema.notifications, {
           userId: admin.id,

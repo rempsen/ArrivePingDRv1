@@ -29,8 +29,8 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import { and, eq, inArray, isNull, isNotNull } from "drizzle-orm";
-import { db } from "../api/database";
 import * as schema from "../api/database/schema";
+import { tdb } from "../api/database/tenant";
 import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { fmtInZone } from "../shared/tz";
@@ -368,22 +368,15 @@ export async function typicalDurationMins(
 ): Promise<number | null> {
   if (!serviceId) return null;
   try {
-    const rows = await db
-      .select({
-        onSiteMinutes: schema.bookings.onSiteMinutes,
-        startedAt: schema.bookings.startedAt,
-        finishedAt: schema.bookings.finishedAt,
-      })
-      .from(schema.bookings)
-      .where(
-        and(
-          eq(schema.bookings.companyId, companyId),
-          eq(schema.bookings.serviceId, serviceId),
-          eq(schema.bookings.status, "completed"),
-          isNull(schema.bookings.deletedAt),
-          isNotNull(schema.bookings.finishedAt),
-        ),
-      );
+    const rows = await tdb(companyId).select(
+      schema.bookings,
+      and(
+        eq(schema.bookings.serviceId, serviceId),
+        eq(schema.bookings.status, "completed"),
+        isNull(schema.bookings.deletedAt),
+        isNotNull(schema.bookings.finishedAt),
+      ),
+    );
     const mins = rows
       .map((r) => {
         if (r.onSiteMinutes && r.onSiteMinutes > 0) return r.onSiteMinutes;
@@ -417,22 +410,13 @@ export async function techWorkload(
 ): Promise<Map<string, { openJobs: number; freeInMins: number }>> {
   const out = new Map<string, { openJobs: number; freeInMins: number }>();
   try {
-    const active = await db
-      .select({
-        riderId: schema.bookings.riderId,
-        serviceId: schema.bookings.serviceId,
-        status: schema.bookings.status,
-        startedAt: schema.bookings.startedAt,
-        scheduledAt: schema.bookings.scheduledAt,
-      })
-      .from(schema.bookings)
-      .where(
-        and(
-          eq(schema.bookings.companyId, companyId),
-          inArray(schema.bookings.status, [...ACTIVE_STATUSES]),
-          isNull(schema.bookings.deletedAt),
-        ),
-      );
+    const active = await tdb(companyId).select(
+      schema.bookings,
+      and(
+        inArray(schema.bookings.status, [...ACTIVE_STATUSES]),
+        isNull(schema.bookings.deletedAt),
+      ),
+    );
     const now = Date.now();
     for (const b of active) {
       if (!b.riderId) continue;
@@ -495,34 +479,23 @@ export async function predictDelays(
   const grace = opts.graceMins ?? 15;
   const out: DelayRisk[] = [];
   try {
-    const jobs = await db
-      .select()
-      .from(schema.bookings)
-      .where(
-        and(
-          eq(schema.bookings.companyId, companyId),
-          inArray(schema.bookings.status, [...ACTIVE_STATUSES]),
-          isNull(schema.bookings.deletedAt),
-        ),
-      );
+    const t = tdb(companyId);
+    const jobs = await t.select(
+      schema.bookings,
+      and(
+        inArray(schema.bookings.status, [...ACTIVE_STATUSES]),
+        isNull(schema.bookings.deletedAt),
+      ),
+    );
     if (!jobs.length) return out;
 
-    const svcRows = await db
-      .select()
-      .from(schema.services)
-      .where(eq(schema.services.companyId, companyId));
+    const svcRows = await t.select(schema.services);
     const svc = new Map(svcRows.map((s) => [s.id, s]));
 
-    const techRows = await db
-      .select()
-      .from(schema.riders)
-      .where(eq(schema.riders.companyId, companyId));
-    const techs = new Map(techRows.map((t) => [t.id, t]));
+    const techRows = await t.select(schema.riders);
+    const techs = new Map(techRows.map((r) => [r.id, r]));
     const userRows = techRows.length
-      ? await db
-          .select({ id: schema.user.id, name: schema.user.name })
-          .from(schema.user)
-          .where(inArray(schema.user.id, techRows.map((t) => t.userId)))
+      ? await t.select(schema.user, inArray(schema.user.id, techRows.map((r) => r.userId)))
       : [];
     const names = new Map(userRows.map((u) => [u.id, u.name]));
 

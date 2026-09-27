@@ -11,7 +11,7 @@
  * notes, technician phone numbers, or any live technician location.
  */
 import { Hono } from "hono";
-import { db } from "../database";
+import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and } from "drizzle-orm";
@@ -19,8 +19,9 @@ import { trackLimiter } from "../lib/rate-limit";
 import { trackingUrl } from "../../services/sms";
 import type { AppEnv } from "../env";
 
+// sdb: public link, tenant is not known until the token resolves it.
 async function resolvePropertyByToken(token: string) {
-  const [p] = await db
+  const [p] = await sdb
     .select()
     .from(schema.properties)
     .where(eq(schema.properties.publicToken, token));
@@ -70,10 +71,7 @@ export const propertyPublicRoutes = new Hono<AppEnv>()
         if (b.riderId) {
           const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
           if (r) {
-            const [ru] = await db
-              .select()
-              .from(schema.user)
-              .where(eq(schema.user.id, r.userId));
+            const ru = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
             techName = ru?.name || "";
           }
         }
@@ -159,16 +157,10 @@ export const propertyPublicRoutes = new Hono<AppEnv>()
     const prop = await resolvePropertyByToken(token);
     if (!prop) return c.json({ message: "Not found" }, 404);
 
-    const [form] = await db
-      .select()
-      .from(schema.intakeForms)
-      .where(
-        and(
-          eq(schema.intakeForms.companyId, prop.companyId),
-          eq(schema.intakeForms.active, true),
-          eq(schema.intakeForms.formType, "lead"),
-        ),
-      );
+    const form = await tdb(prop.companyId).selectOne(
+      schema.intakeForms,
+      and(eq(schema.intakeForms.active, true), eq(schema.intakeForms.formType, "lead")),
+    );
 
     return c.json(
       {
