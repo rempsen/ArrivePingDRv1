@@ -10,7 +10,7 @@ import { rateLimit, keyByIp } from "../lib/rate-limit";
 import { fireEvent } from "../../services/dispatch";
 import { checkServiceZone } from "../../services/zones";
 import { forwardGeocode } from "../../services/geocode";
-import { attachMembership, findCompanyUserByEmail } from "../lib/memberships";
+import { attachMembership, findCompanyUserByEmail, isMember } from "../lib/memberships";
 import { recomputeBooking } from "../../services/billing";
 import { reconcileRiderStatus } from "../../services/presence";
 import { capture } from "../lib/analytics";
@@ -824,6 +824,15 @@ async function submitWorkOrder(c: any, companyId: string, form: typeof schema.in
       if (customer) await attachMembership({ userId: customer.id, companyId, role: "customer", status: "active" });
     }
     customerId = customer.id;
+  } else if (!(await isMember(customerId, companyId))) {
+    // A client id submitted directly (rather than resolved via name/email
+    // find-or-create) MUST belong to THIS tenant. Without this check, a
+    // PIN-gated work-order form (no login) would let anyone who has — or
+    // guesses — a valid user id attach a completely unrelated tenant's
+    // customer to a booking/invoice created here. `id` alone is never trusted
+    // anywhere else in this codebase (see job-search.ts); this path was the
+    // one place that still did.
+    return c.json({ message: "Client not found" }, 404);
   }
   const [cu] = await db.select().from(schema.user).where(eq(schema.user.id, customerId));
   if (!cu) return c.json({ message: "Client not found" }, 404);

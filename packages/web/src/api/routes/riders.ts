@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
-import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
+import { attachMembership, isMember, findUserByEmail, detachMembership } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { putObject, deleteObject } from "../lib/storage";
 import { z } from "zod";
@@ -409,9 +409,11 @@ export const ridersRoutes = new Hono<AppEnv>()
     await t.update(schema.riders, { photoUrl: "", photoKey: "" }, eq(schema.riders.id, id));
     return c.json({ ok: true }, 200);
   })
-  // delete a technician (admin): removes rider profile + user account
+  // delete a technician (admin): removes rider profile; only deletes the
+  // shared login itself if this is the ONLY company they work for.
   .delete("/:id", requireAdmin, async (c) => {
     const id = c.req.param("id");
+    const cid = tenantId(c);
     const t = tx(c);
     const r = await t.selectOne(schema.riders, eq(schema.riders.id, id));
     if (!r) return c.json({ message: "Not found" }, 404);
@@ -422,7 +424,21 @@ export const ridersRoutes = new Hono<AppEnv>()
       eq(schema.bookings.riderId, id),
     );
     await t.delete(schema.riders, eq(schema.riders.id, id));
-    await db.delete(schema.user).where(eq(schema.user.id, r.userId));
+
+    // A technician can work for several companies on ONE shared login (see
+    // memberships table doc). Hard-deleting `user` here unconditionally used
+    // to wipe that person's access — and their login itself — at every OTHER
+    // company they work for too, the instant one company removed them.
+    // Mirrors the same check already used in admin.ts's user-delete route.
+    const memberOf = await db
+      .select()
+      .from(schema.memberships)
+      .where(eq(schema.memberships.userId, r.userId));
+    if (memberOf.length > 1) {
+      await detachMembership(r.userId, cid);
+    } else {
+      await db.delete(schema.user).where(eq(schema.user.id, r.userId));
+    }
     return c.json({ ok: true }, 200);
   })
 ;
