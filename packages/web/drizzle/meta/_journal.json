@@ -8,6 +8,13 @@
       "when": 1790545225565,
       "tag": "0000_burly_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790545423434,
+      "tag": "0001_app_roles_and_rls",
+      "breakpoints": true
     }
   ]
 }

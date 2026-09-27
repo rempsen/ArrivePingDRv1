@@ -64,6 +64,12 @@ const GLOBAL_TABLES = new Set<string>([
   "session",
   "account",
   "verification",
+  // Curated ICP research reference data, keyed by `industry` (not
+  // company_id) — genuinely global, read via plain `db` in
+  // company-provisioning.ts. Has no company_id column at all, so without
+  // this entry a future tdb() call against it would fail closed (throw),
+  // not leak — but it belongs in the allow-list for clarity.
+  "icp_knowledge_base",
 ]);
 
 /** Drizzle exposes the SQL table name via this internal symbol. */
