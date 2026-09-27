@@ -35,11 +35,17 @@ export async function purgeOldPings(): Promise<number> {
     // would silently delete zero rows here (no app.tenant_id set), so this
     // deliberately uses sdb (BYPASSRLS).
     for (let i = 0; i < 50; i++) {
+      // postgres-js's low-level bind path (used by drizzle's raw sql`` +
+      // .execute()) does not serialize a bare JS Date the way its own
+      // tagged-template client does — it throws
+      // "ERR_INVALID_ARG_TYPE: ... Received an instance of Date" under Bun.
+      // Typed drizzle columns (timestamp mode: "date") serialize fine; only
+      // this raw-SQL path needs the explicit .toISOString().
       const res: any = await sdb.execute(
         sql`DELETE FROM tracking_pings WHERE id IN (
           SELECT tp.id FROM tracking_pings tp
           LEFT JOIN bookings b ON b.id = tp.booking_id
-          WHERE tp.created_at < ${cutoff}
+          WHERE tp.created_at < ${cutoff.toISOString()}
             AND (b.status IS NULL OR b.status != 'completed')
           LIMIT 5000
         )`,
@@ -61,7 +67,9 @@ export async function purgeOldIdempotencyKeys(): Promise<void> {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   try {
     // idempotency_keys is a GLOBAL table (see GLOBAL_TABLES) — plain db.
-    await db.execute(sql`DELETE FROM idempotency_keys WHERE created_at < ${cutoff}`);
+    // See the .toISOString() note in purgeOldPings above — same postgres-js
+    // raw-bind quirk applies here.
+    await db.execute(sql`DELETE FROM idempotency_keys WHERE created_at < ${cutoff.toISOString()}`);
   } catch (e) {
     captureException(e, { job: "purgeOldIdempotencyKeys" });
   }
