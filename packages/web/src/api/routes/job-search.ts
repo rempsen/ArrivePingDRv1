@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import {
   eq, and, or, like, gte, lte, isNull, isNotNull, inArray, desc, asc, sql,
 } from "drizzle-orm";
-import { requireAuth, tenantId } from "../middleware/auth";
+import { requireAuth, tenantId, tx } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { toCsv, toPdf, buildJobPdf, fileResponse, tenantFilePrefix, type JobUnitLine, type JobPhoto } from "./export";
 import { companyTimeZone } from "../../services/company-tz";
@@ -104,6 +104,7 @@ const jobNumber = (id: string) => id.replace(/-/g, "").slice(0, 8).toUpperCase()
 
 async function buildWhere(f: Filters, cid: string): Promise<any[]> {
   const b = schema.bookings;
+  const t = tdb(cid);
   const conds: any[] = [];
   // tenant boundary: every job-search query is constrained to the caller's company
   conds.push(eq(b.companyId, cid));
@@ -134,23 +135,23 @@ async function buildWhere(f: Filters, cid: string): Promise<any[]> {
 
   // free text across customer name/phone/email + address + title
   if (f.q) {
-    const t = `%${f.q}%`;
-    const matchingCustomers = await db
-      .select({ id: schema.user.id })
-      .from(schema.user)
-      .where(and(eq(schema.user.companyId, cid), or(like(schema.user.name, t), like(schema.user.email, t), like(schema.user.phone, t))) as any);
+    const pat = `%${f.q}%`;
+    const matchingCustomers = await t.select(
+      schema.user,
+      or(like(schema.user.name, pat), like(schema.user.email, pat), like(schema.user.phone, pat)) as any,
+    );
     const custIds = matchingCustomers.map((r) => r.id);
-    const ors: any[] = [like(b.address, t), like(b.title, t), like(b.customerPhone, t)];
+    const ors: any[] = [like(b.address, pat), like(b.title, pat), like(b.customerPhone, pat)];
     if (custIds.length) ors.push(inArray(b.customerId, custIds));
     conds.push(or(...ors) as any);
   }
 
   // client tag filter → customers carrying that tag
   if (f.tagId) {
-    const tagged = await db
-      .select({ entityId: schema.entityTags.entityId })
-      .from(schema.entityTags)
-      .where(and(eq(schema.entityTags.companyId, cid), eq(schema.entityTags.tagId, f.tagId), eq(schema.entityTags.entityType, "client")));
+    const tagged = await t.select(
+      schema.entityTags,
+      and(eq(schema.entityTags.tagId, f.tagId), eq(schema.entityTags.entityType, "client")) as any,
+    );
     const ids = tagged.map((r) => r.entityId);
     conds.push(ids.length ? inArray(b.customerId, ids) : sql`1 = 0`);
   }
@@ -162,27 +163,46 @@ async function buildWhere(f: Filters, cid: string): Promise<any[]> {
 /*  Enrichment for export rows                                                */
 /* -------------------------------------------------------------------------- */
 async function enrichRows(rows: (typeof schema.bookings.$inferSelect)[]) {
+  // every row here already came from a query scoped to one company (see
+  // buildWhere), so it's safe to re-derive that companyId for the follow-up
+  // lookups below instead of threading a separate cid parameter through.
+  const cid = rows[0]?.companyId;
+  if (!cid) return [];
+  const t = tdb(cid);
+
   const svcIds = [...new Set(rows.map((r) => r.serviceId).filter((id): id is string => !!id))];
   const riderIds = [...new Set(rows.map((r) => r.riderId).filter(Boolean) as string[])];
   const custIds = [...new Set(rows.map((r) => r.customerId).filter((id): id is string => !!id))];
 
-  const svcMap = new Map<string, any>();
-  if (svcIds.length) (await db.select().from(schema.services).where(inArray(schema.services.id, svcIds))).forEach((s) => svcMap.set(s.id, s));
-  const riderMap = new Map<string, any>();
-  if (riderIds.length) {
-    const rs = await db.select().from(schema.riders).where(inArray(schema.riders.id, riderIds));
-    const userIds = rs.map((r) => r.userId);
-    const um = new Map<string, any>();
-    if (userIds.length) (await db.select().from(schema.user).where(inArray(schema.user.id, userIds))).forEach((u) => um.set(u.id, u));
-    rs.forEach((r) => riderMap.set(r.id, { ...r, name: um.get(r.userId)?.name, phone: um.get(r.userId)?.phone }));
-  }
-  const custMap = new Map<string, any>();
-  if (custIds.length) (await db.select().from(schema.user).where(inArray(schema.user.id, custIds))).forEach((u) => custMap.set(u.id, u));
+  const { svcMap, riderMap, custMap } = await t.transaction(async (tx) => {
+    const svcMap = new Map<string, any>();
+    if (svcIds.length) {
+      const svcRows = await tx.select().from(schema.services).where(t.scope(schema.services, inArray(schema.services.id, svcIds)) as any);
+      svcRows.forEach((s: any) => svcMap.set(s.id, s));
+    }
+    const riderMap = new Map<string, any>();
+    if (riderIds.length) {
+      const rs = await tx.select().from(schema.riders).where(t.scope(schema.riders, inArray(schema.riders.id, riderIds)) as any);
+      const userIds = rs.map((r: any) => r.userId);
+      const um = new Map<string, any>();
+      if (userIds.length) {
+        const us = await tx.select().from(schema.user).where(t.scope(schema.user, inArray(schema.user.id, userIds)) as any);
+        us.forEach((u: any) => um.set(u.id, u));
+      }
+      rs.forEach((r: any) => riderMap.set(r.id, { ...r, name: um.get(r.userId)?.name, phone: um.get(r.userId)?.phone }));
+    }
+    const custMap = new Map<string, any>();
+    if (custIds.length) {
+      const us = await tx.select().from(schema.user).where(t.scope(schema.user, inArray(schema.user.id, custIds)) as any);
+      us.forEach((u: any) => custMap.set(u.id, u));
+    }
+    return { svcMap, riderMap, custMap };
+  });
 
   return rows.map((b) => {
-    const svc = svcMap.get(b.serviceId);
+    const svc = svcMap.get(b.serviceId as any);
     const rider = b.riderId ? riderMap.get(b.riderId) : null;
-    const cust = custMap.get(b.customerId);
+    const cust = custMap.get(b.customerId as any);
     let lineItemsText = "";
     try {
       const li = JSON.parse(b.lineItems || "[]");
@@ -230,8 +250,7 @@ async function enrichRows(rows: (typeof schema.bookings.$inferSelect)[]) {
 
 async function logExport(cid: string, actor: SessionUser, format: string, count: number, filters: Filters, columns: string[]) {
   try {
-    await db.insert(schema.auditLog).values({
-      companyId: cid,
+    await tdb(cid).insert(schema.auditLog, {
       actorId: actor.id,
       actorName: actor.name || actor.email,
       action: "export",
@@ -251,16 +270,31 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   .get("/facets", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
     if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
-    const cid = tenantId(c);
-    const services = await db.select({ id: schema.services.id, name: schema.services.name }).from(schema.services).where(eq(schema.services.companyId, cid));
-    const riderRows = await db.select().from(schema.riders).where(eq(schema.riders.companyId, cid));
-    const userIds = riderRows.map((r) => r.userId);
-    const um = new Map<string, any>();
-    if (userIds.length) (await db.select().from(schema.user).where(inArray(schema.user.id, userIds))).forEach((x) => um.set(x.id, x));
-    const technicians = riderRows.map((r) => ({ id: r.id, name: um.get(r.userId)?.name ?? "Tech" }));
-    const tags = await db.select({ id: schema.tags.id, label: schema.tags.label, color: schema.tags.color }).from(schema.tags).where(and(eq(schema.tags.companyId, cid), or(eq(schema.tags.scope, "client"), eq(schema.tags.scope, "both"))) as any);
-    const regionRows = await db.selectDistinct({ region: schema.bookings.region }).from(schema.bookings).where(eq(schema.bookings.companyId, cid));
-    const regions = regionRows.map((r) => r.region).filter(Boolean).sort();
+    const t = tx(c);
+    const { services, technicians, tags, regions } = await t.transaction(async (txn) => {
+      const svcRows = await txn.select().from(schema.services).where(t.scope(schema.services) as any);
+      const riderRows = await txn.select().from(schema.riders).where(t.scope(schema.riders) as any);
+      const userIds = riderRows.map((r: any) => r.userId);
+      const um = new Map<string, any>();
+      if (userIds.length) {
+        const us = await txn.select().from(schema.user).where(t.scope(schema.user, inArray(schema.user.id, userIds)) as any);
+        us.forEach((x: any) => um.set(x.id, x));
+      }
+      const tagRows = await txn
+        .select()
+        .from(schema.tags)
+        .where(t.scope(schema.tags, or(eq(schema.tags.scope, "client"), eq(schema.tags.scope, "both")) as any) as any);
+      const regionRows = await txn
+        .selectDistinct({ region: schema.bookings.region })
+        .from(schema.bookings)
+        .where(t.scope(schema.bookings) as any);
+      return {
+        services: svcRows.map((s: any) => ({ id: s.id, name: s.name })),
+        technicians: riderRows.map((r: any) => ({ id: r.id, name: um.get(r.userId)?.name ?? "Tech" })),
+        tags: tagRows.map((tg: any) => ({ id: tg.id, label: tg.label, color: tg.color })),
+        regions: regionRows.map((r: any) => r.region).filter(Boolean).sort(),
+      };
+    });
     return c.json({
       services,
       technicians,
@@ -293,21 +327,25 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const orderCol = sortMap[sortKey] ?? schema.bookings.scheduledAt;
 
     const cid = tenantId(c);
+    const t = tx(c);
     const conds = await buildWhere(f, cid);
     const whereExpr = conds.length ? and(...conds) : undefined;
 
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(schema.bookings)
-      .where(whereExpr as any);
+    const { count, rows } = await t.transaction(async (txn) => {
+      const [{ count }] = await txn
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.bookings)
+        .where(whereExpr as any);
 
-    const rows = await db
-      .select()
-      .from(schema.bookings)
-      .where(whereExpr as any)
-      .orderBy(dir(orderCol))
-      .limit(pageSize)
-      .offset((page - 1) * pageSize);
+      const rows = await txn
+        .select()
+        .from(schema.bookings)
+        .where(whereExpr as any)
+        .orderBy(dir(orderCol))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize);
+      return { count, rows };
+    });
 
     const enriched = await enrichRows(rows);
     return c.json({ jobs: enriched, total: Number(count), page, pageSize, pages: Math.ceil(Number(count) / pageSize) }, 200);
@@ -324,9 +362,12 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const cols = pickedKeys.map((k) => COL_BY_KEY[k]);
 
     const cid = tenantId(c);
+    const t = tx(c);
     const conds = await buildWhere(f, cid);
     const whereExpr = conds.length ? and(...conds) : undefined;
-    const rows = await db.select().from(schema.bookings).where(whereExpr as any).orderBy(desc(schema.bookings.scheduledAt)).limit(10000);
+    const rows = await t.transaction((txn) =>
+      txn.select().from(schema.bookings).where(whereExpr as any).orderBy(desc(schema.bookings.scheduledAt)).limit(10000),
+    );
     const enriched = await enrichRows(rows);
 
     await logExport(cid, u, format, enriched.length, f, pickedKeys);
@@ -378,13 +419,15 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const format = (c.req.query("format") || "pdf").toLowerCase();
-    const [b] = await db.select().from(schema.bookings).where(and(eq(schema.bookings.id, id), eq(schema.bookings.companyId, tenantId(c))));
+    const cid = tenantId(c);
+    const t = tx(c);
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
     const [enriched] = await enrichRows([b]);
-    await logExport(tenantId(c), u, format, 1, { jobId: id }, JOB_COLUMNS.map((c) => c.key));
+    await logExport(cid, u, format, 1, { jobId: id }, JOB_COLUMNS.map((c) => c.key));
     const stamp = Date.now();
-    const pre = await tenantFilePrefix(tenantId(c));
-    const detailTz = await companyTimeZone(tenantId(c));
+    const pre = await tenantFilePrefix(cid);
+    const detailTz = await companyTimeZone(cid);
     const fmtDetailDate = (v: any) =>
       fmtInZone(v, detailTz, { dateStyle: "medium", timeStyle: "short" }, "en-CA", "");
 
@@ -422,19 +465,19 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     // Fetch job photos for the PDF
     let jobPhotos: JobPhoto[] = [];
     try {
-      const photoRows = await db.select().from(schema.jobPhotos).where(eq(schema.jobPhotos.bookingId, id));
+      const photoRows = await t.select(schema.jobPhotos, eq(schema.jobPhotos.bookingId, id));
       jobPhotos = photoRows.map((p: any) => ({ url: p.url, caption: p.caption ?? "" }));
     } catch { /* skip photos if query fails */ }
 
     // Tenant branding (logo + name + color) for the PDF header, and the raw
     // GPS route for a simple graphical route diagram.
-    const brandRow = await db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, tenantId(c))).then((r) => r[0]).catch(() => null);
+    const brandRow = await t.selectOne(schema.companySettings).catch(() => undefined);
     const brand = brandRow ? { name: brandRow.name, logo: brandRow.logo, brandColor: brandRow.brandColor } : null;
     let route: { lat: number; lng: number; phase: string }[] = [];
     try {
-      const pingRows = await db.select().from(schema.trackingPings).where(eq(schema.trackingPings.bookingId, id));
-      pingRows.sort((x, y) => Number(x.createdAt) - Number(y.createdAt));
-      route = pingRows.map((p) => ({ lat: p.lat, lng: p.lng, phase: p.phase }));
+      const pingRows = await t.select(schema.trackingPings, eq(schema.trackingPings.bookingId, id));
+      pingRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
+      route = pingRows.map((p: any) => ({ lat: p.lat, lng: p.lng, phase: p.phase }));
     } catch { /* skip route if query fails */ }
 
     const baseUrl = new URL(c.req.url).origin;
@@ -450,25 +493,26 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const u = c.get("user") as SessionUser;
     if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
-    const b = await db.select().from(schema.bookings).where(and(eq(schema.bookings.id, id), eq(schema.bookings.companyId, tenantId(c)))).then((r) => r[0]);
+    const t = tx(c);
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
 
-    const svc = b.serviceId ? await db.select().from(schema.services).where(eq(schema.services.id, b.serviceId)).then((r) => r[0]) : null;
-    const cust = b.customerId ? await db.select().from(schema.user).where(eq(schema.user.id, b.customerId)).then((r) => r[0]) : null;
+    const svc = b.serviceId ? await t.selectOne(schema.services, eq(schema.services.id, b.serviceId)) : undefined;
+    const cust = b.customerId ? await t.selectOne(schema.user, eq(schema.user.id, b.customerId)) : undefined;
     let rider: any = null;
     if (b.riderId) {
-      const rp = await db.select().from(schema.riders).where(eq(schema.riders.id, b.riderId)).then((r) => r[0]);
+      const rp = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
       if (rp) {
-        const ru = await db.select().from(schema.user).where(eq(schema.user.id, rp.userId)).then((r) => r[0]);
+        const ru = await t.selectOne(schema.user, eq(schema.user.id, rp.userId));
         rider = { id: rp.id, name: ru?.name, phone: ru?.phone, photoUrl: rp.photoUrl, vehicle: rp.vehicle };
       }
     }
 
-    const photoRows = await db.select().from(schema.jobPhotos).where(eq(schema.jobPhotos.bookingId, id));
-    photoRows.sort((x, y) => Number(x.createdAt) - Number(y.createdAt));
+    const photoRows = await t.select(schema.jobPhotos, eq(schema.jobPhotos.bookingId, id));
+    photoRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
 
-    const pingRows = await db.select().from(schema.trackingPings).where(eq(schema.trackingPings.bookingId, id));
-    pingRows.sort((x, y) => Number(x.createdAt) - Number(y.createdAt));
+    const pingRows = await t.select(schema.trackingPings, eq(schema.trackingPings.bookingId, id));
+    pingRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
 
     let lineItems: any[] = [];
     try {
@@ -503,8 +547,8 @@ export const jobSearchRoutes = new Hono<AppEnv>()
         transitMinutes: b.transitMinutes,
         onSiteMinutes: b.onSiteMinutes,
         mileageKm: b.mileageKm,
-        route: pingRows.map((p) => ({ lat: p.lat, lng: p.lng, phase: p.phase, createdAt: p.createdAt })),
-        photos: photoRows.map((p) => ({ id: p.id, url: p.url, caption: p.caption, createdAt: p.createdAt })),
+        route: pingRows.map((p: any) => ({ lat: p.lat, lng: p.lng, phase: p.phase, createdAt: p.createdAt })),
+        photos: photoRows.map((p: any) => ({ id: p.id, url: p.url, caption: p.caption, createdAt: p.createdAt })),
         pricing: {
           lineItems,
           subtotal: b.subtotal,
@@ -531,10 +575,9 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const u = c.get("user") as SessionUser;
     if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
-    const cid = tenantId(c);
-    await db.update(schema.bookings).set({ deletedAt: new Date() }).where(and(eq(schema.bookings.id, id), eq(schema.bookings.companyId, cid)));
-    await db.insert(schema.auditLog).values({
-      companyId: cid,
+    const t = tx(c);
+    await t.update(schema.bookings, { deletedAt: new Date() }, eq(schema.bookings.id, id));
+    await t.insert(schema.auditLog, {
       actorId: u.id, actorName: u.name || u.email, action: "delete",
       entityType: "booking", entityId: id, summary: "Archived (soft-deleted) work order", meta: "{}",
     });
@@ -546,10 +589,9 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const u = c.get("user") as SessionUser;
     if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
-    const cid = tenantId(c);
-    await db.update(schema.bookings).set({ deletedAt: null }).where(and(eq(schema.bookings.id, id), eq(schema.bookings.companyId, cid)));
-    await db.insert(schema.auditLog).values({
-      companyId: cid,
+    const t = tx(c);
+    await t.update(schema.bookings, { deletedAt: null }, eq(schema.bookings.id, id));
+    await t.insert(schema.auditLog, {
       actorId: u.id, actorName: u.name || u.email, action: "update",
       entityType: "booking", entityId: id, summary: "Restored archived work order", meta: "{}",
     });

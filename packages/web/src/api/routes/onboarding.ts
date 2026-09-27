@@ -25,6 +25,7 @@ import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { requireAdmin, tenantId } from "../middleware/auth";
 import { gateway, MODELS } from "../agent/gateway";
@@ -143,16 +144,18 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
  */
 
 async function buildOnboardingSnapshot(cid: string) {
+  // companies is GLOBAL — plain db, no RLS policy needed.
   const [company] = await db.select().from(schema.companies).where(eq(schema.companies.id, cid));
-  const [settings] = await db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, cid));
+  const t = tdb(cid);
+  const settings = await t.selectOne(schema.companySettings);
   if (!company || !settings) throw Err.notFound("Company not found");
 
   const [forms, templates, services, catalog, options] = await Promise.all([
-    db.select().from(schema.intakeForms).where(eq(schema.intakeForms.companyId, cid)),
-    db.select().from(schema.taskTemplates).where(eq(schema.taskTemplates.companyId, cid)),
-    db.select().from(schema.services).where(eq(schema.services.companyId, cid)),
-    db.select().from(schema.catalogItems).where(eq(schema.catalogItems.companyId, cid)),
-    db.select().from(schema.optionCategories).where(eq(schema.optionCategories.companyId, cid)),
+    t.select(schema.intakeForms),
+    t.select(schema.taskTemplates),
+    t.select(schema.services),
+    t.select(schema.catalogItems),
+    t.select(schema.optionCategories),
   ]);
 
   const knowledge = await loadIcpKnowledge(company.industry).catch(() => null);
@@ -269,6 +272,7 @@ export const onboardingRoutes = new Hono<AppEnv>()
     ),
     async (c) => {
       const cid = tenantId(c);
+      const t = tdb(cid);
       const { messages } = c.req.valid("json");
       const snap = await buildOnboardingSnapshot(cid);
 
@@ -419,7 +423,7 @@ other — Other (free-text business description)`;
               patch[key] = val.trim();
             }
             if (Object.keys(patch).length === 0) return { updated: [] };
-            await db.update(schema.companySettings).set(patch).where(eq(schema.companySettings.companyId, cid));
+            await t.update(schema.companySettings, patch);
             return { updated: Object.keys(patch) };
           },
         }),
@@ -463,23 +467,19 @@ other — Other (free-text business description)`;
             kind: z.enum(["service", "product"]).optional(),
           }),
           execute: async (input) => {
-            const [row] = await db
-              .insert(schema.catalogItems)
-              .values({
-                companyId: cid,
-                kind: input.kind ?? "service",
-                name: input.name.slice(0, 200),
-                category: input.category?.slice(0, 80) || "General",
-                unit: input.unit?.slice(0, 40) || "each",
-                unitCost: input.unitCost ?? 0,
-                markupPct: input.markupPct ?? 35,
-                priceMode: "auto",
-                unitPrice: 0,
-                taxable: true,
-                components: "[]",
-                active: true,
-              })
-              .returning({ id: schema.catalogItems.id });
+            const [row] = await t.insert(schema.catalogItems, {
+              kind: input.kind ?? "service",
+              name: input.name.slice(0, 200),
+              category: input.category?.slice(0, 80) || "General",
+              unit: input.unit?.slice(0, 40) || "each",
+              unitCost: input.unitCost ?? 0,
+              markupPct: input.markupPct ?? 35,
+              priceMode: "auto",
+              unitPrice: 0,
+              taxable: true,
+              components: "[]",
+              active: true,
+            });
             return { ok: Boolean(row), name: input.name };
           },
         }),
@@ -500,10 +500,7 @@ other — Other (free-text business description)`;
               .describe("e.g. 150 for 1.5x, 200 for double — only when offersEmergencyPremium is true"),
           }),
           execute: async (input) => {
-            const [row] = await db
-              .select({ qualifyingProfile: schema.companySettings.qualifyingProfile })
-              .from(schema.companySettings)
-              .where(eq(schema.companySettings.companyId, cid));
+            const row = await t.selectOne(schema.companySettings);
             let current: QualifyingProfile = {};
             try {
               current = JSON.parse(row?.qualifyingProfile || "{}");
@@ -518,10 +515,7 @@ other — Other (free-text business description)`;
               saved.push(key);
             }
             if (!saved.length) return { saved: [] };
-            await db
-              .update(schema.companySettings)
-              .set({ qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() })
-              .where(eq(schema.companySettings.companyId, cid));
+            await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
             return { saved };
           },
         }),
@@ -533,10 +527,7 @@ other — Other (free-text business description)`;
             answer: z.string().max(500),
           }),
           execute: async ({ question, answer }) => {
-            const [row] = await db
-              .select({ qualifyingProfile: schema.companySettings.qualifyingProfile })
-              .from(schema.companySettings)
-              .where(eq(schema.companySettings.companyId, cid));
+            const row = await t.selectOne(schema.companySettings);
             let current: QualifyingProfile = {};
             try {
               current = JSON.parse(row?.qualifyingProfile || "{}");
@@ -546,10 +537,7 @@ other — Other (free-text business description)`;
             const icpAnswers = Array.isArray(current.icpAnswers) ? current.icpAnswers.slice() : [];
             icpAnswers.push({ question: question.slice(0, 300), answer: answer.slice(0, 500) });
             const updated: QualifyingProfile = { ...current, icpAnswers };
-            await db
-              .update(schema.companySettings)
-              .set({ qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() })
-              .where(eq(schema.companySettings.companyId, cid));
+            await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
             return { ok: true, totalIcpAnswers: icpAnswers.length };
           },
         }),
@@ -571,10 +559,7 @@ other — Other (free-text business description)`;
             // once in a session. Never blocks finishing on failure.
             let tuning: Awaited<ReturnType<typeof applyQualifyingTuning>> | null = null;
             try {
-              const [row] = await db
-                .select({ qualifyingProfile: schema.companySettings.qualifyingProfile })
-                .from(schema.companySettings)
-                .where(eq(schema.companySettings.companyId, cid));
+              const row = await t.selectOne(schema.companySettings);
               let current: QualifyingProfile = {};
               try {
                 current = JSON.parse(row?.qualifyingProfile || "{}");
@@ -585,10 +570,7 @@ other — Other (free-text business description)`;
                 tuning = await applyQualifyingTuning(cid, current);
                 if (tuning.applied) {
                   const updated: QualifyingProfile = { ...current, tuningAppliedAt: new Date().toISOString() };
-                  await db
-                    .update(schema.companySettings)
-                    .set({ qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() })
-                    .where(eq(schema.companySettings.companyId, cid));
+                  await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
                 }
               }
             } catch (e) {
