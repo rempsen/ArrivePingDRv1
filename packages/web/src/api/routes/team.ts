@@ -1,9 +1,9 @@
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { auth } from "../auth";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   requirePermission,
   invalidateRoleCache,
@@ -11,7 +11,7 @@ import {
   tenantId,
   tx,
 } from "../middleware/auth";
-import { attachMembership, isMember, findUserByEmail, detachMembership } from "../lib/memberships";
+import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { audit } from "../lib/audit";
 import { z } from "zod";
@@ -129,28 +129,21 @@ export const teamRoutes = new Hono<AppEnv>()
     // The roster is defined by MEMBERSHIPS, not by user.companyId. A technician
     // who works for two companies appears on both rosters, with whatever role
     // they hold at each. Reading user.companyId here would only ever show them
-    // on their default company's list.
-    const members = await db
-      .select()
-      .from(schema.memberships)
-      .where(eq(schema.memberships.companyId, cid));
-    const byUserId = new Map(members.map((m) => [m.userId, m]));
-    const allUsers = await db.select().from(schema.user);
-    const rows = allUsers.filter((u) => byUserId.has(u.id));
-    const internal = rows.filter((u) =>
-      INTERNAL.includes(byUserId.get(u.id)?.role ?? u.role ?? ""),
-    );
+    // on their default company's list. usersForCompany() already does the
+    // membership-join + shared-user overlay correctly and tenant-scoped.
+    const rows = await usersForCompany(cid);
+    const internal = rows.filter((u) => INTERNAL.includes(u.role ?? ""));
     const riderRows = await tx(c).select(schema.riders);
     const riderByUser = new Map(riderRows.map((r) => [r.userId, r]));
     const roleDefaults = await loadRoleDefaults();
     return c.json({
       employees: internal.map((u) => {
         const rd = riderByUser.get(u.id);
-        const m = byUserId.get(u.id);
-        // Role/permissions come from the membership — this is what makes the
-        // same person a technician here and a manager somewhere else.
-        const role = m?.role ?? u.role ?? "";
-        const perms = m?.permissions ?? u.permissions;
+        // usersForCompany() already overlays the membership's role/perms/
+        // staffType/managerId onto `u` — this is what makes the same person a
+        // technician here and a manager somewhere else.
+        const role = u.role ?? "";
+        const perms = u.permissions;
         return {
           id: u.id,
           name: u.name,
@@ -158,14 +151,14 @@ export const teamRoutes = new Hono<AppEnv>()
           phone: u.phone ?? "",
           role,
           roleLabel: ROLE_LABELS[role] ?? role,
-          staffType: m?.staffType ?? u.staffType ?? (role === "rider" ? "technician" : null),
-          managerId: m?.managerId ?? null,
+          staffType: u.staffType ?? (role === "rider" ? "technician" : null),
+          managerId: u.managerId ?? null,
           hasOverride: !!perms,
           permissions: Array.from(resolvePerms({ role, permissions: perms }, roleDefaults)),
           riderId: rd?.id ?? null,
           // Shown in the UI so an admin knows this person also works elsewhere.
-          membershipStatus: m?.status ?? "active",
-          isShared: u.companyId !== cid,
+          membershipStatus: u.membershipStatus ?? "active",
+          isShared: u.isShared,
           createdAt: u.createdAt,
         };
       }),
@@ -197,7 +190,7 @@ export const teamRoutes = new Hono<AppEnv>()
     // company would leak this employee into that company's org chart, and
     // checking after signUpEmail() left an orphaned login behind on rejection.
     if (managerId) {
-      const [mgr] = await db.select().from(schema.user).where(eq(schema.user.id, managerId));
+      const mgr = await tx(c).selectOne(schema.user, eq(schema.user.id, managerId));
       if (!mgr || !(await isMember(managerId, company)))
         return c.json({ message: "Manager not found" }, 400);
     }
@@ -224,10 +217,7 @@ export const teamRoutes = new Hono<AppEnv>()
       // Field staff still need a rider profile at THIS company so they appear
       // on this company's map and scheduler. It's separate per company.
       if (role === FIELD_STAFF_ROLE) {
-        const [existingRider] = await db
-          .select()
-          .from(schema.riders)
-          .where(and(eq(schema.riders.userId, existing.id), eq(schema.riders.companyId, company)));
+        const existingRider = await tx(c).selectOne(schema.riders, eq(schema.riders.userId, existing.id));
         if (!existingRider) {
           await tx(c).insert(schema.riders, {
             userId: existing.id,
@@ -269,18 +259,19 @@ export const teamRoutes = new Hono<AppEnv>()
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
     }
-    const [u] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.email, email));
+    const u = await findUserByEmail(email);
     if (!u) return c.json({ message: "Failed to create user" }, 500);
 
-    // stamp the new employee with the creating admin's company
+    // stamp the new employee with the creating admin's company. This is the
+    // first-time assignment of their HOME company on a brand-new login, so it
+    // must run on the BYPASSRLS system connection: tdb()'s update() strips
+    // companyId from every patch by design (you can't reassign someone's home
+    // company through the normal tenant-scoped path).
     const set: Record<string, any> = { role, phone: phone ?? "", companyId: company };
     if (role === FIELD_STAFF_ROLE)
       set.staffType = staffType === "driver" ? "driver" : "technician";
     if (managerId) set.managerId = managerId;
-    await db.update(schema.user).set(set).where(eq(schema.user.id, u.id));
+    await sdb.update(schema.user).set(set).where(eq(schema.user.id, u.id));
 
     // The membership is what actually grants them their role at this company.
     await attachMembership({
@@ -314,18 +305,16 @@ export const teamRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const b = c.req.valid("json");
     const me = c.get("user") as SessionUser;
-    const [target] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, id));
-    if (!target) return c.json({ message: "Not found" }, 404);
     const cid = tenantId(c);
-    const [membership] = await db
-      .select()
-      .from(schema.memberships)
-      .where(
-        and(eq(schema.memberships.userId, id), eq(schema.memberships.companyId, cid)),
-      );
+    // tdb()'s `user` predicate is home OR active/invited membership at cid,
+    // which is exactly "on your roster" — the membership lookup right after
+    // is what actually confirms and gives us the per-company role.
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
+    if (!target) return c.json({ message: "Not found" }, 404);
+    const membership = await tx(c).selectOne(
+      schema.memberships,
+      eq(schema.memberships.userId, id),
+    );
     if (!membership) return c.json({ message: "Not found" }, 404);
     // Their role AT THIS COMPANY governs what this admin may change.
     const targetRole = membership.role ?? target.role;
@@ -340,10 +329,10 @@ export const teamRoutes = new Hono<AppEnv>()
     }
     // A duplicate email hit the unique index and surfaced as a bare 500.
     if (updates.email && updates.email !== target.email) {
-      const [clash] = await db
-        .select()
-        .from(schema.user)
-        .where(eq(schema.user.email, updates.email as string));
+      // Global email-uniqueness check — the clashing account, if any, could
+      // belong to a completely different tenant, so this has to run outside
+      // tenant scope.
+      const clash = await findUserByEmail(updates.email as string);
       if (clash && clash.id !== id) return c.json({ message: "Email already in use" }, 409);
     }
     if (b.role !== undefined) {
@@ -364,7 +353,7 @@ export const teamRoutes = new Hono<AppEnv>()
     if (b.managerId !== undefined) {
       if (b.managerId) {
         if (b.managerId === id) return c.json({ message: "Someone can't be their own manager" }, 400);
-        const [mgr] = await db.select().from(schema.user).where(eq(schema.user.id, b.managerId));
+        const mgr = await tx(c).selectOne(schema.user, eq(schema.user.id, b.managerId));
         if (!mgr || !(await isMember(b.managerId, cid)))
           return c.json({ message: "Manager not found" }, 400);
       }
@@ -379,10 +368,11 @@ export const teamRoutes = new Hono<AppEnv>()
     if (updates.managerId !== undefined) membershipUpdates.managerId = updates.managerId;
     if (Object.keys(membershipUpdates).length) {
       membershipUpdates.updatedAt = new Date();
-      await db
-        .update(schema.memberships)
-        .set(membershipUpdates)
-        .where(eq(schema.memberships.id, membership.id));
+      await tx(c).update(
+        schema.memberships,
+        membershipUpdates,
+        eq(schema.memberships.id, membership.id),
+      );
     }
 
     const identityUpdates: Record<string, any> = {};
@@ -394,7 +384,9 @@ export const teamRoutes = new Hono<AppEnv>()
       // Letting a company they merely contract for rename them (or change the
       // email they sign in with) would reach into another tenant's data, so a
       // shared person's identity is only editable by their home company.
-      const others = await db
+      // Cross-tenant: how many companies total, not just this one — must
+      // bypass tenant scope to see memberships at other companies.
+      const others = await sdb
         .select()
         .from(schema.memberships)
         .where(eq(schema.memberships.userId, id));
@@ -407,7 +399,7 @@ export const teamRoutes = new Hono<AppEnv>()
           403,
         );
       }
-      await db.update(schema.user).set(identityUpdates).where(eq(schema.user.id, id));
+      await tx(c).update(schema.user, identityUpdates, eq(schema.user.id, id));
     }
 
     // Keep the legacy columns on the user row in step for their HOME company so
@@ -415,7 +407,7 @@ export const teamRoutes = new Hono<AppEnv>()
     if (target.companyId === cid && Object.keys(membershipUpdates).length) {
       const legacy = { ...membershipUpdates };
       delete legacy.updatedAt;
-      await db.update(schema.user).set(legacy).where(eq(schema.user.id, id));
+      await tx(c).update(schema.user, legacy, eq(schema.user.id, id));
     }
 
     // Who granted whom admin/superadmin, and when. This is the first entry an
@@ -458,14 +450,12 @@ export const teamRoutes = new Hono<AppEnv>()
   .post("/:id/resend-invite", requirePermission("techs:create"), async (c) => {
     const id = c.req.param("id");
     const cid = tenantId(c);
-    const [target] = await db.select().from(schema.user).where(eq(schema.user.id, id));
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     if (!target) return c.json({ message: "Not found" }, 404);
-    const [membership] = await db
-      .select()
-      .from(schema.memberships)
-      .where(
-        and(eq(schema.memberships.userId, id), eq(schema.memberships.companyId, cid)),
-      );
+    const membership = await tx(c).selectOne(
+      schema.memberships,
+      eq(schema.memberships.userId, id),
+    );
     // 404 (not 403) for a non-member: never confirm to one company that a
     // person exists on another company's roster.
     if (!membership) return c.json({ message: "Not found" }, 404);
@@ -491,19 +481,14 @@ export const teamRoutes = new Hono<AppEnv>()
     const me = c.get("user") as SessionUser;
     if (me.id === id)
       return c.json({ message: "You cannot delete your own account" }, 400);
-    const [target] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, id));
-    if (!target) return c.json({ message: "Not found" }, 404);
     const cid = tenantId(c);
     // tenant guard: can only manage people who are on YOUR roster
-    const [membership] = await db
-      .select()
-      .from(schema.memberships)
-      .where(
-        and(eq(schema.memberships.userId, id), eq(schema.memberships.companyId, cid)),
-      );
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
+    if (!target) return c.json({ message: "Not found" }, 404);
+    const membership = await tx(c).selectOne(
+      schema.memberships,
+      eq(schema.memberships.userId, id),
+    );
     if (!membership) return c.json({ message: "Not found" }, 404);
 
     const targetRole = membership.role ?? target.role;
@@ -511,20 +496,20 @@ export const teamRoutes = new Hono<AppEnv>()
     if (isAdminRole(targetRole) && !isSuperadmin(me.role))
       return c.json({ message: "Only a superadmin can delete admin-level accounts" }, 403);
     if (isAdminRole(targetRole)) {
-      // don't allow removing the last admin-tier member of this company
-      const admins = (
-        await db
-          .select()
-          .from(schema.memberships)
-          .where(eq(schema.memberships.companyId, cid))
-      ).filter((m) => isAdminRole(m.role) && m.status === "active");
+      // don't allow removing the last admin-tier member of this company.
+      // tx(c).select() is already scoped to companyId = cid, no extra filter needed.
+      const admins = (await tx(c).select(schema.memberships)).filter(
+        (m) => isAdminRole(m.role) && m.status === "active",
+      );
       if (admins.length <= 1)
         return c.json({ message: "Cannot delete the last admin" }, 400);
     }
 
-    // How many companies does this person work for? This decides whether we're
-    // removing a relationship or deleting a human.
-    const all = await db
+    // How many companies does this person work for, total? This decides
+    // whether we're removing a relationship or deleting a human — it must
+    // see memberships at every company, not just this one, so it runs
+    // cross-tenant.
+    const all = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.userId, id));
@@ -548,8 +533,11 @@ export const teamRoutes = new Hono<AppEnv>()
     }
 
     // This was their only company — safe to delete the account outright.
-    // The membership row cascades with the user.
-    await db.delete(schema.user).where(eq(schema.user.id, id));
+    // The membership row cascades with the user. Their membership at cid
+    // still exists at this point (only riders were removed above), so the
+    // tenant `user` predicate (home OR EXISTS membership at cid) still
+    // matches this row.
+    await tx(c).delete(schema.user, eq(schema.user.id, id));
     return c.json({ ok: true, removedFromCompany: true, deletedAccount: true });
   })
 
@@ -557,25 +545,20 @@ export const teamRoutes = new Hono<AppEnv>()
   .put("/:id/permissions", requirePermission("permissions:manage"), jsonBody(PermissionsBody), async (c) => {
     const id = c.req.param("id");
     const b = c.req.valid("json");
-    const [target] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, id));
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     if (!target) return c.json({ message: "Not found" }, 404);
     if (target.companyId !== tenantId(c)) return c.json({ message: "Not found" }, 404);
     // null/undefined => clear override (revert to role defaults)
     if (b.permissions == null) {
-      await db
-        .update(schema.user)
-        .set({ permissions: null })
-        .where(eq(schema.user.id, id));
+      await tx(c).update(schema.user, { permissions: null }, eq(schema.user.id, id));
       return c.json({ ok: true, cleared: true });
     }
     const perms = sanitizePerms(b.permissions);
-    await db
-      .update(schema.user)
-      .set({ permissions: JSON.stringify(perms) })
-      .where(eq(schema.user.id, id));
+    await tx(c).update(
+      schema.user,
+      { permissions: JSON.stringify(perms) },
+      eq(schema.user.id, id),
+    );
     return c.json({ ok: true, permissions: perms });
   })
 
@@ -587,17 +570,19 @@ export const teamRoutes = new Hono<AppEnv>()
     const b = c.req.valid("json");
     const perms = sanitizePerms(b.permissions);
     const now = new Date();
-    const [existing] = await db
+    // role_permissions is a GLOBAL table (see tenant.ts's GLOBAL_TABLES) —
+    // no tenant scoping applies, sdb is just the plain connection here.
+    const [existing] = await sdb
       .select()
       .from(schema.rolePermissions)
       .where(eq(schema.rolePermissions.role, role));
     if (existing) {
-      await db
+      await sdb
         .update(schema.rolePermissions)
         .set({ perms: JSON.stringify(perms), updatedAt: now })
         .where(eq(schema.rolePermissions.role, role));
     } else {
-      await db
+      await sdb
         .insert(schema.rolePermissions)
         .values({ role, perms: JSON.stringify(perms), updatedAt: now });
     }
@@ -608,7 +593,8 @@ export const teamRoutes = new Hono<AppEnv>()
 /** Seed role_permissions with industry defaults if empty. */
 export async function seedRolePermissions() {
   try {
-    const rows = await db.select().from(schema.rolePermissions);
+    // GLOBAL table — no tenant scoping applies.
+    const rows = await sdb.select().from(schema.rolePermissions);
     if (rows.length > 0) return;
     const now = new Date();
     const vals = INTERNAL_ROLES.filter((r) => !isAdminRole(r)).map((r) => ({
@@ -616,7 +602,7 @@ export async function seedRolePermissions() {
       perms: JSON.stringify(DEFAULT_ROLE_PERMS[r] ?? []),
       updatedAt: now,
     }));
-    if (vals.length) await db.insert(schema.rolePermissions).values(vals);
+    if (vals.length) await sdb.insert(schema.rolePermissions).values(vals);
   } catch (e) {
     console.error("seedRolePermissions failed", e);
   }
