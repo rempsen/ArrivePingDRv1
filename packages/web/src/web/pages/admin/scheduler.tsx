@@ -736,9 +736,12 @@ export default function SchedulerPage() {
                     const dayKey = d.toISOString().slice(0, 10);
                     const isToday = sameDay(d, today);
                     return (
+                      // day column is a click/drag-drop time-slot target, not a
+                      // keyboard-navigable control on its own — every job it contains
+                      // is already its own focusable, keyboard-operable element.
+                      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
                       <div
                         key={i}
-                        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
                         onClick={(e) => {
                           if (e.target !== e.currentTarget || calDragId) return;
                           const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);

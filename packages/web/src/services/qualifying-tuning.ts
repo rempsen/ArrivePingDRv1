@@ -54,7 +54,7 @@ function round2(n: number): number {
 
 function parseRateModel(json: string | null | undefined): RateModel {
   try {
-    return { ...EMPTY_RATE_MODEL, ...(JSON.parse(json || "") || {}) };
+    return { ...EMPTY_RATE_MODEL, ...JSON.parse(json || "") };
   } catch {
     return { ...EMPTY_RATE_MODEL };
   }

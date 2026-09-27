@@ -449,6 +449,11 @@ export default function CompaniesPage() {
           </p>
           <Field label={`Type "${deleteTarget?.name ?? ""}" to confirm`}>
             <input
+              aria-label={`Type "${deleteTarget?.name ?? ""}" to confirm deletion`}
+              // deliberate focus management: this input only exists inside the delete
+              // confirmation dialog the user just opened, so moving focus into it is
+              // expected, not a surprise page-load focus grab.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
               className={inputCls}
               value={deleteConfirmName}

@@ -98,8 +98,6 @@ export function ClientCombobox({
         <input
           ref={inputRef}
           aria-label={`Search ${noun.toLowerCase()}s`}
-          role="combobox"
-          aria-expanded={open}
           className={`${inputCls} pl-9 ${selected && !open ? "pr-9" : ""}`}
           placeholder={selected && !open ? undefined : `Search ${noun.toLowerCase()}s by name or email…`}
           value={open ? query : selected ? `${selected.name}${selected.email ? ` — ${selected.email}` : ""}` : ""}
