@@ -174,7 +174,7 @@ export async function pushLiveActivityJobUpdate(booking: {
     event: isComplete ? "end" : "update",
     contentState: {
       // Brand is carried by the logo badge now — keep in sync with client-side
-      // buildState() in lib/useLiveActivity.ts (no redundant "NVC360 ·" prefix).
+      // buildState() in lib/useLiveActivity.ts (no redundant "ArrivePing ·" prefix).
       title: label,
       subtitle: booking.customerName
         ? `${booking.customerName} · ${booking.address ?? ""}`

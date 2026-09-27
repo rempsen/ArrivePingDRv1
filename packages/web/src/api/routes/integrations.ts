@@ -236,7 +236,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
   // POST /api/integrations/drive/export  body: { dataset, format }
   // dataset ∈ work-orders | technicians | clients | invoices ; format ∈ csv | xlsx
   // Tenant-scoped end to end: the data comes from tx(c) (this company only) and
-  // lands in the company's own connected Google Drive ("NVC360 Backups" folder).
+  // lands in the company's own connected Google Drive ("ArrivePing Backups" folder).
   .post("/drive/export", requireAuth, jsonBody(DriveExportBody), async (c) => {
     const t = tx(c);
     const body = c.req.valid("json");

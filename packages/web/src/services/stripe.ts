@@ -28,7 +28,7 @@ export function getStripe(): Stripe {
       // moving it is an API-behaviour change, not a types change.
       apiVersion: "2025-09-30.clover" as NonNullable<ConstructorParameters<typeof Stripe>[1]>["apiVersion"],
       typescript: true,
-      appInfo: { name: "NVC360", version: "1.0.0" },
+      appInfo: { name: "ArrivePing", version: "1.0.0" },
     });
     log.info("stripe client initialized", { livemode: SECRET.startsWith("sk_live") });
   }

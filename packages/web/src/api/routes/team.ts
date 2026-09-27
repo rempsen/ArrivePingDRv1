@@ -255,7 +255,7 @@ export const teamRoutes = new Hono<AppEnv>()
           existingAccount: true,
           status: "invited",
           message:
-            "That email already has an NVC360 login. We've invited them to join your company — they'll keep their existing password.",
+            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
         },
         201,
       );
@@ -543,7 +543,7 @@ export const teamRoutes = new Hono<AppEnv>()
         removedFromCompany: true,
         deletedAccount: false,
         message:
-          "Removed from your company. Their NVC360 login stays active because they also work for another company.",
+          "Removed from your company. Their ArrivePing login stays active because they also work for another company.",
       });
     }
 

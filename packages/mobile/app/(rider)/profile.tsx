@@ -169,7 +169,7 @@ export default function Profile() {
           await unregisterPushToken().catch(() => {});
           await stopLocationSharing().catch(() => {});
           // A signed-out phone must go fully dark: end any Live Activity too,
-          // or the Dynamic Island keeps showing NVC360 job status to whoever
+          // or the Dynamic Island keeps showing ArrivePing job status to whoever
           // holds the phone next, and iOS keeps treating us as having live
           // background content.
           await endAllLiveActivities().catch(() => {});
@@ -262,7 +262,7 @@ export default function Profile() {
                 <Text style={s.availTitle}>Face ID / Fingerprint Lock</Text>
                 <Text style={s.availSub}>
                   {biometric.data.enabled
-                    ? "Unlock NVC360 with Face ID or your fingerprint once a day."
+                    ? "Unlock ArrivePing with Face ID or your fingerprint once a day."
                     : "Off — the app opens without unlocking."}
                 </Text>
               </View>
@@ -367,7 +367,7 @@ export default function Profile() {
         </Card>
 
         <Button title="Sign out" variant="danger" icon={<SignOut color="#fff" size={18} weight="bold" />} onPress={signOut} />
-        <Text style={s.foot}>NVC360 Technician · v1.0</Text>
+        <Text style={s.foot}>ArrivePing Technician · v1.0</Text>
       </ScrollView>
     </SafeAreaView>
   );

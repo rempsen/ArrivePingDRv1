@@ -67,7 +67,7 @@ export async function forwardGeocode(address: string): Promise<GeocodeHit | null
   url.searchParams.set("q", q);
   url.searchParams.set("format", "json");
   url.searchParams.set("limit", "1");
-  const data = await fetchJson(url, { "User-Agent": "NVC360/1.0" });
+  const data = await fetchJson(url, { "User-Agent": "ArrivePing/1.0" });
   const hit = Array.isArray(data) ? data[0] : null;
   const lat = hit ? parseFloat(hit.lat) : NaN;
   const lng = hit ? parseFloat(hit.lon) : NaN;

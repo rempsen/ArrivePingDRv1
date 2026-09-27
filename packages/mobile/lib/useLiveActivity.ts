@@ -1,5 +1,5 @@
 /**
- * useLiveActivity — NVC360 Driver Live Activity / Dynamic Island integration
+ * useLiveActivity — ArrivePing Driver Live Activity / Dynamic Island integration
  *
  * Manages a single iOS Live Activity for the current active job.
  * - Starts when driver accepts (assigned) or begins driving (enroute)
@@ -20,7 +20,7 @@
  * signing out, or the app being closed — the id was gone and there was no
  * longer any way to call `stopActivity(id, ...)`. The result was exactly what
  * Dan saw: a driver with no jobs left, signed out and app closed, still had an
- * NVC360 activity sitting in the Dynamic Island, and iOS kept the app
+ * ArrivePing activity sitting in the Dynamic Island, and iOS kept the app
  * registered as having live background content.
  *
  * So every id we start is written to SecureStore, and `endAllLiveActivities()`
@@ -100,7 +100,7 @@ function buildState(job: LiveActivityJobState) {
     : undefined;
 
   return {
-    // Brand is carried by the logo badge now — no redundant "NVC360 ·" prefix in the title.
+    // Brand is carried by the logo badge now — no redundant "ArrivePing ·" prefix in the title.
     title: label,
     subtitle: job.clientName ? `${job.clientName} · ${job.address}` : job.address,
     progressBar: etaMs

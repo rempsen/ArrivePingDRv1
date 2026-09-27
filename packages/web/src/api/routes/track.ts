@@ -501,7 +501,7 @@ export const trackRoutes = new Hono<AppEnv>()
               : body;
           await sendSms(
             techPhone,
-            `NVC360: Message from ${who}: "${preview}" — Reply: ${trackingUrl(b.publicToken)}`,
+            `ArrivePing: Message from ${who}: "${preview}" — Reply: ${trackingUrl(b.publicToken)}`,
           ).catch(() => {});
         }
       }

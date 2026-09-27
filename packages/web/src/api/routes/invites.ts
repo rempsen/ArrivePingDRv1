@@ -53,7 +53,7 @@ async function companyName(companyId: string): Promise<string> {
     .select()
     .from(schema.companySettings)
     .where(eq(schema.companySettings.companyId, companyId));
-  return co?.name || "NVC360";
+  return co?.name || "ArrivePing";
 }
 
 async function companyBrand(companyId: string): Promise<{ name: string; workerNoun: string }> {
@@ -61,7 +61,7 @@ async function companyBrand(companyId: string): Promise<{ name: string; workerNo
     .select()
     .from(schema.companySettings)
     .where(eq(schema.companySettings.companyId, companyId));
-  return { name: co?.name || "NVC360", workerNoun: co?.workerNoun || "Technician" };
+  return { name: co?.name || "ArrivePing", workerNoun: co?.workerNoun || "Technician" };
 }
 
 export const invitesRoutes = new Hono<AppEnv>()
@@ -77,7 +77,7 @@ export const invitesRoutes = new Hono<AppEnv>()
     const b = c.req.valid("json");
     const [exists] = await db.select().from(schema.user).where(eq(schema.user.email, b.email));
     if (exists) {
-      // They already have an NVC360 login — probably a contract technician who
+      // They already have an ArrivePing login — probably a contract technician who
       // works for another company. Don't ask them to create a second account
       // (and don't let this company set a password for them). Invite them to
       // join with the login they already have.
@@ -103,7 +103,7 @@ export const invitesRoutes = new Hono<AppEnv>()
           existingAccount: true,
           status: "invited",
           message:
-            "That email already has an NVC360 login. We've invited them to join your company — they'll keep their existing password.",
+            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
         },
         201,
       );

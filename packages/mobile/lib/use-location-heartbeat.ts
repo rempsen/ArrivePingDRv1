@@ -167,7 +167,7 @@ async function startBackgroundUpdates() {
       pausesUpdatesAutomatically: false,
       // Keeps the OS from killing updates; shows the system location banner.
       foregroundService: {
-        notificationTitle: "NVC360 is sharing your location",
+        notificationTitle: "ArrivePing is sharing your location",
         notificationBody: "Your live location is visible to dispatch while on shift.",
         notificationColor: "#0ea5e9",
       },

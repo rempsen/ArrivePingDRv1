@@ -1,4 +1,4 @@
-// NVC360 dark brand — mirrors web (@theme in styles.css)
+// ArrivePing dark brand — mirrors web (@theme in styles.css)
 export const C = {
   brand: "#0ea5e9",
   brandDeep: "#0369a1",

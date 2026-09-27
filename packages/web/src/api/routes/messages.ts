@@ -803,7 +803,7 @@ export const messagesRoutes = new Hono<AppEnv>()
           const from =
             roleLabel(u.role) === "tech" ? u.name || "Your technician" : "Dispatch";
           const trackLink = token ? ` Track & reply: ${trackingUrl(token)}` : "";
-          await sendSms(phone, `NVC360: ${from}: "${body}"${trackLink}`).catch(() => {});
+          await sendSms(phone, `ArrivePing: ${from}: "${body}"${trackLink}`).catch(() => {});
         }
       } else {
         if (b.riderId) {
@@ -836,7 +836,7 @@ export const messagesRoutes = new Hono<AppEnv>()
               const who = m.senderName || "Customer";
               await sendSms(
                 techPhone,
-                `NVC360: Customer ${who}: "${body}" — View: ${trackingUrl(b.publicToken)}`,
+                `ArrivePing: Customer ${who}: "${body}" — View: ${trackingUrl(b.publicToken)}`,
               ).catch(() => {});
             }
           }

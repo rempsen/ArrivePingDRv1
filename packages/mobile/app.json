@@ -36,10 +36,10 @@
           "location",
           "remote-notification"
         ],
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "NVC360 shares your live location with dispatch while you are on shift so customers can be given accurate ETAs.",
-        "NSLocationWhenInUseUsageDescription": "NVC360 shares your live location during active jobs.",
-        "NSMicrophoneUsageDescription": "NVC360 records short voice notes so you can dictate job details to the office instead of typing on site.",
-        "NSFaceIDUsageDescription": "NVC360 uses Face ID to quickly and securely unlock the app.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ArrivePing shares your live location with dispatch while you are on shift so customers can be given accurate ETAs.",
+        "NSLocationWhenInUseUsageDescription": "ArrivePing shares your live location during active jobs.",
+        "NSMicrophoneUsageDescription": "ArrivePing records short voice notes so you can dictate job details to the office instead of typing on site.",
+        "NSFaceIDUsageDescription": "ArrivePing uses Face ID to quickly and securely unlock the app.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
@@ -64,8 +64,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow NVC360 to share your live location with dispatch while you are on shift.",
-          "locationWhenInUsePermission": "Allow NVC360 to share your live location during active jobs.",
+          "locationAlwaysAndWhenInUsePermission": "Allow ArrivePing to share your live location with dispatch while you are on shift.",
+          "locationWhenInUsePermission": "Allow ArrivePing to share your live location during active jobs.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
@@ -80,8 +80,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow NVC360 to access your photos to upload job and profile images.",
-          "cameraPermission": "Allow NVC360 to use the camera to capture job photos."
+          "photosPermission": "Allow ArrivePing to access your photos to upload job and profile images.",
+          "cameraPermission": "Allow ArrivePing to use the camera to capture job photos."
         }
       ],
       "expo-secure-store",

@@ -191,7 +191,7 @@
 .leaflet-tooltip.nvc-tip::before { display: none; }
 .leaflet-tooltip.nvc-tip b { color: #fff; }
 
-/* NVC360 dark utilities */
+/* ArrivePing dark utilities */
 .nvc-grid-bg {
   background-image:
     radial-gradient(circle at 50% 0%, rgba(14,165,233,0.10), transparent 55%),

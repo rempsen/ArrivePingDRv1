@@ -38,7 +38,7 @@ export async function toXlsx(
   title?: string,
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "NVC360";
+  wb.creator = "ArrivePing";
   const ws = wb.addWorksheet(sheetName.replace(/[\\/?*[\]:]/g, " ").slice(0, 28) || "Report");
 
   // column widths

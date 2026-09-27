@@ -35,7 +35,7 @@ export default function Onboarding() {
     <SafeAreaView style={s.safe} edges={["top", "left", "right", "bottom"]}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <Text style={s.title}>Before you get started</Text>
-        <Text style={s.sub}>NVC360 will ask you to allow a few things — here's why.</Text>
+        <Text style={s.sub}>ArrivePing will ask you to allow a few things — here's why.</Text>
 
         <View style={s.item}>
           <View style={s.iconWrap}>

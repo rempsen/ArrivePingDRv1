@@ -775,7 +775,7 @@ function EmailBrandCard({ f, set }: { f: any; set: (k: string, v: any) => void }
 /* ---------------- Email sender identity card (per-tenant From/Reply-to + test send) ---------------- */
 function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: string, v: any) => void; onSave: () => void; saving: boolean; dirty: boolean }) {
   const qc = useQueryClient();
-  const [testTo, setTestTo] = useState("dan@nvc360.com");
+  const [testTo, setTestTo] = useState("dan@arriveping.com");
   const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [newDomain, setNewDomain] = useState("");
   const [domErr, setDomErr] = useState<string | null>(null);
@@ -859,8 +859,8 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
       <p className="mb-3 text-xs text-slate-500">Controls the From name, address and Reply-to on every outgoing email for this company.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="From name"><input aria-label="ArrivePing by NVC360" className={inputCls} value={f.emailFromName ?? ""} onChange={(e) => set("emailFromName", e.target.value)} placeholder="ArrivePing by NVC360" /></Field>
-        <Field label="From address"><input aria-label="contact@nvc360.com" className={inputCls} value={f.emailFromAddress ?? ""} onChange={(e) => set("emailFromAddress", e.target.value)} placeholder="contact@nvc360.com" /></Field>
-        <Field label="Reply-to"><input aria-label="contact@nvc360.com" className={inputCls} value={f.emailReplyTo ?? ""} onChange={(e) => set("emailReplyTo", e.target.value)} placeholder="contact@nvc360.com" /></Field>
+        <Field label="From address"><input aria-label="contact@arriveping.com" className={inputCls} value={f.emailFromAddress ?? ""} onChange={(e) => set("emailFromAddress", e.target.value)} placeholder="contact@arriveping.com" /></Field>
+        <Field label="Reply-to"><input aria-label="contact@arriveping.com" className={inputCls} value={f.emailReplyTo ?? ""} onChange={(e) => set("emailReplyTo", e.target.value)} placeholder="contact@arriveping.com" /></Field>
         <Field label="Footer line"><input aria-label="ArrivePing by NVC360 · 423 Main St, Winnipeg" className={inputCls} value={f.emailFooter ?? ""} onChange={(e) => set("emailFooter", e.target.value)} placeholder="ArrivePing by NVC360 · 423 Main St, Winnipeg" /></Field>
       </div>
 
@@ -978,12 +978,12 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
       <div className="mt-4 border-t border-white/5 pt-4">
         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send a test</div>
         <div className="flex flex-wrap items-center gap-2">
-          <input aria-label="dan@nvc360.com"
+          <input aria-label="dan@arriveping.com"
             className={`${inputCls} max-w-xs flex-1`}
             type="email"
             value={testTo}
             onChange={(e) => { setTestTo(e.target.value); setTestMsg(null); }}
-            placeholder="dan@nvc360.com"
+            placeholder="dan@arriveping.com"
           />
           <BtnGhost
             onClick={async () => { if (dirty) onSave(); sendTest.mutate(); }}

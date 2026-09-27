@@ -218,7 +218,7 @@ export const ridersRoutes = new Hono<AppEnv>()
     const cid = tenantId(c);
     const existing = await findUserByEmail(email);
 
-    // A technician who already has an NVC360 login (because they work for
+    // A technician who already has an ArrivePing login (because they work for
     // another company) is INVITED, never re-created — and this company never
     // sets a password for them. See lib/memberships.ts for why.
     if (existing) {
@@ -262,7 +262,7 @@ export const ridersRoutes = new Hono<AppEnv>()
           existingAccount: true,
           status: "invited",
           message:
-            "That email already has an NVC360 login. We've invited them to join your company — they'll keep their existing password.",
+            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
         },
         201,
       );

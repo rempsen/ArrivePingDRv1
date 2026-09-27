@@ -209,7 +209,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
           currency: inv.currency,
           automatic_payment_methods: { enabled: true },
           metadata: { invoiceId: inv.id, bookingId, customerId: u.id, number: inv.number },
-          description: `NVC360 invoice ${inv.number}`,
+          description: `ArrivePing invoice ${inv.number}`,
         },
         { idempotencyKey: idemKey },
       );

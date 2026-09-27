@@ -662,7 +662,7 @@ export default function JobDetail() {
         // iOS never re-prompts once denied — Settings is the only way back.
         Alert.alert(
           "Microphone is turned off",
-          "Turn on Microphone for NVC360 in iPhone Settings to record voice notes.",
+          "Turn on Microphone for ArrivePing in iPhone Settings to record voice notes.",
           [
             { text: "Not now", style: "cancel" },
             { text: "Open Settings", onPress: () => Linking.openSettings() },
@@ -841,7 +841,7 @@ export default function JobDetail() {
                 <Warning color={C.amber} size={16} weight="fill" />
                 <Text style={s.pingWarnTxt}>
                   Dispatch isn't receiving your location. Check your signal and that Location is on
-                  for NVC360 — the office and the {customerNoun.toLowerCase()} are seeing an old
+                  for ArrivePing — the office and the {customerNoun.toLowerCase()} are seeing an old
                   position.
                 </Text>
               </View>

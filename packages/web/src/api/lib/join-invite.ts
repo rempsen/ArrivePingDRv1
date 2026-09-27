@@ -3,7 +3,7 @@
  *
  * Distinct from the existing technician invite (routes/invites.ts), which
  * creates a brand-new login and asks the person to set a password. This one is
- * for someone who ALREADY has an NVC360 login and is being added to another
+ * for someone who ALREADY has an ArrivePing login and is being added to another
  * company's roster. There is no password step at all — they accept with the
  * credentials they already have, which is exactly what keeps the second company
  * from gaining control of their existing account.
@@ -26,7 +26,7 @@ async function companyDisplayName(companyId: string): Promise<string> {
     .select()
     .from(schema.companies)
     .where(eq(schema.companies.id, companyId));
-  return reg?.name || "NVC360";
+  return reg?.name || "ArrivePing";
 }
 
 export async function sendJoinCompanyInvite(a: {
@@ -57,10 +57,10 @@ export async function sendJoinCompanyInvite(a: {
       <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:24px">
         <h2 style="margin:0 0 10px;color:#0f172a">You've been added to ${company}</h2>
         <p style="font-size:14px;color:#334155;line-height:1.6">
-          Hi${a.name ? " " + a.name : ""}, <b>${company}</b> would like to add you to their team on NVC360.
+          Hi${a.name ? " " + a.name : ""}, <b>${company}</b> would like to add you to their team on ArrivePing.
         </p>
         <p style="font-size:14px;color:#334155;line-height:1.6">
-          You already have an NVC360 account, so there's nothing new to set up —
+          You already have an ArrivePing account, so there's nothing new to set up —
           <b>keep using your existing email and password</b>. Once you accept,
           you'll be able to switch between your companies from the menu, and
           you'll only ever see one company's work at a time.

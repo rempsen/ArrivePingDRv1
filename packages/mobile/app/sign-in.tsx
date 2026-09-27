@@ -112,7 +112,7 @@ export default function SignIn() {
             </Pressable>
           </View>
 
-          <Text style={s.foot}>NVC360 · Field Operations</Text>
+          <Text style={s.foot}>ArrivePing · Field Operations</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

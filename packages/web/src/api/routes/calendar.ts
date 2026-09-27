@@ -105,7 +105,7 @@ export const calendarRoutes = new Hono<AppEnv>()
         url: httpsUrl,
         webcal,
         google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
-        outlook: `https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(httpsUrl)}&name=${encodeURIComponent("NVC360 Schedule")}`,
+        outlook: `https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(httpsUrl)}&name=${encodeURIComponent("ArrivePing Schedule")}`,
       },
       200,
     );
@@ -163,10 +163,10 @@ export const calendarRoutes = new Hono<AppEnv>()
     const events = await Promise.all(scoped.map((x) => eventFor(x.booking, base, x.companyId)));
     const calName =
       isAdminRole(u.role)
-        ? "NVC360 — Dispatch Schedule"
+        ? "ArrivePing — Dispatch Schedule"
         : u.role === "rider"
-          ? `NVC360 — ${u.name}'s Jobs`
-          : "NVC360 — My Appointments";
+          ? `ArrivePing — ${u.name}'s Jobs`
+          : "ArrivePing — My Appointments";
     const ics = buildCalendar(events, { name: calName, refreshMinutes: 30 });
     return new Response(ics, {
       status: 200,

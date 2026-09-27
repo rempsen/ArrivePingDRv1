@@ -20,7 +20,7 @@ export default function Index() {
   async function tryUnlockAndProceed() {
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Unlock NVC360",
+        promptMessage: "Unlock ArrivePing",
         cancelLabel: "Cancel",
         disableDeviceFallback: false,
       });
@@ -78,7 +78,7 @@ export default function Index() {
         <View style={s.iconWrap}>
           <Fingerprint color={C.brand} size={40} weight="fill" />
         </View>
-        <Text style={s.title}>NVC360 is locked</Text>
+        <Text style={s.title}>ArrivePing is locked</Text>
         <Text style={s.sub}>Unlock with Face ID or your fingerprint to continue.</Text>
         <Button
           title="Unlock"

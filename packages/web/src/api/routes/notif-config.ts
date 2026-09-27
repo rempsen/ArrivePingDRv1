@@ -379,7 +379,7 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       const res = await fetch(w.url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(w.secret ? { "X-Webhook-Secret": w.secret } : {}) },
-        body: JSON.stringify({ event: "test", message: "NVC360 webhook test", at: new Date().toISOString() }),
+        body: JSON.stringify({ event: "test", message: "ArrivePing webhook test", at: new Date().toISOString() }),
       });
       return c.json({ ok: res.ok, status: res.status }, 200);
     } catch (e: any) {

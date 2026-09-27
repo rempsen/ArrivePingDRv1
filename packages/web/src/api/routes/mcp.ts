@@ -14,7 +14,7 @@ import type { AppEnv } from "../env";
  *
  * Implements the Model Context Protocol over a single HTTP endpoint so external
  * agents (Claude Code, Claude Desktop, custom clients) can discover and call
- * tools backed by the NVC360 database. Auth is via API-key Bearer token; each
+ * tools backed by the ArrivePing database. Auth is via API-key Bearer token; each
  * tool declares a required scope which is checked against the key's grants.
  *
  * Protocol surface implemented: initialize, tools/list, tools/call, ping.
@@ -614,7 +614,7 @@ export const mcpRoutes = new Hono<AppEnv>()
       server: SERVER_INFO,
       protocol: "mcp",
       transport: "streamable-http",
-      description: "NVC360 remote MCP server. POST JSON-RPC 2.0 with Authorization: Bearer <nvc_ key>.",
+      description: "ArrivePing remote MCP server. POST JSON-RPC 2.0 with Authorization: Bearer <nvc_ key>.",
       tools: TOOLS.length,
     }),
   )

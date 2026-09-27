@@ -328,8 +328,8 @@ function FieldStaffTab() {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Email">
-              <input aria-label="marcus@nvc360.app" className={inputCls} type="email" value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="marcus@nvc360.app" />
+              <input aria-label="marcus@arriveping.app" className={inputCls} type="email" value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="marcus@arriveping.app" />
             </Field>
             <Field label="Temp password" hint="Tech can change later">
               <input aria-label="min 8 chars" className={inputCls} value={form.password}

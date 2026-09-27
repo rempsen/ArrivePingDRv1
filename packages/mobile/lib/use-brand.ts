@@ -8,7 +8,7 @@ import { api } from "./api";
  * everywhere, not just on the admin web dashboard.
  *
  * Cached for the session (settings rarely change); falls back to sane
- * NVC360 defaults while loading or if the request fails.
+ * ArrivePing defaults while loading or if the request fails.
  */
 export interface TenantBrand {
   noun: string; // singular worker noun, e.g. "Technician"
@@ -27,7 +27,7 @@ const DEFAULTS: TenantBrand = {
   customerNounPlural: "Customers",
   jobNoun: "Job",
   jobNounPlural: "Jobs",
-  name: "NVC 360",
+  name: "ArrivePing",
 };
 
 export function useBrand(): TenantBrand {

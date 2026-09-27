@@ -200,7 +200,7 @@ export const geoRoutes = new Hono<AppEnv>()
     url.searchParams.set("format", "json");
     url.searchParams.set("addressdetails", "1");
     url.searchParams.set("limit", "6");
-    const r = await fetch(url, { headers: { "User-Agent": "NVC360/1.0" } });
+    const r = await fetch(url, { headers: { "User-Agent": "ArrivePing/1.0" } });
     const data = await r.json();
     const predictions = (data || []).map((p: any) => ({
       placeId: `osm:${p.lat},${p.lon}`,
