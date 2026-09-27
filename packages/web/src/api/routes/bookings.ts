@@ -1,6 +1,6 @@
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, isNull, and, inArray, desc, sql, type SQL } from "drizzle-orm";
@@ -132,8 +132,10 @@ type EnrichedBooking = typeof schema.bookings.$inferSelect & {
  * correctly. Output is byte-for-byte the same as the old per-row version.
  *
  * Tenant safety: `services` and `riders` are tenant-owned, so those lookups go
- * through `tdb(companyId)` and stay company-scoped. `user` is a GLOBAL table
- * (see database/tenant.ts) and is queried by explicit id list only.
+ * through `tdb(companyId)` and stay company-scoped. `user` IS tenant-owned
+ * too (see database/tenant.ts), but this batch can legitimately span several
+ * companies at once (system paths), so it is read by explicit id list on the
+ * `sdb` system connection rather than one `tdb(cid)` call per company.
  */
 async function enrichMany(
   rows: (typeof schema.bookings.$inferSelect)[],
@@ -185,7 +187,7 @@ async function enrichMany(
     ] as string[];
     const userMap = new Map<string, any>();
     if (userIds.length) {
-      const us = await db
+      const us = await sdb
         .select()
         .from(schema.user)
         .where(inArray(schema.user.id, userIds))
@@ -452,23 +454,29 @@ export const bookingsRoutes = new Hono<AppEnv>()
 
     const scoped = t.scope(schema.bookings, where);
 
-    // Total via COUNT(*) rather than fetching rows to count them.
-    const countQ = db
-      .select({ n: sql<number>`count(*)` })
-      .from(schema.bookings);
-    const [{ n: total }] = await (scoped ? countQ.where(scoped) : countQ);
+    // Hand-written COUNT + orderBy/limit/offset query — runs inside
+    // t.transaction() so the RLS session var (app.tenant_id) is actually set
+    // for these raw builder calls, same pattern as job-events.ts/reviews.ts.
+    const { total, rows } = await t.transaction(async (tx) => {
+      // Total via COUNT(*) rather than fetching rows to count them.
+      const countQ = tx
+        .select({ n: sql<number>`count(*)` })
+        .from(schema.bookings);
+      const [{ n }] = await (scoped ? countQ.where(scoped) : countQ);
 
-    // Sort in SQL (was an in-memory sort over every row).
-    const baseQ = db
-      .select()
-      .from(schema.bookings)
-      .orderBy(desc(schema.bookings.createdAt));
-    const withWhere = scoped ? baseQ.where(scoped) : baseQ;
+      // Sort in SQL (was an in-memory sort over every row).
+      const baseQ = tx
+        .select()
+        .from(schema.bookings)
+        .orderBy(desc(schema.bookings.createdAt));
+      const withWhere = scoped ? baseQ.where(scoped) : baseQ;
 
-    const limit = paginated ? pageSize : MAX_LIST;
-    const offset = paginated ? (page - 1) * pageSize : 0;
-    const rows = (await withWhere.limit(limit).offset(offset)) as
-      (typeof schema.bookings.$inferSelect)[];
+      const limit = paginated ? pageSize : MAX_LIST;
+      const offset = paginated ? (page - 1) * pageSize : 0;
+      const r = (await withWhere.limit(limit).offset(offset)) as
+        (typeof schema.bookings.$inferSelect)[];
+      return { total: n, rows: r };
+    });
 
     const truncated = !paginated && Number(total) > MAX_LIST;
     if (truncated) {
@@ -540,10 +548,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const svc = await t.selectOne(schema.services, eq(schema.services.id, body.serviceId));
     if (!svc) return c.json({ message: "Service not found" }, 404);
 
-    const [cu] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, u.id));
+    const cu = await t.selectOne(schema.user, eq(schema.user.id, u.id));
 
     // Resolve real coordinates for the address. The lat/lng columns are NOT NULL
     // with a downtown-Toronto default, so a create with no coordinates used to
@@ -627,10 +632,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const svc = await t.selectOne(schema.services, eq(schema.services.id, body.serviceId));
     if (!svc) return c.json({ message: "Service not found" }, 404);
 
-    const [cu] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, body.customerId));
+    const cu = await t.selectOne(schema.user, eq(schema.user.id, body.customerId));
     if (!cu) return c.json({ message: "Client not found" }, 404);
 
     // riderId is a foreign key too, and unlike serviceId/customerId it was
@@ -824,7 +826,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       if (!svc) return c.json({ message: "Service not found" }, 404);
     }
     if (body.customerId !== undefined) {
-      const [cu] = await db.select().from(schema.user).where(eq(schema.user.id, body.customerId));
+      const cu = await t.selectOne(schema.user, eq(schema.user.id, body.customerId));
       // Membership, not user.companyId: a client shared with another company is
       // still this company's client, and comparing home companies rejected them.
       if (!cu || !(await isMember(cu.id, co))) return c.json({ message: "Client not found" }, 404);

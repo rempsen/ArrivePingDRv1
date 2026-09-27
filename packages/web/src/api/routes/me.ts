@@ -11,7 +11,7 @@
  * effect immediately, instead of a stale session continuing to work.
  */
 import { Hono } from "hono";
-import { db } from "../database";
+import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
@@ -400,10 +400,8 @@ export const meRoutes = new Hono<AppEnv>()
           const custIds = [...new Set(completed.map((b) => b.customerId).filter((v): v is string => !!v))];
           const custMap = new Map<string, string>();
           if (custIds.length) {
-            const us = await db
-              .select()
-              .from(schema.user)
-              .where(inArray(schema.user.id, custIds))
+            const us = await t
+              .select(schema.user, inArray(schema.user.id, custIds))
               .catch(() => []);
             us.forEach((u) => custMap.set(u.id, u.name ?? ""));
           }
@@ -557,23 +555,17 @@ export const meRoutes = new Hono<AppEnv>()
         .where(eq(schema.companies.id, companyId));
       if (!co) return c.json({ message: "Company not found" }, 404);
     } else {
-      const [m] = await db
-        .select()
-        .from(schema.memberships)
-        .where(
-          and(
-            eq(schema.memberships.userId, me.id),
-            eq(schema.memberships.companyId, companyId),
-            eq(schema.memberships.status, "active"),
-          ),
-        );
+      const m = await tdb(companyId).selectOne(
+        schema.memberships,
+        and(eq(schema.memberships.userId, me.id), eq(schema.memberships.status, "active")),
+      );
       if (!m) return c.json({ message: "You are not a member of that company" }, 403);
     }
 
-    await db
-      .update(schema.user)
-      .set({ companyId })
-      .where(eq(schema.user.id, me.id));
+    // Reassigning someone's HOME company is exactly the case tdb()'s update()
+    // deliberately blocks (it always strips companyId from a patch), so this
+    // goes through the BYPASSRLS system connection.
+    await sdb.update(schema.user).set({ companyId }).where(eq(schema.user.id, me.id));
 
     return c.json({ ok: true, activeCompanyId: companyId });
   })
@@ -584,13 +576,15 @@ export const meRoutes = new Hono<AppEnv>()
    * membership.
    */
   .get("/join-company/:membershipId", async (c) => {
-    const [m] = await db
+    // Pre-resolution: no company is known until this row is fetched, so this
+    // runs on the BYPASSRLS system connection.
+    const [m] = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.id, c.req.param("membershipId")));
     if (!m || m.status !== "invited")
       return c.json({ message: "This invite is no longer valid" }, 404);
-    const [u] = await db.select().from(schema.user).where(eq(schema.user.id, m.userId));
+    const [u] = await sdb.select().from(schema.user).where(eq(schema.user.id, m.userId));
     const [co] = await db
       .select()
       .from(schema.companies)
@@ -612,7 +606,8 @@ export const meRoutes = new Hono<AppEnv>()
    */
   .post("/join-company/:membershipId", requireAuth, async (c) => {
     const me = c.get("user") as unknown as SessionUser;
-    const [m] = await db
+    // Pre-resolution: no company is known until this row is fetched.
+    const [m] = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.id, c.req.param("membershipId")));
@@ -621,10 +616,11 @@ export const meRoutes = new Hono<AppEnv>()
     if (m.userId !== me.id)
       return c.json({ message: "This invite belongs to a different account" }, 403);
 
-    await db
-      .update(schema.memberships)
-      .set({ status: "active", acceptedAt: new Date(), updatedAt: new Date() })
-      .where(eq(schema.memberships.id, m.id));
+    await tdb(m.companyId).update(
+      schema.memberships,
+      { status: "active", acceptedAt: new Date(), updatedAt: new Date() },
+      eq(schema.memberships.id, m.id),
+    );
 
     return c.json({ ok: true, companyId: m.companyId });
   })
@@ -640,7 +636,8 @@ export const meRoutes = new Hono<AppEnv>()
    */
   .post("/join-company/:membershipId/decline", requireAuth, async (c) => {
     const me = c.get("user") as unknown as SessionUser;
-    const [m] = await db
+    // Pre-resolution: no company is known until this row is fetched.
+    const [m] = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.id, c.req.param("membershipId")));
@@ -668,7 +665,8 @@ export const meRoutes = new Hono<AppEnv>()
    */
   .get("/invites", requireAuth, async (c) => {
     const me = c.get("user") as unknown as SessionUser;
-    const pending = await db
+    // Cross-company by design: invites at every company, not just one.
+    const pending = await sdb
       .select()
       .from(schema.memberships)
       .where(
@@ -707,7 +705,9 @@ export const meRoutes = new Hono<AppEnv>()
     const companyId = typeof body.companyId === "string" ? body.companyId.trim() : "";
     if (!companyId) return c.json({ message: "companyId is required" }, 400);
 
-    const mine = await db
+    // Cross-company: counting every company this person works for, not just
+    // the one they're leaving.
+    const mine = await sdb
       .select()
       .from(schema.memberships)
       .where(eq(schema.memberships.userId, me.id));
