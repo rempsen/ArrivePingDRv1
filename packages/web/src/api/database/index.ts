@@ -184,6 +184,37 @@ export const db: PostgresJsDatabase<typeof schema> = memoryMode
   : drizzlePg(queryClient!, { schema });
 
 /**
+ * System/bypass connection: uses the `app_system` Postgres role, which has
+ * BYPASSRLS. This is a DELIBERATE, NARROW escape hatch for the handful of
+ * call sites that must run BEFORE a tenant is known — authentication itself
+ * (better-auth's session/user/account lookups, API-key hash resolution) and
+ * the couple of webhook/callback handlers that resolve their own tenant from
+ * a provider-supplied opaque id (Stripe payment intent id, OAuth state).
+ * Those cannot set `app.tenant_id` first because determining the tenant IS
+ * the point of the query.
+ *
+ * Every other query MUST go through `tdb()` (or the plain `db` export for
+ * genuinely global, non-tenant-owned tables). Grep for `sdb` before adding a
+ * new usage — each one is a hole in the RLS backstop and should be reviewed
+ * as carefully as a new raw SQL string.
+ *
+ * In the pglite test harness there are no Postgres roles/RLS at all, so this
+ * just aliases to the same in-memory client.
+ */
+const systemQueryClient = memoryMode
+  ? undefined
+  : postgres(process.env.DATABASE_SYSTEM_URL || process.env.DATABASE_URL!, {
+      ssl: "require",
+      max: 5,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+
+export const sdb: PostgresJsDatabase<typeof schema> = memoryMode
+  ? db
+  : drizzlePg(systemQueryClient!, { schema });
+
+/**
  * Warm-up / liveness ping. Called on server boot so the very first real user
  * request never races a cold connection. Also reusable by the /ready probe.
  * Returns true if the DB answered, false otherwise (never throws).

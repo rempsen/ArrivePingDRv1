@@ -2,13 +2,17 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
-import { db } from "./database";
+import { sdb } from "./database";
 import { sendEmail, emailTemplates, loadEmailBrand } from "../services/email";
 
 export const auth = betterAuth({
   basePath: "/api/auth",
   baseURL: process.env.WEBSITE_URL,
-  database: drizzleAdapter(db, { provider: "pg" }),
+  // better-auth resolves sessions/users/accounts by token/email BEFORE any
+  // tenant is known — it must run on the BYPASSRLS system connection, not
+  // the RLS-enforced app_runtime one. See ./database/index.ts's doc comment
+  // on `sdb`.
+  database: drizzleAdapter(sdb, { provider: "pg" }),
   emailAndPassword: {
     enabled: true,
     // Forgot-password flow: better-auth generates a one-time token and calls

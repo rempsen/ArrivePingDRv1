@@ -16,7 +16,8 @@
  *                         password. Until they accept, they have no access.
  */
 import { and, eq } from "drizzle-orm";
-import { db } from "../database";
+import { sdb } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 
 export type MembershipRole = string;
@@ -40,15 +41,11 @@ export interface AttachArgs {
  */
 export async function attachMembership(a: AttachArgs) {
   const status = a.status ?? "active";
-  const [existing] = await db
-    .select()
-    .from(schema.memberships)
-    .where(
-      and(
-        eq(schema.memberships.userId, a.userId),
-        eq(schema.memberships.companyId, a.companyId),
-      ),
-    );
+  const t = tdb(a.companyId);
+  const existing = await t.selectOne(
+    schema.memberships,
+    eq(schema.memberships.userId, a.userId),
+  );
 
   if (existing) {
     // Re-adding someone who was disabled reactivates them, but we never
@@ -56,9 +53,9 @@ export async function attachMembership(a: AttachArgs) {
     // lock out someone who is currently working.
     const nextStatus =
       existing.status === "active" && status === "invited" ? "active" : status;
-    const [row] = await db
-      .update(schema.memberships)
-      .set({
+    const [row] = await t.update(
+      schema.memberships,
+      {
         role: a.role,
         staffType: a.staffType ?? existing.staffType,
         managerId: a.managerId ?? existing.managerId,
@@ -67,48 +64,44 @@ export async function attachMembership(a: AttachArgs) {
         updatedAt: new Date(),
         acceptedAt:
           nextStatus === "active" ? (existing.acceptedAt ?? new Date()) : existing.acceptedAt,
-      })
-      .where(eq(schema.memberships.id, existing.id))
-      .returning();
+      },
+      eq(schema.memberships.id, existing.id),
+    );
     return { membership: row, created: false };
   }
 
-  const [row] = await db
-    .insert(schema.memberships)
-    .values({
-      userId: a.userId,
-      companyId: a.companyId,
-      role: a.role,
-      staffType: a.staffType ?? null,
-      managerId: a.managerId ?? null,
-      permissions: a.permissions ?? null,
-      status,
-      invitedBy: a.invitedBy ?? null,
-      acceptedAt: status === "active" ? new Date() : null,
-      updatedAt: new Date(),
-    })
-    .returning();
+  const [row] = await t.insert(schema.memberships, {
+    userId: a.userId,
+    role: a.role,
+    staffType: a.staffType ?? null,
+    managerId: a.managerId ?? null,
+    permissions: a.permissions ?? null,
+    status,
+    invitedBy: a.invitedBy ?? null,
+    acceptedAt: status === "active" ? new Date() : null,
+    updatedAt: new Date(),
+  });
   return { membership: row, created: true };
 }
 
 /** Is this person an active member of this company? */
 export async function isMember(userId: string, companyId: string): Promise<boolean> {
-  const [row] = await db
-    .select()
-    .from(schema.memberships)
-    .where(
-      and(
-        eq(schema.memberships.userId, userId),
-        eq(schema.memberships.companyId, companyId),
-        eq(schema.memberships.status, "active"),
-      ),
-    );
+  const row = await tdb(companyId).selectOne(
+    schema.memberships,
+    and(eq(schema.memberships.userId, userId), eq(schema.memberships.status, "active")),
+  );
   return !!row;
 }
 
-/** Look up a login by email (case-insensitive is not needed: emails are stored as entered). */
+/**
+ * Look up a login by email, GLOBALLY (case-insensitive is not needed: emails
+ * are stored as entered). No companyId is known yet at most call sites of
+ * this — that's the whole point (checking whether an email already has a
+ * login anywhere before creating one, or resolving which company a shared
+ * login belongs to) — so this runs on the BYPASSRLS system connection.
+ */
 export async function findUserByEmail(email: string) {
-  const [u] = await db.select().from(schema.user).where(eq(schema.user.email, email));
+  const [u] = await sdb.select().from(schema.user).where(eq(schema.user.email, email));
   return u ?? null;
 }
 
@@ -136,20 +129,17 @@ export async function findCompanyUserByEmail(email: string, companyId: string) {
  * attached for history.
  */
 export async function detachMembership(userId: string, companyId: string) {
-  await db
-    .delete(schema.memberships)
-    .where(
-      and(
-        eq(schema.memberships.userId, userId),
-        eq(schema.memberships.companyId, companyId),
-      ),
-    );
+  await tdb(companyId).delete(schema.memberships, eq(schema.memberships.userId, userId));
 
   // If this was their default company, move their default to another one they
   // still belong to so they don't land on a company they were removed from.
-  const [u] = await db.select().from(schema.user).where(eq(schema.user.id, userId));
+  // This reassigns companyId on a user who may no longer have ANY
+  // relationship to `companyId` after the delete above — a genuine
+  // system-level bookkeeping step, not a tenant-scoped read/write, so it
+  // runs on the BYPASSRLS connection (same as findUserByEmail above).
+  const [u] = await sdb.select().from(schema.user).where(eq(schema.user.id, userId));
   if (u && u.companyId === companyId) {
-    const remaining = await db
+    const remaining = await sdb
       .select()
       .from(schema.memberships)
       .where(
@@ -157,18 +147,14 @@ export async function detachMembership(userId: string, companyId: string) {
       );
     const next = remaining[0]?.companyId;
     if (next) {
-      await db.update(schema.user).set({ companyId: next }).where(eq(schema.user.id, userId));
+      await sdb.update(schema.user).set({ companyId: next }).where(eq(schema.user.id, userId));
     }
   }
 }
 
 /** Every active member of a company, joined to their identity. */
 export async function listCompanyMembers(companyId: string) {
-  const rows = await db
-    .select()
-    .from(schema.memberships)
-    .where(eq(schema.memberships.companyId, companyId));
-  return rows;
+  return tdb(companyId).select(schema.memberships);
 }
 
 /**
@@ -182,9 +168,13 @@ export async function listCompanyMembers(companyId: string) {
  * global `user.role`, which is now only meaningful at their home company.
  */
 export async function usersForCompany(companyId: string) {
+  const t = tdb(companyId);
   const [members, allUsers] = await Promise.all([
-    db.select().from(schema.memberships).where(eq(schema.memberships.companyId, companyId)),
-    db.select().from(schema.user),
+    t.select(schema.memberships),
+    // Scoped `user` reads already return home-company OR active-membership
+    // rows for this company (see tenant.ts's tenantReadPredicate) — exactly
+    // the superset `members` below needs to match against.
+    t.select(schema.user),
   ]);
   const byId = new Map(members.map((m) => [m.userId, m]));
   return allUsers

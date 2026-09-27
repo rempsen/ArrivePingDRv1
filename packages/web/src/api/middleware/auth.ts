@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { auth } from "../auth";
-import { db } from "../database";
+import { db, sdb } from "../database";
 import * as schema from "../database/schema";
 import { and, eq } from "drizzle-orm";
 import {
@@ -301,7 +301,9 @@ export async function resolvePublicKey(rawToken: string | undefined | null): Pro
 > {
   if (!rawToken || !rawToken.startsWith("nvcpub_")) return null;
   const hashed = await hashApiKey(rawToken);
-  const [row] = await db
+  // Pre-resolution: we don't know the tenant until the hash matches a row,
+  // so this one lookup runs on the BYPASSRLS system connection.
+  const [row] = await sdb
     .select()
     .from(schema.apiKeys)
     .where(eq(schema.apiKeys.hashedKey, hashed))
@@ -309,9 +311,9 @@ export async function resolvePublicKey(rawToken: string | undefined | null): Pro
   if (!row || row.keyType !== "public") return null;
   if (row.revokedAt) return null;
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
-  db.update(schema.apiKeys)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(schema.apiKeys.id, row.id))
+  // Tenant is known now — the touch-update goes back through tdb().
+  tdb(row.companyId || "default")
+    .update(schema.apiKeys, { lastUsedAt: new Date() }, eq(schema.apiKeys.id, row.id))
     .catch(() => {});
   return {
     id: row.id,
@@ -351,7 +353,8 @@ export async function resolveApiKey(c: {
   // API — note nvcpub_ also starts with "nvc_" so we explicitly exclude it.
   if (!token || !token.startsWith("nvc_") || token.startsWith("nvcpub_")) return null;
   const hashed = await hashApiKey(token);
-  const [row] = await db
+  // Pre-resolution: same reasoning as resolvePublicKey above.
+  const [row] = await sdb
     .select()
     .from(schema.apiKeys)
     .where(eq(schema.apiKeys.hashedKey, hashed))
@@ -359,10 +362,9 @@ export async function resolveApiKey(c: {
   if (!row || row.keyType === "public") return null;
   if (row.revokedAt) return null;
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
-  // touch lastUsedAt (fire and forget)
-  db.update(schema.apiKeys)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(schema.apiKeys.id, row.id))
+  // touch lastUsedAt (fire and forget) — tenant known now, back through tdb()
+  tdb(row.companyId || "default")
+    .update(schema.apiKeys, { lastUsedAt: new Date() }, eq(schema.apiKeys.id, row.id))
     .catch(() => {});
   return {
     id: row.id,

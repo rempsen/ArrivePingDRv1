@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { and, eq, gt } from "drizzle-orm";
 import * as schema from "../database/schema";
-import { db } from "../database";
+import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import { resolveApiKey, scopeAllows, requireAuth, tx, tenantId } from "../middleware/auth";
-import { attachMembership } from "../lib/memberships";
+import { attachMembership, findUserByEmail } from "../lib/memberships";
 import { auth } from "../auth";
 import { putObject } from "../lib/storage";
 import { audit } from "../lib/audit";
@@ -51,10 +51,10 @@ async function pushDeficiencyWebhook(
   projectExternalId: string,
 ) {
   try {
-    const eps = await db
-      .select()
-      .from(schema.webhookEndpoints)
-      .where(and(eq(schema.webhookEndpoints.active, true), eq(schema.webhookEndpoints.companyId, companyId)));
+    const eps = await tdb(companyId).select(
+      schema.webhookEndpoints,
+      eq(schema.webhookEndpoints.active, true),
+    );
     const targets = eps.filter(
       (e) => e.events === "*" || e.events.split(",").map((s) => s.trim()).includes(PUNCHLIST_WEBHOOK_EVENT),
     );
@@ -80,8 +80,7 @@ async function pushDeficiencyWebhook(
       }).catch((e) => {
         throw e;
       });
-      await db.insert(schema.notificationDeliveries).values({
-        companyId,
+      await tdb(companyId).insert(schema.notificationDeliveries, {
         event: PUNCHLIST_WEBHOOK_EVENT,
         bookingId: deficiency.bookingId,
         recipient: "office",
@@ -164,21 +163,17 @@ async function upsertProject(
 
   const slug = slugify(input.name || input.externalId);
   const email = placeholderEmail("project", slug);
-  const [customer] = await db
-    .insert(schema.user)
-    .values({
-      id: crypto.randomUUID(),
-      companyId,
-      name: input.name || "Hotel Project",
-      email,
-      role: "customer",
-      emailVerified: false,
-      address: input.address || "",
-      notes: "Auto-created by the BMD Punch List integration — replace with the real property contact when known.",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as any)
-    .returning();
+  const [customer] = await t.insert(schema.user, {
+    id: crypto.randomUUID(),
+    name: input.name || "Hotel Project",
+    email,
+    role: "customer",
+    emailVerified: false,
+    address: input.address || "",
+    notes: "Auto-created by the BMD Punch List integration — replace with the real property contact when known.",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any);
   await attachMembership({ userId: customer.id, companyId, role: "customer", status: "active" });
 
   const serviceId = await findOrCreatePunchlistService(companyId);
@@ -228,7 +223,7 @@ async function upsertTrade(
   const slug = slugify(input.name);
   const email = input.contactEmail || placeholderEmail("trade", slug);
   let userId: string;
-  const [byEmail] = await db.select().from(schema.user).where(eq(schema.user.email, email)).limit(1);
+  const byEmail = await findUserByEmail(email);
   if (byEmail) {
     userId = byEmail.id;
     await attachMembership({ userId, companyId, role: "rider", staffType: "technician", status: "invited" });
@@ -237,10 +232,13 @@ async function upsertTrade(
       await auth.api.signUpEmail({
         body: { name: input.name, email, password: randomPassword(), role: "rider", phone: input.contactPhone || "" } as any,
       });
-      const [created] = await db.select().from(schema.user).where(eq(schema.user.email, email)).limit(1);
+      const created = await findUserByEmail(email);
       if (!created) throw new Error("failed to create technician login");
       userId = created.id;
-      await db.update(schema.user).set({ role: "rider", phone: input.contactPhone || "", companyId }).where(eq(schema.user.id, userId));
+      // Stamping their HOME company on a brand-new signup (tdb() refuses to
+      // ever reassign companyId, by design) — sdb is the deliberate escape
+      // hatch for exactly this.
+      await sdb.update(schema.user).set({ role: "rider", phone: input.contactPhone || "", companyId }).where(eq(schema.user.id, userId));
       await attachMembership({ userId, companyId, role: "rider", staffType: "technician", status: "active" });
     } catch (e: any) {
       throw new Error(`could not auto-provision technician for trade "${input.name}": ${e?.message ?? e}`);
