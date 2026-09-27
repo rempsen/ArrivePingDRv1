@@ -14,20 +14,17 @@
  *    alert to the office so the company can fix it first. Nothing is hidden
  *    from the company — every rating is still stored and visible in admin.
  */
-import { db } from "../api/database";
+import { sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { registerTaskHandler, scheduleTask, cancelTasks } from "./scheduler";
 import { sendSms, trackingUrl } from "./sms";
 
 const KIND = "review_request";
 
 async function settingsFor(companyId: string) {
-  const [cs] = await db
-    .select()
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId));
-  return cs ?? null;
+  return (await tdb(companyId).selectOne(schema.companySettings)) ?? null;
 }
 
 /**
@@ -36,7 +33,8 @@ async function settingsFor(companyId: string) {
  */
 export async function scheduleReviewRequest(bookingId: string): Promise<void> {
   try {
-    const [b] = await db
+    // Pre-resolution: only a bookingId is known here, not its tenant.
+    const [b] = await sdb
       .select()
       .from(schema.bookings)
       .where(eq(schema.bookings.id, bookingId));
@@ -83,18 +81,10 @@ export async function alertLowRating(opts: {
   jobTitle: string;
 }): Promise<void> {
   try {
-    const admins = await db
-      .select()
-      .from(schema.user)
-      .where(
-        and(
-          eq(schema.user.companyId, opts.companyId),
-          eq(schema.user.role, "admin"),
-        ),
-      );
+    const t = tdb(opts.companyId);
+    const admins = await t.select(schema.user, eq(schema.user.role, "admin"));
     for (const a of admins) {
-      await db.insert(schema.notifications).values({
-        companyId: opts.companyId,
+      await t.insert(schema.notifications, {
         userId: a.id,
         bookingId: opts.bookingId,
         type: "low_rating",
@@ -111,17 +101,14 @@ export async function alertLowRating(opts: {
 registerTaskHandler(KIND, async (task) => {
   if (!task.bookingId) return;
 
-  const [b] = await db
-    .select()
-    .from(schema.bookings)
-    .where(eq(schema.bookings.id, task.bookingId));
+  // task.companyId came from our own scheduleTask() call, so it's a
+  // trustworthy tenant — no need to bypass RLS here.
+  const t0 = tdb(task.companyId);
+  const b = await t0.selectOne(schema.bookings, eq(schema.bookings.id, task.bookingId));
   if (!b || b.status !== "completed" || b.deletedAt) return;
 
   // already reviewed — don't nag
-  const [existing] = await db
-    .select()
-    .from(schema.reviews)
-    .where(eq(schema.reviews.bookingId, b.id));
+  const existing = await t0.selectOne(schema.reviews, eq(schema.reviews.bookingId, b.id));
   if (existing) return;
 
   const cs = await settingsFor(b.companyId);

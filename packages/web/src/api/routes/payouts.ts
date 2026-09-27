@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq, and, gte, lte, isNull } from "drizzle-orm";
 import { requireAdmin, tx } from "../middleware/auth";
@@ -29,7 +28,7 @@ export const payoutsRoutes = new Hono<AppEnv>()
       const r = await t.selectOne(schema.riders, eq(schema.riders.id, p.riderId));
       let name = "";
       if (r) {
-        const [u] = await db.select().from(schema.user).where(eq(schema.user.id, r.userId));
+        const u = await t.selectOne(schema.user, eq(schema.user.id, r.userId));
         name = u?.name ?? "";
       }
       let jobs: unknown[] = [];

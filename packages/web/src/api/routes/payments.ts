@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx } from "../middleware/auth";
@@ -35,16 +35,20 @@ async function ledger(row: {
 }) {
   try {
     // Derive the tenant from the linked invoice when not explicitly supplied
-    // (webhook context has no request user). Falls back to "default".
+    // (webhook context has no request user). Falls back to "default". This
+    // whole helper runs on the system (BYPASSRLS) connection: it is called
+    // both from authenticated request handlers (which already resolved a
+    // companyId elsewhere) and from the Stripe webhook, which has no tenant
+    // at all until the invoice lookup below resolves one.
     let companyId = row.companyId;
     if (!companyId && row.invoiceId) {
-      const [inv] = await db
+      const [inv] = await sdb
         .select({ companyId: schema.invoices.companyId })
         .from(schema.invoices)
         .where(eq(schema.invoices.id, row.invoiceId));
       companyId = inv?.companyId;
     }
-    await db.insert(schema.paymentLedger).values({
+    await sdb.insert(schema.paymentLedger).values({
       companyId: companyId ?? "default",
       invoiceId: row.invoiceId ?? null,
       bookingId: row.bookingId ?? null,
@@ -67,7 +71,9 @@ async function syncInvoiceFromIntent(pi: {
   latest_charge?: string | null;
   last_payment_error?: { message?: string } | null;
 }) {
-  const [inv] = await db
+  // Same reasoning as ledger() above: reconciling from a Stripe object id
+  // happens before any tenant is known, so this runs on sdb throughout.
+  const [inv] = await sdb
     .select()
     .from(schema.invoices)
     .where(eq(schema.invoices.stripePaymentIntentId, pi.id));
@@ -81,7 +87,7 @@ async function syncInvoiceFromIntent(pi: {
 
   const paidNow = status === "paid" && inv.status !== "paid";
 
-  await db
+  await sdb
     .update(schema.invoices)
     .set({
       status,
@@ -92,7 +98,7 @@ async function syncInvoiceFromIntent(pi: {
     .where(eq(schema.invoices.id, inv.id));
 
   if (status === "paid") {
-    await db
+    await sdb
       .update(schema.bookings)
       .set({ paymentStatus: "paid" })
       .where(eq(schema.bookings.id, inv.bookingId));

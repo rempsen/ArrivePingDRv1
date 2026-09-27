@@ -1,4 +1,4 @@
-import { db } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 
 interface AuditArgs {
@@ -16,8 +16,7 @@ interface AuditArgs {
 /** Write an audit log entry. Fire-and-forget safe. */
 export async function audit(a: AuditArgs) {
   try {
-    await db.insert(schema.auditLog).values({
-      companyId: a.companyId ?? "default",
+    await tdb(a.companyId ?? "default").insert(schema.auditLog, {
       actorId: a.actorId ?? "",
       actorName: a.actorName ?? "",
       action: a.action,

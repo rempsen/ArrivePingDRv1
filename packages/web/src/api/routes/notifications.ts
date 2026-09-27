@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { sdb } from "../database";
+import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { requireAuth, tenantId } from "../middleware/auth";
@@ -10,34 +11,37 @@ type SessionUser = { id: string };
 export const notificationsRoutes = new Hono<AppEnv>()
   .get("/", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    const rows = await db
-      .select()
-      .from(schema.notifications)
-      .where(eq(schema.notifications.userId, u.id))
-      .orderBy(desc(schema.notifications.createdAt))
-      .limit(50);
+    const t = tdb(tenantId(c));
+    const rows = await t.transaction((tx) =>
+      tx
+        .select()
+        .from(schema.notifications)
+        .where(t.scope(schema.notifications, eq(schema.notifications.userId, u.id)))
+        .orderBy(desc(schema.notifications.createdAt))
+        .limit(50),
+    );
     return c.json({ notifications: rows }, 200);
   })
   .post("/:id/read", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
     // Ownership guard: a user may only mark THEIR OWN notification read (IDOR fix).
-    await db
-      .update(schema.notifications)
-      .set({ read: true })
-      .where(
-        and(
-          eq(schema.notifications.id, c.req.param("id")),
-          eq(schema.notifications.userId, u.id),
-        ),
-      );
+    await tdb(tenantId(c)).update(
+      schema.notifications,
+      { read: true },
+      and(
+        eq(schema.notifications.id, c.req.param("id")),
+        eq(schema.notifications.userId, u.id),
+      ),
+    );
     return c.json({ success: true }, 200);
   })
   .post("/read-all", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    await db
-      .update(schema.notifications)
-      .set({ read: true })
-      .where(eq(schema.notifications.userId, u.id));
+    await tdb(tenantId(c)).update(
+      schema.notifications,
+      { read: true },
+      eq(schema.notifications.userId, u.id),
+    );
     return c.json({ success: true }, 200);
   })
   // Register (or refresh) an Expo push token for the current device.
@@ -53,14 +57,21 @@ export const notificationsRoutes = new Hono<AppEnv>()
     const deviceName =
       typeof body.deviceName === "string" ? body.deviceName.slice(0, 120) : "";
 
-    const existing = await db
+    // The token is the lookup key and is globally unique across tenants (a
+    // shared device may move from one company's tech to another's) — there
+    // is no single companyId to scope this lookup by, so it runs on the
+    // system connection like the other pre-resolution cases.
+    const existing = await sdb
       .select()
       .from(schema.pushTokens)
       .where(eq(schema.pushTokens.token, token));
 
     if (existing.length) {
-      // Token may have moved to a different user (shared device / re-login).
-      await db
+      // Token may have moved to a different user AND a different company
+      // (shared device / re-login under another tenant) — this is a
+      // deliberate cross-tenant reassignment, so it stays on sdb rather
+      // than tdb() (which would refuse to let companyId change).
+      await sdb
         .update(schema.pushTokens)
         .set({
           userId: u.id,
@@ -71,9 +82,8 @@ export const notificationsRoutes = new Hono<AppEnv>()
         })
         .where(eq(schema.pushTokens.token, token));
     } else {
-      await db.insert(schema.pushTokens).values({
+      await tdb(tenantId(c)).insert(schema.pushTokens, {
         userId: u.id,
-        companyId: tenantId(c),
         token,
         platform,
         deviceName,
@@ -88,13 +98,9 @@ export const notificationsRoutes = new Hono<AppEnv>()
     const body = await c.req.json().catch(() => ({}));
     const token = typeof body.token === "string" ? body.token.trim() : "";
     if (!token) return c.json({ message: "Missing token" }, 400);
-    await db
-      .delete(schema.pushTokens)
-      .where(
-        and(
-          eq(schema.pushTokens.token, token),
-          eq(schema.pushTokens.userId, u.id),
-        ),
-      );
+    await tdb(tenantId(c)).delete(
+      schema.pushTokens,
+      and(eq(schema.pushTokens.token, token), eq(schema.pushTokens.userId, u.id)),
+    );
     return c.json({ success: true }, 200);
   });

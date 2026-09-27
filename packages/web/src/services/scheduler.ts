@@ -13,9 +13,19 @@
  * the same task means one wins the claim and the other sees zero rows changed
  * and skips it — no double-sends.
  */
-import { db } from "../api/database";
+import { sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { and, eq, lte, asc } from "drizzle-orm";
+
+/*
+ * This is a single background process ticking across EVERY tenant's due
+ * tasks, not a per-request handler — there is no one companyId to scope to
+ * for the scan/claim/boot-recovery queries below, so those genuinely need
+ * the system (BYPASSRLS) connection. `scheduleTask` is the one exception:
+ * its caller already knows which company the task belongs to, so that
+ * insert goes through tdb() like any other tenant write.
+ */
 
 /**
  * Reads the affected-row count off an UPDATE/DELETE result regardless of
@@ -61,17 +71,13 @@ export async function scheduleTask(opts: {
   payload?: Record<string, unknown>;
 }): Promise<string | null> {
   try {
-    const [row] = await db
-      .insert(schema.scheduledTasks)
-      .values({
-        companyId: opts.companyId,
-        kind: opts.kind,
-        runAt: new Date(opts.runAt),
-        bookingId: opts.bookingId ?? null,
-        propertyId: opts.propertyId ?? null,
-        payload: JSON.stringify(opts.payload ?? {}),
-      })
-      .returning();
+    const [row] = await tdb(opts.companyId).insert(schema.scheduledTasks, {
+      kind: opts.kind,
+      runAt: new Date(opts.runAt),
+      bookingId: opts.bookingId ?? null,
+      propertyId: opts.propertyId ?? null,
+      payload: JSON.stringify(opts.payload ?? {}),
+    });
     return row?.id ?? null;
   } catch (e) {
     console.error("[scheduler] schedule failed", opts.kind, e);
@@ -92,7 +98,7 @@ export async function cancelTasks(opts: {
     const conds = [eq(schema.scheduledTasks.status, "pending")];
     if (opts.bookingId) conds.push(eq(schema.scheduledTasks.bookingId, opts.bookingId));
     if (opts.kind) conds.push(eq(schema.scheduledTasks.kind, opts.kind));
-    const res = await db
+    const res = await sdb
       .update(schema.scheduledTasks)
       .set({ status: "cancelled", completedAt: new Date() })
       .where(and(...conds));
@@ -108,7 +114,7 @@ const BATCH = 25;
 
 /** Claim a single task. Returns true only if THIS process won the claim. */
 async function claim(id: string): Promise<boolean> {
-  const res = await db
+  const res = await sdb
     .update(schema.scheduledTasks)
     .set({ status: "running" })
     .where(
@@ -122,7 +128,7 @@ async function claim(id: string): Promise<boolean> {
 export async function runDueTasks(now: Date = new Date()): Promise<number> {
   let ran = 0;
   try {
-    const due = await db
+    const due = await sdb
       .select()
       .from(schema.scheduledTasks)
       .where(
@@ -138,7 +144,7 @@ export async function runDueTasks(now: Date = new Date()): Promise<number> {
       const handler = handlers.get(task.kind);
       if (!handler) {
         // Unknown kind — park it rather than spinning on it every tick.
-        await db
+        await sdb
           .update(schema.scheduledTasks)
           .set({
             status: "failed",
@@ -167,7 +173,7 @@ export async function runDueTasks(now: Date = new Date()): Promise<number> {
             }
           })(),
         });
-        await db
+        await sdb
           .update(schema.scheduledTasks)
           .set({ status: "done", attempts, completedAt: new Date(), lastError: "" })
           .where(eq(schema.scheduledTasks.id, task.id));
@@ -177,7 +183,7 @@ export async function runDueTasks(now: Date = new Date()): Promise<number> {
         // Retry with a widening backoff, then give up so a poison task can't
         // block the queue forever.
         const giveUp = attempts >= MAX_ATTEMPTS;
-        await db
+        await sdb
           .update(schema.scheduledTasks)
           .set({
             status: giveUp ? "failed" : "pending",
@@ -205,7 +211,7 @@ export function startScheduler(intervalMs = 60 * 1000) {
   if (timer) return;
   // Recover anything left "running" by a process that died mid-task. Safe
   // because handlers are expected to be idempotent-ish and we cap attempts.
-  db.update(schema.scheduledTasks)
+  sdb.update(schema.scheduledTasks)
     .set({ status: "pending" })
     .where(eq(schema.scheduledTasks.status, "running"))
     .catch((e) => console.error("[scheduler] boot recovery failed", e));

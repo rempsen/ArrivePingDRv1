@@ -1367,7 +1367,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
-    const events = await jobTimeline(id, { onlyCustomerVisible: false });
+    const events = await jobTimeline(b.companyId, id, { onlyCustomerVisible: false });
     return c.json(
       {
         events,

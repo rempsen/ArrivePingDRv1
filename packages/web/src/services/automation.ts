@@ -15,7 +15,8 @@
  * - Event-driven triggers fire from dispatch.fireEvent(). Time-based triggers
  *   (tech_idle, sla_risk) are swept by the scheduler every minute.
  */
-import { db } from "../api/database";
+import { sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { sendSms, trackingUrl } from "./sms";
@@ -102,18 +103,13 @@ async function notifyOffice(
   body: string,
   bookingId?: string | null,
 ) {
-  const admins = await db
-    .select()
-    .from(schema.user)
-    .where(
-      and(
-        eq(schema.user.companyId, companyId),
-        or(eq(schema.user.role, "admin"), eq(schema.user.role, "dispatcher")),
-      ),
-    );
+  const t = tdb(companyId);
+  const admins = await t.select(
+    schema.user,
+    or(eq(schema.user.role, "admin"), eq(schema.user.role, "dispatcher")),
+  );
   for (const a of admins) {
-    await db.insert(schema.notifications).values({
-      companyId,
+    await t.insert(schema.notifications, {
       userId: a.id,
       bookingId: bookingId ?? null,
       type: "automation",
@@ -190,16 +186,14 @@ export async function runAutomations(
 ): Promise<number> {
   let ran = 0;
   try {
-    const rules = await db
-      .select()
-      .from(schema.automationRules)
-      .where(
-        and(
-          eq(schema.automationRules.companyId, ctx.companyId),
-          eq(schema.automationRules.trigger, trigger),
-          eq(schema.automationRules.enabled, true),
-        ),
-      );
+    const t = tdb(ctx.companyId);
+    const rules = await t.select(
+      schema.automationRules,
+      and(
+        eq(schema.automationRules.trigger, trigger),
+        eq(schema.automationRules.enabled, true),
+      ),
+    );
 
     for (const rule of rules) {
       try {
@@ -209,13 +203,14 @@ export async function runAutomations(
         const outcome = await runAction(rule, ctx);
         ran++;
 
-        await db
-          .update(schema.automationRules)
-          .set({
+        await t.update(
+          schema.automationRules,
+          {
             runsCount: (rule.runsCount ?? 0) + 1,
             lastRunAt: new Date(),
-          })
-          .where(eq(schema.automationRules.id, rule.id));
+          },
+          eq(schema.automationRules.id, rule.id),
+        );
 
         if (ctx.bookingId) {
           await logJobEvent({
@@ -261,7 +256,12 @@ function recentlyFlagged(map: Map<string, number>, key: string): boolean {
 export async function sweepTimeTriggers(now: Date = new Date()): Promise<number> {
   let fired = 0;
   try {
-    const timeRules = await db
+    // Scanning enabled rules across EVERY tenant to find which companies have
+    // a time-based rule at all — same reasoning as services/scheduler.ts:
+    // no single companyId to scope this initial scan to, so it runs on the
+    // system (BYPASSRLS) connection. Everything after resolves a companyId
+    // and goes back through tdb().
+    const timeRules = await sdb
       .select()
       .from(schema.automationRules)
       .where(eq(schema.automationRules.enabled, true));
@@ -285,23 +285,13 @@ export async function sweepTimeTriggers(now: Date = new Date()): Promise<number>
               .map((r) => Number(parse<any>(r.conditions, {}).minMinutes ?? 30)),
           ),
         );
-        const techs = await db
-          .select()
-          .from(schema.riders)
-          .where(
-            and(
-              eq(schema.riders.companyId, companyId),
-              eq(schema.riders.status, "available"),
-            ),
-          );
+        const t = tdb(companyId);
+        const techs = await t.select(schema.riders, eq(schema.riders.status, "available"));
         for (const tech of techs) {
           const since = tech.locationUpdatedAt ? Number(tech.locationUpdatedAt) : null;
           const mins = since ? (now.getTime() - since) / 60000 : idleMins + 1;
           if (mins < idleMins) continue;
-          const [u] = await db
-            .select()
-            .from(schema.user)
-            .where(eq(schema.user.id, tech.userId));
+          const u = await t.selectOne(schema.user, eq(schema.user.id, tech.userId));
           if (recentlyFlagged(IDLE_FLAGGED, tech.id)) continue;
           fired += await runAutomations("tech_idle", {
             companyId,
@@ -321,16 +311,11 @@ export async function sweepTimeTriggers(now: Date = new Date()): Promise<number>
               .map((r) => Number(parse<any>(r.conditions, {}).minMinutes ?? 60)),
           ),
         );
-        const open = await db
-          .select()
-          .from(schema.bookings)
-          .where(
-            and(
-              eq(schema.bookings.companyId, companyId),
-              eq(schema.bookings.status, "pending"),
-              isNull(schema.bookings.deletedAt),
-            ),
-          );
+        const t2 = tdb(companyId);
+        const open = await t2.select(
+          schema.bookings,
+          and(eq(schema.bookings.status, "pending"), isNull(schema.bookings.deletedAt)),
+        );
         for (const b of open) {
           if (!b.scheduledAt) continue;
           const minsUntil = (Number(b.scheduledAt) - now.getTime()) / 60000;
@@ -361,10 +346,7 @@ export async function sweepTimeTriggers(now: Date = new Date()): Promise<number>
         const risks = await predictDelays(companyId, { graceMins: 15 });
         for (const r of risks) {
           if (recentlyFlagged(SLA_FLAGGED, r.bookingId)) continue;
-          const [bk] = await db
-            .select()
-            .from(schema.bookings)
-            .where(eq(schema.bookings.id, r.bookingId));
+          const bk = await tdb(companyId).selectOne(schema.bookings, eq(schema.bookings.id, r.bookingId));
           if (!bk) continue;
           fired += await runAutomations("sla_risk", {
             companyId,

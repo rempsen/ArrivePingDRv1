@@ -1,5 +1,8 @@
 import { Hono } from "hono";
-import { db } from "../database";
+import { db, sdb } from "../database";
+// idempotency_keys is a GLOBAL table (see database/tenant.ts) so it stays on
+// `db`; invoices/bookings looked up by a raw Stripe object id are genuinely
+// pre-tenant and go through `sdb`.
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { getStripe, stripeEnabled, STRIPE_WEBHOOK_SECRET, fromMinor } from "../../services/stripe";
@@ -77,19 +80,19 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
         const ch = event.data.object as Stripe.Charge;
         const piId = typeof ch.payment_intent === "string" ? ch.payment_intent : ch.payment_intent?.id;
         if (piId) {
-          const [inv] = await db
+          const [inv] = await sdb
             .select()
             .from(schema.invoices)
             .where(eq(schema.invoices.stripePaymentIntentId, piId));
           if (inv) {
             const refunded = fromMinor(ch.amount_refunded);
             const fully = refunded >= inv.total - 0.001;
-            await db
+            await sdb
               .update(schema.invoices)
               .set({ amountRefunded: refunded, status: fully ? "refunded" : inv.status })
               .where(eq(schema.invoices.id, inv.id));
             if (fully) {
-              await db
+              await sdb
                 .update(schema.bookings)
                 .set({ paymentStatus: "refunded" })
                 .where(eq(schema.bookings.id, inv.bookingId));
@@ -102,7 +105,7 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
         const dp = event.data.object as Stripe.Dispute;
         const piId = typeof dp.payment_intent === "string" ? dp.payment_intent : dp.payment_intent?.id;
         const [inv] = piId
-          ? await db.select().from(schema.invoices).where(eq(schema.invoices.stripePaymentIntentId, piId))
+          ? await sdb.select().from(schema.invoices).where(eq(schema.invoices.stripePaymentIntentId, piId))
           : [undefined];
         await ledger({
           invoiceId: inv?.id ?? null,

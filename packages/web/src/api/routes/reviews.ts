@@ -1,8 +1,7 @@
 import { Hono } from "hono";
-import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
+import { requireAuth, requireAdmin, tx } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { z } from "zod";
 import { jsonBody, longText } from "../lib/validate";
@@ -22,8 +21,7 @@ export const reviewsRoutes = new Hono<AppEnv>()
   .get("/", requireAuth, async (c) => {
     const t = tx(c);
     const rows = await t.select(schema.reviews);
-    // scope the id->name lookup to this tenant's users (global table, explicit filter)
-    const users = await db.select().from(schema.user).where(eq(schema.user.companyId, tenantId(c)));
+    const users = await t.select(schema.user);
     const riders = await t.select(schema.riders);
     const uName = new Map(users.map((u) => [u.id, u.name]));
     const rUserId = new Map(riders.map((r) => [r.id, r.userId]));

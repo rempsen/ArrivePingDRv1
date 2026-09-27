@@ -62,6 +62,10 @@ beforeAll(async () => {
   for (const t of [
     schema.companySettings, schema.maintenancePlans, schema.scheduledTasks,
     schema.user, schema.notifications, schema.properties, schema.services,
+    // tenant.ts's read predicate for `user` always LEFT-joins an EXISTS
+    // against memberships (home company OR active/invited membership) —
+    // the table has to exist even when this test never populates it.
+    schema.memberships,
   ]) {
     await s.execute(ddlFor(t));
   }

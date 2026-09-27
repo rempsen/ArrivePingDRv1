@@ -13,7 +13,8 @@
  * on anyone's calendar automatically. The customer replies or taps through to
  * the intake form, and the office books it like any other job.
  */
-import { db } from "../api/database";
+import { sdb } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { and, eq } from "drizzle-orm";
 import { registerTaskHandler, scheduleTask } from "./scheduler";
@@ -39,7 +40,11 @@ export function reminderRunAt(plan: {
 /** Cancel any pending reminder for a plan (plan paused, deleted, rescheduled). */
 export async function cancelPlanReminders(planId: string): Promise<void> {
   try {
-    const pending = await db
+    // A plan's pending reminder can be for any tenant and there is no
+    // companyId to scope this scan by until it's decoded from the task's
+    // JSON payload below, so the scan itself runs on the system connection;
+    // each matching task's own cancel-update then goes back through tdb().
+    const pending = await sdb
       .select()
       .from(schema.scheduledTasks)
       .where(
@@ -48,18 +53,19 @@ export async function cancelPlanReminders(planId: string): Promise<void> {
           eq(schema.scheduledTasks.status, "pending"),
         ),
       );
-    for (const t of pending) {
+    for (const task of pending) {
       let pid = "";
       try {
-        pid = String(JSON.parse(t.payload || "{}").planId ?? "");
+        pid = String(JSON.parse(task.payload || "{}").planId ?? "");
       } catch {
         /* ignore */
       }
       if (pid !== planId) continue;
-      await db
-        .update(schema.scheduledTasks)
-        .set({ status: "cancelled", completedAt: new Date() })
-        .where(eq(schema.scheduledTasks.id, t.id));
+      await tdb(task.companyId).update(
+        schema.scheduledTasks,
+        { status: "cancelled", completedAt: new Date() },
+        eq(schema.scheduledTasks.id, task.id),
+      );
     }
   } catch (e) {
     console.error("[maintenance] cancel failed", planId, e);
@@ -72,7 +78,8 @@ export async function cancelPlanReminders(planId: string): Promise<void> {
  */
 export async function syncPlanReminder(planId: string): Promise<void> {
   try {
-    const [plan] = await db
+    // Pre-resolution: only a planId is known here, not its tenant.
+    const [plan] = await sdb
       .select()
       .from(schema.maintenancePlans)
       .where(eq(schema.maintenancePlans.id, planId));
@@ -130,35 +137,25 @@ registerTaskHandler(KIND, async (task) => {
   const planId = String((task.payload as any)?.planId ?? "");
   if (!planId) return;
 
-  const [plan] = await db
-    .select()
-    .from(schema.maintenancePlans)
-    .where(eq(schema.maintenancePlans.id, planId));
+  // task.companyId came from our own scheduleTask() call, so it's a
+  // trustworthy tenant — no need to bypass RLS to look the plan up.
+  const t0 = tdb(task.companyId);
+  const plan = await t0.selectOne(schema.maintenancePlans, eq(schema.maintenancePlans.id, planId));
   if (!plan || !plan.active) return;
-
-  const [cs] = await db
-    .select()
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, plan.companyId));
+  const cs = await t0.selectOne(schema.companySettings);
   const company = cs?.name || "ArrivePing";
 
   // Customer text — with the property hub link so they can see the history
   // behind the recommendation instead of taking our word for it.
   let hubUrl = "";
   if (plan.propertyId) {
-    const [prop] = await db
-      .select()
-      .from(schema.properties)
-      .where(eq(schema.properties.id, plan.propertyId));
+    const prop = await t0.selectOne(schema.properties, eq(schema.properties.id, plan.propertyId));
     if (prop) hubUrl = propertyUrl(prop.publicToken);
   }
 
   let phone = "";
   if (plan.customerId) {
-    const [cust] = await db
-      .select()
-      .from(schema.user)
-      .where(eq(schema.user.id, plan.customerId));
+    const cust = await t0.selectOne(schema.user, eq(schema.user.id, plan.customerId));
     phone = cust?.phone || "";
   }
 
@@ -178,18 +175,10 @@ registerTaskHandler(KIND, async (task) => {
   }
 
   // Office copy so nothing depends on the customer replying.
-  const admins = await db
-    .select()
-    .from(schema.user)
-    .where(
-      and(
-        eq(schema.user.companyId, plan.companyId),
-        eq(schema.user.role, "admin"),
-      ),
-    );
+  const t = tdb(plan.companyId);
+  const admins = await t.select(schema.user, eq(schema.user.role, "admin"));
   for (const a of admins) {
-    await db.insert(schema.notifications).values({
-      companyId: plan.companyId,
+    await t.insert(schema.notifications, {
       userId: a.id,
       type: "maintenance_due",
       title: copy.officeTitle,
@@ -202,13 +191,14 @@ registerTaskHandler(KIND, async (task) => {
     Number(plan.nextDueAt ?? Date.now()) +
       Math.max(1, plan.intervalDays) * 86_400_000,
   );
-  await db
-    .update(schema.maintenancePlans)
-    .set({
+  await tdb(plan.companyId).update(
+    schema.maintenancePlans,
+    {
       nextDueAt: nextDue,
       remindersSent: (plan.remindersSent ?? 0) + 1,
-    })
-    .where(eq(schema.maintenancePlans.id, planId));
+    },
+    eq(schema.maintenancePlans.id, planId),
+  );
 
   await syncPlanReminder(planId);
 });

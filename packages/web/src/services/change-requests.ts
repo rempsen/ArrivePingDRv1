@@ -13,7 +13,6 @@
  *     hand-crafts the request — the screen and the API agree because they run
  *     the same evaluator.
  */
-import { db } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { and, eq, desc, inArray } from "drizzle-orm";
@@ -35,15 +34,7 @@ export const OPEN_STATUS = "pending" as const;
 
 /** Read the tenant's change policy from company_settings, falling back to defaults. */
 export async function changePolicyFor(companyId: string): Promise<ChangePolicy> {
-  const [row] = await db
-    .select({
-      allowCustomerReschedule: schema.companySettings.allowCustomerReschedule,
-      allowCustomerCancelRequest: schema.companySettings.allowCustomerCancelRequest,
-      customerChangeCutoffHours: schema.companySettings.customerChangeCutoffHours,
-    })
-    .from(schema.companySettings)
-    .where(eq(schema.companySettings.companyId, companyId))
-    .limit(1);
+  const row = await tdb(companyId).selectOne(schema.companySettings);
   if (!row) return { ...DEFAULT_CHANGE_POLICY };
   return {
     allowReschedule: !!row.allowCustomerReschedule,
@@ -405,7 +396,7 @@ export async function listRequests(companyId: string, status?: string) {
   const smap = new Map(svcs.map((s) => [s.id, s]));
   const custIds = [...new Set(bookings.map((b) => b.customerId).filter(Boolean))];
   const custs = custIds.length
-    ? await db.select().from(schema.user).where(inArray(schema.user.id, custIds))
+    ? await t.select(schema.user, inArray(schema.user.id, custIds))
     : [];
   const cmap = new Map(custs.map((u) => [u.id, u]));
   return rows.map((r) => {
@@ -440,15 +431,12 @@ export async function pendingRequestCount(companyId: string): Promise<number> {
 
 /** Newest-first history for one booking (office job view). */
 export async function requestsForBooking(companyId: string, bookingId: string) {
-  const rows = await db
-    .select()
-    .from(schema.bookingChangeRequests)
-    .where(
-      and(
-        eq(schema.bookingChangeRequests.companyId, companyId),
-        eq(schema.bookingChangeRequests.bookingId, bookingId),
-      ),
-    )
-    .orderBy(desc(schema.bookingChangeRequests.createdAt));
-  return rows;
+  const t = tdb(companyId);
+  return t.transaction((tx) =>
+    tx
+      .select()
+      .from(schema.bookingChangeRequests)
+      .where(t.scope(schema.bookingChangeRequests, eq(schema.bookingChangeRequests.bookingId, bookingId)))
+      .orderBy(desc(schema.bookingChangeRequests.createdAt)),
+  );
 }

@@ -10,7 +10,7 @@
  * accidentally leak internal activity (declines, staff notes, pricing) to the
  * client. Pass an explicit `customerVisible` to override.
  */
-import { db } from "../api/database";
+import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { eq, and, asc } from "drizzle-orm";
 
@@ -92,8 +92,7 @@ export async function logJobEvent(opts: {
 }): Promise<void> {
   try {
     const policy = EVENT_POLICY[opts.kind] ?? { visible: false, label: opts.kind };
-    await db.insert(schema.jobEvents).values({
-      companyId: opts.companyId,
+    await tdb(opts.companyId).insert(schema.jobEvents, {
       bookingId: opts.bookingId,
       kind: opts.kind,
       actorRole: opts.actorRole ?? "system",
@@ -115,21 +114,25 @@ export function isCustomerVisible(kind: JobEventKind): boolean {
 
 /** Full timeline for a job, oldest first. `onlyCustomerVisible` for public pages. */
 export async function jobTimeline(
+  companyId: string,
   bookingId: string,
   opts: { onlyCustomerVisible?: boolean } = {},
 ) {
-  const where = opts.onlyCustomerVisible
+  const t = tdb(companyId);
+  const extra = opts.onlyCustomerVisible
     ? and(
         eq(schema.jobEvents.bookingId, bookingId),
         eq(schema.jobEvents.customerVisible, true),
       )
     : eq(schema.jobEvents.bookingId, bookingId);
 
-  const rows = await db
-    .select()
-    .from(schema.jobEvents)
-    .where(where)
-    .orderBy(asc(schema.jobEvents.createdAt));
+  const rows = await t.transaction((tx) =>
+    tx
+      .select()
+      .from(schema.jobEvents)
+      .where(t.scope(schema.jobEvents, extra))
+      .orderBy(asc(schema.jobEvents.createdAt)),
+  );
 
   return rows.map((r) => ({
     id: r.id,

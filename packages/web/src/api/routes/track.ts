@@ -200,7 +200,7 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   // ── Customer-facing job history ─────────────────────────────────────────
   // Only events flagged customerVisible (policy lives in services/job-events.ts)
   // so internal activity — declines, staff notes — never leaks to the client.
-  const timeline = await jobTimeline(b.id, { onlyCustomerVisible: true });
+  const timeline = await jobTimeline(b.companyId, b.id, { onlyCustomerVisible: true });
 
   const photoRows = await t.select(
     schema.jobPhotos,
