@@ -227,7 +227,7 @@ const app = new Hono<{ Variables: Variables }>()
     try {
       const { db } = await import("./database");
       const { sql } = await import("drizzle-orm");
-      await db.run(sql`select 1`);
+      await db.execute(sql`select 1`);
       checks.database = "ok";
     } catch (e) {
       ok = false;

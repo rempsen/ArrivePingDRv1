@@ -1,25 +1,25 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, real, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
 
 const now = () =>
-  integer("created_at", { mode: "timestamp_ms" })
+  timestamp("created_at", { mode: "date", withTimezone: true })
     .notNull()
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`);
+    .default(sql`now()`);
 
 /** Per-role default permissions. perms = JSON array of permission keys. */
-export const rolePermissions = sqliteTable("role_permissions", {
+export const rolePermissions = pgTable("role_permissions", {
   role: text("role").primaryKey(), // admin | manager | dispatcher | project_manager | rider
   perms: text("perms").notNull().default("[]"),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
     .notNull()
-    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+    .default(sql`now()`),
 });
 
 /** Service categories / offerings */
-export const services = sqliteTable("services", {
+export const services = pgTable("services", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -34,14 +34,14 @@ export const services = sqliteTable("services", {
   // flexible pricing model (JSON RateModel). When set, overrides basePrice for client charge.
   rateModel: text("rate_model").notNull().default(""),
   rating: real("rating").notNull().default(4.8),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("services_company_idx").on(t.companyId),
 }));
 
 /** Technician profile (1:1 with a user of role=rider) */
-export const riders = sqliteTable("riders", {
+export const riders = pgTable("riders", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -61,23 +61,23 @@ export const riders = sqliteTable("riders", {
   address: text("address").notNull().default(""),
   notes: text("notes").notNull().default(""),
   status: text("status").notNull().default("offline"), // offline | available | enroute | onsite | break | busy
-  manualOffline: integer("manual_offline", { mode: "boolean" }).notNull().default(false), // tech toggled themselves offline
+  manualOffline: boolean("manual_offline").notNull().default(false), // tech toggled themselves offline
   payRatePerHour: real("pay_rate_per_hour").notNull().default(0), // tech hourly pay for time on site
   rating: real("rating").notNull().default(4.9),
   completedJobs: integer("completed_jobs").notNull().default(0),
   approval: text("approval").notNull().default("active"), // invited | pending | active | suspended
-  invitedAt: integer("invited_at", { mode: "timestamp_ms" }),
+  invitedAt: timestamp("invited_at", { mode: "date", withTimezone: true }),
   // last known location
   lat: real("lat"),
   lng: real("lng"),
-  locationUpdatedAt: integer("location_updated_at", { mode: "timestamp_ms" }),
+  locationUpdatedAt: timestamp("location_updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("riders_company_idx").on(t.companyId),
 }));
 
 /** Custom work-order / task templates (the drag-and-drop builder output) */
-export const taskTemplates = sqliteTable("task_templates", {
+export const taskTemplates = pgTable("task_templates", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -94,14 +94,14 @@ export const taskTemplates = sqliteTable("task_templates", {
   estimatedMins: integer("estimated_mins").notNull().default(60),
   // flexible pricing model (JSON RateModel) applied to bookings created from this template
   rateModel: text("rate_model").notNull().default(""),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("tasktpl_company_idx").on(t.companyId),
 }));
 
 /** Shared, reusable skill library for technicians (dropdown + type-to-add). */
-export const skillLibrary = sqliteTable("skill_library", {
+export const skillLibrary = pgTable("skill_library", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull(),
@@ -112,7 +112,7 @@ export const skillLibrary = sqliteTable("skill_library", {
 }));
 
 /** Two-way messages (client <-> tech <-> dispatch) tied to a work order thread */
-export const messages = sqliteTable("messages", {
+export const messages = pgTable("messages", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -138,8 +138,8 @@ export const messages = sqliteTable("messages", {
   // job-thread messages toward the driver app's badge meant either a red number
   // the tech could never clear, or a tech silently blanking the dispatcher's
   // inbox just by opening a job.
-  read: integer("read", { mode: "boolean" }).notNull().default(false),
-  readByTech: integer("read_by_tech", { mode: "boolean" }).notNull().default(false),
+  read: boolean("read").notNull().default(false),
+  readByTech: boolean("read_by_tech").notNull().default(false),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("msg_company_idx").on(t.companyId),
@@ -149,7 +149,7 @@ export const messages = sqliteTable("messages", {
 }));
 
 /** AI / automation rules engine */
-export const automationRules = sqliteTable("automation_rules", {
+export const automationRules = pgTable("automation_rules", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -161,16 +161,16 @@ export const automationRules = sqliteTable("automation_rules", {
   conditions: text("conditions").notNull().default("{}"),
   action: text("action").notNull(), // auto_assign | send_sms | notify_dispatch | reroute | escalate
   actionConfig: text("action_config").notNull().default("{}"),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  enabled: boolean("enabled").notNull().default(true),
   runsCount: integer("runs_count").notNull().default(0),
-  lastRunAt: integer("last_run_at", { mode: "timestamp_ms" }),
+  lastRunAt: timestamp("last_run_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("autorule_company_idx").on(t.companyId),
 }));
 
 /** Third-party integrations */
-export const integrations = sqliteTable("integrations", {
+export const integrations = pgTable("integrations", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -182,17 +182,17 @@ export const integrations = sqliteTable("integrations", {
   // --- OAuth2 token storage ---
   accessToken: text("access_token").notNull().default(""),
   refreshToken: text("refresh_token").notNull().default(""),
-  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+  expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }),
   scope: text("scope").notNull().default(""),
   externalAccountId: text("external_account_id").notNull().default(""),
-  lastSyncAt: integer("last_sync_at", { mode: "timestamp_ms" }),
+  lastSyncAt: timestamp("last_sync_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("integ_company_idx").on(t.companyId),
 }));
 
 /** CompanyCam-style job photos */
-export const jobPhotos = sqliteTable("job_photos", {
+export const jobPhotos = pgTable("job_photos", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -209,7 +209,7 @@ export const jobPhotos = sqliteTable("job_photos", {
   // Whether the homeowner sees it on /t/:token and the permanent record.
   // Defaults on — techs can mark a shot internal (e.g. a damaged part close-up
   // the office wants but the customer shouldn't be alarmed by).
-  customerVisible: integer("customer_visible", { mode: "boolean" }).notNull().default(true),
+  customerVisible: boolean("customer_visible").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("jobphoto_company_idx").on(t.companyId),
@@ -217,7 +217,7 @@ export const jobPhotos = sqliteTable("job_photos", {
 }));
 
 /** A booking / appointment */
-export const bookings = sqliteTable("bookings", {
+export const bookings = pgTable("bookings", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -234,7 +234,7 @@ export const bookings = sqliteTable("bookings", {
   priority: text("priority").notNull().default("normal"), // low | normal | high | urgent
   status: text("status").notNull().default("pending"),
   // pending | confirmed | assigned | enroute | arrived | in_progress | completed | cancelled
-  scheduledAt: integer("scheduled_at", { mode: "timestamp_ms" }).notNull(),
+  scheduledAt: timestamp("scheduled_at", { mode: "date", withTimezone: true }).notNull(),
   address: text("address").notNull(),
   // resolved-or-created from `address` on save — links this job into the
   // property's permanent service history. Nullable: legacy rows + any job
@@ -248,7 +248,7 @@ export const bookings = sqliteTable("bookings", {
   // --- sign-off (captured on site by the tech, on the customer's behalf) ---
   signatureUrl: text("signature_url").notNull().default(""), // stored SVG/PNG of the drawn signature
   signatureName: text("signature_name").notNull().default(""), // printed name of whoever signed
-  signedAt: integer("signed_at", { mode: "timestamp_ms" }),
+  signedAt: timestamp("signed_at", { mode: "date", withTimezone: true }),
   // JSON: filled template fields + checklist state
   fieldData: text("field_data").notNull().default("{}"),
   checklistState: text("checklist_state").notNull().default("[]"),
@@ -267,9 +267,9 @@ export const bookings = sqliteTable("bookings", {
   total: real("total").notNull().default(0), // subtotal + tax
   priceBreakdown: text("price_breakdown").notNull().default(""), // JSON line items
   // --- time & mileage tracking ---
-  enrouteAt: integer("enroute_at", { mode: "timestamp_ms" }), // when tech tapped "on my way" — mileage accrues from here
-  startedAt: integer("started_at", { mode: "timestamp_ms" }),
-  finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+  enrouteAt: timestamp("enroute_at", { mode: "date", withTimezone: true }), // when tech tapped "on my way" — mileage accrues from here
+  startedAt: timestamp("started_at", { mode: "date", withTimezone: true }),
+  finishedAt: timestamp("finished_at", { mode: "date", withTimezone: true }),
   onSiteMinutes: real("on_site_minutes").notNull().default(0), // billed minutes actually worked
   // Elapsed drive time from "Start Driving" (enrouteAt) to first arrival on
   // site (auto-arrive via geofence or manual "I've Arrived"). Finalized once,
@@ -278,8 +278,8 @@ export const bookings = sqliteTable("bookings", {
   // --- geofenced clock (pause/resume as tech enters/leaves job site) ---
   clockState: text("clock_state").notNull().default("idle"), // idle | running | paused
   accumulatedMs: integer("accumulated_ms").notNull().default(0), // total on-site ms banked across resume cycles
-  lastResumeAt: integer("last_resume_at", { mode: "timestamp_ms" }), // when clock last started running
-  insideGeofence: integer("inside_geofence", { mode: "boolean" }).notNull().default(false), // current presence at job site
+  lastResumeAt: timestamp("last_resume_at", { mode: "date", withTimezone: true }), // when clock last started running
+  insideGeofence: boolean("inside_geofence").notNull().default(false), // current presence at job site
   mileageKm: real("mileage_km").notNull().default(0), // round-trip km accumulated from GPS pings (enroute + on-site + return)
   techPay: real("tech_pay").notNull().default(0), // computed driver pay for this job (hourly)
   techPayBreakdown: text("tech_pay_breakdown").notNull().default(""), // JSON
@@ -300,9 +300,9 @@ export const bookings = sqliteTable("bookings", {
     .notNull()
     .$defaultFn(() => crypto.randomUUID().replace(/-/g, "").slice(0, 12)),
   customerPhone: text("customer_phone").notNull().default(""),
-  smsSentAt: integer("sms_sent_at", { mode: "timestamp_ms" }),
+  smsSentAt: timestamp("sms_sent_at", { mode: "date", withTimezone: true }),
   // public tracking link expiry — link stops resolving after this time (PII safety)
-  tokenExpiresAt: integer("token_expires_at", { mode: "timestamp_ms" }),
+  tokenExpiresAt: timestamp("token_expires_at", { mode: "date", withTimezone: true }),
   etaMins: integer("eta_mins"),
   etaDistanceKm: real("eta_distance_km"),
   // ── Running-late watch (shared/delay-policy.ts) ──────────────────────────
@@ -311,23 +311,23 @@ export const bookings = sqliteTable("bookings", {
   // starts the grace clock before the notice sends itself. delayNotifiedMins
   // records the slip the customer was actually told about, so a second notice
   // only goes out if things genuinely got worse.
-  delayFlaggedAt: integer("delay_flagged_at", { mode: "timestamp_ms" }),
+  delayFlaggedAt: timestamp("delay_flagged_at", { mode: "date", withTimezone: true }),
   delayFlaggedMins: integer("delay_flagged_mins"),
-  delayNotifiedAt: integer("delay_notified_at", { mode: "timestamp_ms" }),
+  delayNotifiedAt: timestamp("delay_notified_at", { mode: "date", withTimezone: true }),
   delayNotifiedMins: integer("delay_notified_mins"),
   // Dispatch handled it another way (already phoned the customer) — detection
   // keeps running, the automatic notice does not.
-  delayMuted: integer("delay_muted", { mode: "boolean" }).notNull().default(false),
+  delayMuted: boolean("delay_muted").notNull().default(false),
   // assignment lifecycle: none | offered | accepted | declined
   assignStatus: text("assign_status").notNull().default("none"),
-  assignedAt: integer("assigned_at", { mode: "timestamp_ms" }),
-  acceptedAt: integer("accepted_at", { mode: "timestamp_ms" }),
+  assignedAt: timestamp("assigned_at", { mode: "date", withTimezone: true }),
+  acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
   declineReason: text("decline_reason").notNull().default(""),
   // required skill matching for dispatch
   requiredSkillClass: text("required_skill_class").notNull().default(""), // e.g. "HVAC" — filters techs on scheduler
   requiredSkills: text("required_skills").notNull().default(""),          // csv of individual skill tags required
   // soft-delete: when set, the job is archived (excluded from active lists) but never lost
-  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   // indexes for dispatcher search/filter at scale
@@ -347,7 +347,7 @@ export const bookings = sqliteTable("bookings", {
 
 /** Product & Service Catalog — reusable priced items the dispatcher drops into work orders.
  *  kind: service (labor) | product (material) | assembly (composite of other items). */
-export const catalogItems = sqliteTable("catalog_items", {
+export const catalogItems = pgTable("catalog_items", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   kind: text("kind").notNull().default("product"), // service | product | assembly
@@ -361,12 +361,12 @@ export const catalogItems = sqliteTable("catalog_items", {
   markupPct: real("markup_pct").notNull().default(0), // % markup over cost (auto mode)
   priceMode: text("price_mode").notNull().default("auto"), // auto (cost*(1+markup)) | manual
   unitPrice: real("unit_price").notNull().default(0), // customer-facing price per unit (manual or cached auto)
-  taxable: integer("taxable", { mode: "boolean" }).notNull().default(true),
+  taxable: boolean("taxable").notNull().default(true),
   // assembly composition: JSON [{ itemId, qty }] — rolls up child cost/price
   components: text("components").notNull().default("[]"),
   // optional link to a legacy service template (migration provenance)
   serviceId: text("service_id"),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("catalog_company_idx").on(t.companyId),
@@ -387,19 +387,19 @@ export const catalogItems = sqliteTable("catalog_items", {
  * Selections roll up into the booking's line items via the existing
  * buildUnitLineItem/recomputeBooking pipeline — no separate pricing engine.
  */
-export const optionCategories = sqliteTable("option_categories", {
+export const optionCategories = pgTable("option_categories", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull(), // e.g. "Flooring", "Paint Grade", "Garage Door Model"
   description: text("description").notNull().default(""), // shown to the customer above the tier cards
   sortOrder: integer("sort_order").notNull().default(0),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("optcat_company_idx").on(t.companyId),
 }));
 
-export const optionCategoryItems = sqliteTable("option_category_items", {
+export const optionCategoryItems = pgTable("option_category_items", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   categoryId: text("category_id")
@@ -411,9 +411,9 @@ export const optionCategoryItems = sqliteTable("option_category_items", {
   image: text("image").notNull().default(""),
   priceDelta: real("price_delta").notNull().default(0), // added to the base price when selected (can be 0 for the included/default tier)
   unitCost: real("unit_cost").notNull().default(0), // optional COGS delta, for margin/attach-rate reporting only
-  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false), // pre-selected tier when the customer opens the page
+  isDefault: boolean("is_default").notNull().default(false), // pre-selected tier when the customer opens the page
   sortOrder: integer("sort_order").notNull().default(0),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   categoryIdx: index("optitem_category_idx").on(t.categoryId),
@@ -421,7 +421,7 @@ export const optionCategoryItems = sqliteTable("option_category_items", {
 }));
 
 /** One row per (booking, category) — the customer's locked-in tier choice + e-sign. */
-export const bookingOptionSelections = sqliteTable("booking_option_selections", {
+export const bookingOptionSelections = pgTable("booking_option_selections", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   bookingId: text("booking_id")
@@ -435,7 +435,7 @@ export const bookingOptionSelections = sqliteTable("booking_option_selections", 
   priceDelta: real("price_delta").notNull().default(0), // snapshot
   selectedBy: text("selected_by").notNull().default("customer"), // customer | staff
   signatureName: text("signature_name").notNull().default(""), // typed e-sign name
-  selectedAt: integer("selected_at", { mode: "timestamp_ms" }),
+  selectedAt: timestamp("selected_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   bookingIdx: index("optsel_booking_idx").on(t.bookingId),
@@ -452,7 +452,7 @@ export const bookingOptionSelections = sqliteTable("booking_option_selections", 
  * still recorded here (status "applied") as the audit trail of what moved and
  * from when. Policy lives in shared/change-policy.ts.
  */
-export const bookingChangeRequests = sqliteTable("booking_change_requests", {
+export const bookingChangeRequests = pgTable("booking_change_requests", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   bookingId: text("booking_id")
@@ -466,11 +466,11 @@ export const bookingChangeRequests = sqliteTable("booking_change_requests", {
   reason: text("reason").notNull().default(""), // customer's words, shown to the office
   // reschedule only: the time the customer asked for, and the time it was on
   // before, so the office sees the move and an applied change is reversible.
-  proposedAt: integer("proposed_at", { mode: "timestamp_ms" }),
-  previousAt: integer("previous_at", { mode: "timestamp_ms" }),
+  proposedAt: timestamp("proposed_at", { mode: "date", withTimezone: true }),
+  previousAt: timestamp("previous_at", { mode: "date", withTimezone: true }),
   decidedBy: text("decided_by").notNull().default(""),
   decidedByName: text("decided_by_name").notNull().default(""),
-  decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
+  decidedAt: timestamp("decided_at", { mode: "date", withTimezone: true }),
   decisionNote: text("decision_note").notNull().default(""), // office reply back to the customer
   createdAt: now(),
 }, (t) => ({
@@ -480,7 +480,7 @@ export const bookingChangeRequests = sqliteTable("booking_change_requests", {
 }));
 
 /** Live rider location pings during an active job (track history) */
-export const trackingPings = sqliteTable("tracking_pings", {
+export const trackingPings = pgTable("tracking_pings", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -500,7 +500,7 @@ export const trackingPings = sqliteTable("tracking_pings", {
 }));
 
 /** Invoices / payments */
-export const invoices = sqliteTable("invoices", {
+export const invoices = pgTable("invoices", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -517,7 +517,7 @@ export const invoices = sqliteTable("invoices", {
   total: real("total").notNull(),
   status: text("status").notNull().default("unpaid"), // unpaid | processing | paid | refunded | failed
   method: text("method").notNull().default("card"),
-  paidAt: integer("paid_at", { mode: "timestamp_ms" }),
+  paidAt: timestamp("paid_at", { mode: "date", withTimezone: true }),
   // ---- Stripe payment linkage ----
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   stripeChargeId: text("stripe_charge_id"),
@@ -532,7 +532,7 @@ export const invoices = sqliteTable("invoices", {
 }));
 
 /** Idempotency keys — dedupe money-mutating requests + replay webhook events. */
-export const idempotencyKeys = sqliteTable("idempotency_keys", {
+export const idempotencyKeys = pgTable("idempotency_keys", {
   key: text("key").primaryKey(), // client key or stripe event id
   scope: text("scope").notNull().default("payment"),
   responseStatus: integer("response_status"),
@@ -541,7 +541,7 @@ export const idempotencyKeys = sqliteTable("idempotency_keys", {
 });
 
 /** Immutable payment ledger — append-only audit trail of every money movement. */
-export const paymentLedger = sqliteTable("payment_ledger", {
+export const paymentLedger = pgTable("payment_ledger", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -564,7 +564,7 @@ export const paymentLedger = sqliteTable("payment_ledger", {
 }));
 
 /** In-app notifications */
-export const notifications = sqliteTable("notifications", {
+export const notifications = pgTable("notifications", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -578,7 +578,7 @@ export const notifications = sqliteTable("notifications", {
   type: text("type").notNull(), // booking_confirmed, assigned, enroute, arrived, completed, reminder, receipt
   title: text("title").notNull(),
   body: text("body").notNull(),
-  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  read: boolean("read").notNull().default(false),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("notif_company_idx").on(t.companyId),
@@ -589,7 +589,7 @@ export const notifications = sqliteTable("notifications", {
  * (phone + tablet). We store the Expo token (ExponentPushToken[...]) and send
  * via the Expo Push API. Tokens are pruned when Expo reports them invalid.
  */
-export const pushTokens = sqliteTable("push_tokens", {
+export const pushTokens = pgTable("push_tokens", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -600,14 +600,14 @@ export const pushTokens = sqliteTable("push_tokens", {
   token: text("token").notNull().unique(), // ExponentPushToken[...]
   platform: text("platform").notNull().default("ios"), // ios | android
   deviceName: text("device_name").notNull().default(""),
-  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }),
+  lastSeenAt: timestamp("last_seen_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   userIdx: index("push_tokens_user_idx").on(t.userId),
 }));
 
 /** Reviews */
-export const reviews = sqliteTable("reviews", {
+export const reviews = pgTable("reviews", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -621,8 +621,8 @@ export const reviews = sqliteTable("reviews", {
   riderId: text("rider_id").references(() => riders.id),
   rating: integer("rating").notNull(),
   comment: text("comment").notNull().default(""),
-  hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
-  featured: integer("featured", { mode: "boolean" }).notNull().default(false),
+  hidden: boolean("hidden").notNull().default(false),
+  featured: boolean("featured").notNull().default(false),
   reply: text("reply").notNull().default(""),
   createdAt: now(),
 }, (t) => ({
@@ -630,7 +630,7 @@ export const reviews = sqliteTable("reviews", {
 }));
 
 /** Singleton company settings (row id = "default") */
-export const companySettings = sqliteTable("company_settings", {
+export const companySettings = pgTable("company_settings", {
   id: text("id").primaryKey().default("default"),
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull().default("ArrivePing by NVC360"),
@@ -645,7 +645,7 @@ export const companySettings = sqliteTable("company_settings", {
   taxRate: real("tax_rate").notNull().default(5), // % (GST 5% MB) — fallback when region unknown
   taxLabel: text("tax_label").notNull().default("GST"),
   defaultRegion: text("default_region").notNull().default("MB"), // default tax region code
-  autoTaxByRegion: integer("auto_tax_by_region", { mode: "boolean" }).notNull().default(true),
+  autoTaxByRegion: boolean("auto_tax_by_region").notNull().default(true),
   logo: text("logo").notNull().default(""),
   // Original location of the logo on the tenant's own website (from "Grab Brand
   // Assets"). We keep BOTH: `logo` is our hosted/durable copy used in emails &
@@ -681,7 +681,7 @@ export const companySettings = sqliteTable("company_settings", {
   // ── Review requests ────────────────────────────────────────────────────
   // A completed job schedules ONE review-request SMS this many minutes later
   // (services/reviews.ts). 0 or disabled = never ask.
-  reviewRequestEnabled: integer("review_request_enabled", { mode: "boolean" }).notNull().default(true),
+  reviewRequestEnabled: boolean("review_request_enabled").notNull().default(true),
   reviewRequestDelayMins: integer("review_request_delay_mins").notNull().default(120),
   // Where 4-5 star reviewers get sent to leave a public review. Ratings of 3
   // or below are deliberately NOT routed here — they go to the office as
@@ -694,8 +694,8 @@ export const companySettings = sqliteTable("company_settings", {
   // in shared/change-policy.ts: the customer may move their own appointment
   // outside the cutoff, and may ASK to cancel, but a cancellation is always
   // approved by the office so nothing silently leaves the dispatch board.
-  allowCustomerReschedule: integer("allow_customer_reschedule", { mode: "boolean" }).notNull().default(true),
-  allowCustomerCancelRequest: integer("allow_customer_cancel_request", { mode: "boolean" }).notNull().default(true),
+  allowCustomerReschedule: boolean("allow_customer_reschedule").notNull().default(true),
+  allowCustomerCancelRequest: boolean("allow_customer_cancel_request").notNull().default(true),
   // Hours before the appointment where self-serve stops and changes need an
   // office approval instead. 0 = no cutoff (always self-serve).
   customerChangeCutoffHours: integer("customer_change_cutoff_hours").notNull().default(12),
@@ -703,7 +703,7 @@ export const companySettings = sqliteTable("company_settings", {
   // Detection is automatic; the notice waits delayAutoSendAfterMins for a
   // human to send, adjust, or mute it, then goes out on its own. 0 = never
   // auto-send, dispatcher only.
-  delayNoticeEnabled: integer("delay_notice_enabled", { mode: "boolean" }).notNull().default(true),
+  delayNoticeEnabled: boolean("delay_notice_enabled").notNull().default(true),
   delayNoticeThresholdMins: integer("delay_notice_threshold_mins").notNull().default(15),
   delayNoticeAutoSendAfterMins: integer("delay_notice_auto_send_after_mins").notNull().default(10),
   // ── Qualifying profile (onboarding chat) ────────────────────────────────
@@ -715,14 +715,14 @@ export const companySettings = sqliteTable("company_settings", {
   // (capacity-aware suggestions, rush pricing) — never load-bearing for
   // provisioning, which already ran before this exists.
   qualifyingProfile: text("qualifying_profile").notNull().default("{}"),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("settings_company_idx").on(t.companyId),
 }));
 
 /** Reusable colored tags, scoped to clients/techs/both */
-export const tags = sqliteTable("tags", {
+export const tags = pgTable("tags", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   label: text("label").notNull(),
@@ -741,7 +741,7 @@ export const tags = sqliteTable("tags", {
  * the tenant's industry preset (see industry-presets.ts categories[]) so a
  * fresh tenant isn't empty, but is fully editable afterward.
  */
-export const formCategories = sqliteTable("form_categories", {
+export const formCategories = pgTable("form_categories", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull(),
@@ -752,7 +752,7 @@ export const formCategories = sqliteTable("form_categories", {
 }));
 
 /** Tag assignment join (entityType: client | tech) */
-export const entityTags = sqliteTable("entity_tags", {
+export const entityTags = pgTable("entity_tags", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   tagId: text("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
@@ -764,7 +764,7 @@ export const entityTags = sqliteTable("entity_tags", {
 }));
 
 /** Admin-defined custom fields per entity type */
-export const customFields = sqliteTable("custom_fields", {
+export const customFields = pgTable("custom_fields", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   entity: text("entity").notNull(), // client | tech | work_order
@@ -773,31 +773,31 @@ export const customFields = sqliteTable("custom_fields", {
   type: text("type").notNull().default("text"),
   options: text("options").notNull().default("[]"), // JSON for select
   placeholder: text("placeholder").notNull().default(""),
-  required: integer("required", { mode: "boolean" }).notNull().default(false),
+  required: boolean("required").notNull().default(false),
   section: text("section").notNull().default("General"),
   sortOrder: integer("sort_order").notNull().default(0),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("cf_company_idx").on(t.companyId),
 }));
 
 /** Stored values for custom fields */
-export const customFieldValues = sqliteTable("custom_field_values", {
+export const customFieldValues = pgTable("custom_field_values", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   fieldId: text("field_id").notNull().references(() => customFields.id, { onDelete: "cascade" }),
   entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(),
   value: text("value").notNull().default(""),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("cfv_company_idx").on(t.companyId),
 }));
 
 /** File attachments on any entity (client/tech/work_order) — local storage */
-export const attachments = sqliteTable("attachments", {
+export const attachments = pgTable("attachments", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   entityType: text("entity_type").notNull(), // client | tech | work_order
@@ -815,12 +815,12 @@ export const attachments = sqliteTable("attachments", {
 }));
 
 /** Technician shifts & time-off */
-export const techShifts = sqliteTable("tech_shifts", {
+export const techShifts = pgTable("tech_shifts", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   riderId: text("rider_id").notNull().references(() => riders.id, { onDelete: "cascade" }),
   kind: text("kind").notNull().default("shift"), // shift | timeoff
-  date: integer("date", { mode: "timestamp_ms" }).notNull(),
+  date: timestamp("date", { mode: "date", withTimezone: true }).notNull(),
   startMin: integer("start_min").notNull().default(540), // minutes from midnight (9:00)
   endMin: integer("end_min").notNull().default(1020), // 17:00
   note: text("note").notNull().default(""),
@@ -830,13 +830,13 @@ export const techShifts = sqliteTable("tech_shifts", {
 }));
 
 /** Service area zones (map polygons) */
-export const serviceZones = sqliteTable("service_zones", {
+export const serviceZones = pgTable("service_zones", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull(),
   color: text("color").notNull().default("#06B6D4"),
   polygon: text("polygon").notNull().default("[]"), // JSON [[lat,lng],...]
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   surgeMultiplier: real("surge_multiplier").notNull().default(1),
   createdAt: now(),
 }, (t) => ({
@@ -844,12 +844,12 @@ export const serviceZones = sqliteTable("service_zones", {
 }));
 
 /** Technician payouts / earnings */
-export const payouts = sqliteTable("payouts", {
+export const payouts = pgTable("payouts", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   riderId: text("rider_id").notNull().references(() => riders.id, { onDelete: "cascade" }),
-  periodStart: integer("period_start", { mode: "timestamp_ms" }).notNull(),
-  periodEnd: integer("period_end", { mode: "timestamp_ms" }).notNull(),
+  periodStart: timestamp("period_start", { mode: "date", withTimezone: true }).notNull(),
+  periodEnd: timestamp("period_end", { mode: "date", withTimezone: true }).notNull(),
   jobsCount: integer("jobs_count").notNull().default(0),
   // gross == net == the sum of real per-job tech pay (hourly on-site time +
   // per-unit pay). feePct/fee are legacy columns from the old "percentage of the
@@ -870,14 +870,14 @@ export const payouts = sqliteTable("payouts", {
   unratedJobs: integer("unrated_jobs").notNull().default(0),
   breakdown: text("breakdown").notNull().default(""), // JSON per-job detail
   status: text("status").notNull().default("pending"), // pending | paid
-  paidAt: integer("paid_at", { mode: "timestamp_ms" }),
+  paidAt: timestamp("paid_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("payout_company_idx").on(t.companyId),
 }));
 
 /** Audit log of admin actions */
-export const auditLog = sqliteTable("audit_log", {
+export const auditLog = pgTable("audit_log", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   actorId: text("actor_id").notNull().default(""),
@@ -896,37 +896,37 @@ export const auditLog = sqliteTable("audit_log", {
 }));
 
 /** Notification rule matrix: for each event, who gets notified and over which channels. */
-export const notificationRules = sqliteTable("notification_rules", {
+export const notificationRules = pgTable("notification_rules", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   event: text("event").notNull(), // created | assigned | accepted | declined | enroute | arrived | started | completed | cancelled | receipt
   recipient: text("recipient").notNull(), // client | tech | office
-  inApp: integer("in_app", { mode: "boolean" }).notNull().default(true),
-  email: integer("email", { mode: "boolean" }).notNull().default(false),
-  sms: integer("sms", { mode: "boolean" }).notNull().default(false),
-  webhook: integer("webhook", { mode: "boolean" }).notNull().default(false),
+  inApp: boolean("in_app").notNull().default(true),
+  email: boolean("email").notNull().default(false),
+  sms: boolean("sms").notNull().default(false),
+  webhook: boolean("webhook").notNull().default(false),
   // optional custom override template; {{vars}} supported. empty = use default.
   template: text("template").notNull().default(""),
   // optional custom subject line for email ({{vars}} supported). empty = use default.
   emailSubject: text("email_subject").notNull().default(""),
   // rich HTML-email block design as JSON (array of blocks). empty = fall back to text template.
   emailDesign: text("email_design").notNull().default(""),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("notifrule_company_idx").on(t.companyId),
 }));
 
 /** Per-company per-channel delivery configuration (sender identity, quiet hours, master switch). */
-export const notificationChannels = sqliteTable("notification_channels", {
+export const notificationChannels = pgTable("notification_channels", {
   id: text("id").primaryKey().default("default"),
   companyId: text("company_id").notNull().default("default"),
   // master enable per channel
-  inAppEnabled: integer("in_app_enabled", { mode: "boolean" }).notNull().default(true),
-  emailEnabled: integer("email_enabled", { mode: "boolean" }).notNull().default(true),
-  smsEnabled: integer("sms_enabled", { mode: "boolean" }).notNull().default(true),
-  webhookEnabled: integer("webhook_enabled", { mode: "boolean" }).notNull().default(true),
+  inAppEnabled: boolean("in_app_enabled").notNull().default(true),
+  emailEnabled: boolean("email_enabled").notNull().default(true),
+  smsEnabled: boolean("sms_enabled").notNull().default(true),
+  webhookEnabled: boolean("webhook_enabled").notNull().default(true),
   // email sender identity
   emailFromName: text("email_from_name").notNull().default("ArrivePing by NVC360"),
   emailFromAddress: text("email_from_address").notNull().default(""),
@@ -940,7 +940,7 @@ export const notificationChannels = sqliteTable("notification_channels", {
   smsFromNumber: text("sms_from_number").notNull().default(""),
   smsSenderId: text("sms_sender_id").notNull().default(""),
   // quiet hours (24h local), suppress sms/email outside window. blank = always on.
-  quietHoursEnabled: integer("quiet_hours_enabled", { mode: "boolean" }).notNull().default(false),
+  quietHoursEnabled: boolean("quiet_hours_enabled").notNull().default(false),
   quietStart: text("quiet_start").notNull().default("21:00"),
   quietEnd: text("quiet_end").notNull().default("08:00"),
   quietChannels: text("quiet_channels").notNull().default("sms,email"), // csv of channels affected
@@ -950,14 +950,14 @@ export const notificationChannels = sqliteTable("notification_channels", {
   emailBrandColor: text("email_brand_color").notNull().default("#06B6D4"), // header gradient + button color
   emailHeaderStyle: text("email_header_style").notNull().default("gradient"), // gradient | solid | minimal
   emailBgColor: text("email_bg_color").notNull().default("#f1f5f9"), // outer page background
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("notifchan_company_idx").on(t.companyId),
 }));
 
 /** Reusable branded email templates (block-based designs) usable across any event. */
-export const emailTemplates = sqliteTable("email_templates", {
+export const emailTemplates = pgTable("email_templates", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull().default("Untitled template"),
@@ -965,15 +965,15 @@ export const emailTemplates = sqliteTable("email_templates", {
   subject: text("subject").notNull().default(""),
   // JSON array of email blocks
   design: text("design").notNull().default("[]"),
-  isBuiltin: integer("is_builtin", { mode: "boolean" }).notNull().default(false),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  isBuiltin: boolean("is_builtin").notNull().default(false),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("emailtpl_company_idx").on(t.companyId),
 }));
 
 /** Webhook endpoints that receive event POSTs. */
-export const webhookEndpoints = sqliteTable("webhook_endpoints", {
+export const webhookEndpoints = pgTable("webhook_endpoints", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   label: text("label").notNull().default(""),
@@ -981,14 +981,14 @@ export const webhookEndpoints = sqliteTable("webhook_endpoints", {
   secret: text("secret").notNull().default(""),
   // csv of events to receive, or "*" for all
   events: text("events").notNull().default("*"),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("webhook_company_idx").on(t.companyId),
 }));
 
 /** Delivery log for every notification fired (audit + debugging). */
-export const notificationDeliveries = sqliteTable("notification_deliveries", {
+export const notificationDeliveries = pgTable("notification_deliveries", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   event: text("event").notNull(),
@@ -1004,7 +1004,7 @@ export const notificationDeliveries = sqliteTable("notification_deliveries", {
 }));
 
 /** Pending technician invites (invite-only onboarding). */
-export const techInvites = sqliteTable("tech_invites", {
+export const techInvites = pgTable("tech_invites", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   email: text("email").notNull(),
@@ -1014,14 +1014,14 @@ export const techInvites = sqliteTable("tech_invites", {
   token: text("token").notNull().$defaultFn(() => crypto.randomUUID().replace(/-/g, "")),
   status: text("status").notNull().default("pending"), // pending | accepted | revoked
   invitedBy: text("invited_by").notNull().default(""),
-  acceptedAt: integer("accepted_at", { mode: "timestamp_ms" }),
+  acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("techinvite_company_idx").on(t.companyId),
 }));
 
 /** API keys for external agents / integrations (Claude Code, MCP clients, scripts). */
-export const apiKeys = sqliteTable("api_keys", {
+export const apiKeys = pgTable("api_keys", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   label: text("label").notNull().default(""),
@@ -1042,9 +1042,9 @@ export const apiKeys = sqliteTable("api_keys", {
   allowedOrigins: text("allowed_origins").notNull().default(""),
   createdBy: text("created_by").notNull().default(""),
   createdByName: text("created_by_name").notNull().default(""),
-  lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
-  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
-  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  lastUsedAt: timestamp("last_used_at", { mode: "date", withTimezone: true }),
+  expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("apikey_company_idx").on(t.companyId),
@@ -1056,7 +1056,7 @@ export const apiKeys = sqliteTable("api_keys", {
  * a pending booking (lead) in the owning tenant. Bound to a public key so the
  * browser submit can authenticate without a session.
  */
-export const intakeForms = sqliteTable("intake_forms", {
+export const intakeForms = pgTable("intake_forms", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   slug: text("slug").notNull(), // url segment, unique per company
@@ -1077,7 +1077,7 @@ export const intakeForms = sqliteTable("intake_forms", {
   successMessage: text("success_message").notNull().default("Thanks! We've received your request and will reach out shortly."),
   // default priority + service fallback when submitter doesn't pick one
   defaultServiceId: text("default_service_id").notNull().default(""),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  active: boolean("active").notNull().default(true),
   submitCount: integer("submit_count").notNull().default(0),
   createdBy: text("created_by").notNull().default(""),
   // "lead" = customer-facing intake (default, unchanged behavior).
@@ -1094,8 +1094,8 @@ export const intakeForms = sqliteTable("intake_forms", {
   accessCode: text("access_code").notNull().default(""),
   // work_order forms only: whether the employee submitting is allowed to pick
   // a technician + exact schedule time, or must leave it for a dispatcher.
-  allowTechAssign: integer("allow_tech_assign", { mode: "boolean" }).notNull().default(true),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  allowTechAssign: boolean("allow_tech_assign").notNull().default(true),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("intake_company_idx").on(t.companyId),
@@ -1103,7 +1103,7 @@ export const intakeForms = sqliteTable("intake_forms", {
 }));
 
 /** Raw audit trail of every public form submission (before/independent of booking). */
-export const intakeSubmissions = sqliteTable("intake_submissions", {
+export const intakeSubmissions = pgTable("intake_submissions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   companyId: text("company_id").notNull().default("default"),
   formId: text("form_id").notNull().default(""),
@@ -1129,17 +1129,17 @@ export const intakeSubmissions = sqliteTable("intake_submissions", {
  * every tenant can just click "Connect" and authorize on the provider's site —
  * no API keys ever touched by tenants. Falls back to env vars when absent.
  */
-export const oauthAppCredentials = sqliteTable("oauth_app_credentials", {
+export const oauthAppCredentials = pgTable("oauth_app_credentials", {
   provider: text("provider").primaryKey(), // quickbooks | gmail | google_calendar | ...
   clientId: text("client_id").notNull().default(""),
   clientSecret: text("client_secret").notNull().default(""),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  enabled: boolean("enabled").notNull().default(true),
   updatedBy: text("updated_by").notNull().default(""), // superadmin user id
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
 
-export const companies = sqliteTable("companies", {
+export const companies = pgTable("companies", {
   id: text("id").primaryKey(), // slug, e.g. "acme-hvac" — used as companyId everywhere
   name: text("name").notNull(),
   contactEmail: text("contact_email").notNull().default(""),
@@ -1155,8 +1155,8 @@ export const companies = sqliteTable("companies", {
   // the "I'll finish this later" skip button (api/routes/onboarding.ts).
   // Pre-existing tenants are backfilled to non-null at migration time so this
   // new experience only ever appears for tenants provisioned after it shipped.
-  onboardingCompletedAt: integer("onboarding_completed_at", { mode: "timestamp_ms" }),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { mode: "date", withTimezone: true }),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
 
@@ -1179,7 +1179,7 @@ export const companies = sqliteTable("companies", {
  * and overlays its role/permissions onto the session user, which is what makes
  * every existing `user.role` check become per-company automatically.
  */
-export const memberships = sqliteTable(
+export const memberships = pgTable(
   "memberships",
   {
     id: text("id")
@@ -1205,9 +1205,9 @@ export const memberships = sqliteTable(
     // Set when an admin adds someone who ALREADY has a login elsewhere. The
     // second company never sets a password; the person accepts to join.
     invitedBy: text("invited_by"),
-    acceptedAt: integer("accepted_at", { mode: "timestamp_ms" }),
+    acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   },
   (table) => [
     // One membership per person per company. This is the integrity rule that
@@ -1230,7 +1230,7 @@ export const memberships = sqliteTable(
  * Optional by design — an industry with no row here still gets the baseline
  * IndustryPreset experience; this only enriches it further.
  */
-export const icpKnowledgeBase = sqliteTable("icp_knowledge_base", {
+export const icpKnowledgeBase = pgTable("icp_knowledge_base", {
   industry: text("industry").primaryKey(), // industry-presets.ts id, e.g. "flooring"
   summary: text("summary").notNull().default(""), // 2-3 sentence grounding on the vertical
   bestPractices: text("best_practices").notNull().default(""), // JSON string[] — concrete operational best practices
@@ -1241,8 +1241,8 @@ export const icpKnowledgeBase = sqliteTable("icp_knowledge_base", {
   complianceNotes: text("compliance_notes").notNull().default(""), // regulatory/compliance considerations (licensing, EVV, safety, etc.)
   sources: text("sources").notNull().default(""), // JSON string {title,url}[] — citations for the research above
   researchedBy: text("researched_by").notNull().default(""), // superadmin user id who curated this
-  researchedAt: integer("researched_at", { mode: "timestamp_ms" }),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+  researchedAt: timestamp("researched_at", { mode: "date", withTimezone: true }),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
 
@@ -1258,7 +1258,7 @@ export const icpKnowledgeBase = sqliteTable("icp_knowledge_base", {
  * persistent magic link that survives across jobs, unlike the per-job
  * tracking token which is scoped to one work order.
  */
-export const properties = sqliteTable(
+export const properties = pgTable(
   "properties",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1276,7 +1276,7 @@ export const properties = sqliteTable(
       .notNull()
       .$defaultFn(() => crypto.randomUUID().replace(/-/g, "").slice(0, 16)),
     notes: text("notes").notNull().default(""),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
   },
   (t) => ({
@@ -1297,7 +1297,7 @@ export const properties = sqliteTable(
  * customerVisible gates what the homeowner sees on /t/:token — internal events
  * (staff notes, tech declined, pricing changes) stay office-only.
  */
-export const jobEvents = sqliteTable(
+export const jobEvents = pgTable(
   "job_events",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1315,7 +1315,7 @@ export const jobEvents = sqliteTable(
     label: text("label").notNull().default(""),
     detail: text("detail").notNull().default(""),
     meta: text("meta").notNull().default("{}"), // JSON — photo url, duration, etc.
-    customerVisible: integer("customer_visible", { mode: "boolean" }).notNull().default(false),
+    customerVisible: boolean("customer_visible").notNull().default(false),
     createdAt: now(),
   },
   (t) => ({
@@ -1336,7 +1336,7 @@ export const jobEvents = sqliteTable(
  * Claimed by services/scheduler.ts with a conditional UPDATE so two server
  * instances can never double-fire the same task.
  */
-export const scheduledTasks = sqliteTable(
+export const scheduledTasks = pgTable(
   "scheduled_tasks",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1345,12 +1345,12 @@ export const scheduledTasks = sqliteTable(
     kind: text("kind").notNull(), // review_request | maintenance_reminder | warranty_expiry | automation_check
     bookingId: text("booking_id").references(() => bookings.id, { onDelete: "cascade" }),
     propertyId: text("property_id").references(() => properties.id, { onDelete: "cascade" }),
-    runAt: integer("run_at", { mode: "timestamp_ms" }).notNull(),
+    runAt: timestamp("run_at", { mode: "date", withTimezone: true }).notNull(),
     payload: text("payload").notNull().default("{}"), // JSON handler args
     status: text("status").notNull().default("pending"), // pending | running | done | failed | cancelled
     attempts: integer("attempts").notNull().default(0),
     lastError: text("last_error").notNull().default(""),
-    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
   },
   (t) => ({
@@ -1371,7 +1371,7 @@ export const scheduledTasks = sqliteTable(
  * intervalDays and queue the next one. Cancelling the plan cancels its pending
  * task, so a deactivated plan goes quiet immediately.
  */
-export const maintenancePlans = sqliteTable(
+export const maintenancePlans = pgTable(
   "maintenance_plans",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1384,10 +1384,10 @@ export const maintenancePlans = sqliteTable(
     intervalDays: integer("interval_days").notNull().default(180),
     // how far ahead of nextDueAt the reminder goes out
     remindDaysBefore: integer("remind_days_before").notNull().default(7),
-    nextDueAt: integer("next_due_at", { mode: "timestamp_ms" }),
-    lastServiceAt: integer("last_service_at", { mode: "timestamp_ms" }),
+    nextDueAt: timestamp("next_due_at", { mode: "date", withTimezone: true }),
+    lastServiceAt: timestamp("last_service_at", { mode: "date", withTimezone: true }),
     notes: text("notes").notNull().default(""),
-    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    active: boolean("active").notNull().default(true),
     remindersSent: integer("reminders_sent").notNull().default(0),
     createdAt: now(),
   },
@@ -1404,7 +1404,7 @@ export const maintenancePlans = sqliteTable(
  * DNS records stored -> tenant adds them -> auto-poller flips to verified.
  * A tenant's emailFromAddress is only honored once its domain is "verified".
  */
-export const tenantEmailDomains = sqliteTable(
+export const tenantEmailDomains = pgTable(
   "tenant_email_domains",
   {
     id: text("id")
@@ -1416,7 +1416,7 @@ export const tenantEmailDomains = sqliteTable(
     status: text("status").notNull().default("pending"), // pending | verifying | verified | failed
     region: text("region").notNull().default("eu-west-1"),
     records: text("records").notNull().default("[]"), // JSON: [{record,name,type,value,priority?,status}]
-    lastCheckedAt: integer("last_checked_at", { mode: "timestamp_ms" }),
+    lastCheckedAt: timestamp("last_checked_at", { mode: "date", withTimezone: true }),
     createdBy: text("created_by").notNull().default(""),
     createdAt: now(),
   },
@@ -1439,7 +1439,7 @@ export const tenantEmailDomains = sqliteTable(
  */
 
 /** One row per Lovable hotel project <-> one ArrivePing booking (Job). */
-export const punchlistProjects = sqliteTable(
+export const punchlistProjects = pgTable(
   "punchlist_projects",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1453,9 +1453,9 @@ export const punchlistProjects = sqliteTable(
       .references(() => bookings.id, { onDelete: "cascade" }),
     customerId: text("customer_id").references(() => user.id),
     createdAt: now(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
       .notNull()
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+      .default(sql`now()`),
   },
   (t) => ({
     companyIdx: index("plproj_company_idx").on(t.companyId),
@@ -1464,7 +1464,7 @@ export const punchlistProjects = sqliteTable(
 );
 
 /** One row per Lovable trade/subcontractor <-> one auto-provisioned rider (Technician). */
-export const punchlistTrades = sqliteTable(
+export const punchlistTrades = pgTable(
   "punchlist_trades",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1488,7 +1488,7 @@ export const punchlistTrades = sqliteTable(
 );
 
 /** A single deficiency (punch list line item) inside a hotel project's Job. */
-export const deficiencies = sqliteTable(
+export const deficiencies = pgTable(
   "deficiencies",
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -1510,23 +1510,23 @@ export const deficiencies = sqliteTable(
     description: text("description").notNull().default(""),
     tradeName: text("trade_name").notNull().default(""), // raw "assign to" label from Lovable
     riderId: text("rider_id").references(() => riders.id),
-    dueDate: integer("due_date", { mode: "timestamp_ms" }),
+    dueDate: timestamp("due_date", { mode: "date", withTimezone: true }),
     // open | in_progress | done — the ArrivePing-side working status this
     // integration owns and reports back to Lovable.
     status: text("status").notNull().default("open"),
     photosBefore: text("photos_before").notNull().default("[]"), // JSON string[] — Lovable-hosted URLs from assignment
     photosAfter: text("photos_after").notNull().default("[]"), // JSON string[] — captured in ArrivePing, synced back
     technicianNotes: text("technician_notes").notNull().default(""),
-    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
     signOffName: text("sign_off_name").notNull().default(""),
-    signOffAt: integer("sign_off_at", { mode: "timestamp_ms" }),
+    signOffAt: timestamp("sign_off_at", { mode: "date", withTimezone: true }),
     // Lovable's own "last updated" timestamp for this deficiency, so a push
     // never clobbers ArrivePing-side progress with a stale re-send.
-    sourceUpdatedAt: integer("source_updated_at", { mode: "timestamp_ms" }),
+    sourceUpdatedAt: timestamp("source_updated_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
       .notNull()
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .default(sql`now()`)
       .$onUpdate(() => /* @__PURE__ */ new Date()),
   },
   (t) => ({

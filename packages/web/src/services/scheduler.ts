@@ -17,6 +17,17 @@ import { db } from "../api/database";
 import * as schema from "../api/database/schema";
 import { and, eq, lte, asc } from "drizzle-orm";
 
+/**
+ * Reads the affected-row count off an UPDATE/DELETE result regardless of
+ * driver: libsql used `rowsAffected`, postgres.js's raw (no `.returning()`)
+ * result is the array itself with a `.count` property, and the pglite test
+ * harness returns `.rowCount`. Check all three rather than assuming one.
+ */
+function affectedRows(res: unknown): number {
+  const r = res as { rowsAffected?: number; rowCount?: number; count?: number } | undefined;
+  return r?.rowsAffected ?? r?.rowCount ?? r?.count ?? 0;
+}
+
 export type TaskHandler = (task: {
   id: string;
   companyId: string;
@@ -85,7 +96,7 @@ export async function cancelTasks(opts: {
       .update(schema.scheduledTasks)
       .set({ status: "cancelled", completedAt: new Date() })
       .where(and(...conds));
-    return (res as any)?.rowsAffected ?? 0;
+    return affectedRows(res);
   } catch (e) {
     console.error("[scheduler] cancel failed", e);
     return 0;
@@ -103,8 +114,8 @@ async function claim(id: string): Promise<boolean> {
     .where(
       and(eq(schema.scheduledTasks.id, id), eq(schema.scheduledTasks.status, "pending")),
     );
-  // libsql returns rowsAffected; if another instance claimed it first this is 0
-  return ((res as any)?.rowsAffected ?? 0) > 0;
+  // If another instance claimed it first, this is 0.
+  return affectedRows(res) > 0;
 }
 
 /** Run one pass over due tasks. Exported for tests / manual invocation. */

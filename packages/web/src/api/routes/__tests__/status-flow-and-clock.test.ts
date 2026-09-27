@@ -29,7 +29,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { Hono } from "hono";
-import { getTableConfig, type SQLiteColumn } from "drizzle-orm/sqlite-core";
+import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -65,7 +65,7 @@ app.onError((err, c) => {
 
 function ddlFor(table: any): string {
   const cfg = getTableConfig(table);
-  const cols = cfg.columns.map((col: SQLiteColumn) => {
+  const cols = cfg.columns.map((col: PgColumn) => {
     const parts = [`"${col.name}"`, col.getSQLType()];
     if (col.primary) parts.push("PRIMARY KEY");
     const dflt = (col as any).default;
@@ -73,7 +73,7 @@ function ddlFor(table: any): string {
     if (dflt !== undefined) {
       lit =
         typeof dflt === "string" ? `'${dflt.replace(/'/g, "''")}'`
-        : typeof dflt === "boolean" ? (dflt ? "1" : "0")
+        : typeof dflt === "boolean" ? (dflt ? "TRUE" : "FALSE")
         : typeof dflt === "number" ? String(dflt)
         : null;
     }
@@ -228,7 +228,7 @@ describe("on-site clock vs the geofence", () => {
     const b = await row("sfc-manual");
     expect(b.clock_state).toBe("running");
     // The bug: this used to be 1, so the very next ping paused the clock.
-    expect(b.inside_geofence).toBe(0);
+    expect(b.inside_geofence).toBe(false);
   });
 
   it("marks the geofence flag when the arrival came FROM the geofence", async () => {
@@ -236,7 +236,7 @@ describe("on-site clock vs the geofence", () => {
     await applyBookingStatus(CO, "sfc-auto", "arrived", { byGeofence: true });
     const b = await row("sfc-auto");
     expect(b.clock_state).toBe("running");
-    expect(b.inside_geofence).toBe(1);
+    expect(b.inside_geofence).toBe(true);
   });
 
   it("does not pause a manually-arrived tech who GPS has never seen inside the radius", async () => {
@@ -246,7 +246,7 @@ describe("on-site clock vs the geofence", () => {
     // flag correctly false that branch cannot fire. Prove the state is the one
     // that keeps the tech's clock running.
     const b = await row("sfc-nopause");
-    expect(b.inside_geofence).toBe(0);
+    expect(b.inside_geofence).toBe(false);
     expect(b.clock_state).toBe("running");
   });
 
@@ -255,7 +255,7 @@ describe("on-site clock vs the geofence", () => {
     await resumeClock(CO, "sfc-late");
     // Used to early-return and leave this at 0, which killed exit detection for
     // the rest of the job.
-    expect((await row("sfc-late")).inside_geofence).toBe(1);
+    expect((await row("sfc-late")).inside_geofence).toBe(true);
   });
 
   it("then detects the tech leaving and banks the time", async () => {
@@ -263,7 +263,7 @@ describe("on-site clock vs the geofence", () => {
     await pauseClock(CO, "sfc-leave");
     const b = await row("sfc-leave");
     expect(b.clock_state).toBe("paused");
-    expect(b.inside_geofence).toBe(0);
+    expect(b.inside_geofence).toBe(false);
     expect(Number(b.accumulated_ms)).toBeGreaterThan(0);
   });
 

@@ -58,6 +58,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/vite": "^4.2.1",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^25.3.5",

@@ -15,7 +15,7 @@
  * Harness: ephemeral in-memory libsql, ids prefixed "mrw-".
  */
 import { describe, it, expect, beforeAll } from "bun:test";
-import { getTableConfig, type SQLiteColumn } from "drizzle-orm/sqlite-core";
+import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -36,7 +36,7 @@ const DUE = Date.parse("2026-08-18T01:00:00.000Z");
 
 function ddlFor(table: any): string {
   const cfg = getTableConfig(table);
-  const cols = cfg.columns.map((col: SQLiteColumn) => {
+  const cols = cfg.columns.map((col: PgColumn) => {
     const parts = [`"${col.name}"`, col.getSQLType()];
     if (col.primary) parts.push("PRIMARY KEY");
     const dflt = (col as any).default;
@@ -44,7 +44,7 @@ function ddlFor(table: any): string {
     if (dflt !== undefined) {
       lit =
         typeof dflt === "string" ? `'${dflt.replace(/'/g, "''")}'`
-        : typeof dflt === "boolean" ? (dflt ? "1" : "0")
+        : typeof dflt === "boolean" ? (dflt ? "TRUE" : "FALSE")
         : typeof dflt === "number" ? String(dflt)
         : null;
     }

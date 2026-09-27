@@ -44,7 +44,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
 import { Hono } from "hono";
-import { getTableConfig, type SQLiteColumn } from "drizzle-orm/sqlite-core";
+import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -86,7 +86,7 @@ app.onError((err, c) => {
 
 function ddlFor(table: any): string {
   const cfg = getTableConfig(table);
-  const cols = cfg.columns.map((col: SQLiteColumn) => {
+  const cols = cfg.columns.map((col: PgColumn) => {
     const parts = [`"${col.name}"`, col.getSQLType()];
     if (col.primary) parts.push("PRIMARY KEY");
     const dflt = (col as any).default;
@@ -94,7 +94,7 @@ function ddlFor(table: any): string {
     if (dflt !== undefined) {
       lit =
         typeof dflt === "string" ? `'${dflt.replace(/'/g, "''")}'`
-        : typeof dflt === "boolean" ? (dflt ? "1" : "0")
+        : typeof dflt === "boolean" ? (dflt ? "TRUE" : "FALSE")
         : typeof dflt === "number" ? String(dflt)
         : null;
     }
@@ -290,7 +290,7 @@ describe("POST /bookings/:id/assign — dispatch guard", () => {
     expect(res.status).toBe(409);
     const after = await row("dap-same");
     expect(after.assign_status).toBe("accepted");
-    expect(after.accepted_at).toBe(before.accepted_at);
+    expect(after.accepted_at).toEqual(before.accepted_at);
   });
 
   it("is office-only — a technician cannot dispatch work to themselves", async () => {
@@ -476,7 +476,7 @@ describe("POST /payouts/:id/pay — marking a payout paid", () => {
     const paidAt = (await payoutRows()).find((x) => x.id === p.id)!.paid_at;
     const second = await req(`/payouts/${p.id}/pay`, { method: "POST" });
     expect(second.status).toBe(409);
-    expect((await payoutRows()).find((x) => x.id === p.id)!.paid_at).toBe(paidAt);
+    expect((await payoutRows()).find((x) => x.id === p.id)!.paid_at).toEqual(paidAt);
   });
 
   it("refuses to delete a payout that has already been paid", async () => {

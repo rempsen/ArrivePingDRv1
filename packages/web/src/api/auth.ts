@@ -8,7 +8,7 @@ import { sendEmail, emailTemplates, loadEmailBrand } from "../services/email";
 export const auth = betterAuth({
   basePath: "/api/auth",
   baseURL: process.env.WEBSITE_URL,
-  database: drizzleAdapter(db, { provider: "sqlite" }),
+  database: drizzleAdapter(db, { provider: "pg" }),
   emailAndPassword: {
     enabled: true,
     // Forgot-password flow: better-auth generates a one-time token and calls
