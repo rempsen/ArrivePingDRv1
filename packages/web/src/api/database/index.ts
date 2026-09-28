@@ -174,7 +174,20 @@ const queryClient = memoryMode
   ? undefined
   : postgres(process.env.DATABASE_URL!, {
       ssl: "require",
-      max: 10,
+      // BUG FIX (root cause of intermittent 500s across every route, incl.
+      // sign-in and the dashboard's onboarding-status widget): Supabase's
+      // session-mode pooler caps this project at 15 concurrent connections
+      // total. This pool's `max: 10` PLUS the system pool's `max: 5` below
+      // summed to exactly 15 — the entire budget, with zero headroom. Any
+      // extra connection (a second instance briefly alive during a deploy, a
+      // developer's local script pointed at the same DATABASE_URL, even
+      // ordinary connection churn) pushed the project over its cap and
+      // Postgres started rejecting NEW connections with `EMAXCONNSESSION:
+      // max clients reached in session mode`, which surfaced to users as a
+      // generic 500 on whatever route happened to need a fresh connection at
+      // that moment — sign-in included. Lowered so the two pools together
+      // (7 + 3 = 10) leave real headroom under the 15-connection ceiling.
+      max: 7,
       idle_timeout: 20,
       connect_timeout: 10,
     });
@@ -205,7 +218,10 @@ const systemQueryClient = memoryMode
   ? undefined
   : postgres(process.env.DATABASE_SYSTEM_URL || process.env.DATABASE_URL!, {
       ssl: "require",
-      max: 5,
+      // See the matching comment on `queryClient` above — this pool's max
+      // was lowered from 5 to 3 for the same reason (Supabase's 15-connection
+      // session-mode ceiling had zero headroom between the two pools).
+      max: 3,
       idle_timeout: 20,
       connect_timeout: 10,
     });
