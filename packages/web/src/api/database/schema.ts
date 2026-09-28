@@ -510,7 +510,7 @@ export const invoices = pgTable("invoices", {
     .references(() => bookings.id, { onDelete: "cascade" }),
   customerId: text("customer_id")
     .notNull()
-    .references(() => user.id),
+    .references(() => user.id, { onDelete: "cascade" }),
   number: text("number").notNull(),
   amount: real("amount").notNull(),
   tax: real("tax").notNull().default(0),
@@ -617,7 +617,7 @@ export const reviews = pgTable("reviews", {
     .references(() => bookings.id, { onDelete: "cascade" }),
   customerId: text("customer_id")
     .notNull()
-    .references(() => user.id),
+    .references(() => user.id, { onDelete: "cascade" }),
   riderId: text("rider_id").references(() => riders.id),
   rating: integer("rating").notNull(),
   comment: text("comment").notNull().default(""),
@@ -1277,7 +1277,7 @@ export const properties = pgTable(
     lat: real("lat"),
     lng: real("lng"),
     // most recent customer associated with this address (properties outlive customers)
-    customerId: text("customer_id").references(() => user.id),
+    customerId: text("customer_id").references(() => user.id, { onDelete: "set null" }),
     // persistent public token for /p/:token — rotatable from admin for PII safety
     publicToken: text("public_token")
       .notNull()
@@ -1384,7 +1384,7 @@ export const maintenancePlans = pgTable(
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     companyId: text("company_id").notNull().default("default"),
     name: text("name").notNull().default(""), // "Bi-annual furnace tune-up"
-    customerId: text("customer_id").references(() => user.id),
+    customerId: text("customer_id").references(() => user.id, { onDelete: "set null" }),
     propertyId: text("property_id").references(() => properties.id, { onDelete: "cascade" }),
     serviceId: text("service_id").references(() => services.id),
     address: text("address").notNull().default(""), // denormalised for reminder copy
@@ -1458,7 +1458,7 @@ export const punchlistProjects = pgTable(
     bookingId: text("booking_id")
       .notNull()
       .references(() => bookings.id, { onDelete: "cascade" }),
-    customerId: text("customer_id").references(() => user.id),
+    customerId: text("customer_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: now(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
       .notNull()
