@@ -279,6 +279,10 @@ const app = new Hono<{ Variables: Variables }>()
     return c.json({ status: ok ? "ok" : "degraded", checks }, ok ? 200 : 503);
   })
   .post("/seed", async (c) => {
+    // Demo/fixture data must never land in a live tenant database.
+    if (process.env.NODE_ENV === "production") {
+      return c.json({ error: "Seeding is disabled in production" }, 403);
+    }
     const { seed } = await import("./seed");
     const result = await seed();
     return c.json(result, 200);
