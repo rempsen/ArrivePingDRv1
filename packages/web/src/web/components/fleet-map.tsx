@@ -3,6 +3,12 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useWorkerNoun } from "../lib/use-brand";
 
+// The zoom every tenant lands on when they open the Map page. z11 is a
+// city-scale view (~30 km across on a laptop screen): the whole service
+// area is visible, but individual neighbourhoods and rivers still read.
+// The map is centred on the team's dots; this only sets how far in it is.
+export const FLEET_DEFAULT_ZOOM = 11;
+
 export interface FleetTech {
   id: string;
   name: string;
@@ -190,7 +196,7 @@ export function FleetMap({
       zoomControl: false,
       attributionControl: false,
       fadeAnimation: false,
-    }).setView([43.6532, -79.3832], 12);
+    }).setView([43.6532, -79.3832], FLEET_DEFAULT_ZOOM);
     L.control.zoom({ position: "bottomleft" }).addTo(map);
     L.tileLayer(
       // Esri "World Dark Gray Base" — keyless raster tiles (no API key / account required).
@@ -260,8 +266,14 @@ export function FleetMap({
         delete markers.current[id];
       }
     }
+    // First load: centre on the team, at ONE fixed zoom for every tenant.
+    // Previously this was fitBounds(), which picked a different zoom for
+    // every company depending on how spread out their dots happened to be
+    // (one tech → zoomed to street level, techs in two cities → whole
+    // province). Every tenant now lands on the same city-scale view;
+    // the user can still zoom from there, and selecting a tech still flies in.
     if (pts.length && !(mapRef.current as unknown as { _loaded_once?: boolean })._loaded_once) {
-      map.fitBounds(L.latLngBounds(pts).pad(0.25));
+      map.setView(L.latLngBounds(pts).getCenter(), FLEET_DEFAULT_ZOOM);
       (mapRef.current as any)._loaded_once = true;
     }
   }, [
