@@ -32,7 +32,7 @@ export function TechAvatar({
   textClassName?: string;
 }) {
   const base = cn(
-    "grid place-items-center overflow-hidden rounded-full bg-cover bg-center font-extrabold text-ink shrink-0",
+    "grid place-items-center overflow-hidden rounded-full bg-cover bg-center font-semibold text-slate-100 shrink-0",
     className,
   );
   const [failed, setFailed] = useState(false);
@@ -53,7 +53,16 @@ export function TechAvatar({
     );
   }
   return (
-    <span className={base} style={{ background: color || "#0ea5e9" }}>
+    // Restrained fallback: one tinted surface for every tech, with the
+    // tech's map colour kept as a thin ring so the list still maps to the
+    // fleet-map markers without turning the roster into a rainbow.
+    <span
+      className={base}
+      style={{
+        background: "rgba(14,165,233,0.10)",
+        boxShadow: `inset 0 0 0 1.5px ${color || "#0ea5e9"}`,
+      }}
+    >
       <span className={textClassName}>{initials(name)}</span>
     </span>
   );

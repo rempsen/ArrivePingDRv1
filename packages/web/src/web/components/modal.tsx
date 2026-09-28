@@ -108,17 +108,17 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
         {label}
       </span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-slate-600">{hint}</span>}
+      {hint && <span className="mt-1.5 block text-xs leading-snug text-slate-500">{hint}</span>}
     </label>
   );
 }
 
 export const inputCls =
-  "w-full rounded-lg border border-white/10 bg-ink-3/60 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand focus:outline-none";
+  "w-full min-h-10 rounded-lg border border-white/10 bg-ink-3/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 transition-[border-color,box-shadow] duration-150 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25";
 
 export function BtnPrimary({
   children,
@@ -127,7 +127,7 @@ export function BtnPrimary({
   return (
     <button
       {...props}
-      className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
+      className="nvc-btn-primary inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
     >
       {children}
     </button>
@@ -141,7 +141,7 @@ export function BtnGhost({
   return (
     <button
       {...props}
-      className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5"
+      className="inline-flex h-10 items-center rounded-lg border border-white/10 px-4 text-sm font-medium text-slate-300 transition-colors duration-150 hover:border-white/20 hover:bg-white/5 hover:text-white"
     >
       {children}
     </button>

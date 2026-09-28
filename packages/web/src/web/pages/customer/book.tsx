@@ -127,7 +127,7 @@ export default function BookPage() {
         <div className="mt-6 flex flex-col gap-3">
           <button
             onClick={() => navigate(`/app/track/${done}`)}
-            className="rounded-xl bg-brand py-3.5 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep"
+            className="rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep"
           >
             Track my booking
           </button>
@@ -257,7 +257,7 @@ export default function BookPage() {
             <button
               disabled={!slot || !address || create.isPending}
               onClick={() => create.mutate()}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep disabled:opacity-50"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-50"
             >
               {create.isPending ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : "Confirm booking"}
             </button>

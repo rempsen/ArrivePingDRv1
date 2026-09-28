@@ -57,7 +57,7 @@ export default function RiderEarnings() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-brand to-brand-deep p-6 text-white shadow-lg shadow-brand/20">
+      <div className="rounded-2xl bg-gradient-to-br from-brand to-brand-deep p-6 text-white shadow-lg shadow-black/20">
         <div className="flex items-center gap-2 text-sm text-white/80">
           <Wallet className="h-4 w-4" /> Total earnings
         </div>

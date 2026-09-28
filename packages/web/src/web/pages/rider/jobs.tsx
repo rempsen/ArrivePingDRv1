@@ -52,7 +52,7 @@ export default function RiderJobs() {
   return (
     <div className="space-y-6">
       {/* status header */}
-      <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-brand to-brand-deep p-5 text-white shadow-lg shadow-brand/20">
+      <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-brand to-brand-deep p-5 text-white shadow-lg shadow-black/20">
         <div>
           <h1 className="text-xl font-extrabold">Your jobs</h1>
           <p className="text-sm text-white/80">{online ? "You're online & accepting jobs" : "You're offline"}</p>

@@ -172,9 +172,9 @@ export default function SignupCompanyPage() {
         <div className="absolute -right-20 top-20 h-80 w-80 rounded-full bg-brand/20 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-cyan-glow/10 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
-          <Logo light />
+          <Logo light imgClassName="h-10 w-auto" />
           <div>
-            <h1 className="font-display text-4xl font-extrabold leading-tight">
+            <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">
               Give us your website.
               <br /> <span className="text-glow text-cyan-glow">We'll set up the rest.</span>
             </h1>
@@ -210,7 +210,7 @@ export default function SignupCompanyPage() {
           <div className="mb-6 md:hidden">
             <Logo light />
           </div>
-          <h2 className="font-display text-3xl font-extrabold text-white">Set up your company</h2>
+          <h2 className="font-display text-3xl font-bold tracking-tight text-white">Set up your company</h2>
           <p className="mt-1 text-slate-400">Two minutes, mostly done for you.</p>
 
           <form onSubmit={submit} className="mt-5 space-y-4">
@@ -318,16 +318,18 @@ export default function SignupCompanyPage() {
               </div>
             </div>
 
-            {err && (
-              <div className="rounded-lg bg-red-500/10 px-4 py-3 text-sm font-medium text-red-400">
-                {err}
-              </div>
-            )}
+            <div className="min-h-[44px]" role="alert" aria-live="polite">
+              {err && (
+                <div className="flex min-h-[44px] items-center rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400">
+                  {err}
+                </div>
+              )}
+            </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep disabled:opacity-60"
+              className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
             >
               {submitting ? (
                 <Loader className="h-5 w-5 border-white/40 border-t-white" />

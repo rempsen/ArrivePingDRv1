@@ -246,7 +246,7 @@ function FieldStaffTab() {
                     {meta.label}
                   </span>
                   {r.skillClass && (
-                    <span className="rounded-md bg-brand/10 px-2 py-0.5 text-xs font-medium text-cyan-glow">
+                    <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-slate-300">
                       {r.skillClass}
                     </span>
                   )}
@@ -255,7 +255,7 @@ function FieldStaffTab() {
                   {r.isShared && (
                     <span
                       title="Also works for another company. Their login and contact details are managed there."
-                      className="rounded-md bg-violet-400/10 px-2 py-0.5 text-xs font-medium text-violet-300"
+                      className="rounded-md bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-slate-300"
                     >
                       Shared
                     </span>

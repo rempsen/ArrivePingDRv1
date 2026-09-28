@@ -134,7 +134,7 @@ export default function TrackPage() {
                     </div>
                   </div>
                 </div>
-                <a href={`tel:${t.rider.phone ?? ""}`} className="grid h-11 w-11 place-items-center rounded-full bg-green-500 text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600">
+                <a href={`tel:${t.rider.phone ?? ""}`} className="grid h-11 w-11 place-items-center rounded-full bg-green-500 text-white nvc-btn-primary transition hover:bg-green-600">
                   <Phone className="h-5 w-5" />
                 </a>
               </div>
@@ -206,7 +206,7 @@ export default function TrackPage() {
               ) : (
                 <button
                   onClick={() => setPayOpen(true)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep"
                 >
                   <CreditCard className="h-4.5 w-4.5" /> Pay {money(inv.total)}
                 </button>

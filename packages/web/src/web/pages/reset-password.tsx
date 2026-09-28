@@ -90,7 +90,7 @@ export default function ResetPasswordPage() {
               </p>
               <Link
                 to="/forgot-password"
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep"
               >
                 Request new link <ArrowRight className="h-4 w-4" />
               </Link>
@@ -149,7 +149,7 @@ export default function ResetPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep disabled:opacity-60"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-60"
                 >
                   {loading ? (
                     <Loader className="h-5 w-5 border-white/40 border-t-white" />

@@ -211,7 +211,7 @@ export default function RiderActive() {
               </div>
               <button
                 onClick={sharing ? stopSharing : startSharing}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${sharing ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-brand text-white shadow-lg shadow-brand/30 hover:bg-brand-deep"}`}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${sharing ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-brand text-white nvc-btn-primary hover:bg-brand-deep"}`}
               >
                 {sharing ? "Stop" : "Share"}
               </button>
@@ -237,7 +237,7 @@ export default function RiderActive() {
                 <div className="font-bold text-white">{b.customer.name}</div>
               </div>
               {b.customer.phone && (
-                <a href={`tel:${b.customer.phone}`} className="grid h-11 w-11 place-items-center rounded-full bg-green-500 text-white shadow-lg shadow-green-500/30">
+                <a href={`tel:${b.customer.phone}`} className="grid h-11 w-11 place-items-center rounded-full bg-green-500 text-white nvc-btn-primary">
                   <Phone className="h-5 w-5" />
                 </a>
               )}
@@ -250,7 +250,7 @@ export default function RiderActive() {
               <button
                 disabled={accept.isPending}
                 onClick={() => accept.mutate()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-3.5 text-base font-bold text-white shadow-lg shadow-green-500/30 transition hover:bg-green-600 disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-3.5 text-base font-bold text-white nvc-btn-primary transition hover:bg-green-600 disabled:opacity-60"
               >
                 {accept.isPending ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <><Check className="h-5 w-5" /> Accept job</>}
               </button>
@@ -269,7 +269,7 @@ export default function RiderActive() {
                 if (step.next === "enroute" && !sharing) startSharing();
                 setStatus.mutate(step.next);
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 text-base font-bold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 text-base font-bold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-60"
             >
               {setStatus.isPending ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <><step.icon className="h-5 w-5" />{step.label}</>}
             </button>

@@ -98,9 +98,9 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
         <div className="absolute -right-20 top-20 h-80 w-80 rounded-full bg-brand/20 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-cyan-glow/10 blur-3xl" />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
-          <Logo light />
+          <Logo light imgClassName="h-10 w-auto" />
           <div>
-            <h1 className="font-display text-4xl font-extrabold leading-tight">
+            <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">
               The command center for
               <br /> <span className="text-glow text-cyan-glow">field service.</span>
             </h1>
@@ -135,7 +135,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
           <div className="mb-6 md:hidden">
             <Logo light />
           </div>
-          <h2 className="font-display text-3xl font-extrabold text-white">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-white">
             {isSignUp ? "Create your account" : "Welcome back"}
           </h2>
           <p className="mt-1 text-slate-400">
@@ -176,16 +176,18 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
               </div>
             )}
 
-            {error && (
-              <div className="rounded-lg bg-red-500/10 px-4 py-3 text-sm font-medium text-red-400">
-                {error}
-              </div>
-            )}
+            <div className="min-h-[44px]" role="alert" aria-live="polite">
+              {error && (
+                <div className="flex min-h-[44px] items-center rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400">
+                  {error}
+                </div>
+              )}
+            </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white shadow-lg shadow-brand/30 transition hover:bg-brand-deep disabled:opacity-60"
+              className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
             >
               {loading ? (
                 <Loader className="h-5 w-5 border-white/40 border-t-white" />
@@ -237,7 +239,7 @@ function Field({
         value={value}
         required={required}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-white/10 bg-ink-2 py-3 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-600 focus:border-brand focus:ring-2 focus:ring-brand/20"
+        className="h-11 w-full rounded-lg border border-white/10 bg-ink-2 pl-11 pr-4 text-white outline-none transition placeholder:text-slate-500 focus:border-brand focus:ring-2 focus:ring-brand/25"
       />
     </div>
   );

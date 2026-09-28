@@ -53,7 +53,7 @@ export default function AdminNotifications() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              tab === t.id ? "bg-brand text-white shadow-lg shadow-brand/30" : "text-slate-400 hover:text-white hover:bg-white/5"
+              tab === t.id ? "bg-brand text-white nvc-btn-primary" : "text-slate-400 hover:text-white hover:bg-white/5"
             }`}
           >
             <t.icon className="h-4 w-4" /> {tabLabel(t)}

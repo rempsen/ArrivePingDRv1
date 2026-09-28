@@ -303,7 +303,7 @@ const STEPS = [
   { key: "assigned",   label: "Assigned",   Icon: UserCheck },
   { key: "enroute",    label: "En Route",   Icon: Navigation },
   { key: "arrived",    label: "Arrived",    Icon: MapPin },
-  { key: "in_progress",label: "In Progress",Icon: Wrench },
+  { key: "in_progress",label: "Working",    Icon: Wrench },
   { key: "completed",  label: "Complete",   Icon: CheckCircle2 },
 ] as const;
 
@@ -357,6 +357,13 @@ function StatusStepper({ status }: { status: string }) {
 
   return (
     <div className="nvc-card p-4">
+      {/* Mobile: only the current step is labelled (NN/g status-tracker
+          guidance — the latest update should dominate; six wrapping labels
+          under 36px circles just compete). Desktop shows every label. */}
+      <p className="mb-3 text-center text-xs font-semibold text-cyan-glow sm:hidden">
+        {STEPS[current]?.label}
+        <span className="ml-1.5 font-normal text-slate-500">· step {current + 1} of {STEPS.length}</span>
+      </p>
       <div className="relative flex items-start justify-between">
         {/* connecting line */}
         <div className="absolute left-0 right-0 top-[18px] mx-[18px] h-0.5 bg-white/10" />
@@ -379,7 +386,7 @@ function StatusStepper({ status }: { status: string }) {
                   done
                     ? "border-cyan-glow bg-cyan-glow text-ink"
                     : active
-                    ? "border-cyan-glow bg-ink text-cyan-glow shadow-[0_0_12px_rgba(14,165,233,0.5)]"
+                    ? "border-cyan-glow bg-ink text-cyan-glow ring-4 ring-cyan-glow/15"
                     : "border-white/15 bg-ink text-slate-600"
                 }`}
               >
@@ -393,8 +400,8 @@ function StatusStepper({ status }: { status: string }) {
                 )}
               </span>
               <span
-                className={`text-center text-[10px] font-semibold leading-tight ${
-                  active ? "text-cyan-glow" : done ? "text-slate-400" : "text-slate-600"
+                className={`hidden whitespace-nowrap text-center text-[11px] leading-tight sm:block ${
+                  active ? "font-semibold text-cyan-glow" : done ? "font-medium text-slate-400" : "font-medium text-slate-600"
                 }`}
               >
                 {step.label}
@@ -1100,19 +1107,25 @@ export default function TrackPublic() {
               )}
 
               {/* Messaging */}
-              <div className="nvc-card flex h-[360px] flex-col">
+              <div className={`nvc-card flex flex-col ${msgs.length === 0 ? "" : "h-[360px]"}`}>
                 <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
                   <MessageSquare className="h-4 w-4 text-cyan-glow" />
-                  <p className="font-bold text-white">Messages</p>
+                  <p className="font-semibold text-white">Messages</p>
                 </div>
                 <div
                   ref={scrollRef}
                   className="flex-1 space-y-2 overflow-y-auto p-3"
                 >
                   {msgs.length === 0 ? (
-                    <p className="py-10 text-center text-xs text-slate-600">
-                      Send a message to your {workerNoun.toLowerCase()}
-                    </p>
+                    <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.05] text-slate-500">
+                        <MessageSquare className="h-4 w-4" />
+                      </span>
+                      <p className="text-sm font-medium text-slate-300">No messages yet</p>
+                      <p className="max-w-[26ch] text-xs leading-relaxed text-slate-500">
+                        Anything you send here goes straight to your {workerNoun.toLowerCase()}.
+                      </p>
+                    </div>
                   ) : (
                     msgs.map((m: any) => {
                       const mine = m.senderRole === "client";
@@ -1153,14 +1166,14 @@ export default function TrackPublic() {
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       placeholder="Type a message…"
-                      className="flex-1 rounded-lg border border-white/10 bg-ink-3/60 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand focus:outline-none"
+                      className="h-10 flex-1 rounded-lg border border-white/10 bg-ink-3/60 px-3 text-sm text-white placeholder:text-slate-500 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25"
                     />
                     <button
                       type="submit"
                       disabled={!draft.trim() || send.isPending}
                       aria-label="Send message"
                       title="Send message"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand text-white hover:bg-brand-deep disabled:opacity-50"
+                      className="nvc-btn-primary grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand text-white hover:bg-brand-deep disabled:opacity-50"
                     >
                       <Send className="h-4 w-4" />
                     </button>

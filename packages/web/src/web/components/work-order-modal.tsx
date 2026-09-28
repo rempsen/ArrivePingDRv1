@@ -917,7 +917,7 @@ export function WorkOrderModal({
         </>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
 
         {/* ── Core fields ── */}
         <Field label={customerNoun}>
@@ -1027,7 +1027,7 @@ export function WorkOrderModal({
             <button
               type="button"
               onClick={() => setRequiredSkillClass("")}
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${requiredSkillClass === "" ? "bg-brand text-white" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}
+              className={`inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium transition-colors ${requiredSkillClass === "" ? "bg-brand text-white" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white"}`}
             >
               Any
             </button>
@@ -1036,7 +1036,7 @@ export function WorkOrderModal({
                 key={sc}
                 type="button"
                 onClick={() => setRequiredSkillClass(sc === requiredSkillClass ? "" : sc)}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${requiredSkillClass === sc ? "bg-brand text-white" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}
+                className={`inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium transition-colors ${requiredSkillClass === sc ? "bg-brand text-white" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white"}`}
               >
                 {sc}
               </button>
@@ -1054,7 +1054,7 @@ export function WorkOrderModal({
                     key={sk}
                     type="button"
                     onClick={() => setRequiredSkills((prev) => active ? prev.filter((x) => x !== sk) : [...prev, sk])}
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold transition ${active ? "bg-cyan-glow/20 text-cyan-glow ring-1 ring-cyan-glow/40" : "bg-white/10 text-slate-300 hover:bg-white/15"}`}
+                    className={`inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium transition-colors ${active ? "bg-brand/15 text-brand ring-1 ring-brand/40" : "border border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white"}`}
                   >
                     {sk}
                   </button>

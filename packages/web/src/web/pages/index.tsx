@@ -38,7 +38,7 @@ function Nav() {
           {isAuthed ? (
             <Link
               to={home}
-              className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-ink shadow-lg shadow-brand/30 transition hover:bg-cyan-glow"
+              className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-ink nvc-btn-primary transition hover:bg-cyan-glow"
             >
               Dashboard
             </Link>
@@ -49,7 +49,7 @@ function Nav() {
               </Link>
               <Link
                 to="/get-started"
-                className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-ink shadow-lg shadow-brand/30 transition hover:bg-cyan-glow"
+                className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-ink nvc-btn-primary transition hover:bg-cyan-glow"
               >
                 Request Demo
               </Link>
@@ -75,13 +75,13 @@ export default function Index() {
             <span className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
               <Radio className="h-3.5 w-3.5" /> ArrivePing Platform — Launching November 2026
             </span>
-            <h1 className="animate-fade-up delay-1 mt-5 font-display text-5xl font-black leading-[1.04] text-white md:text-6xl">
+            <h1 className="animate-fade-up delay-1 mt-5 font-display text-[2.25rem] font-bold leading-[1.08] text-white sm:text-5xl md:text-[3.25rem]">
               Make your clients{" "}
               <span className="bg-gradient-to-r from-brand to-cyan-glow bg-clip-text text-transparent text-glow">
                 love you.
               </span>
             </h1>
-            <p className="animate-fade-up delay-2 mt-5 max-w-md text-lg text-slate-400">
+            <p className="animate-fade-up delay-2 mt-5 max-w-md text-base leading-relaxed text-slate-400 md:text-lg">
               Live tech tracking. Automatic ETAs. Zero "where is my tech?" calls.
               ArrivePing turns every service call into a 5-star experience — and cuts
               20% off your field labor while it's at it.
@@ -89,7 +89,7 @@ export default function Index() {
             <div className="animate-fade-up delay-3 mt-8 flex flex-wrap gap-3">
               <Link
                 to="/get-started"
-                className="inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 font-semibold text-ink shadow-xl shadow-brand/40 transition hover:bg-cyan-glow"
+                className="inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 font-semibold text-ink nvc-btn-primary transition hover:bg-cyan-glow"
               >
                 Get Started <ArrowRight className="h-4 w-4" />
               </Link>
@@ -106,9 +106,9 @@ export default function Index() {
                 ["800+", "Techs operated"],
                 ["1B", "Hrs wasted / yr"],
               ].map(([n, l], i) => (
-                <div key={l} className={i === 0 ? "pr-8" : "px-8"}>
-                  <div className="text-3xl font-black tracking-tight text-white">{n}</div>
-                  <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">{l}</div>
+                <div key={l} className={`min-w-0 ${i === 0 ? "pr-4 sm:pr-5 md:pr-8" : "px-4 sm:px-5 md:px-8"}`}>
+                  <div className="text-2xl font-bold tracking-tight text-white md:text-3xl">{n}</div>
+                  <div className="mt-0.5 text-[10px] font-medium uppercase leading-tight tracking-wider text-slate-500 sm:whitespace-nowrap sm:text-[11px]">{l}</div>
                 </div>
               ))}
             </div>
@@ -184,7 +184,7 @@ export default function Index() {
         <div className="absolute left-1/2 top-1/2 -z-10 h-[420px] w-[820px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand/10 blur-3xl" />
         <div className="mx-auto max-w-6xl px-5 text-center">
           <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">See it in action</span>
-          <h2 className="mt-2 font-display text-4xl font-black text-white">Uberize your business</h2>
+          <h2 className="mt-2 font-display text-3xl font-bold text-white md:text-4xl">Uberize your business</h2>
           <p className="mx-auto mt-3 max-w-xl text-slate-400">
             One connected system across dispatch desk, technician phone, and client device —
             schedule, track, and communicate in real time.
@@ -201,7 +201,7 @@ export default function Index() {
       <section id="features" className="mx-auto max-w-6xl px-5 py-20">
         <div className="mb-12 text-center">
           <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">Platform</span>
-          <h2 className="mt-4 font-display text-4xl font-black text-white tracking-tight">
+          <h2 className="mt-4 font-display text-3xl font-bold text-white md:text-4xl tracking-tight">
             One platform for real-time field service
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-slate-400 leading-relaxed">
@@ -250,7 +250,7 @@ export default function Index() {
             </div>
             <div>
               <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">The client journey</span>
-              <h2 className="mt-2 font-display text-4xl font-black text-white">Dispatch smarter in seconds</h2>
+              <h2 className="mt-2 font-display text-3xl font-bold text-white md:text-4xl">Dispatch smarter in seconds</h2>
               <p className="mt-4 max-w-md text-slate-400">
                 From the moment a job is created to the moment it's closed, every step is tracked,
                 timed, and shared — so your clients always know exactly what's happening.
@@ -265,7 +265,7 @@ export default function Index() {
               { icon: Zap, t: "Document & Close", d: "Log time & travel, capture photos, collect approvals, close jobs digitally." },
             ].map((s, i) => (
               <div key={i} className="relative rounded-2xl border border-white/5 bg-ink p-6 transition duration-200 hover:border-brand/20 hover:bg-ink-2">
-                <div className="absolute -top-4 left-6 grid h-9 w-9 place-items-center rounded-xl bg-brand font-black text-ink ring-4 ring-brand/20 text-sm">{i + 1}</div>
+                <div className="absolute -top-4 left-6 grid h-9 w-9 place-items-center rounded-xl bg-brand font-bold text-ink ring-4 ring-brand/20 text-sm">{i + 1}</div>
                 <s.icon className="mt-4 h-7 w-7 text-brand" />
                 <h3 className="mt-3 font-bold text-white">{s.t}</h3>
                 <p className="mt-2 text-sm text-slate-400">{s.d}</p>
@@ -279,7 +279,7 @@ export default function Index() {
       <section id="industries" className="mx-auto max-w-6xl px-5 py-20">
         <div className="mb-12 text-center">
           <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">Industries</span>
-          <h2 className="mt-2 font-display text-4xl font-black text-white">If you run a mobile workforce, ArrivePing works for you</h2>
+          <h2 className="mt-2 font-display text-3xl font-bold text-white md:text-4xl">If you run a mobile workforce, ArrivePing works for you</h2>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
@@ -311,7 +311,7 @@ export default function Index() {
       <section id="integrations" className="border-y border-white/5 bg-ink-2 py-16">
         <div className="mx-auto max-w-6xl px-5 text-center">
           <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">Integrations</span>
-          <h2 className="mt-2 font-display text-3xl font-black text-white">Keep the systems you trust</h2>
+          <h2 className="mt-2 font-display text-3xl font-bold text-white">Keep the systems you trust</h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             {[
               { name: "QuickBooks", logo: "quickbooks" },
@@ -337,7 +337,7 @@ export default function Index() {
       <section id="pricing" className="mx-auto max-w-6xl px-5 py-20">
         <div className="text-center">
           <span className="inline-flex items-center rounded-full border border-brand/25 bg-brand/[0.08] px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-brand">Pricing</span>
-          <h2 className="mt-2 font-display text-3xl font-black text-white sm:text-4xl">Simple, per-vehicle pricing</h2>
+          <h2 className="mt-2 font-display text-3xl font-bold text-white md:text-4xl">Simple, per-vehicle pricing</h2>
           <p className="mx-auto mt-3 max-w-xl text-slate-400">
             One license per vehicle. The more drivers you run, the lower your per-license rate — automatically.
           </p>
@@ -386,7 +386,7 @@ export default function Index() {
               }`}
             >
               {tier.featured && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand px-4 py-1 text-xs font-bold uppercase tracking-wide text-ink shadow-lg shadow-brand/40">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand px-4 py-1 text-xs font-bold uppercase tracking-wide text-ink nvc-btn-primary">
                   Most popular
                 </span>
               )}
@@ -394,8 +394,8 @@ export default function Index() {
               <div className="mt-1 text-lg font-semibold text-white">{tier.range}</div>
               <div className="mt-6 flex items-end gap-1">
                 <span className="text-2xl font-bold text-slate-400">$</span>
-                <span className="font-display text-6xl font-black leading-none text-white">{tier.price}</span>
-                <span className="mb-1 text-2xl font-black text-white">.{tier.cents}</span>
+                <span className="font-display text-5xl font-bold leading-none text-white">{tier.price}</span>
+                <span className="mb-1 text-xl font-bold text-white">.{tier.cents}</span>
               </div>
               <div className="mt-1 text-sm text-slate-400">per month, per license</div>
               <p className="mt-5 text-sm text-slate-400">{tier.tagline}</p>
@@ -422,7 +422,7 @@ export default function Index() {
                 to="/get-started"
                 className={`mt-8 inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold transition ${
                   tier.featured
-                    ? "bg-brand text-ink shadow-lg shadow-brand/40 hover:bg-cyan-glow"
+                    ? "bg-brand text-ink nvc-btn-primary hover:bg-cyan-glow"
                     : "border border-white/15 bg-white/5 text-slate-200 hover:border-brand"
                 }`}
               >
@@ -442,10 +442,10 @@ export default function Index() {
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-brand/20 blur-2xl" />
           <div className="px-8 py-14 text-center md:text-left">
             <Logo imgClassName="h-11 md:mx-0 mx-auto" className="mb-6 justify-center md:justify-start" />
-            <h2 className="font-display text-4xl font-black text-white">Become a founding client.</h2>
+            <h2 className="font-display text-3xl font-bold text-white md:text-4xl">Become a founding client.</h2>
             <p className="mt-3 max-w-md text-slate-400 md:mx-0 mx-auto">Reduce field costs by 20%. Eliminate the 4-hour window. Make your clients love you.</p>
             <div className="mt-8 flex flex-wrap justify-center gap-3 md:justify-start">
-              <Link to="/get-started" className="inline-flex items-center gap-2 rounded-full bg-brand px-8 py-3.5 font-semibold text-ink shadow-xl shadow-brand/40 transition hover:bg-cyan-glow">
+              <Link to="/get-started" className="inline-flex items-center gap-2 rounded-full bg-brand px-8 py-3.5 font-semibold text-ink nvc-btn-primary transition hover:bg-cyan-glow">
                 Request Demo <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/sign-in" className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-8 py-3.5 font-semibold text-slate-200 transition hover:border-brand">

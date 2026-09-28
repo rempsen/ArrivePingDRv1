@@ -609,7 +609,7 @@ export default function CompaniesPage() {
               type="button"
               onClick={() => { setErr(""); scout.mutate(); }}
               disabled={!form.website.trim() || scout.isPending}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-cyan-500 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 transition hover:opacity-95 disabled:opacity-50"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-cyan-500 py-2.5 text-sm font-bold text-white nvc-btn-primary transition hover:opacity-95 disabled:opacity-50"
             >
               {scout.isPending ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Reading their website & brand…</>

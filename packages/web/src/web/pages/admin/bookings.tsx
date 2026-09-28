@@ -13,7 +13,7 @@ import { fmtDate, money, PRIORITY_META, dismiss } from "../../lib/utils";
 import {
   X, UserPlus, MapPin, Search, Sparkles, Plus, Pencil,
   Download, Filter, Trash2, RotateCcw, Printer, ChevronLeft, ChevronRight,
-  Columns3, FileJson, FileText, FileSpreadsheet, Loader2, ChevronDown, ClipboardList,
+  Columns3, FileJson, FileText, FileSpreadsheet, Loader2, ChevronDown, ClipboardList, MoreHorizontal,
 } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
@@ -558,7 +558,7 @@ export default function AdminWorkOrders() {
                           claims its max-content width and shoves the action
                           buttons off the right edge between 1024 and 1440px. */}
                       <td
-                        className={`max-w-[240px] px-3 py-3 lg:max-w-[200px] lg:px-4 xl:max-w-[300px] 2xl:max-w-none ${archived ? "" : "cursor-pointer"}`}
+                        className={`max-w-[240px] px-3 py-3 lg:max-w-[200px] lg:px-4 xl:max-w-[260px] 2xl:max-w-none ${archived ? "" : "cursor-pointer"}`}
                         aria-label={b.title || b.service || b.jobNumber}
                         onClick={() => {
                           if (!archived) openJob(b);
@@ -566,10 +566,10 @@ export default function AdminWorkOrders() {
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="shrink-0 rounded bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+                            <span className="shrink-0 rounded-md border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-slate-400">
                               {b.jobNumber}
                             </span>
-                            <p className="truncate font-semibold text-slate-100">
+                            <p className="truncate font-medium text-slate-100">
                               {b.title || b.service}
                             </p>
                             {b.priority && PRIORITY_META[b.priority] && (
@@ -598,23 +598,23 @@ export default function AdminWorkOrders() {
                           columns plus the action buttons did not fit, and a
                           sideways scroll that hides Assign/Edit costs more than
                           a name the row already opens onto. */}
-                      <td className="hidden px-3 py-3 text-slate-300 xl:table-cell xl:px-4">
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-slate-300 xl:table-cell xl:px-4">
                         {b.customerName}
                       </td>
-                      <td className="hidden px-3 py-3 text-slate-400 xl:table-cell xl:px-4">
+                      <td className="hidden whitespace-nowrap px-3 py-3 tabular-nums text-slate-400 xl:table-cell xl:px-4">
                         {b.scheduledAt ? fmtDate(b.scheduledAt) : "—"}
                       </td>
-                      <td className="hidden px-3 py-3 text-slate-300 md:table-cell lg:px-4">
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-slate-300 md:table-cell lg:px-4">
                         {b.technician === "Unassigned" ? (
                           <span className="text-slate-600">Unassigned</span>
                         ) : (
                           b.technician
                         )}
                       </td>
-                      <td className="px-3 py-3 lg:px-4">
+                      <td className="whitespace-nowrap px-3 py-3 lg:px-4">
                         <StatusBadge status={b.status} />
                       </td>
-                      <td className="hidden px-3 py-3 text-right font-bold text-white sm:table-cell lg:px-4">
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-white sm:table-cell lg:px-4">
                         {money(b.total ?? 0)}
                       </td>
                       <td className="px-3 py-3 lg:px-4">
@@ -624,7 +624,7 @@ export default function AdminWorkOrders() {
                               <button
                                 onClick={() => setAssignFor(b)}
                                 aria-label={`Assign ${noun.toLowerCase()}`}
-                                className="inline-flex items-center gap-1.5 rounded-full bg-brand px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-deep lg:px-3"
+                                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand px-2.5 text-xs font-semibold text-white hover:bg-brand-deep lg:px-3"
                               >
                                 <UserPlus className="h-3.5 w-3.5" />{" "}
                                 <span className="hidden 2xl:inline">Assign</span>
@@ -635,7 +635,7 @@ export default function AdminWorkOrders() {
                               onClick={() => openJob(b)}
                               title={b.status === "completed" ? "View job report" : "Edit work order"}
                               aria-label={b.status === "completed" ? "View job report" : "Edit work order"}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white lg:px-3"
+                              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white lg:px-3"
                             >
                               {b.status === "completed"
                                 ? <ClipboardList className="h-3.5 w-3.5" />
@@ -643,33 +643,25 @@ export default function AdminWorkOrders() {
                               <span className="hidden 2xl:inline">{b.status === "completed" ? "Report" : "Edit"}</span>
                             </button>
                           )}
-                          <RowExportMenu jobId={b.id} jobNumber={b.jobNumber} />
-                          {archived ? (
-                            <button
-                              onClick={() => restore.mutate(b.id)}
-                              title="Restore"
-                              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-emerald-live hover:bg-white/5"
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={async () => {
-                                if (
-                                  await confirm({
-                                    title: "Archive this work order?",
-                                    message: "It moves to the archive and can be restored later.",
-                                    confirmLabel: "Archive",
-                                  })
-                                )
-                                  del.mutate(b.id);
-                              }}
-                              title="Archive"
-                              className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-slate-400 hover:border-rose-500/40 hover:text-rose-400"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          {/* One overflow menu instead of three equal-weight icon
+                              buttons per row: export/print and archive/restore
+                              are secondary actions, so they live behind "⋯". */}
+                          <RowExportMenu
+                            jobId={b.id}
+                            jobNumber={b.jobNumber}
+                            archived={archived}
+                            onRestore={() => restore.mutate(b.id)}
+                            onArchive={async () => {
+                              if (
+                                await confirm({
+                                  title: "Archive this work order?",
+                                  message: "It moves to the archive and can be restored later.",
+                                  confirmLabel: "Archive",
+                                })
+                              )
+                                del.mutate(b.id);
+                            }}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -1149,9 +1141,15 @@ function MenuItem({
 function RowExportMenu({
   jobId,
   jobNumber,
+  archived,
+  onArchive,
+  onRestore,
 }: {
   jobId: string;
   jobNumber: string;
+  archived?: boolean;
+  onArchive?: () => void;
+  onRestore?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1166,10 +1164,13 @@ function RowExportMenu({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        title="Export / print this job"
-        className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-slate-400 hover:border-brand/40 hover:text-white"
+        title="More actions"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-slate-400 transition-colors hover:border-white/20 hover:bg-white/5 hover:text-white"
       >
-        <Download className="h-3.5 w-3.5" />
+        <MoreHorizontal className="h-4 w-4" />
       </button>
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-ink-2 py-1.5 shadow-2xl">
@@ -1200,6 +1201,27 @@ function RowExportMenu({
               setOpen(false);
             }}
           />
+          {(onArchive || onRestore) && <div className="my-1.5 border-t border-white/[0.06]" />}
+          {archived && onRestore && (
+            <MenuItem
+              icon={<RotateCcw className="h-4 w-4 text-emerald-live" />}
+              label="Restore"
+              onClick={() => {
+                setOpen(false);
+                onRestore();
+              }}
+            />
+          )}
+          {!archived && onArchive && (
+            <MenuItem
+              icon={<Trash2 className="h-4 w-4 text-rose-400" />}
+              label="Archive"
+              onClick={() => {
+                setOpen(false);
+                onArchive();
+              }}
+            />
+          )}
         </div>
       )}
     </div>

@@ -149,6 +149,10 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
+    line-height: 1.15;
+    /* Weight scale is 400 body / 600 labels / 700 headings. Nothing heavier —
+       900 reads loud rather than confident on a dark UI. */
+    font-weight: 700;
   }
 }
 
@@ -201,6 +205,19 @@
 }
 .nvc-glow { box-shadow: 0 0 0 1px rgba(14,165,233,0.25), 0 8px 40px -8px rgba(14,165,233,0.45); }
 .nvc-glow-sm { box-shadow: 0 0 24px -6px rgba(14,165,233,0.5); }
+
+/* Primary button depth without a coloured glow: a 1px lighter top edge and a
+   short neutral shadow, lifting 1px on hover. Applied wherever a filled
+   bg-brand button used to carry shadow-brand/30–40. */
+.nvc-btn-primary {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.35);
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+.nvc-btn-primary:hover:not(:disabled) {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 6px 16px -6px rgba(0,0,0,0.6);
+  transform: translateY(-1px);
+}
+.nvc-btn-primary:active:not(:disabled) { transform: translateY(0); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.35); }
 .nvc-glass { background: rgba(12,18,32,0.72); backdrop-filter: blur(14px); border: 1px solid rgba(148,163,184,0.12); }
 
 /* horizontal scroll without a visible bar — used by the fleet map's status

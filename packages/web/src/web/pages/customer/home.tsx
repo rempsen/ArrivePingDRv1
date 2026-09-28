@@ -59,7 +59,7 @@ export default function CustomerHome() {
       {/* active booking banner */}
       {active && (
         <Link to={`/app/track/${active.id}`}>
-          <div className="animate-fade-up flex items-center justify-between rounded-2xl bg-gradient-to-r from-brand to-brand-deep p-5 text-white shadow-lg shadow-brand/20">
+          <div className="animate-fade-up flex items-center justify-between rounded-2xl bg-gradient-to-r from-brand to-brand-deep p-5 text-white shadow-lg shadow-black/20">
             <div className="flex items-center gap-4">
               <div className="relative grid h-12 w-12 place-items-center rounded-xl bg-ink-2/15">
                 <span className="live-ping absolute inset-0 rounded-xl opacity-30" />

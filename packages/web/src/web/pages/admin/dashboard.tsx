@@ -8,6 +8,7 @@ import { StatusBadge, PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
 import { fmtDate, money, TECH_STATUS } from "../../lib/utils";
 import { RunningLateBoard } from "../../components/running-late-board";
+import { TechAvatar } from "../../components/tech-avatar";
 import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
 import {
   ClipboardList,
@@ -193,16 +194,16 @@ export default function AdminDashboard() {
       label: "Work orders",
       value: s.totalBookings,
       icon: ClipboardList,
-      iconTint: "bg-sky-500/10 text-sky-400",
-      topBorder: "border-t-sky-500/40",
+      iconTint: "bg-white/[0.06] text-slate-300",
+      topBorder: "border-t-white/10",
       to: "/admin/work-orders",
     },
     {
       label: "Active jobs",
       value: s.activeBookings,
       icon: Activity,
-      iconTint: "bg-amber-500/10 text-amber-400",
-      topBorder: "border-t-amber-500/40",
+      iconTint: "bg-brand/10 text-brand",
+      topBorder: "border-t-brand/50",
       to: "/admin/work-orders?status=active",
       hint: s.activeBookings === 0 ? "Nothing in progress" : undefined,
     },
@@ -210,32 +211,32 @@ export default function AdminDashboard() {
       label: "Completed",
       value: s.completedBookings,
       icon: CheckCircle2,
-      iconTint: "bg-emerald-500/10 text-emerald-400",
-      topBorder: "border-t-emerald-500/40",
+      iconTint: "bg-white/[0.06] text-slate-300",
+      topBorder: "border-t-white/10",
       to: "/admin/work-orders?status=completed",
     },
     {
       label: "Revenue",
       value: kpiMoney(s.revenue),
       icon: DollarSign,
-      iconTint: "bg-emerald-500/10 text-emerald-400",
-      topBorder: "border-t-emerald-500/40",
+      iconTint: "bg-white/[0.06] text-slate-300",
+      topBorder: "border-t-white/10",
       to: "/admin/payouts",
     },
     {
       label: customerPlural,
       value: s.customers,
       icon: Users,
-      iconTint: "bg-brand/10 text-brand",
-      topBorder: "border-t-brand/40",
+      iconTint: "bg-white/[0.06] text-slate-300",
+      topBorder: "border-t-white/10",
       to: "/admin/clients",
     },
     {
       label: workerPlural,
       value: s.riders,
       icon: Wrench,
-      iconTint: "bg-violet-500/10 text-violet-400",
-      topBorder: "border-t-violet-500/40",
+      iconTint: "bg-white/[0.06] text-slate-300",
+      topBorder: "border-t-white/10",
       to: "/admin/techs",
     },
   ];
@@ -342,7 +343,7 @@ export default function AdminDashboard() {
                   $15048.16 was being clipped by the card's overflow-hidden. */}
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{c.label}</p>
-                <div className="mt-2 font-display text-[22px] font-black leading-none tracking-tight text-white tabular-nums sm:text-[28px]">
+                <div className="mt-2 font-display text-[22px] font-bold leading-none tracking-tight text-white tabular-nums sm:text-[28px]">
                   {c.value}
                 </div>
                 {"hint" in c && c.hint && (
@@ -353,7 +354,7 @@ export default function AdminDashboard() {
                 <c.icon className="h-[18px] w-[18px]" />
               </div>
             </div>
-            <div className="mt-3 flex items-center gap-1 text-[11px] font-medium text-slate-600 transition-colors group-hover:text-brand">
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-medium text-slate-500 transition-colors group-hover:text-brand">
               View details <ArrowRight className="h-3 w-3 translate-x-0 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
             </div>
           </Link>
@@ -490,16 +491,13 @@ export default function AdminDashboard() {
                     to="/admin/fleet"
                     className="flex items-center gap-3 px-5 py-3 transition hover:bg-white/[0.03]"
                   >
-                    <span
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-ink"
-                      style={{ background: t.color ?? "#334155" }}
-                    >
-                      {t.name
-                        .split(" ")
-                        .map((x) => x[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </span>
+                    <TechAvatar
+                      name={t.name}
+                      photoUrl={t.photoUrl}
+                      color={t.color}
+                      className="h-8 w-8"
+                      textClassName="text-xs"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-100">
                         {t.name}

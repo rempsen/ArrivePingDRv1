@@ -26,36 +26,54 @@ export function fmtDateShort(d: string | number | Date) {
   });
 }
 
+/**
+ * Status colour language — four meanings only, used everywhere a status is
+ * shown (Jobs table, dashboard, scheduler, public tracking page):
+ *   cyan  = in motion (assigned / en route / on site / in progress)
+ *   green = done
+ *   amber = needs attention (unassigned, paused)
+ *   red   = problem
+ *   slate = scheduled, nothing moving yet
+ * Keep new statuses inside these five; never add a sixth hue.
+ */
+const C = {
+  cyan: { color: "#38bdf8", bg: "rgba(14,165,233,0.14)" },
+  green: { color: "#34d399", bg: "rgba(16,185,129,0.14)" },
+  amber: { color: "#fbbf24", bg: "rgba(245,158,11,0.14)" },
+  red: { color: "#f87171", bg: "rgba(239,68,68,0.14)" },
+  slate: { color: "#94a3b8", bg: "rgba(148,163,184,0.12)" },
+};
+
 export const STATUS_META: Record<
   string,
   { label: string; color: string; bg: string }
 > = {
-  pending: { label: "Pending", color: "#fbbf24", bg: "rgba(245,158,11,0.14)" },
-  confirmed: { label: "Confirmed", color: "#38bdf8", bg: "rgba(14,165,233,0.14)" },
-  assigned: { label: "Assigned", color: "#c084fc", bg: "rgba(168,85,247,0.16)" },
-  enroute: { label: "En route", color: "#22d3ee", bg: "rgba(34,211,238,0.14)" },
-  arrived: { label: "On site", color: "#34d399", bg: "rgba(16,185,129,0.14)" },
+  pending: { label: "Pending", ...C.amber },
+  confirmed: { label: "Confirmed", ...C.slate },
+  assigned: { label: "Assigned", ...C.cyan },
+  enroute: { label: "En route", ...C.cyan },
+  arrived: { label: "On site", ...C.cyan },
   // A tech clocked in on site, and a tech who paused mid-job, are real booking
   // statuses the API returns. They were missing here, so every surface that
   // looks a status up (including the public tracking page) fell through to
   // printing the raw db value at the customer — "onsite", "paused".
-  onsite: { label: "On site", color: "#34d399", bg: "rgba(16,185,129,0.14)" },
-  paused: { label: "Paused", color: "#fbbf24", bg: "rgba(245,158,11,0.14)" },
-  in_progress: { label: "In progress", color: "#fb923c", bg: "rgba(249,115,22,0.16)" },
-  completed: { label: "Completed", color: "#34d399", bg: "rgba(16,185,129,0.16)" },
-  cancelled: { label: "Cancelled", color: "#f87171", bg: "rgba(239,68,68,0.16)" },
+  onsite: { label: "On site", ...C.cyan },
+  paused: { label: "Paused", ...C.amber },
+  in_progress: { label: "In progress", ...C.cyan },
+  completed: { label: "Completed", ...C.green },
+  cancelled: { label: "Cancelled", ...C.red },
 };
 
-/** Technician live status (fleet map) */
+/** Technician live status (fleet map) — same four-meaning palette. */
 export const TECH_STATUS: Record<
   string,
   { label: string; color: string }
 > = {
   available: { label: "Available", color: "#10b981" },
   enroute: { label: "En Route", color: "#0ea5e9" },
-  onsite: { label: "On Site", color: "#f59e0b" },
-  busy: { label: "Busy", color: "#f59e0b" },
-  break: { label: "Break", color: "#a855f7" },
+  onsite: { label: "On Site", color: "#0ea5e9" },
+  busy: { label: "Busy", color: "#0ea5e9" },
+  break: { label: "Break", color: "#f59e0b" },
   offline: { label: "Offline", color: "#64748b" },
 };
 
