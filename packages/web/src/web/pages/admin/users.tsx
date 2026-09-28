@@ -22,6 +22,7 @@ import { TagPicker } from "../../components/tag-picker";
 import { AttachmentManager } from "../../components/attachment-manager";
 import { CustomFieldsForm } from "../../components/custom-fields";
 import { WorkOrderModal } from "../../components/work-order-modal";
+import { ImportMenu, type ImportType } from "../../components/import-menu";
 import { Search, UserPlus, Trash2, Plus, X, Mail, Phone, ClipboardList } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
 
@@ -159,9 +160,18 @@ export default function AdminClients() {
         title="Directory"
         subtitle={`${list.length} accounts`}
         actions={
-          <BtnPrimary onClick={addAction.onClick}>
-            <UserPlus className="h-4 w-4" /> {addAction.label}
-          </BtnPrimary>
+          <div className="flex items-center gap-2">
+            <ImportMenu
+              types={["customer", "rider", "admin"]}
+              activeType={role !== "all" ? (role as ImportType) : undefined}
+              customerLabel={customerNounPlural}
+              workerLabel={nounPlural}
+              onDone={() => qc.invalidateQueries({ queryKey: ["admin-users"] })}
+            />
+            <BtnPrimary onClick={addAction.onClick}>
+              <UserPlus className="h-4 w-4" /> {addAction.label}
+            </BtnPrimary>
+          </div>
         }
       />
 

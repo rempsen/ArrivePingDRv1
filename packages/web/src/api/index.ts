@@ -29,6 +29,7 @@ import { templatesRoutes } from "./routes/templates";
 import { automationRoutes } from "./routes/automation";
 import { integrationsRoutes } from "./routes/integrations";
 import { exportRoutes } from "./routes/export";
+import { importRoutes } from "./routes/import";
 import { jobSearchRoutes } from "./routes/job-search";
 import { settingsRoutes } from "./routes/settings";
 import { tagsRoutes } from "./routes/tags";
@@ -311,6 +312,7 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/maintenance", maintenanceRoutes)
   .route("/integrations", integrationsRoutes)
   .route("/export", exportRoutes)
+  .route("/import", importRoutes)
   .route("/settings", settingsRoutes)
   .route("/tags", tagsRoutes)
   .route("/custom-fields", customFieldsRoutes)

@@ -27,6 +27,7 @@ import { WorkOrderModal } from "../../components/work-order-modal";
 import { Star, Phone, Mail, Truck, Plus, Trash2, UserPlus, X, Camera, Wrench, Users, ShieldCheck, KeyRound, ClipboardList } from "lucide-react";
 import { TechAvatar } from "../../components/tech-avatar";
 import { InternalTeamTab, RolesPermissionsTab } from "./team-tabs";
+import { ImportMenu } from "../../components/import-menu";
 
 const TEAM_TABS = [
   { key: "field", label: "Field Staff", icon: Wrench },
@@ -68,7 +69,7 @@ const STATUS_FILTERS = ["all", "available", "enroute", "onsite", "busy", "offlin
 
 function FieldStaffTab() {
   const qc = useQueryClient();
-  const { noun: workerNoun } = useWorkerNoun();
+  const { noun: workerNoun, nounPlural: workerNounPlural } = useWorkerNoun();
   const [showAdd, setShowAdd] = useState(false);
   const [delId, setDelId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -163,9 +164,17 @@ function FieldStaffTab() {
         title="Field Staff"
         subtitle={`${(riders.data?.riders ?? []).length} ${workerNoun.toLowerCase()}s & field staff on your team`}
         actions={
-          <BtnPrimary onClick={() => setShowAdd(true)}>
-            <UserPlus className="h-4 w-4" /> Add {workerNoun}
-          </BtnPrimary>
+          <div className="flex items-center gap-2">
+            <ImportMenu
+              types={["rider"]}
+              activeType="rider"
+              workerLabel={workerNounPlural}
+              onDone={() => { qc.invalidateQueries({ queryKey: ["riders"] }); qc.invalidateQueries({ queryKey: ["fleet"] }); }}
+            />
+            <BtnPrimary onClick={() => setShowAdd(true)}>
+              <UserPlus className="h-4 w-4" /> Add {workerNoun}
+            </BtnPrimary>
+          </div>
         }
       />
 
