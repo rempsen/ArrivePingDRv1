@@ -95,7 +95,19 @@ export async function loadMemberships(userId: string): Promise<
   }[]
 > {
   try {
-    const rows = await db
+    // This is a cross-tenant lookup for ONE user (their memberships across
+    // every company they belong to), which is fundamentally incompatible
+    // with the per-tenant `tenant_isolation` RLS policy on `memberships`
+    // (`company_id = current_setting('app.tenant_id', true)`): that policy
+    // requires a single tenant to already be set, and no single tenant is
+    // correct here. Querying through the RLS-enforced `db` client with no
+    // tenant context set means `current_setting` returns null, the policy
+    // matches nothing, and this silently returns zero rows for every
+    // multi-company user (they'd see "not associated with any tenants").
+    // Use the BYPASSRLS system connection instead, same as the analogous
+    // lookup in routes/superadmin.ts and the other membership reads in
+    // routes/me.ts.
+    const rows = await sdb
       .select()
       .from(schema.memberships)
       .where(
