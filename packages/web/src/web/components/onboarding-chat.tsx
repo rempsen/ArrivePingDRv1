@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../lib/api";
 import { useAuth } from "../hooks/use-auth";
@@ -63,6 +63,52 @@ function toolLabel(t: ToolEvent): string {
     default:
       return t.name;
   }
+}
+
+/** Bold-only inline formatting: splits on **text** and wraps the middle in
+ * <strong>. The system prompt tells the model not to use markdown at all,
+ * but this is a cheap safety net so an occasional "**word**" slip renders as
+ * emphasis instead of literal asterisks on screen. */
+function renderInline(text: string, keyPrefix: string): ReactNode[] {
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={`${keyPrefix}-${i}`} className="font-semibold text-white">
+        {part}
+      </strong>
+    ) : (
+      <span key={`${keyPrefix}-${i}`}>{part}</span>
+    ),
+  );
+}
+
+/** Renders an assistant message's plain text as paragraphs, turning any
+ * "- " / "* " line runs into a real bulleted list rather than showing the
+ * dash literally — same safety-net reasoning as renderInline above. */
+function AssistantText({ text }: { text: string }) {
+  const paragraphs = text.split(/\n{2,}/);
+  return (
+    <>
+      {paragraphs.map((para, pi) => {
+        const lines = para.split("\n").filter((l) => l.length > 0);
+        const isList = lines.length > 0 && lines.every((l) => /^[-*]\s+/.test(l));
+        if (isList) {
+          return (
+            <ul key={pi} className={pi > 0 ? "mt-2 list-disc space-y-1 pl-4" : "list-disc space-y-1 pl-4"}>
+              {lines.map((l, li) => (
+                <li key={li}>{renderInline(l.replace(/^[-*]\s+/, ""), `${pi}-${li}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={pi} className={pi > 0 ? "mt-2" : undefined}>
+            {lines.flatMap((l, li) => (li > 0 ? [<br key={`br-${li}`} />, ...renderInline(l, `${pi}-${li}`)] : renderInline(l, `${pi}-${li}`)))}
+          </p>
+        );
+      })}
+    </>
+  );
 }
 
 /** Incremental SSE line parser for a hand-rolled protocol (event:/data: blocks
@@ -330,7 +376,17 @@ export function OnboardingChat() {
                       : "bg-white/5 text-slate-200")
                   }
                 >
-                  {l.msg.content || (streaming && i === lines.length - 1 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "")}
+                  {l.msg.content ? (
+                    l.msg.role === "assistant" ? (
+                      <AssistantText text={l.msg.content} />
+                    ) : (
+                      l.msg.content
+                    )
+                  ) : streaming && i === lines.length - 1 ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    ""
+                  )}
                 </div>
               </div>
             ),

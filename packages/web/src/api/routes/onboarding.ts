@@ -397,6 +397,12 @@ Rules:
   the surrounding region.").
 - Keep replies to 1-3 short sentences. No corporate tone, no bullet-point
   walls, no "Great question!".
+- PLAIN TEXT ONLY — this renders in a chat bubble with no markdown parser.
+  Never use markdown syntax: no "**bold**", no "*italic*", no "- " or "* "
+  bullet lists, no "#" headings, no backticks. Write it exactly as it should
+  look on screen — plain sentences, commas instead of dashes/bullets when
+  listing a couple of things ("industry's set to Plumbing, tagline's
+  Fast, Fair, Fixed Right — both look good.").
 - Only call finish_onboarding once Part 1's essentials AND the 5 mandatory
   qualifying fields are captured (or the user explicitly says they're done /
   it's fine / skip it — then call it immediately regardless of what's
@@ -624,9 +630,22 @@ other — Other (free-text business description)`;
       });
 
       return streamSSE(c, async (stream) => {
+        // The model streams its reply in separate "steps" whenever a tool
+        // call sits in the middle of a turn (say something → call a tool →
+        // say more). Each step opens its own text-start/text-delta run with
+        // no guaranteed leading space, so naively concatenating every
+        // text-delta produced runs like "...save that tagline.Industry
+        // locked in..." — two sentences welded together with no space,
+        // which is exactly the "run-on sentence, no spacing" look this was
+        // reported as. Treat every text-start after the first as a new
+        // paragraph so step boundaries always render as a clean break.
+        let textSegments = 0;
         try {
           for await (const part of result.fullStream) {
-            if (part.type === "text-delta") {
+            if (part.type === "text-start") {
+              textSegments++;
+              if (textSegments > 1) await stream.writeSSE({ event: "delta", data: "\n\n" });
+            } else if (part.type === "text-delta") {
               await stream.writeSSE({ event: "delta", data: part.text });
             } else if (part.type === "tool-result") {
               await stream.writeSSE({
