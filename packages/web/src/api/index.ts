@@ -154,7 +154,28 @@ const app = new Hono<{ Variables: Variables }>()
   // throttle credential auth surfaces hard (brute-force defense); session reads
   // (get-session etc.) get a generous budget so page loads never 429 -> /sign-in
   .use("/api/auth/*", authSurfaceLimiter)
-  .on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw))
+  .on(["GET", "POST"], "/api/auth/*", async (c) => {
+    const res = await auth.handler(c.req.raw);
+    // BUG FIX (root cause of "Something went wrong" on every wrong-password
+    // sign-in attempt, incl. Dan's Sep 2026 report): the platform edge in
+    // front of this app (Cloudflare -> Google's LB, ahead of the actual
+    // origin) swallows a clean 401 from better-auth and replaces it with a
+    // bare, unbranded 500 "Internal Server Error" — verified by calling
+    // `auth.handler` directly in-process (instant, correct 401 JSON body,
+    // no crash) while the SAME request through arriveping.com's public edge
+    // came back as a 500 with no fly.io hop in its `via` header, i.e. it
+    // never reached this app at all. A 400 on this exact endpoint (e.g. a
+    // malformed email) passes through that edge untouched, so credential
+    // failures are remapped to 400 here — same JSON body/code the frontend
+    // already reads generically via `error.message`, just a status the edge
+    // doesn't mangle. Does NOT affect authMiddleware's own 401s elsewhere
+    // (session-expired on normal /api/* routes) — those never touch this
+    // route at all.
+    if (res.status === 401) {
+      return new Response(res.body, { status: 400, headers: res.headers });
+    }
+    return res;
+  })
   // Stripe webhook — MUST stay before basePath/authMiddleware/json parsing so
   // the handler can read the raw body for signature verification, and so it is
   // reachable unauthenticated (Stripe authenticates via the signature).
