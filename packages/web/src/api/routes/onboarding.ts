@@ -147,16 +147,42 @@ async function buildOnboardingSnapshot(cid: string) {
   // companies is GLOBAL — plain db, no RLS policy needed.
   const [company] = await db.select().from(schema.companies).where(eq(schema.companies.id, cid));
   const t = tdb(cid);
-  const settings = await t.selectOne(schema.companySettings);
-  if (!company || !settings) throw Err.notFound("Company not found");
 
-  const [forms, templates, services, catalog, options] = await Promise.all([
-    t.select(schema.intakeForms),
-    t.select(schema.taskTemplates),
-    t.select(schema.services),
-    t.select(schema.catalogItems),
-    t.select(schema.optionCategories),
-  ]);
+  // BUG FIX (root cause of the consistent 500 on this endpoint specifically):
+  // `t.select()`/`t.selectOne()` each open their OWN transaction — i.e. their
+  // own checked-out connection — under the hood (see database/tenant.ts).
+  // The old code below fired 6 of them for one request: one `selectOne` for
+  // settings, then FIVE MORE run concurrently via `Promise.all`. That is up
+  // to 6 simultaneous connections for a single call to this one route, vs. 1
+  // for almost every other route in the app. Supabase's session-mode pooler
+  // hard-caps this whole project at a small pool_size (see the connection
+  // pool comment in database/index.ts) — this route alone could burn through
+  // most or all of the remaining headroom, and did, which is why it failed
+  // far more often and more consistently than sign-in or anything else.
+  // Fixed by running every read on ONE connection (`t.transaction`) instead
+  // of six, sequentially. These are small, single-tenant reads — the extra
+  // latency of running them one after another instead of in parallel is
+  // negligible next to the cost of a dropped connection.
+  const { settings, forms, templates, services, catalog, options } = await t.transaction(
+    async (tx) => {
+      const settingsWhere = t.scope(schema.companySettings);
+      const [settings] = settingsWhere
+        ? await tx.select().from(schema.companySettings).where(settingsWhere).limit(1)
+        : await tx.select().from(schema.companySettings).limit(1);
+      const selectAll = async <T extends typeof schema.intakeForms>(table: T) => {
+        const where = t.scope(table);
+        const q = tx.select().from(table as never);
+        return (where ? await q.where(where) : await q) as T["$inferSelect"][];
+      };
+      const forms = await selectAll(schema.intakeForms);
+      const templates = await selectAll(schema.taskTemplates);
+      const services = await selectAll(schema.services);
+      const catalog = await selectAll(schema.catalogItems);
+      const options = await selectAll(schema.optionCategories);
+      return { settings, forms, templates, services, catalog, options };
+    },
+  );
+  if (!company || !settings) throw Err.notFound("Company not found");
 
   const knowledge = await loadIcpKnowledge(company.industry).catch(() => null);
 
