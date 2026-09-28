@@ -73,7 +73,19 @@ export function Modal({
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {/*
+          touch-pan-y (touch-action: pan-y): on mobile Safari/Chrome the
+          content here can end up a hair wider than the panel (a select, a
+          long date string, etc.) — without this, that turns into a
+          horizontal drag that shifts the whole modal sideways, the same
+          class of bug the signature pad's touch-none fixes for drawing.
+          pan-y keeps vertical scroll/swipe working and refuses horizontal
+          panning outright; overflow-x-hidden clips anything that still
+          overflows instead of growing the box.
+        */}
+        <div className="flex-1 touch-pan-y overflow-x-hidden overflow-y-auto px-5 py-4">
+          {children}
+        </div>
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t border-white/5 px-5 py-3">
             {footer}
