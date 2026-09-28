@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import * as schema from "../database/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
-import { requireAuth, requireAdmin, tx } from "../middleware/auth";
+import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
+import { db } from "../database";
 import { sendSms } from "../../services/sms";
 import { z } from "zod";
 import { jsonBody, shortText } from "../lib/validate";
@@ -113,7 +114,21 @@ export const fleetRoutes = new Hono<AppEnv>()
         };
       }),
     )).filter((s) => s.status === "fulfilled").map((s) => (s as PromiseFulfilledResult<FleetTech>).value);
-    return c.json({ fleet: result }, 200);
+    // Office / home-base location — the fleet map's fallback center when no
+    // tech in `result` has a live lat/lng yet (instead of a hardcoded city).
+    let officeLat: number | null = null;
+    let officeLng: number | null = null;
+    try {
+      const [co] = await db
+        .select({ officeLat: schema.companies.officeLat, officeLng: schema.companies.officeLng })
+        .from(schema.companies)
+        .where(eq(schema.companies.id, tenantId(c)));
+      officeLat = co?.officeLat ?? null;
+      officeLng = co?.officeLng ?? null;
+    } catch {
+      // best-effort
+    }
+    return c.json({ fleet: result, officeLat, officeLng }, 200);
   })
   // unassigned / pending work orders (for dispatch + auto-assign)
   .get("/pending", requireAuth, async (c) => {

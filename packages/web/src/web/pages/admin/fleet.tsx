@@ -176,6 +176,8 @@ export default function FleetPage() {
         jobs={jobs}
         showTechs={showDrivers}
         showJobs={showJobs}
+        officeLat={(fleet.data as any)?.officeLat}
+        officeLng={(fleet.data as any)?.officeLng}
         selectedId={selected}
         onSelect={(id) => {
           setSelected(id);

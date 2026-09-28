@@ -47,7 +47,17 @@ interface FleetMapProps {
   onSelect?: (id: string) => void;
   onSelectJob?: (id: string) => void;
   className?: string;
+  /** Tenant's office/home-base coords — centers the map here when no tech
+   * has a live location yet. Falls back to a generic world view when this
+   * is also unset (a brand-new tenant with neither). */
+  officeLat?: number | null;
+  officeLng?: number | null;
 }
+
+// Last-resort center when a brand-new tenant has neither a located tech nor
+// an office location set yet (Toronto — arbitrary, just needs to be
+// somewhere on the map instead of the ocean at [0,0]).
+const NO_LOCATION_CENTER: [number, number] = [43.6532, -79.3832];
 
 function techIcon(
   color: string,
@@ -174,12 +184,19 @@ export function FleetMap({
   onSelect,
   onSelectJob,
   className,
+  officeLat,
+  officeLng,
 }: FleetMapProps) {
   const { noun } = useWorkerNoun();
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markers = useRef<Record<string, L.Marker>>({});
   const jobMarkers = useRef<Record<string, L.Marker>>({});
+  // Office coords are read on first mount only (see map-init effect below,
+  // which runs once) — a ref keeps the latest value available there without
+  // re-running that effect every time the office query resolves.
+  const officeRef = useRef<{ lat?: number | null; lng?: number | null }>({ lat: officeLat, lng: officeLng });
+  officeRef.current = { lat: officeLat, lng: officeLng };
 
   useEffect(() => {
     if (!elRef.current || mapRef.current) return;
@@ -196,7 +213,12 @@ export function FleetMap({
       zoomControl: false,
       attributionControl: false,
       fadeAnimation: false,
-    }).setView([43.6532, -79.3832], FLEET_DEFAULT_ZOOM);
+    }).setView(
+      officeRef.current.lat != null && officeRef.current.lng != null
+        ? [officeRef.current.lat, officeRef.current.lng]
+        : NO_LOCATION_CENTER,
+      FLEET_DEFAULT_ZOOM,
+    );
     L.control.zoom({ position: "bottomleft" }).addTo(map);
     L.tileLayer(
       // Esri "World Dark Gray Base" — keyless raster tiles (no API key / account required).
@@ -272,9 +294,17 @@ export function FleetMap({
     // (one tech → zoomed to street level, techs in two cities → whole
     // province). Every tenant now lands on the same city-scale view;
     // the user can still zoom from there, and selecting a tech still flies in.
-    if (pts.length && !(mapRef.current as unknown as { _loaded_once?: boolean })._loaded_once) {
-      map.setView(L.latLngBounds(pts).getCenter(), FLEET_DEFAULT_ZOOM);
-      (mapRef.current as any)._loaded_once = true;
+    // No tech located yet (fresh tenant, or everyone's location is stale)?
+    // Fall back to the office location set in Settings → Company instead of
+    // leaving the map on whatever placeholder it happened to init with.
+    if (!(mapRef.current as unknown as { _loaded_once?: boolean })._loaded_once) {
+      if (pts.length) {
+        map.setView(L.latLngBounds(pts).getCenter(), FLEET_DEFAULT_ZOOM);
+        (mapRef.current as any)._loaded_once = true;
+      } else if (officeRef.current.lat != null && officeRef.current.lng != null) {
+        map.setView([officeRef.current.lat, officeRef.current.lng], FLEET_DEFAULT_ZOOM);
+        (mapRef.current as any)._loaded_once = true;
+      }
     }
   }, [
 	techs,

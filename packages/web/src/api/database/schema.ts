@@ -1149,6 +1149,13 @@ export const companies = pgTable("companies", {
   industryOther: text("industry_other").notNull().default(""), // free-text business description when industry="other" (no preset fits)
   status: text("status").notNull().default("active"), // active | suspended
   createdBy: text("created_by").notNull().default(""), // superadmin user id
+  // Office / home-base location. Used as the fleet map's fallback center
+  // when no technician has reported a live location yet (instead of a
+  // hardcoded city). Distinct from companySettings.address/lat/lng, which
+  // is the "business address" used for tax region + geofencing.
+  officeAddress: text("office_address").notNull().default(""),
+  officeLat: real("office_lat"),
+  officeLng: real("office_lng"),
   // When the AI-assisted onboarding conversation finished (or was skipped) for
   // this tenant. NULL = the "finish setting up" chat should surface on the
   // admin's next login — set by either the `finish_onboarding` chat tool or

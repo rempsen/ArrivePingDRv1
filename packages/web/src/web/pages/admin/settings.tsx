@@ -400,6 +400,18 @@ function CompanySettingsTab() {
                   }
                 />
               </Field>
+              <Field label="Office location" hint="Where the fleet map centers when no technician has a live location yet">
+                <AddressAutocomplete
+                  value={form.officeAddress ?? ""}
+                  onResolve={({ address, lat, lng }) =>
+                    setForm((f: any) => ({
+                      ...f,
+                      officeAddress: address,
+                      ...(lat != null && { officeLat: lat, officeLng: lng }),
+                    }))
+                  }
+                />
+              </Field>
             </div>
           </div>
 

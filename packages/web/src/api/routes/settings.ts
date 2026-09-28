@@ -32,22 +32,46 @@ export const settingsRoutes = new Hono<AppEnv>()
     // Stored on companies, not settings.
     let industry = "";
     let industryOther = "";
+    let officeAddress = "";
+    let officeLat: number | null = null;
+    let officeLng: number | null = null;
     try {
       const [co] = await db
-        .select({ industry: schema.companies.industry, industryOther: schema.companies.industryOther })
+        .select({
+          industry: schema.companies.industry,
+          industryOther: schema.companies.industryOther,
+          officeAddress: schema.companies.officeAddress,
+          officeLat: schema.companies.officeLat,
+          officeLng: schema.companies.officeLng,
+        })
         .from(schema.companies)
         .where(eq(schema.companies.id, tenantId(c)));
       industry = co?.industry ?? "";
       industryOther = co?.industryOther ?? "";
+      officeAddress = co?.officeAddress ?? "";
+      officeLat = co?.officeLat ?? null;
+      officeLng = co?.officeLng ?? null;
     } catch {
       // best-effort; default to empty
     }
-    return c.json({ settings: { ...settings, industry, industryOther } }, 200);
+    return c.json({ settings: { ...settings, industry, industryOther, officeAddress, officeLat, officeLng } }, 200);
   })
   .put("/", requireAdmin, async (c) => {
     const me = c.get("user") as SessionUser;
     const body = await c.req.json();
     const existing = await getOrInit(c);
+    // officeAddress/officeLat/officeLng live on `companies`, not
+    // `company_settings` — they're the tenant's home base (fleet map
+    // fallback center), separate from the tax/geofencing "business address"
+    // below. Handled here too so Settings → Company can save both in one
+    // "Save changes" click.
+    if ("officeAddress" in body || "officeLat" in body || "officeLng" in body) {
+      const officePatch: Record<string, unknown> = { updatedAt: new Date() };
+      if ("officeAddress" in body) officePatch.officeAddress = String(body.officeAddress ?? "");
+      if ("officeLat" in body) officePatch.officeLat = body.officeLat == null ? null : Number(body.officeLat);
+      if ("officeLng" in body) officePatch.officeLng = body.officeLng == null ? null : Number(body.officeLng);
+      await db.update(schema.companies).set(officePatch as any).where(eq(schema.companies.id, tenantId(c)));
+    }
     const allowed = [
       "name", "legalName", "email", "phone", "address", "lat", "lng",
       "timezone", "currency", "taxRate", "taxLabel", "logo", "brandColor", "website",
