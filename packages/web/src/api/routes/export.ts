@@ -78,30 +78,101 @@ export async function toXlsx(
 }
 
 /* ------------------------------- PDF -------------------------------- */
+/** A raw 36-char UUID eats a whole table column and tells nobody anything —
+ *  shorten it the same way the single-job PDF's "JOB xxxxxxx" number does
+ *  (strip dashes, first 8 chars, upper-case) so an "id" column stays
+ *  meaningful without hogging width. CSV/XLSX still get the real id. */
+function shortId(v: string): string {
+  const s = String(v).replace(/-/g, "");
+  return s.length > 8 ? s.slice(0, 8).toUpperCase() : s.toUpperCase();
+}
+
+/** Shrink `text` with a trailing ellipsis until it actually fits `maxWidth`
+ *  at this font/size — replaces the old fixed "slice at 26 chars" rule,
+ *  which is exactly what produced overlapping/garbled rows: a 26-char
+ *  slice is far wider than a narrow money or status column, so neighboring
+ *  cells' text painted on top of each other. Measuring real glyph width
+ *  per column is what actually keeps every cell inside its own lane. */
+function fitText(text: string, font: { widthOfTextAtSize(text: string, size: number): number }, size: number, maxWidth: number): string {
+  if (maxWidth <= 0) return "";
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return text;
+  const ellipsis = "…";
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const candidate = text.slice(0, mid) + ellipsis;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo > 0 ? text.slice(0, lo) + ellipsis : ellipsis;
+}
+
+/** Raw-table PDF used for the "Raw data exports" (Jobs/Installers/Customers/
+ *  Invoices) and for ad-hoc dashboard report exports. Shares the same
+ *  branded-header / footer treatment as buildJobPdf below so every PDF a
+ *  tenant downloads — single job sheet or bulk table — carries their own
+ *  logo and brand color instead of looking like a generic system dump. */
 export async function toPdf(
   rows: Record<string, any>[],
-  columns: { key: string; label: string; kind?: string }[],
+  columns: { key: string; label: string; kind?: string; width?: number }[],
   title: string,
   subtitle?: string,
   /** Tenant's IANA zone. Without it a date cell renders on the server's UTC
    *  clock, so an evening job prints on the next calendar day. */
   tz?: string | null,
+  brand?: JobBrand | null,
+  baseUrl?: string,
 ): Promise<Buffer> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const pageW = 792, pageH = 612; // landscape letter
-  const margin = 36;
+  // Letter landscape runs out of room past ~8 columns even with weighted
+  // widths — every label starts truncating hard. Tabloid landscape (11x17")
+  // gives ~70% more usable width for wide tables (Work Orders, Technicians)
+  // and still prints on one physical sheet, same idea as buildJobPdf using
+  // portrait letter because its layout is single-column detail cards.
+  const wide = columns.length > 8;
+  const pageW = wide ? 1224 : 792, pageH = wide ? 792 : 612; // landscape tabloid or letter
+  const margin = 32;
   const usableW = pageW - margin * 2;
-  const colW = usableW / columns.length;
+  const brandColor = hexRgb(brand?.brandColor);
+  const ink = rgb(0.1, 0.12, 0.15);
+  const muted = rgb(0.45, 0.5, 0.56);
+  // More than ~9 columns on a landscape page needs a smaller row font to
+  // stay legible rather than cramming full-size text into slivers.
+  const rowSize = wide ? (columns.length > 13 ? 7.5 : 8) : 8;
+  const headSize = Math.min(rowSize, 7.5);
+  const rowH = rowSize + 7;
+
+  // Column widths are weighted, not equal — an address or client name needs
+  // far more room than a status or priority flag. Unweighted columns
+  // (dashboard report exports) default to 1, so old callers behave the same.
+  const DEFAULT_WEIGHTS: Record<string, number> = {
+    id: 0.7, title: 1.4, service: 1.15, client: 1.15, name: 1.15,
+    clientPhone: 0.95, phone: 0.95, technician: 1.15, status: 0.8,
+    priority: 0.75, address: 1.7, scheduledAt: 0.95, price: 0.85,
+    amount: 0.85, tax: 0.75, total: 0.85, paymentStatus: 0.95,
+    method: 0.85, createdAt: 0.95, paidAt: 0.95, email: 1.3,
+    vehicle: 0.95, skillClass: 0.85, skills: 1.2, rating: 0.7,
+    completedJobs: 0.8, number: 0.9,
+  };
+  const weights = columns.map((c) => c.width ?? DEFAULT_WEIGHTS[c.key] ?? 1);
+  const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+  const colWidths = weights.map((w) => (usableW * w) / totalWeight);
+  const colX = colWidths.reduce<number[]>((acc, w, i) => {
+    acc.push(i === 0 ? margin : acc[i - 1] + colWidths[i - 1]);
+    return acc;
+  }, []);
+  const PAD = 5;
+
   const fmt = (v: any, kind?: string) => {
     if (v == null || v === "") return "";
-    if (kind === "money") return `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (kind === "money") return "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (kind === "pct") return `${Number(v).toFixed(1)}%`;
     if (kind === "num") return Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 });
     if (kind === "date") { const d = new Date(v); return isNaN(+d) ? String(v) : fmtInZone(d, tz, { year: "numeric", month: "numeric", day: "numeric" }); }
-    const s = String(v);
-    return s.length > 26 ? s.slice(0, 24) + "…" : s;
+    if (kind === "id") return shortId(String(v));
+    return String(v);
   };
 
   let page = doc.addPage([pageW, pageH]);
@@ -117,32 +188,91 @@ export async function toPdf(
       page.drawText(ascii || "(unsupported character)", opts);
     }
   };
-  dt(title, { x: margin, y: y - 4, size: 16, font: bold, color: rgb(0.04, 0.65, 0.79) });
-  y -= 22;
-  if (subtitle) { dt(subtitle, { x: margin, y, size: 9, font, color: rgb(0.4, 0.45, 0.5) }); y -= 16; }
-  y -= 6;
+  const drawRight = (text: string, yy: number, size: number, f = font, color = muted) => {
+    const w = f.widthOfTextAtSize(text, size);
+    dt(text, { x: pageW - margin - w, y: yy, size, font: f, color });
+  };
 
-  const drawHeader = () => {
+  // --- branded header (logo or tenant name, brand-colored rule, title) ---
+  let logoImg: any = null;
+  if (brand?.logo) {
+    try {
+      const resp = await fetch(absoluteUrl(brand.logo, baseUrl || ""));
+      if (resp.ok) {
+        const buf = Buffer.from(await resp.arrayBuffer());
+        const ct = resp.headers.get("content-type") || "";
+        logoImg = ct.includes("png") ? await doc.embedPng(buf) : await doc.embedJpg(buf);
+      }
+    } catch { /* no logo — header just skips it */ }
+  }
+  const headerTop = y;
+  let headerH = 20;
+  if (logoImg) {
+    const maxH = 28, maxW = 130;
+    const scale = Math.min(maxW / logoImg.width, maxH / logoImg.height, 1);
+    const w = logoImg.width * scale, h = logoImg.height * scale;
+    page.drawImage(logoImg, { x: margin, y: headerTop - h, width: w, height: h });
+    headerH = h;
+  } else if (brand?.name) {
+    dt(brand.name, { x: margin, y: headerTop - 13, size: 12, font: bold, color: ink });
+    headerH = 18;
+  }
+  const generatedOn = new Date().toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+  drawRight(`Generated ${generatedOn}`, headerTop - headerH / 2 - 3, 7.5, font, muted);
+  y -= Math.max(headerH, 18) + 12;
+  page.drawLine({ start: { x: margin, y }, end: { x: pageW - margin, y }, thickness: 2, color: brandColor });
+  y -= 18;
+
+  dt(title, { x: margin, y: y - 2, size: 15, font: bold, color: brandColor });
+  y -= 20;
+  if (subtitle) { dt(subtitle, { x: margin, y, size: 9, font, color: muted }); y -= 14; }
+  y -= 4;
+
+  const drawTableHeader = () => {
     page.drawRectangle({ x: margin, y: y - 16, width: usableW, height: 18, color: rgb(0.06, 0.09, 0.16) });
     columns.forEach((c, i) => {
-      dt(c.label.slice(0, 18), { x: margin + i * colW + 4, y: y - 12, size: 8, font: bold, color: rgb(1, 1, 1) });
+      dt(fitText(c.label, bold, headSize, colWidths[i] - PAD * 2), { x: colX[i] + PAD, y: y - 12, size: headSize, font: bold, color: rgb(1, 1, 1) });
     });
     y -= 20;
   };
-  drawHeader();
+  drawTableHeader();
+
+  const drawFooter = (p: typeof page, pageNum: number, pageCount: number) => {
+    const footerY = 22;
+    p.drawLine({ start: { x: margin, y: footerY + 10 }, end: { x: pageW - margin, y: footerY + 10 }, thickness: 0.5, color: rgb(0.88, 0.9, 0.93) });
+    const left = [brand?.name, title].filter(Boolean).join(" · ");
+    if (left) p.drawText(fitText(left, font, 7, usableW / 2), { x: margin, y: footerY, size: 7, font, color: muted });
+    const pageLabel = `Page ${pageNum} of ${pageCount}`;
+    const pw = font.widthOfTextAtSize(pageLabel, 7);
+    p.drawText(pageLabel, { x: pageW - margin - pw, y: footerY, size: 7, font, color: muted });
+  };
 
   rows.forEach((r, ri) => {
-    if (y < margin + 24) {
+    if (y < margin + rowH + 10) {
       page = doc.addPage([pageW, pageH]);
       y = pageH - margin;
-      drawHeader();
+      drawTableHeader();
     }
-    if (ri % 2 === 0) page.drawRectangle({ x: margin, y: y - 13, width: usableW, height: 15, color: rgb(0.96, 0.97, 0.98) });
+    if (ri % 2 === 0) page.drawRectangle({ x: margin, y: y - (rowH - 2), width: usableW, height: rowH, color: rgb(0.96, 0.97, 0.98) });
     columns.forEach((c, i) => {
-      dt(fmt(r[c.key], c.kind), { x: margin + i * colW + 4, y: y - 10, size: 8, font, color: rgb(0.1, 0.12, 0.15) });
+      const isNumeric = c.kind === "money" || c.kind === "num" || c.kind === "pct";
+      const text = fitText(fmt(r[c.key], c.kind), font, rowSize, colWidths[i] - PAD * 2);
+      const x = isNumeric
+        ? colX[i] + colWidths[i] - PAD - font.widthOfTextAtSize(text, rowSize)
+        : colX[i] + PAD;
+      dt(text, { x, y: y - rowH + 5, size: rowSize, font, color: ink });
     });
-    y -= 15;
+    y -= rowH;
   });
+
+  // Stamp every page with a footer — matching buildJobPdf's per-page footer
+  // treatment so a raw table export reads as the same document family as a
+  // single job sheet, rather than a generic system dump.
+  const allPages = doc.getPages();
+  allPages.forEach((p, i) => drawFooter(p, i + 1, allPages.length));
+
   const bytes = await doc.save();
   return Buffer.from(bytes);
 }
@@ -549,20 +679,20 @@ export async function buildJobPdf(
 
 export const DATASET_COLUMNS: Record<string, { key: string; label: string; kind?: string }[]> = {
   "work-orders": [
-    { key: "id", label: "ID" }, { key: "title", label: "Title" }, { key: "service", label: "Service" },
+    { key: "id", label: "ID", kind: "id" }, { key: "title", label: "Title" }, { key: "service", label: "Service" },
     { key: "client", label: "Client" }, { key: "clientPhone", label: "Phone" }, { key: "technician", label: "Technician" },
     { key: "status", label: "Status" }, { key: "priority", label: "Priority" }, { key: "address", label: "Address" },
     { key: "scheduledAt", label: "Scheduled", kind: "date" }, { key: "price", label: "Price", kind: "money" },
     { key: "paymentStatus", label: "Payment" }, { key: "createdAt", label: "Created", kind: "date" },
   ],
   technicians: [
-    { key: "id", label: "ID" }, { key: "name", label: "Name" }, { key: "email", label: "Email" },
+    { key: "id", label: "ID", kind: "id" }, { key: "name", label: "Name" }, { key: "email", label: "Email" },
     { key: "phone", label: "Phone" }, { key: "vehicle", label: "Vehicle" }, { key: "skillClass", label: "Class" },
     { key: "skills", label: "Skills" }, { key: "status", label: "Status" }, { key: "rating", label: "Rating", kind: "num" },
     { key: "completedJobs", label: "Jobs", kind: "num" },
   ],
   clients: [
-    { key: "id", label: "ID" }, { key: "name", label: "Name" }, { key: "email", label: "Email" },
+    { key: "id", label: "ID", kind: "id" }, { key: "name", label: "Name" }, { key: "email", label: "Email" },
     { key: "phone", label: "Phone" }, { key: "createdAt", label: "Created", kind: "date" },
   ],
   invoices: [
@@ -621,6 +751,15 @@ export function fileResponse(buf: Buffer | string, name: string, mime: string) {
   });
 }
 
+/** Tenant logo + name + brand color for a PDF header — same shape and same
+ *  source table job-search.ts already reads for the single-job PDF. Every
+ *  export (bulk table or single job) should carry the tenant's own
+ *  branding, not a generic unbranded page. */
+async function loadTenantBrand(companyId: string): Promise<JobBrand | null> {
+  const row = await tdb(companyId).selectOne(schema.companySettings).catch(() => undefined);
+  return row ? { name: row.name, logo: row.logo, brandColor: row.brandColor } : null;
+}
+
 export const exportRoutes = new Hono<AppEnv>()
   // generic report export: client posts the already-computed report rows/columns.
   // POST /api/export/report?format=csv|xlsx|pdf  body: { title, subtitle, rows, columns }
@@ -636,7 +775,9 @@ export const exportRoutes = new Hono<AppEnv>()
       return fileResponse(buf, `${pre}-${slug}-${stamp}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
     if (format === "pdf") {
-      const buf = await toPdf(rows, columns, title || "Report", subtitle, await companyTimeZone(tenantId(c)));
+      const brand = await loadTenantBrand(tenantId(c));
+      const baseUrl = new URL(c.req.url).origin;
+      const buf = await toPdf(rows, columns, title || "Report", subtitle, await companyTimeZone(tenantId(c)), brand, baseUrl);
       return fileResponse(buf, `${pre}-${slug}-${stamp}.pdf`, "application/pdf");
     }
     const csv = toCsv(rows, columns.map((c: any) => c.key));
@@ -662,7 +803,9 @@ export const exportRoutes = new Hono<AppEnv>()
       return fileResponse(buf, `${pre}-${dataset}-${stamp}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
     if (format === "pdf") {
-      const buf = await toPdf(rows, cols, title, undefined, await companyTimeZone(tenantId(c)));
+      const brand = await loadTenantBrand(tenantId(c));
+      const baseUrl = new URL(c.req.url).origin;
+      const buf = await toPdf(rows, cols, title, undefined, await companyTimeZone(tenantId(c)), brand, baseUrl);
       return fileResponse(buf, `${pre}-${dataset}-${stamp}.pdf`, "application/pdf");
     }
     const csv = toCsv(rows, cols.map((c) => c.key));
