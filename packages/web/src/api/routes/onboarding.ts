@@ -427,7 +427,21 @@ ${k ? `\nDEEP RESEARCH NOTES for this industry (use to sound like a specialist A
 
 INDUSTRY OPTIONS (id — label (group), for set_industry):
 ${industryList}
-other — Other (free-text business description)`;
+other — Other (free-text business description)
+
+A few ids above appear more than once with different labels (e.g.
+hvac-plumbing shows as "HVAC & Plumbing", "Plumbing", and "Mechanical") —
+same underlying catalog/template data either way, just different labels for
+different self-descriptions. When the tenant tells you which one they
+actually are, call set_industry with that shared id regardless, but talk
+about their business using THEIR word for it, not whichever label happens
+to be canonical. If they say "we're strictly plumbing, no HVAC" and the
+closest bucket is hvac-plumbing, say something like "We don't have a
+plumbing-only bucket yet, so I'll use our HVAC & Plumbing template as the
+closest match — it's built to cover plumbing fully, just ignore anything
+HVAC-flavored." Don't reply as if "HVAC & Plumbing" is a confirmation of
+what they just told you, and don't cheer ("Love it!") right after a
+correction like that — it reads like you weren't listening.`;
 
       const tools = {
         update_brand_profile: tool({

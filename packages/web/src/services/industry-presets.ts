@@ -756,6 +756,51 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     templates: [],
     categories: [],
   },
+  {
+    // Dan, 2026-09-28: a plumbing-only shop (no HVAC side) selecting from
+    // the New Company dropdown, or correcting the onboarding AI, shouldn't
+    // have to pick a label with "HVAC" in it. Same underlying preset/
+    // catalog as hvac-plumbing — this exists purely so the dropdown (and
+    // the onboarding AI, via industryOtherLabel below) can call it what it
+    // actually is.
+    id: "hvac-plumbing",
+    label: "Plumbing",
+    group: "Aliases (route to a core industry)",
+    tier: "alias",
+    aliasOf: "hvac-plumbing",
+    workerNoun: "Technician",
+    workerNounPlural: "Technicians",
+    customerNoun: "Customer",
+    customerNounPlural: "Customers",
+    jobNoun: "Job",
+    jobNounPlural: "Jobs",
+    aiTone: "See HVAC & Plumbing.",
+    notificationGuidance: "See HVAC & Plumbing.",
+    services: [],
+    templates: [],
+    categories: [],
+  },
+  {
+    // Dan, 2026-09-28: same reasoning as Plumbing above — a mechanical
+    // contractor (boilers, hydronic/mechanical systems, not general HVAC
+    // service) gets a label that fits, still on the hvac-plumbing catalog.
+    id: "hvac-plumbing",
+    label: "Mechanical",
+    group: "Aliases (route to a core industry)",
+    tier: "alias",
+    aliasOf: "hvac-plumbing",
+    workerNoun: "Technician",
+    workerNounPlural: "Technicians",
+    customerNoun: "Customer",
+    customerNounPlural: "Customers",
+    jobNoun: "Job",
+    jobNounPlural: "Jobs",
+    aiTone: "See HVAC & Plumbing.",
+    notificationGuidance: "See HVAC & Plumbing.",
+    services: [],
+    templates: [],
+    categories: [],
+  },
 ];
 
 export const INDUSTRY_LABELS: { id: string; label: string; group: string }[] =
