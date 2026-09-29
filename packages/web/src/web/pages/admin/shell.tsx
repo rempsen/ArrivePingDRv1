@@ -66,8 +66,8 @@ const NAV_GROUPS: NavGroup[] = [
     heading: "Operations",
     items: [
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/admin/fleet", label: "Map", icon: MapIcon },
       { to: "/admin/scheduler", label: "Scheduler", icon: CalendarClock },
+      { to: "/admin/fleet", label: "Map", icon: MapIcon },
       { to: "/admin/work-orders", label: "__JOB_PLURAL__", icon: ClipboardList },
       { to: "/admin/inbox", label: "Inbox", icon: Inbox },
       // Badged deliberately: a customer's cancellation request sits here doing
@@ -124,7 +124,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { nounPlural: jobPlural } = useJobNoun();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // superadmins get a "Companies" (tenant registry) entry under Operations.
+  // superadmins get a "Companies" (tenant registry) entry at the bottom of Operations.
   const groups: NavGroup[] =
     role === "superadmin"
       ? NAV_GROUPS.map((g, i) =>
@@ -132,13 +132,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             ? {
                 ...g,
                 items: [
-                  g.items[0],
+                  ...g.items,
                   {
                     to: "/admin/companies",
                     label: "Companies",
                     icon: Building2,
                   },
-                  ...g.items.slice(1),
                 ],
               }
             : g,
