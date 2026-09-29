@@ -6,6 +6,7 @@ import { eq, and, gte, lte } from "drizzle-orm";
 import { requireAuth, loadMemberships } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { buildCalendar, type CalEvent } from "../../services/ics";
+import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
@@ -14,12 +15,16 @@ function ensureToken(existing: string | null): string {
   return existing && existing.length > 10 ? existing : crypto.randomUUID().replace(/-/g, "");
 }
 
-function baseUrl(c: any): string {
-  const env = process.env.APP_URL || process.env.PUBLIC_URL;
-  if (env) return env.replace(/\/$/, "");
-  const url = new URL(c.req.url);
-  return `${url.protocol}//${url.host}`;
-}
+// Was: process.env.APP_URL || process.env.PUBLIC_URL first, request host
+// last — the exact bug request-origin.ts documents. APP_URL was still
+// "https://uberize.ai" long after the product's domain moved to
+// arriveping.com, so every "Sync your calendar" webcal/Google/Outlook link
+// (and the tracking URL embedded in each calendar event) kept pointing at
+// the dead old domain no matter which domain the user was actually on.
+// publicOrigin(c) trusts the real request (via X-Forwarded-Host behind the
+// prod proxy) over the stale env var, matching the fix already applied to
+// forms.ts / api-keys.ts share links.
+const baseUrl = publicOrigin;
 
 /** Resolve the set of bookings a given user should see on their calendar. */
 async function bookingsForUser(u: { id: string; role: string | null; companyId: string }) {
