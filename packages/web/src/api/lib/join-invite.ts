@@ -13,7 +13,7 @@ import { db } from "../database";
 import * as schema from "../database/schema";
 import { tdb } from "../database/tenant";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
-import { logoDims } from "../../services/email-render";
+import { logoDims, contrastText } from "../../services/email-render";
 
 const SITE = (process.env.WEBSITE_URL || "http://localhost:4200").replace(/\/$/, "");
 
@@ -41,10 +41,11 @@ export async function sendJoinCompanyInvite(a: {
   const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
   const link = `${SITE}/join-company/${a.membershipId}`;
 
+  const headerText = contrastText(accent);
   const logoBlock = logoSrc
     ? `<img src="${logoSrc}" alt="${company}" style="height:${logoH}px;max-width:${logoMaxW}px;display:block;margin:0 auto 8px"/>
-       <div style="color:#fff;font-size:15px;font-weight:700;text-align:center">${company}</div>`
-    : `<div style="color:#fff;font-size:18px;font-weight:800;text-align:center">${company}</div>`;
+       <div style="color:${headerText};font-size:15px;font-weight:700;text-align:center">${company}</div>`
+    : `<div style="color:${headerText};font-size:18px;font-weight:800;text-align:center">${company}</div>`;
 
   await sendEmail({
     to: a.email,
@@ -64,7 +65,7 @@ export async function sendJoinCompanyInvite(a: {
           you'll be able to switch between your companies from the menu, and
           you'll only ever see one company's work at a time.
         </p>
-        <a href="${link}" style="display:inline-block;margin-top:16px;background:${accent};color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px">Accept &amp; join ${company}</a>
+        <a href="${link}" style="display:inline-block;margin-top:16px;background:${accent};color:${contrastText(accent)};text-decoration:none;font-weight:700;padding:11px 21px;border:1px solid rgba(15,23,42,0.14);border-radius:10px">Accept &amp; join ${company}</a>
         <p style="margin-top:18px;font-size:12px;color:#94a3b8">
           If you weren't expecting this, you can ignore this email — nothing changes
           about your existing account and ${company} cannot see your other work

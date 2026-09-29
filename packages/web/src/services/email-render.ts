@@ -79,7 +79,12 @@ function renderBlock(b: EmailBlock, brand: EmailBrand, interp: (s: string) => st
       return `<tr><td style="padding:6px 0;text-align:${b.align || "left"};font-size:15px;line-height:1.65;color:#334155">${inlineFormat(interp(b.text))}</td></tr>`;
     case "button": {
       const al = b.align || "left";
-      return `<tr><td style="padding:14px 0;text-align:${al}"><a href="${esc(interp(b.url))}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 30px;border-radius:10px">${esc(interp(b.label))}</a></td></tr>`;
+      const textColor = contrastText(accent);
+      // A subtle border so the button keeps a visible pill outline even when
+      // accent is white/near-white against the card's own white background —
+      // without it a white-on-white button has correct (readable) text but no
+      // visible edges at all, still looking broken.
+      return `<tr><td style="padding:14px 0;text-align:${al}"><a href="${esc(interp(b.url))}" style="display:inline-block;background:${accent};color:${textColor};text-decoration:none;font-weight:700;font-size:15px;padding:12px 29px;border:1px solid rgba(15,23,42,0.14);border-radius:10px">${esc(interp(b.label))}</a></td></tr>`;
     }
     case "image": {
       const al = b.align || "center";
@@ -124,7 +129,7 @@ export function renderEmailDesign(
       : style === "solid"
         ? `background:${accent}`
         : "background:#ffffff;border-bottom:1px solid #e2e8f0";
-  const headerColor = style === "minimal" ? "#0f172a" : "#ffffff";
+  const headerColor = style === "minimal" ? "#0f172a" : contrastText(accent);
 
   const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
   const brandMark = logo
@@ -166,6 +171,26 @@ function shade(hex: string): string {
   const g = Math.max(0, ((n >> 8) & 255) * 0.7) | 0;
   const b = Math.max(0, (n & 255) * 0.7) | 0;
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+
+/**
+ * Pick a readable text color (near-white or near-black) for text/icons sitting
+ * on top of a `bg` color, using perceived luminance (WCAG-ish weighting).
+ * Every button/header/CTA in the email system paints its label in a hardcoded
+ * white on top of the tenant's `brandColor` — invisible whenever a tenant sets
+ * a light/white brand color (e.g. a black-and-white logo brand). This is the
+ * single source of truth other files import to fix that instead of hardcoding.
+ */
+export function contrastText(bg: string | undefined | null, light = "#ffffff", dark = "#0f172a"): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(bg ?? "").trim());
+  if (!m) return light;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  // Perceived luminance (0 = black, 255 = white).
+  const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance > 165 ? dark : light;
 }
 
 /** Plain-text fallback derived from blocks (for the email `text` field). */

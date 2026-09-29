@@ -8,7 +8,7 @@ import { attachMembership, isMember, findUserByEmail } from "../lib/memberships"
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { auth } from "../auth";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
-import { logoDims } from "../../services/email-render";
+import { logoDims, contrastText } from "../../services/email-render";
 import { sendSms } from "../../services/sms";
 
 import { z } from "zod";
@@ -119,10 +119,11 @@ export const invitesRoutes = new Hono<AppEnv>()
     // Tenant logo always sits above the company name in the header.
     const logoSrc = resolveLogo(brand.logoUrl);
     const { height: logoH, maxWidth: logoMaxW } = logoDims(brand.logoHeight);
+    const headerText = contrastText(accent);
     const logoBlock = logoSrc
       ? `<img src="${logoSrc}" alt="${company}" style="height:${logoH}px;max-width:${logoMaxW}px;display:block;margin:0 auto 8px"/>
-         <div style="color:#fff;font-size:15px;font-weight:700;text-align:center">${company}</div>`
-      : `<div style="color:#fff;font-size:18px;font-weight:800;text-align:center">${company}</div>`;
+         <div style="color:${headerText};font-size:15px;font-weight:700;text-align:center">${company}</div>`
+      : `<div style="color:${headerText};font-size:18px;font-weight:800;text-align:center">${company}</div>`;
 
     // email the invite
     sendEmail({
@@ -135,7 +136,7 @@ export const invitesRoutes = new Hono<AppEnv>()
         <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:24px">
           <h2 style="margin:0 0 10px;color:#0f172a">Welcome aboard${inv.name ? ", " + inv.name : ""} 👋</h2>
           <p style="font-size:14px;color:#334155;line-height:1.6">You've been invited to join <b>${company}</b> as a technician. Set up your account to start receiving job assignments, navigate to clients, and update job status in real time.</p>
-          <a href="${link}" style="display:inline-block;margin-top:16px;background:${accent};color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px">Accept invite & set password</a>
+          <a href="${link}" style="display:inline-block;margin-top:16px;background:${accent};color:${contrastText(accent)};text-decoration:none;font-weight:700;padding:11px 21px;border:1px solid rgba(15,23,42,0.14);border-radius:10px">Accept invite & set password</a>
           <p style="margin-top:18px;font-size:12px;color:#94a3b8">If the button doesn't work, paste this link: ${link}</p>
         </div>
       </div>`,

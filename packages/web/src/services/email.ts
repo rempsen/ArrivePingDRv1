@@ -4,7 +4,7 @@ import { tdb } from "../api/database/tenant";
 import { fmtInZone } from "../shared/tz";
 import { pickSender, pickRetrySender, type SenderIdentity } from "./sender";
 import { verifiedDomainsForCompany } from "./email-domains";
-import { logoDims } from "./email-render";
+import { logoDims, contrastText } from "./email-render";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -208,13 +208,13 @@ function shell(title: string, bodyHtml: string, cta?: { label: string; url: stri
     ${header}
     <div style="background:#111a2e;border:1px solid #1e293b;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.4)">
       <div style="background:linear-gradient(135deg,${accent},${darken(accent)});padding:28px 32px">
-        <h1 style="margin:0;color:#fff;font-size:20px;font-weight:700">${title}</h1>
+        <h1 style="margin:0;color:${contrastText(accent)};font-size:20px;font-weight:700">${title}</h1>
       </div>
       <div style="padding:28px 32px;font-size:15px;line-height:1.65;color:#cbd5e1">
         ${bodyHtml}
         ${
           cta
-            ? `<div style="margin-top:24px"><a href="${cta.url}" style="display:inline-block;background:${accent};color:#06121a;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:700;font-size:14px">${cta.label}</a></div>`
+            ? `<div style="margin-top:24px"><a href="${cta.url}" style="display:inline-block;background:${accent};color:${contrastText(accent)};text-decoration:none;padding:11px 25px;border:1px solid rgba(15,23,42,0.14);border-radius:10px;font-weight:700;font-size:14px">${cta.label}</a></div>`
             : ""
         }
       </div>
