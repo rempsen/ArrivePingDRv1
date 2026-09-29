@@ -86,6 +86,18 @@ function unguessablePassword(): string {
   return `${crypto.randomUUID()}${crypto.randomUUID()}`;
 }
 
+/**
+ * A row with no email, or no name, is still worth importing — the tenant
+ * fills the gap in later from the person's profile rather than losing the
+ * row entirely. When email is missing, give it a private, guaranteed-unique
+ * placeholder address (same pattern as the anonymous-lead fallback in
+ * public-forms.ts) so the user table's unique-email constraint, and every
+ * "does this person already have a login" check downstream, still work.
+ */
+function placeholderEmail(companyId: string, kind: "customer" | "dispatcher" | "technician"): string {
+  return `${kind}-${crypto.randomUUID().slice(0, 8)}@${companyId}.import.local`;
+}
+
 /* -------------------------------- parsing -------------------------------- */
 
 /** Minimal CSV reader matching what toCsv() in export.ts writes: comma-
@@ -212,15 +224,21 @@ async function importPersonRow(
   opts: { role: "customer" | "admin"; companyId: string; invitedBy: string | null },
 ): Promise<RowResult> {
   const rawEmail = (row.email || "").trim();
-  if (!rawEmail) return { ok: false, reason: "Missing email" };
-  const parsed = emailField().safeParse(rawEmail);
-  if (!parsed.success) return { ok: false, reason: "Invalid email" };
-  const email = parsed.data;
+  let email: string;
+  if (rawEmail) {
+    const parsed = emailField().safeParse(rawEmail);
+    if (!parsed.success) return { ok: false, reason: "Invalid email" };
+    email = parsed.data;
+  } else {
+    email = placeholderEmail(opts.companyId, opts.role === "customer" ? "customer" : "dispatcher");
+  }
 
   const firstName = (row.firstName || "").trim();
   const lastName = (row.lastName || "").trim();
-  const name = (row.name || [firstName, lastName].filter(Boolean).join(" ")).trim();
-  if (!name) return { ok: false, reason: "Missing name" };
+  const name =
+    (row.name || [firstName, lastName].filter(Boolean).join(" ")).trim() ||
+    (row.company || "").trim() ||
+    `Unnamed ${opts.role === "customer" ? "customer" : "dispatcher"}`;
 
   const cid = opts.companyId;
   const role = opts.role;
@@ -282,12 +300,15 @@ async function importRiderRow(
   opts: { companyId: string; invitedBy: string | null },
 ): Promise<RowResult> {
   const rawEmail = (row.email || "").trim();
-  if (!rawEmail) return { ok: false, reason: "Missing email" };
-  const parsed = emailField().safeParse(rawEmail);
-  if (!parsed.success) return { ok: false, reason: "Invalid email" };
-  const email = parsed.data;
-  const name = (row.name || "").trim();
-  if (!name) return { ok: false, reason: "Missing name" };
+  let email: string;
+  if (rawEmail) {
+    const parsed = emailField().safeParse(rawEmail);
+    if (!parsed.success) return { ok: false, reason: "Invalid email" };
+    email = parsed.data;
+  } else {
+    email = placeholderEmail(opts.companyId, "technician");
+  }
+  const name = (row.name || "").trim() || "Unnamed technician";
 
   const cid = opts.companyId;
   const phone = row.phone || "";
