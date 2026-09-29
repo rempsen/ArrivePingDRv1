@@ -216,6 +216,13 @@ async function enrichRows(rows: (typeof schema.bookings.$inferSelect)[]) {
       priority: b.priority,
       service: svc?.name ?? "",
       serviceId: b.serviceId,
+      // The work-order-modal's edit path resolves the customer picker and
+      // email prefill off this id — without it, editing a job from this
+      // list (the normal path, via Jobs → pencil icon) always showed the
+      // Customer field blank, no matter who the job was actually booked
+      // for. customerName/Phone/Email below are separate derived display
+      // columns for the table itself; this is the real FK the edit form needs.
+      customerId: b.customerId,
       customerName: cust?.name ?? "",
       customerPhone: b.customerPhone || cust?.phone || "",
       customerEmail: cust?.email ?? "",

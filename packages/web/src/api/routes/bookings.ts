@@ -7,7 +7,7 @@ import { eq, isNull, and, inArray, desc, sql, type SQL } from "drizzle-orm";
 import { requireAuth, tenantId, tx } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { Err } from "../lib/errors";
-import { isMember } from "../lib/memberships";
+import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } from "../lib/memberships";
 import { fireEvent } from "../../services/dispatch";
 import { recomputeBooking } from "../../services/billing";
 import { reconcileRiderStatus } from "../../services/presence";
@@ -44,6 +44,7 @@ import { jsonBody,
   jsonBlob,
   jsonObject,
   phone,
+  email,
 } from "../lib/validate";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
@@ -273,14 +274,24 @@ const BookingCore = {
 
 const BookingCreate = z.object(BookingCore);
 
-const BookingAdminCreate = z.object({
-  ...BookingCore,
-  customerId: idField("Client"),
-  riderId: idField("Technician").nullish(),
-  status: bookingStatus.optional(),
-  /** Book it anyway: the tech is already out on a job then, or has time off. */
-  force: z.boolean().optional(),
-});
+const BookingAdminCreate = z
+  .object({
+    ...BookingCore,
+    // An existing client, OR (when the office typed someone new into the
+    // combobox) a name + email to find-or-create one from. Exactly one of
+    // these two paths is valid — enforced below.
+    customerId: idField("Client").optional(),
+    customerName: shortText("Customer name", 200).optional(),
+    customerEmail: email("Customer email").optional(),
+    riderId: idField("Technician").nullish(),
+    status: bookingStatus.optional(),
+    /** Book it anyway: the tech is already out on a job then, or has time off. */
+    force: z.boolean().optional(),
+  })
+  .refine((d) => !!d.customerId || (!!d.customerName?.trim() && !!d.customerEmail), {
+    message: "Select an existing client, or enter a name and email to add a new one",
+    path: ["customerId"],
+  });
 
 /** Every field is optional, but a present field must still be the right shape. */
 const BookingPatch = z
@@ -297,6 +308,11 @@ const BookingPatch = z
     lat: latitude,
     lng: longitude,
     customerPhone: phone,
+    // Best-effort correction to the client's own CRM email (not a per-booking
+    // snapshot like customerPhone) — lets the office fix a typo or fill one
+    // in that was missing, without ever being allowed to steal someone
+    // else's login (silently ignored on a unique-email collision).
+    customerEmail: email("Customer email"),
     scheduledAt: z.union([isoDate("Schedule date"), z.literal("")]),
     rateModel: jsonBlob(),
     lineItems: z.array(z.unknown()).max(500, "Too many line items"),
@@ -632,8 +648,54 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const svc = await t.selectOne(schema.services, eq(schema.services.id, body.serviceId));
     if (!svc) return c.json({ message: "Service not found" }, 404);
 
-    const cu = await t.selectOne(schema.user, eq(schema.user.id, body.customerId));
-    if (!cu) return c.json({ message: "Client not found" }, 404);
+    // Resolve the client: either an existing one picked from the combobox, or
+    // find-or-create one from the name/email the office typed for someone
+    // new. Never creates a duplicate — email is the identity key, and
+    // `attachMembership` is idempotent (see lib/memberships.ts):
+    //   - already on THIS company's roster (any role)         -> reuse as-is
+    //   - has a login elsewhere (another company, or a rider/
+    //     installer account here) but not on this roster yet  -> reuse the
+    //     one global login, just add a "customer" membership so they show up
+    //     on this company's client list too
+    //   - genuinely new email                                 -> create it
+    let cu: typeof schema.user.$inferSelect | undefined;
+    if (body.customerId) {
+      cu = await t.selectOne(schema.user, eq(schema.user.id, body.customerId));
+      if (!cu) return c.json({ message: "Client not found" }, 404);
+      // Office corrected/filled in the email while an existing client was
+      // selected. Best-effort — never blocks the booking on a collision.
+      if (body.customerEmail && body.customerEmail !== cu.email) {
+        const updated = await t
+          .update(schema.user, { email: body.customerEmail }, eq(schema.user.id, cu.id))
+          .catch(() => [] as (typeof schema.user.$inferSelect)[]);
+        if (updated[0]) cu = updated[0];
+      }
+    } else {
+      const newEmail = body.customerEmail!;
+      const newName = body.customerName!.trim();
+      cu = (await findCompanyUserByEmail(newEmail, co)) ?? undefined;
+      if (!cu) {
+        const globalMatch = await findUserByEmail(newEmail);
+        if (globalMatch) {
+          await attachMembership({ userId: globalMatch.id, companyId: co, role: "customer", status: "active" });
+          cu = globalMatch;
+        } else {
+          const created = await t
+            .insert(schema.user, {
+              id: crypto.randomUUID(),
+              name: newName,
+              email: newEmail,
+              role: "customer",
+              phone: body.phone || null,
+              address: body.address || null,
+            })
+            .catch(() => [] as (typeof schema.user.$inferSelect)[]);
+          cu = created[0];
+          if (!cu) return c.json({ message: "Couldn't create that customer — check the email address" }, 422);
+          await attachMembership({ userId: cu.id, companyId: co, role: "customer", status: "active" });
+        }
+      }
+    }
 
     // riderId is a foreign key too, and unlike serviceId/customerId it was
     // never resolved — a bogus technician id was a bare 500 on the FK.
@@ -699,7 +761,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
 
     const assignedRider = body.riderId || null;
     const [b] = await t.insert(schema.bookings, {
-      customerId: body.customerId,
+      customerId: cu!.id,
       serviceId: body.serviceId,
       riderId: assignedRider,
       templateId: body.templateId ?? null,
@@ -714,7 +776,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       staffNotes: (body as any).staffNotes ?? "",
       fieldData,
       checklistState,
-      customerPhone: body.phone ?? cu.phone ?? "",
+      customerPhone: body.phone ?? cu!.phone ?? "",
       region: body.region ?? "",
       rateModel: body.rateModel ? JSON.stringify(body.rateModel) : "",
       lineItems: Array.isArray(body.lineItems) ? JSON.stringify(body.lineItems) : "",
@@ -730,7 +792,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const tax = bill?.taxAmount ?? +(svc.basePrice * 0.13).toFixed(2);
     await t.insert(schema.invoices, {
       bookingId: b.id,
-      customerId: body.customerId,
+      customerId: cu!.id,
       number: num,
       amount,
       tax,
@@ -830,6 +892,20 @@ export const bookingsRoutes = new Hono<AppEnv>()
       // Membership, not user.companyId: a client shared with another company is
       // still this company's client, and comparing home companies rejected them.
       if (!cu || !(await isMember(cu.id, co))) return c.json({ message: "Client not found" }, 404);
+    }
+    // Best-effort correction to the client's own CRM email — fixes a typo or
+    // fills one in that was missing. Never blocks the save on a collision
+    // with someone else's login; it just keeps the old email in that case.
+    if (body.customerEmail !== undefined) {
+      const targetCustomerId = body.customerId ?? prev.customerId;
+      if (targetCustomerId) {
+        const targetCu = await t.selectOne(schema.user, eq(schema.user.id, targetCustomerId));
+        if (targetCu && targetCu.email !== body.customerEmail) {
+          await t
+            .update(schema.user, { email: body.customerEmail }, eq(schema.user.id, targetCustomerId))
+            .catch(() => {});
+        }
+      }
     }
     if (body.riderId) {
       const rd = await t.selectOne(schema.riders, eq(schema.riders.id, body.riderId));

@@ -462,6 +462,21 @@ export function WorkOrderModal({
   // SAME client twice (e.g. re-opening the combobox) doesn't stomp on edits
   // made since, but picking a DIFFERENT client always refreshes both.
   const prefilledCustomerRef = useRef("");
+  // Explicit email field — the combobox already shows email in its display
+  // text, but that's truncated and read-only. This is the office's chance to
+  // read the full address clearly, correct a typo, or add one that's
+  // missing entirely. Prefilled from whichever client is picked (own effect
+  // below, separate from the phone/address one since edit mode also wants
+  // this looked up — a booking has no per-booking email snapshot to fall
+  // back on the way it does for phone).
+  const [email, setEmail] = useState("");
+  const prefilledEmailCustomerRef = useRef("");
+  // "Add new customer" flow: the office typed a name into the client
+  // combobox that didn't match anyone, so instead of picking an id we're
+  // collecting a name + email to find-or-create one when the work order is
+  // saved (server decides find vs. create — see bookings.ts POST /admin).
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
   const [riderId, setRiderId] = useState(defaultRiderId ?? "");
   const [requiredSkillClass, setRequiredSkillClass] = useState("");
   const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
@@ -645,6 +660,13 @@ export function WorkOrderModal({
       // Editing shows whatever's already saved — don't let the prefill
       // effect below overwrite it just because customerId happens to match.
       prefilledCustomerRef.current = b.customerId ?? "";
+      // Email has no per-booking snapshot column — always look it up fresh
+      // from the client's current CRM record (effect below), same as a
+      // brand-new work order does.
+      setEmail("");
+      prefilledEmailCustomerRef.current = "";
+      setCreatingCustomer(false);
+      setNewCustomerName("");
       setRiderId(b.riderId ?? "");
       setRequiredSkillClass((b as any).requiredSkillClass ?? "");
       setRequiredSkills((b as any).requiredSkills ? (b as any).requiredSkills.split(",").filter(Boolean) : []);
@@ -694,6 +716,10 @@ export function WorkOrderModal({
       // Fresh work order: let the client-prefill effect below fill address
       // + phone in once a customer's picked.
       prefilledCustomerRef.current = "";
+      setEmail("");
+      prefilledEmailCustomerRef.current = "";
+      setCreatingCustomer(false);
+      setNewCustomerName("");
     }
   }, [open, defaultDate, defaultRiderId, editBooking]);
 
@@ -712,6 +738,21 @@ export function WorkOrderModal({
     }
     prefilledCustomerRef.current = customerId;
   }, [open, isEdit, customerId, clients]);
+
+  // Prefill the email field from the selected client's CRM record — for
+  // BOTH create and edit (unlike phone/address, a booking has no saved email
+  // snapshot to show instead). Only advances the "already prefilled" marker
+  // once the client list has actually loaded and the match was found, so a
+  // slow `users` fetch on edit-open doesn't permanently miss it.
+  useEffect(() => {
+    if (!open) return;
+    if (!customerId || customerId === prefilledEmailCustomerRef.current) return;
+    const c = clients.find((u: any) => u.id === customerId);
+    if (c) {
+      setEmail(c.email || "");
+      prefilledEmailCustomerRef.current = customerId;
+    }
+  }, [open, customerId, clients]);
 
   // ── mutations ──────────────────────────────────────────────────────────────
 
@@ -754,7 +795,12 @@ export function WorkOrderModal({
     const allLineItems = [...lineItems, ...chargeLineItems];
 
     return {
-      customerId,
+      // Creating a brand-new customer sends a name + email instead of an id —
+      // the server finds-or-creates them (see bookings.ts POST /admin) so we
+      // never end up with two records for the same person.
+      customerId: creatingCustomer ? undefined : customerId,
+      customerName: creatingCustomer ? newCustomerName || undefined : undefined,
+      customerEmail: email || undefined,
       serviceId,
       templateId: templateId || undefined,
       title: title || undefined,
@@ -872,6 +918,8 @@ export function WorkOrderModal({
     setCustomerId(""); setServiceId(""); setTemplateId(""); setTitle("");
     setPriority("normal"); setAddress(""); setLat(null); setLng(null);
     setPhone(""); prefilledCustomerRef.current = "";
+    setEmail(""); prefilledEmailCustomerRef.current = "";
+    setCreatingCustomer(false); setNewCustomerName("");
     setRiderId(""); setRequiredSkillClass(""); setRequiredSkills([]); setTechFilter("");
     setNotes(""); setStaffNotes(""); setRegion("");
     setRateModel({ ...EMPTY_RATE_MODEL }); setRateTouched(false); setCharges([]);
@@ -930,7 +978,10 @@ export function WorkOrderModal({
 
   function submit() {
     setErr("");
-    if (!customerId) return setErr("Select a client");
+    if (creatingCustomer) {
+      if (!newCustomerName.trim()) return setErr("Enter the new customer's name");
+      if (!email.trim()) return setErr("Enter the new customer's email");
+    } else if (!customerId) return setErr(`Select a ${customerNoun.toLowerCase()}`);
     if (!serviceId) return setErr("Select a service");
     if (!scheduledAt) return setErr("Pick a schedule date");
     if (isEdit) update.mutate();
@@ -974,8 +1025,49 @@ export function WorkOrderModal({
       <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
 
         {/* ── Core fields ── */}
-        <Field label={customerNoun}>
-          <ClientCombobox clients={clients} value={customerId} onChange={setCustomerId} noun={customerNoun} />
+        <Field
+          label={customerNoun}
+          hint={creatingCustomer ? `New ${customerNoun.toLowerCase()} — added to your ${customerNoun.toLowerCase()} list when saved` : undefined}
+        >
+          {creatingCustomer ? (
+            <div className="space-y-1.5">
+              <input
+                aria-label={`New ${customerNoun.toLowerCase()} name`}
+                value={newCustomerName}
+                onChange={(e) => setNewCustomerName(e.target.value)}
+                placeholder={`${customerNoun} name`}
+                className={inputCls}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => { setCreatingCustomer(false); setNewCustomerName(""); }}
+                className="text-xs text-brand hover:underline"
+              >
+                ← Search existing {customerNoun.toLowerCase()}s instead
+              </button>
+            </div>
+          ) : (
+            <ClientCombobox
+              clients={clients}
+              value={customerId}
+              onChange={setCustomerId}
+              noun={customerNoun}
+              onCreateNew={
+                isEdit
+                  ? undefined
+                  : (typedName) => {
+                      setCustomerId("");
+                      setCreatingCustomer(true);
+                      setNewCustomerName(typedName);
+                      // A brand-new person has no CRM record to prefill from —
+                      // clear whatever the last-picked client left behind.
+                      setEmail("");
+                      prefilledEmailCustomerRef.current = "";
+                    }
+              }
+            />
+          )}
         </Field>
 
         <Field label="Service">
@@ -1088,6 +1180,24 @@ export function WorkOrderModal({
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="e.g. (204) 479-0221"
+            className={inputCls}
+          />
+        </Field>
+
+        {/* ── Email — prefilled from the client's record (the combobox only
+             shows a truncated preview). Lets the office verify it's right,
+             fix a typo, or add one that's missing; for a brand-new customer
+             this is also what the server uses to find-or-create them. ── */}
+        <Field
+          label="Email Address"
+          hint={creatingCustomer ? `Required to add this new ${customerNoun.toLowerCase()}` : "Verify or correct the client's email"}
+        >
+          <input
+            aria-label="Email Address"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
             className={inputCls}
           />
         </Field>

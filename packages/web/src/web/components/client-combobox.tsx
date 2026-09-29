@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, UserPlus, X } from "lucide-react";
 import { inputCls } from "./modal";
 
 export interface ClientOption {
@@ -28,11 +28,23 @@ export function ClientCombobox({
   value,
   onChange,
   noun = "Client",
+  onCreateNew,
 }: {
   clients: ClientOption[];
   value: string;
   onChange: (id: string) => void;
   noun?: string;
+  /**
+   * Offered as a row at the bottom of the dropdown whenever there's typed
+   * text that doesn't already match — e.g. the office is booking someone
+   * who isn't in the CRM yet. Passing this switches the parent into a
+   * "create new" flow (name + email inputs) instead of picking from here;
+   * whether that actually creates a new record or finds a duplicate is
+   * decided server-side when the work order is saved (see bookings.ts —
+   * same email anywhere reuses the existing person instead of duplicating
+   * them).
+   */
+  onCreateNew?: (typedName: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -150,6 +162,23 @@ export function ClientCombobox({
               </button>
             </li>
           ))}
+          {onCreateNew && query.trim() && (
+            <li className="border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  const typed = query.trim();
+                  setQuery("");
+                  setOpen(false);
+                  onCreateNew(typed);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-brand hover:bg-white/5"
+              >
+                <UserPlus className="h-4 w-4 shrink-0" />
+                <span className="truncate">Add "{query.trim()}" as a new {noun.toLowerCase()}</span>
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </div>
