@@ -23,7 +23,20 @@ import { AttachmentManager } from "../../components/attachment-manager";
 import { CustomFieldsForm } from "../../components/custom-fields";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { ImportMenu, type ImportType } from "../../components/import-menu";
-import { Search, UserPlus, Trash2, Plus, X, Mail, Phone, ClipboardList } from "lucide-react";
+import {
+  Search,
+  UserPlus,
+  Trash2,
+  Plus,
+  X,
+  Mail,
+  Phone,
+  ClipboardList,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
 
 const ROLE_LABEL_BASE: Record<string, string> = {
@@ -75,11 +88,21 @@ export default function AdminClients() {
   const [, go] = useLocation();
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const [delUser, setDelUser] = useState<any>(null);
   const [detail, setDetail] = useState<any>(null);
   const [err, setErr] = useState("");
   const [form, setForm] = useState({ ...EMPTY_ADD_FORM });
+
+  // A filter/sort/page-size change can leave the current page number
+  // pointing past the end (or just stale) — snap back to page 1 whenever
+  // any of them change rather than the clamp-on-render doing it silently.
+  useEffect(() => {
+    setPage(1);
+  }, [role, q, pageSize, sortDir]);
 
   const users = useQuery({
     queryKey: ["admin-users"],
@@ -153,12 +176,21 @@ export default function AdminClients() {
         u.name?.toLowerCase().includes(t) || u.email?.toLowerCase().includes(t),
     );
   }
+  list = [...list].sort((a, b) => {
+    const cmp = (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" });
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  const pageSafe = Math.min(page, totalPages);
+  const pageStart = (pageSafe - 1) * pageSize;
+  const pageList = list.slice(pageStart, pageStart + pageSize);
 
   return (
     <PageWrap>
       <PageHead
         title="Directory"
-        subtitle={`${list.length} accounts`}
+        subtitle={`${list.length} account${list.length === 1 ? "" : "s"}`}
         actions={
           <div className="flex items-center gap-2">
             <ImportMenu
@@ -196,14 +228,25 @@ export default function AdminClients() {
             </button>
           ))}
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input aria-label="Search…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search…"
-            className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand sm:w-56"
-          />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+            aria-label={sortDir === "asc" ? "Sorted A to Z, click for Z to A" : "Sorted Z to A, click for A to Z"}
+            title={sortDir === "asc" ? "Name: A → Z" : "Name: Z → A"}
+            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-ink-2 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-brand/50 hover:text-white"
+          >
+            {sortDir === "asc" ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
+            <span className="hidden sm:inline">{sortDir === "asc" ? "A–Z" : "Z–A"}</span>
+          </button>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input aria-label="Search…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search…"
+              className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand sm:w-56"
+            />
+          </div>
         </div>
       </div>
 
@@ -228,7 +271,7 @@ export default function AdminClients() {
                 </td>
               </tr>
             ) : (
-              list.map((u) => (
+              pageList.map((u) => (
                 <tr key={u.id} onClick={() => setDetail(u)} className="cursor-pointer hover:bg-white/[0.03]">
                   <td className="px-4 py-3" aria-label={u.name}>
                     <div className="flex items-center gap-2.5">
@@ -272,6 +315,17 @@ export default function AdminClients() {
           </tbody>
         </table>
         </div>
+
+        {list.length > 0 && (
+          <PaginationBar
+            page={pageSafe}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            total={list.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
+        )}
       </div>
 
       {/* add client modal */}
@@ -381,6 +435,110 @@ export default function AdminClients() {
 
       <ClientDrawer user={detail} onClose={() => setDetail(null)} />
     </PageWrap>
+  );
+}
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+/**
+ * Bottom-of-table controls: a page-size picker on the left (25/50/100 rows —
+ * 25 is the default so a big tenant's directory never dumps hundreds of rows
+ * onto one screen), and page number buttons plus prev/next on the right. Page
+ * numbers collapse to first/last + a window around the current page with "…"
+ * once there are more pages than fit, so a 500-row directory at 25/page (20
+ * pages) never turns into 20 buttons in a row.
+ */
+function PaginationBar({
+  page,
+  totalPages,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (n: number) => void;
+}) {
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(total, page * pageSize);
+
+  const pageNumbers = (() => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const nums = new Set<number>([1, 2, totalPages - 1, totalPages, page - 1, page, page + 1]);
+    return [...nums].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+  })();
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-white/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        <span>
+          {rangeStart}–{rangeEnd} of {total}
+        </span>
+        <span className="text-slate-700">·</span>
+        <label className="flex items-center gap-1.5">
+          Show
+          <select
+            aria-label="Rows per page"
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="rounded-lg border border-white/10 bg-ink-2 px-1.5 py-1 text-xs text-slate-200 outline-none focus:border-brand"
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          per page
+        </label>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center gap-1">
+          <button
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+            aria-label="Previous page"
+            className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/5 disabled:opacity-30"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          {pageNumbers.map((n, i) => {
+            const prev = pageNumbers[i - 1];
+            const gap = prev != null && n - prev > 1;
+            return (
+              <span key={n} className="flex items-center gap-1">
+                {gap && <span className="px-1 text-slate-600">…</span>}
+                <button
+                  onClick={() => onPageChange(n)}
+                  aria-label={`Page ${n}`}
+                  aria-current={n === page ? "page" : undefined}
+                  className={`grid h-8 min-w-[2rem] place-items-center rounded-lg px-2 text-xs font-semibold transition ${
+                    n === page
+                      ? "bg-brand text-white"
+                      : "border border-white/10 text-slate-300 hover:bg-white/5"
+                  }`}
+                >
+                  {n}
+                </button>
+              </span>
+            );
+          })}
+          <button
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+            aria-label="Next page"
+            className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-300 transition hover:bg-white/5 disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
