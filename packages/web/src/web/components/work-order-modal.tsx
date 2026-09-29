@@ -36,6 +36,7 @@ import { ChargesEditor, chargesSummary, type Charge } from "./charges-editor";
 import { CatalogLineItems } from "./catalog-line-items";
 import { UnitLineItems } from "./unit-line-items";
 import { ClientCombobox } from "./client-combobox";
+import { DateTimePicker } from "./datetime-picker";
 import {
   EMPTY_RATE_MODEL,
   parseRateModel,
@@ -1052,7 +1053,11 @@ export function WorkOrderModal({
         </Field>
 
         <Field label="Schedule">
-          <input aria-label="Schedule" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={inputCls} />
+          <DateTimePicker
+            value={scheduledAt}
+            onChange={setScheduledAt}
+            saveLabel={isEdit ? "Update Schedule" : "Save Schedule"}
+          />
         </Field>
 
         {/* ── Address autocomplete ── */}
