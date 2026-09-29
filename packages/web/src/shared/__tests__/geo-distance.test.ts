@@ -1,5 +1,11 @@
 import { describe, it, expect } from "bun:test";
-import { haversineKm, pathDistanceKm, isInsideGeofence } from "../geo-distance";
+import {
+  haversineKm,
+  pathDistanceKm,
+  isInsideGeofence,
+  resolveAutoPauseRadiusM,
+  AUTO_PAUSE_RADIUS_MULTIPLIER,
+} from "../geo-distance";
 
 describe("haversineKm", () => {
   it("is zero for identical points", () => {
@@ -72,5 +78,20 @@ describe("isInsideGeofence", () => {
 
   it("treats a zero/invalid radius as a point fence", () => {
     expect(isInsideGeofence(43.6542, target.lng, target.lat, target.lng, 0)).toBe(false);
+  });
+});
+
+describe("resolveAutoPauseRadiusM", () => {
+  it("is always double whatever the arrive radius is (hardcoded multiplier)", () => {
+    expect(AUTO_PAUSE_RADIUS_MULTIPLIER).toBe(2);
+    expect(resolveAutoPauseRadiusM(20)).toBe(40);
+    expect(resolveAutoPauseRadiusM(150)).toBe(300);
+    expect(resolveAutoPauseRadiusM(10)).toBe(20);
+  });
+
+  it("scales with an already-resolved (clamped) arrive radius", () => {
+    // resolveGeofenceRadiusM would have already clamped these before this
+    // ever runs, but the doubling itself has no opinion on the input's range.
+    expect(resolveAutoPauseRadiusM(2000)).toBe(4000);
   });
 });

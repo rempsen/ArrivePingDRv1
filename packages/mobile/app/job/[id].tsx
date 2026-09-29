@@ -132,7 +132,7 @@ export default function JobDetail() {
   const [releaseReason, setReleaseReason] = useState<string | null>(null);
   const [releaseNote, setReleaseNote] = useState("");
   const [pingProblem, setPingProblem] = useState(false);
-  const [geo, setGeo] = useState<{ radiusM: number; distanceM: number; inside: boolean } | null>(null);
+  const [geo, setGeo] = useState<{ radiusM: number; pauseRadiusM?: number; distanceM: number; inside: boolean } | null>(null);
   const [recording, setRecording] = useState<Recording | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const voiceSupported = isVoiceNoteSupported();
@@ -307,6 +307,34 @@ export default function JobDetail() {
         { text: "OK" },
         { text: "Refresh job", onPress: () => qc.invalidateQueries({ queryKey: ["job", id] }) },
       ]);
+    },
+  });
+
+  // Manual override for the auto-pause: hardwired for every tenant, no
+  // setting turns it off. The geofence pauses aggressively on purpose (a tech
+  // stepping back to the truck shouldn't lose time, but the server still
+  // wants a real margin before it decides someone's actually left) — this is
+  // the tech's own way to say "no, I'm still here, keep counting" without
+  // waiting on GPS to catch up.
+  const resumeClock = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${API}/api/bookings/${id}/resume-clock`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as any;
+        throw new Error(body?.message || body?.error?.message || "Couldn't resume the clock.");
+      }
+    },
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      qc.invalidateQueries({ queryKey: ["job", id] });
+      qc.invalidateQueries({ queryKey: ["today-stats"] });
+    },
+    onError: (e: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert("Couldn't resume the clock", e?.message || "Try again in a moment.");
     },
   });
 
@@ -890,25 +918,42 @@ export default function JobDetail() {
                   j.clockState === "paused" && s.clockCardPaused,
                 ]}
               >
-                <Clock
-                  color={j.clockState === "paused" ? C.muted : C.green}
-                  size={22}
-                  weight="fill"
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.clockBig}>
-                    {j.clockState === "paused" ? "Clock paused" : "On site · clock running"}
-                  </Text>
-                  <Text style={s.clockSub}>
-                    {j.clockState === "paused"
-                      ? "You've stepped away from the job site — time isn't counting. Return to resume."
-                      : `Checked in automatically${
-                          typeof j.onSiteMinutes === "number" && j.onSiteMinutes > 0
-                            ? ` · ${j.onSiteMinutes} min banked`
-                            : ""
-                        }`}
-                  </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Clock
+                    color={j.clockState === "paused" ? C.muted : C.green}
+                    size={22}
+                    weight="fill"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.clockBig}>
+                      {j.clockState === "paused" ? "Clock paused" : "On site · clock running"}
+                    </Text>
+                    <Text style={s.clockSub}>
+                      {j.clockState === "paused"
+                        ? "You've stepped away from the job site — time isn't counting. Return to resume, or tap below if you're still on site."
+                        : `Checked in automatically${
+                            typeof j.onSiteMinutes === "number" && j.onSiteMinutes > 0
+                              ? ` · ${j.onSiteMinutes} min banked`
+                              : ""
+                          }`}
+                    </Text>
+                  </View>
                 </View>
+                {/* Manual override, hardwired for every tenant: if the pause
+                    was wrong (stepped just out of range, GPS hiccup) the tech
+                    doesn't have to wait on the geofence to catch up. */}
+                {j.clockState === "paused" && (
+                  <Pressable
+                    onPress={() => resumeClock.mutate()}
+                    disabled={resumeClock.isPending}
+                    style={s.resumeClockBtn}
+                  >
+                    <Clock color="#04121c" size={16} weight="fill" />
+                    <Text style={s.resumeClockBtnTxt}>
+                      {resumeClock.isPending ? "Resuming…" : "Resume Clock"}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             )}
 
@@ -1948,8 +1993,7 @@ const s = StyleSheet.create({
   },
   pingWarnTxt: { flex: 1, color: C.amber, fontSize: 12, lineHeight: 17, fontWeight: "600" },
   clockCard: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
     gap: 12,
     marginTop: 12,
     padding: 14,
@@ -1964,6 +2008,16 @@ const s = StyleSheet.create({
   },
   clockBig: { color: C.text, fontSize: 15, fontWeight: "800" },
   clockSub: { color: C.sub, fontSize: 12, marginTop: 2, lineHeight: 16 },
+  resumeClockBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: C.cyan,
+    borderRadius: R.control,
+    paddingVertical: 10,
+  },
+  resumeClockBtnTxt: { color: "#04121c", fontSize: 13, fontWeight: "800" },
   statsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   statCard: {
     flex: 1,

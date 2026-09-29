@@ -45,6 +45,7 @@ const { AppError } = await import("../../lib/errors");
 const CO = "sfc-co";
 const TECH_USER = "sfc-user-tech";
 const ADMIN_USER = "sfc-user-admin";
+const OTHER_TECH_USER = "sfc-user-other-tech";
 const CUST = "sfc-cust";
 const RIDER = "sfc-rider";
 const SVC = "sfc-svc";
@@ -133,6 +134,13 @@ function setStatus(id: string, status: string, role = "rider", user = TECH_USER)
   });
 }
 
+function resumeClockRoute(id: string, role = "rider", user = TECH_USER) {
+  return app.request(`/bookings/${id}/resume-clock`, {
+    method: "POST",
+    headers: { "X-Test-User": user, "X-Test-Role": role },
+  });
+}
+
 beforeAll(async () => {
   const s = sqlClient();
   for (const t of [
@@ -148,6 +156,7 @@ beforeAll(async () => {
   for (const [id, name, role] of [
     [TECH_USER, "Field Tech", "rider"],
     [ADMIN_USER, "Office", "admin"],
+    [OTHER_TECH_USER, "Other Tech", "rider"],
     [CUST, "Customer", "customer"],
   ] as const) {
     await s.execute({
@@ -275,5 +284,63 @@ describe("on-site clock vs the geofence", () => {
     expect(after.clock_state).toBe("running");
     expect(Number(after.accumulated_ms)).toBe(Number(before.accumulated_ms));
     expect(Number(after.last_resume_at)).toBe(Number(before.last_resume_at));
+  });
+});
+
+/**
+ * Requirement from the field: auto-arrive and auto-pause used to share one
+ * radius, so a tech who stepped back to the truck (just outside a tight
+ * residential 20m fence) got their clock paused for a trip that never really
+ * left the job. Auto-pause is now hardcoded to double the arrive radius
+ * everywhere (`resolveAutoPauseRadiusM`, no per-tenant setting) — the ping
+ * route itself is what applies that doubled radius, so these tests exercise
+ * `pauseClock`/`resumeClock` directly the same way the ping handler does:
+ * they're the state machine, not the distance math (that's covered in
+ * geo-distance.test.ts). What's new here is the manual override.
+ */
+describe("manual clock resume — hardwired for every tenant", () => {
+  it("lets the tech holding the job restart their own paused clock", async () => {
+    await seedJob({ id: "sfc-resume-ok", status: "arrived", clockState: "paused", insideGeofence: false, accumulatedMs: 60_000 });
+    const res = await resumeClockRoute("sfc-resume-ok");
+    expect(res.status).toBe(200);
+    const b = await row("sfc-resume-ok");
+    expect(b.clock_state).toBe("running");
+    expect(b.inside_geofence).toBe(true);
+    // banked time from before the pause is kept, not reset
+    expect(Number(b.accumulated_ms)).toBe(60_000);
+  });
+
+  it("works on an in_progress job too, not just the moment of arrival", async () => {
+    await seedJob({ id: "sfc-resume-inprog", status: "in_progress", clockState: "paused", insideGeofence: false });
+    const res = await resumeClockRoute("sfc-resume-inprog");
+    expect(res.status).toBe(200);
+    expect((await row("sfc-resume-inprog")).clock_state).toBe("running");
+  });
+
+  it("refuses a tech who isn't holding this job", async () => {
+    await seedJob({ id: "sfc-resume-forbidden", status: "arrived", clockState: "paused" });
+    const res = await resumeClockRoute("sfc-resume-forbidden", "rider", OTHER_TECH_USER);
+    expect(res.status).toBe(403);
+    expect((await row("sfc-resume-forbidden")).clock_state).toBe("paused");
+  });
+
+  it("lets the office resume it too, same as any other holder-gated action", async () => {
+    await seedJob({ id: "sfc-resume-admin", status: "arrived", clockState: "paused" });
+    const res = await resumeClockRoute("sfc-resume-admin", "admin", ADMIN_USER);
+    expect(res.status).toBe(200);
+    expect((await row("sfc-resume-admin")).clock_state).toBe("running");
+  });
+
+  it("is a no-op 409, not a silent success, when the clock isn't actually paused", async () => {
+    await seedJob({ id: "sfc-resume-notpaused", status: "arrived", clockState: "running", insideGeofence: true });
+    const res = await resumeClockRoute("sfc-resume-notpaused");
+    expect(res.status).toBe(409);
+    expect((await row("sfc-resume-notpaused")).clock_state).toBe("running");
+  });
+
+  it("refuses on a job that was never on-site (idle clock, no arrival yet)", async () => {
+    await seedJob({ id: "sfc-resume-noarrival", status: "enroute", clockState: "idle" });
+    const res = await resumeClockRoute("sfc-resume-noarrival");
+    expect(res.status).toBe(409);
   });
 });

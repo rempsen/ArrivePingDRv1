@@ -8,6 +8,7 @@ import {
   haversineKm,
   isInsideGeofence,
   resolveGeofenceRadiusM,
+  resolveAutoPauseRadiusM,
 } from "../../shared/geo-distance";
 import { applyBookingStatus, pauseClock, resumeClock } from "../../services/booking-status";
 import { pingLimiter } from "../lib/rate-limit";
@@ -107,22 +108,31 @@ export const trackingRoutes = new Hono<AppEnv>()
 
     // --- GEOFENCE: auto-arrive + clock pause/resume -------------------------
     // Authoritative on the server. Once the tech is enroute (or already on a
-    // job), entering the radius around the job address auto-arrives them and
-    // starts the clock; leaving the radius pauses the clock; re-entering
-    // resumes it. Completion stays manual.
-    let geofence: { radiusM: number; distanceM: number; inside: boolean } | null = null;
+    // job), entering the ARRIVE radius around the job address auto-arrives
+    // them and starts/resumes the clock. Leaving pauses the clock, but not at
+    // that same tight radius — auto-pause only fires once they're past DOUBLE
+    // the arrive radius (resolveAutoPauseRadiusM, hardcoded 2x system-wide),
+    // so stepping back to the truck for a moment just outside a tight 20 m
+    // residential radius doesn't cut their time. Between the two radii is a
+    // dead zone: the clock keeps whatever state it was already in. Resuming
+    // always requires being back inside the tighter arrive radius, per the
+    // same reasoning `insideGeofence` already used — see resumeClock/pauseClock
+    // in booking-status.ts. Completion stays manual.
+    let geofence: { radiusM: number; pauseRadiusM: number; distanceM: number; inside: boolean } | null = null;
     if (b && b.lat != null && b.lng != null && b.enrouteAt && b.status !== "completed" && b.status !== "cancelled") {
       // Configured radius in metres. Resolved through the shared helper so a
       // missing settings row, a blank field or a 0 can't silently disable
       // auto-arrive — the fallback here used to be 20m while the DB column
       // default and the driver app's own copy both said 150m.
       const radiusM = resolveGeofenceRadiusM(await geofenceRadiusFor(c));
+      const pauseRadiusM = resolveAutoPauseRadiusM(radiusM);
       const distanceM = Math.round(haversineKm(lat, lng, b.lat, b.lng) * 1000);
-      const inside = isInsideGeofence(lat, lng, b.lat, b.lng, radiusM);
-      geofence = { radiusM, distanceM, inside };
+      const insideArrive = isInsideGeofence(lat, lng, b.lat, b.lng, radiusM);
+      const insidePause = isInsideGeofence(lat, lng, b.lat, b.lng, pauseRadiusM);
+      geofence = { radiusM, pauseRadiusM, distanceM, inside: insideArrive };
 
-      if (inside && !b.insideGeofence) {
-        // entered the job site
+      if (insideArrive && !b.insideGeofence) {
+        // entered (or re-entered) the tight arrive radius
         if (b.status === "enroute") {
           // first arrival → auto-arrive + start the job clock
           await applyBookingStatus(tenantId(c), bookingId, "arrived", { byGeofence: true });
@@ -130,8 +140,8 @@ export const trackingRoutes = new Hono<AppEnv>()
           // came back after stepping away → resume the clock
           await resumeClock(tenantId(c), bookingId);
         }
-      } else if (!inside && b.insideGeofence) {
-        // left the job site → stop (pause) the clock
+      } else if (!insidePause && b.insideGeofence) {
+        // gone past DOUBLE the arrive radius → they've actually left, pause
         await pauseClock(tenantId(c), bookingId);
       }
     }

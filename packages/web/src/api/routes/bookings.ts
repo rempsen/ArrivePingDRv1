@@ -11,7 +11,7 @@ import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } f
 import { fireEvent } from "../../services/dispatch";
 import { recomputeBooking } from "../../services/billing";
 import { reconcileRiderStatus } from "../../services/presence";
-import { applyBookingStatus, StatusTransitionError } from "../../services/booking-status";
+import { applyBookingStatus, resumeClock, StatusTransitionError } from "../../services/booking-status";
 import { putObject } from "../lib/storage";
 import { capture } from "../lib/analytics";
 import { incr } from "../lib/metrics";
@@ -1169,6 +1169,35 @@ export const bookingsRoutes = new Hono<AppEnv>()
         return c.json({ message: e.message, from: e.from, to: e.to }, 409);
       throw e;
     }
+    if (!b) return c.json({ error: "not found" }, 404);
+    return c.json({ booking: await enrich(b) }, 200);
+  })
+  /**
+   * Tech manually restarts their own on-site clock after it auto-paused
+   * (stepped too far from the site, GPS glitched, whatever the reason).
+   * Hardwired system-wide for every tenant — there is no setting that turns
+   * this off. Only the tech actually holding the job (or the office) can hit
+   * it, same guard as /release, and it only does anything when the clock is
+   * actually paused on an in-flight job; otherwise it's a no-op 409 rather
+   * than silently starting a clock on a job that was never on-site.
+   */
+  .post("/:id/resume-clock", requireAuth, async (c) => {
+    const co = tenantId(c);
+    const u = c.get("user") as SessionUser;
+    const id = c.req.param("id");
+    const t = tx(c);
+    const cur = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!cur) return c.json({ message: "Not found" }, 404);
+    const holder = cur.riderId
+      ? await t.selectOne(schema.riders, eq(schema.riders.id, cur.riderId))
+      : null;
+    const isHolder = !!holder && holder.userId === u.id;
+    if (!isHolder && !isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (cur.status !== "arrived" && cur.status !== "in_progress")
+      throw Err.conflict("This job's clock can't be resumed right now.");
+    if (cur.clockState !== "paused")
+      throw Err.conflict("This job's clock isn't paused.");
+    const b = await resumeClock(co, id);
     if (!b) return c.json({ error: "not found" }, 404);
     return c.json({ booking: await enrich(b) }, 200);
   })

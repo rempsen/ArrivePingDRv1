@@ -69,3 +69,24 @@ export function resolveGeofenceRadiusM(value: unknown): number {
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_GEOFENCE_RADIUS_M;
   return Math.min(MAX_GEOFENCE_RADIUS_M, Math.max(MIN_GEOFENCE_RADIUS_M, Math.round(n)));
 }
+
+/**
+ * Auto-pause is deliberately a WIDER radius than auto-arrive, not the same
+ * one.
+ *
+ * Before this existed, leaving and re-entering used the exact same radius as
+ * arrival — so a tech who stepped back to the truck for a part, a moment
+ * outside a single-family home's tight 20 m radius, got their clock paused
+ * ("you've stepped away") for a trip that was never really leaving the job.
+ * Every tenant's auto-pause distance is now always double whatever THEY have
+ * their auto-arrive radius set to (hardcoded system-wide, not a per-tenant
+ * setting) — resuming still happens back at the tighter arrive radius, so the
+ * clock is quick to pause-protect against real departures but slow to
+ * penalize someone standing just outside their own driveway.
+ */
+export const AUTO_PAUSE_RADIUS_MULTIPLIER = 2;
+
+/** The distance (metres) beyond which a tech is far enough to auto-pause. */
+export function resolveAutoPauseRadiusM(arriveRadiusM: number): number {
+  return arriveRadiusM * AUTO_PAUSE_RADIUS_MULTIPLIER;
+}
