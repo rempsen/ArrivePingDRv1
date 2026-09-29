@@ -404,6 +404,21 @@ function toLocalInput(d?: Date) {
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 }
 
+/**
+ * A client's CRM record stores address/city/region/postalCode as separate
+ * fields; the work order's own Address is one free-text line (what
+ * AddressAutocomplete edits and what gets geocoded). This joins the parts a
+ * client record actually has into that one line, e.g.
+ * "504 Boreham Boulevard, Winnipeg, MB" — skipping whatever's blank rather
+ * than leaving stray commas.
+ */
+function formatClientAddress(c: any): string {
+  const line2 = [c?.region, c?.postalCode].filter((p) => p && String(p).trim()).join(" ");
+  return [c?.address, c?.city, line2]
+    .filter((p) => p && String(p).trim())
+    .join(", ");
+}
+
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
 export function WorkOrderModal({
@@ -437,6 +452,15 @@ export function WorkOrderModal({
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  // Cell phone for this job's SMS/push notifications. Prefilled from the
+  // client's own record the moment they're picked below (see the effect near
+  // `clients`) — the office should never have to go look this up on a
+  // customer we already have it for, but they can still type over it.
+  const [phone, setPhone] = useState("");
+  // Which customer we've already pulled address/phone from, so picking the
+  // SAME client twice (e.g. re-opening the combobox) doesn't stomp on edits
+  // made since, but picking a DIFFERENT client always refreshes both.
+  const prefilledCustomerRef = useRef("");
   const [riderId, setRiderId] = useState(defaultRiderId ?? "");
   const [requiredSkillClass, setRequiredSkillClass] = useState("");
   const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
@@ -616,6 +640,10 @@ export function WorkOrderModal({
       setAddress(b.address ?? "");
       setLat(b.lat ?? null);
       setLng(b.lng ?? null);
+      setPhone(b.customerPhone ?? "");
+      // Editing shows whatever's already saved — don't let the prefill
+      // effect below overwrite it just because customerId happens to match.
+      prefilledCustomerRef.current = b.customerId ?? "";
       setRiderId(b.riderId ?? "");
       setRequiredSkillClass((b as any).requiredSkillClass ?? "");
       setRequiredSkills((b as any).requiredSkills ? (b as any).requiredSkills.split(",").filter(Boolean) : []);
@@ -662,8 +690,27 @@ export function WorkOrderModal({
       setLineItems([]);
       setFieldsFromTemplate(false);
       setPendingTemplateSwap(null);
+      // Fresh work order: let the client-prefill effect below fill address
+      // + phone in once a customer's picked.
+      prefilledCustomerRef.current = "";
     }
   }, [open, defaultDate, defaultRiderId, editBooking]);
+
+  // Prefill address + phone from the selected client's CRM record. Only for
+  // brand-new work orders (editBooking sets prefilledCustomerRef up front so
+  // this no-ops there); re-picking the same client doesn't stomp on edits
+  // made since, but picking a different one always refreshes both.
+  useEffect(() => {
+    if (!open || isEdit) return;
+    if (!customerId || customerId === prefilledCustomerRef.current) return;
+    const c = clients.find((u: any) => u.id === customerId);
+    if (c) {
+      const line = formatClientAddress(c);
+      if (line) setAddress(line);
+      setPhone(c.phone || c.altPhone || "");
+    }
+    prefilledCustomerRef.current = customerId;
+  }, [open, isEdit, customerId, clients]);
 
   // ── mutations ──────────────────────────────────────────────────────────────
 
@@ -715,6 +762,7 @@ export function WorkOrderModal({
       address,
       lat: lat ?? undefined,
       lng: lng ?? undefined,
+      phone: phone || undefined,
       notes,
       staffNotes,
       riderId: riderId || undefined,
@@ -781,6 +829,10 @@ export function WorkOrderModal({
             templateId: templateId || "",
             riderId: riderId || "",
             region: region || "",
+            // BookingPatch's field is named customerPhone, not phone like the
+            // create route — buildPayload()'s `phone` key gets silently
+            // stripped here otherwise, so send it under the name PATCH expects.
+            customerPhone: phone || "",
             ...(force ? { force: true } : {}),
           } as any,
         });
@@ -818,6 +870,7 @@ export function WorkOrderModal({
   function reset() {
     setCustomerId(""); setServiceId(""); setTemplateId(""); setTitle("");
     setPriority("normal"); setAddress(""); setLat(null); setLng(null);
+    setPhone(""); prefilledCustomerRef.current = "";
     setRiderId(""); setRequiredSkillClass(""); setRequiredSkills([]); setTechFilter("");
     setNotes(""); setStaffNotes(""); setRegion("");
     setRateModel({ ...EMPTY_RATE_MODEL }); setRateTouched(false); setCharges([]);
@@ -1020,6 +1073,19 @@ export function WorkOrderModal({
             />
           </Field>
         </div>
+
+        {/* ── Cell phone — prefilled from the client's own record so SMS/push
+             notifications reach them; office can still override it. ── */}
+        <Field label="Cell Phone" hint="Used for SMS/push notifications to the client">
+          <input
+            aria-label="Cell Phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. (204) 479-0221"
+            className={inputCls}
+          />
+        </Field>
 
         {/* ── Skill class + skill tags ────────────────────────────────── */}
         <Field label="Required skill class" hint="Filter tech assignment to matching skill class">
