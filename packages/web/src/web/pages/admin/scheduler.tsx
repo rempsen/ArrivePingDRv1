@@ -60,7 +60,7 @@ export default function SchedulerPage() {
   const [assignFor, setAssignFor] = useState<string | null>(null);
   // skill class filter for board view
   const [skillFilter, setSkillFilter] = useState<string>("");
-  const [mode, setMode] = useState<"board" | "calendar">("board");
+  const [mode, setMode] = useState<"board" | "calendar">("calendar");
   const [calView, setCalView] = useState<CalView>("week");
   const [anchor, setAnchor] = useState(() => new Date());
   const [newDate, setNewDate] = useState<Date | null>(null);
@@ -270,13 +270,6 @@ export default function SchedulerPage() {
   // dragging job for skill highlight
   const draggedJob = dragId ? all.find((b) => b.id === dragId) : null;
   const dragSkillClass = (draggedJob as any)?.requiredSkillClass ?? "";
-  // calendar backlog: active jobs that still need scheduling OR a tech assigned.
-  // drag one onto a day to (re)set its date, then dispatch from the Board.
-  const undated = all.filter(
-    (b) =>
-      !["completed", "cancelled"].includes(b.status) &&
-      (!b.scheduledAt || !b.riderId),
-  );
   const byTech = (tid: string) =>
     all.filter((b) => b.riderId === tid && !["completed", "cancelled"].includes(b.status));
 
@@ -422,22 +415,23 @@ export default function SchedulerPage() {
 
       {mode === "calendar" ? (
         <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-        {/* far-left unscheduled queue — drag onto a day to set its date */}
+        {/* far-left work queue — every active job still missing a tech, drag
+            onto a day to set its date */}
         <div className="nvc-card flex h-fit flex-col">
           <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
             <Inbox className="h-4 w-4 text-amber-warn" />
             <h2 className="font-bold text-white">Work Queue</h2>
             <span className="ml-auto rounded-full bg-amber-warn/15 px-2 py-0.5 text-xs font-bold text-amber-warn">
-              {undated.length}
+              {unassigned.length}
             </span>
           </div>
           <div className="space-y-2 p-3">
-            {undated.length === 0 ? (
+            {unassigned.length === 0 ? (
               <p className="py-8 text-center text-xs text-slate-500">
                 All caught up — every active job is scheduled and assigned.
               </p>
             ) : (
-              undated.map((b) => (
+              unassigned.map((b) => (
                 <div
                   key={b.id}
                   draggable

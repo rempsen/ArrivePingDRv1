@@ -7,6 +7,7 @@ import { TechAvatar } from "../../components/tech-avatar";
 import { FleetMap } from "../../components/fleet-map";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { Modal, inputCls, BtnGhost, BtnPrimary } from "../../components/modal";
+import { EmptyState } from "../../components/empty-state";
 import { TECH_STATUS, PRIORITY_META, STATUS_META } from "../../lib/utils";
 import {
   Wrench,
@@ -24,6 +25,8 @@ import {
   Users,
   Briefcase,
   Layers,
+  Inbox,
+  CheckCircle2,
 } from "lucide-react";
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 
@@ -81,6 +84,19 @@ export default function FleetPage() {
     },
     refetchInterval: 15000,
   });
+
+  // Unassigned queue, piled up on the left — deliberately date-unfiltered
+  // (unlike the map's own job pins) so a job waiting for a tech never drops
+  // out of sight just because it's scheduled for a different day, or has no
+  // date at all yet. Same "bookings" cache key the Scheduler uses.
+  const allBookingsQ = useQuery({
+    queryKey: ["bookings"],
+    queryFn: async () => ok(await api.bookings.$get()),
+    refetchInterval: 8000,
+  });
+  const unassignedQueue = ((allBookingsQ.data as any)?.bookings ?? []).filter(
+    (b: any) => !b.riderId && b.status !== "completed" && b.status !== "cancelled",
+  );
 
   const techs = fleet.data?.fleet ?? [];
   const active = techs.find((t) => t.id === selected) ?? null;
@@ -303,6 +319,80 @@ export default function FleetPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* unassigned queue — piles up on the left so a dispatcher watching the
+          map still sees what's waiting for a tech, independent of the map's
+          own date filter */}
+      <div
+        className="absolute left-3 bottom-3 z-20 flex w-[280px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-2/95 backdrop-blur-xl shadow-2xl sm:left-4 sm:bottom-4"
+        style={{ top: barH + 8 }}
+      >
+        <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
+          <Inbox className="h-4 w-4 text-amber-warn" />
+          <h2 className="font-bold text-white">Unassigned</h2>
+          <span className="ml-auto rounded-full bg-amber-warn/15 px-2 py-0.5 text-xs font-bold text-amber-warn">
+            {unassignedQueue.length}
+          </span>
+        </div>
+        <div className="flex-1 space-y-2 overflow-y-auto p-3">
+          {unassignedQueue.length === 0 ? (
+            <EmptyState
+              compact
+              tone="good"
+              icon={CheckCircle2}
+              title="All dispatched"
+              hint="Nothing is waiting for a technician right now."
+            />
+          ) : (
+            unassignedQueue.map((b: any) => (
+              <div
+                key={b.id}
+                role="button"
+                tabIndex={0}
+                title="Click to view & edit"
+                onClick={() => setJobFor(b)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setJobFor(b);
+                  }
+                }}
+                className="group cursor-pointer rounded-xl border border-white/10 bg-ink-3/60 p-2.5 transition hover:border-brand/40"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {b.title || b.service?.name || jobNoun}
+                    </p>
+                    <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      {b.address || "No address"}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {b.priority && (
+                        <span
+                          className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                          style={{
+                            color: PRIORITY_META[b.priority]?.color,
+                            background: `${PRIORITY_META[b.priority]?.color}22`,
+                          }}
+                        >
+                          {PRIORITY_META[b.priority]?.label}
+                        </span>
+                      )}
+                      {!b.scheduledAt && (
+                        <span className="inline-block rounded-full bg-amber-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-warn">
+                          No date
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {/* tech detail panel */}
