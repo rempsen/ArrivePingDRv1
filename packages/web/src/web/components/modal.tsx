@@ -148,6 +148,27 @@ export function BtnGhost({
   );
 }
 
+/**
+ * A destructive action that lives in a form's own footer (e.g. "Delete Work
+ * Order" next to "Save Changes") rather than a confirm dialog's already-red
+ * button. Outlined, not solid — a solid red button here would out-rank the
+ * actual primary action's visual weight and get mis-tapped as "the button
+ * that finishes this form".
+ */
+export function BtnDanger({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-rose-500/30 px-4 text-sm font-semibold text-rose-400 transition-colors duration-150 hover:border-rose-500/60 hover:bg-rose-500/10 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 /** Lightweight confirm dialog */
 export function ConfirmModal({
   open,

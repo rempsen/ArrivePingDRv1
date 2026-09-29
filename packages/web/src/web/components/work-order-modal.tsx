@@ -30,7 +30,7 @@ import { apiHeaders } from "../lib/api";
 import { ok } from "../lib/api-ok";
 import { useWorkerNoun, useCustomerNoun } from "../lib/use-brand";
 import { api } from "../lib/api";
-import { Modal, Field, inputCls, BtnGhost, BtnPrimary, ConfirmModal } from "./modal";
+import { Modal, Field, inputCls, BtnGhost, BtnPrimary, BtnDanger, ConfirmModal } from "./modal";
 import { PRIORITY_META } from "../lib/utils";
 import { ChargesEditor, chargesSummary, type Charge } from "./charges-editor";
 import { CatalogLineItems } from "./catalog-line-items";
@@ -914,6 +914,34 @@ export function WorkOrderModal({
     onError: (e: any) => setErr(e.message),
   });
 
+  // Soft-delete (archive): the same "Archive"/`deletedAt` mechanism the
+  // Bookings list already uses for its own trash-icon button, just reachable
+  // from inside the edit modal too — a work order that's no longer relevant
+  // shouldn't require closing this dialog and hunting for it in a list to get
+  // rid of it. Nothing is destroyed: it drops off the active board and can be
+  // restored later from Bookings > Show archived.
+  const remove = useMutation({
+    mutationFn: async () => api.jobs[":id"].$delete({ param: { id: editBooking.id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bookings"] });
+      qc.invalidateQueries({ queryKey: ["jobSearch"] });
+      qc.invalidateQueries({ queryKey: ["scheduler"] });
+      qc.invalidateQueries({ queryKey: ["riders"] });
+      onCreated?.();
+      onClose();
+    },
+    onError: (e: any) => setErr(e.message || "Couldn't archive this work order"),
+  });
+
+  async function deleteWorkOrder() {
+    const yes = await confirm({
+      title: "Archive this work order?",
+      message: "It moves to the archive and can be restored later. Nothing is deleted for good.",
+      confirmLabel: "Archive",
+    });
+    if (yes) remove.mutate();
+  }
+
   function reset() {
     setCustomerId(""); setServiceId(""); setTemplateId(""); setTitle("");
     setPriority("normal"); setAddress(""); setLat(null); setLng(null);
@@ -1000,6 +1028,7 @@ export function WorkOrderModal({
   }
 
   const busy = create.isPending || update.isPending;
+  const deleting = remove.isPending;
 
   const pendingTemplateName = pendingTemplateSwap
     ? (templates.data?.templates ?? []).find((t: any) => t.id === pendingTemplateSwap)?.name ?? "this template"
@@ -1014,12 +1043,25 @@ export function WorkOrderModal({
       subtitle={isEdit ? "Adjust any detail of this job" : "Schedule a job on behalf of a client"}
       size="lg"
       footer={
-        <>
-          <BtnGhost onClick={onClose}>Cancel</BtnGhost>
-          <BtnPrimary onClick={submit} disabled={busy}>
-            {busy ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : "Create Work Order")}
+        <div className="flex w-full items-center justify-between gap-2">
+          <div>
+            {/* Only an existing work order has anything to archive. New ones
+                just get Cancel, same as before. */}
+            {isEdit ? (
+              <BtnDanger onClick={deleteWorkOrder} disabled={busy || deleting}>
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Archiving…" : "Delete Work Order"}
+              </BtnDanger>
+            ) : (
+              <BtnGhost onClick={onClose}>Cancel</BtnGhost>
+            )}
+          </div>
+          <BtnPrimary onClick={submit} disabled={busy || deleting}>
+            {busy
+              ? (isEdit ? "Saving…" : "Creating…")
+              : (isEdit ? "Save and Close" : "Create Work Order")}
           </BtnPrimary>
-        </>
+        </div>
       }
     >
       <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
