@@ -15,6 +15,7 @@
  */
 import { Hono } from "hono";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { eq } from "drizzle-orm";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
@@ -123,9 +124,53 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
+/**
+ * Some exporters (seen from at least one customer's CRM export) write every
+ * SpreadsheetML tag behind a namespace prefix — `<x:workbook xmlns:x="...">`,
+ * `<x:worksheet ...>`, etc — instead of the unprefixed default-namespace form
+ * every mainstream tool (Excel, Google Sheets, LibreOffice, openpyxl) uses.
+ * That's legal OOXML/XML, but ExcelJS's part parser matches bare tag names
+ * and silently comes back with an empty `workbook.sheets`, which surfaces
+ * upstream as "Could not read that file". Rather than reject a file that
+ * genuinely is a valid Excel export, unzip it, strip whichever prefix is
+ * bound to the main spreadsheet namespace from every element in every XML
+ * part, and re-zip before handing it to ExcelJS.
+ */
+async function stripSpreadsheetNamespacePrefix(buf: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(buf);
+  const nsRe = /xmlns:([A-Za-z0-9_]+)="http:\/\/schemas\.openxmlformats\.org\/spreadsheetml\/2006\/main"/;
+  let changed = false;
+  for (const name of Object.keys(zip.files)) {
+    const entry = zip.files[name];
+    if (entry.dir || !name.endsWith(".xml")) continue;
+    const text = await entry.async("string");
+    const m = text.match(nsRe);
+    if (!m) continue;
+    const prefix = m[1];
+    const fixed = text.replace(new RegExp(`</?${prefix}:`, "g"), (tag) => (tag.startsWith("</") ? "</" : "<"));
+    if (fixed !== text) {
+      zip.file(name, fixed);
+      changed = true;
+    }
+  }
+  if (!changed) return buf;
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
 async function parseXlsx(buf: Buffer): Promise<Record<string, string>[]> {
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buf as any);
+  let wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(buf as any);
+  } catch {
+    // Fall back to the namespace-prefix repair above; if the file is
+    // genuinely unreadable this rethrows and the caller's generic
+    // "Could not read that file" message still applies. Retry on a fresh
+    // Workbook instance — the failed load above may have left `wb` partially
+    // populated.
+    const fixed = await stripSpreadsheetNamespacePrefix(buf);
+    wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(fixed as any);
+  }
   const ws = wb.worksheets[0];
   if (!ws) return [];
   let headers: string[] = [];
