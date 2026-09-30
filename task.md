@@ -1,46 +1,32 @@
-# Onboarding Intelligence Upgrade — Task Scratchpad
+# Main-chat migration — 2026-09-30
 
-Decisions from Dan (2026-09-27):
-- 17 ICPs confirmed (13 core + 4 outlier). No new ICPs added.
-- Catalog: STATIC hand-authored presets, expanded to 30-50 items/industry, industry-standard CAD pricing (unchanged pattern from catalog-presets.ts).
-- Form Builder templates (4+ per ICP): AI-GENERATED per-tenant at signup, grounded in ICP research + scraped site. NOT static.
-- Notification message copy: AI-GENERATED per-tenant at signup, grounded in ICP research (aiTone) + scraped site. NOT static.
-- Qualifying chatbot reasoning model: anthropic/claude-opus-4.6 (new MODELS.reasoning key).
-- Delivery: full pass, review at the end. No mid-build checkpoints.
+Goal: make THIS chat the home for ArrivePing / NVC360 (web + iOS + working files),
+replacing the "NVCV4 August 2026" chat (shared: runable.com/shared/c416dd9b-...).
 
-## Build plan
-1. [ ] Read all 17 ICP research folders (04-NVC360-App-Customization.md, 03-Workflows) to extract grounding material -> feed into knowledge base used by AI generation + catalog expansion.
-2. [ ] Expand catalog-presets.ts: every core+outlier ICP -> 30-50 items, real CAD industry pricing (cost+markup), following existing item shape.
-3. [ ] Add MODELS.reasoning = anthropic/claude-opus-4.6 to gateway.ts.
-4. [ ] Notification copy generator: new service (e.g. notification-copy-scout.ts) that at provisioning time calls AI grounded in icp_knowledge_base row (aiTone/toneRefinement/workflowNotes) + brand profile to produce per-event SMS+email copy, stored per-company (new table or JSON column on companies/company_settings). Wire dispatch.ts defaultMessage() to check for stored per-tenant copy first, fallback to generic.
-5. [ ] Template workflows generator: enhance/replace template-scout.ts + form-scout.ts to guarantee >=4 premade Form Builder workflows tailored to ICP + site, using research grounding. Validate count, retry/pad if AI returns <4.
-6. [ ] Fix jobNoun/customerNoun missing interpolation in dispatch.ts (grep confirmed only workerNoun wired).
-7. [ ] Qualifying chatbot: extend onboarding chat (POST /api/onboarding/chat) — after industry+website submitted, ask 5-10 questions (baseline: tech count, vehicle count, daily job volume, maintenance plans y/n, emergency/rush service y/n + multiplier, plus ICP-specific extras) using MODELS.reasoning, feed answers into catalog quantity/tier selection, template generation, notification tone, pricing.
-8. [ ] Wire qualifying answers into provisioning: adjust which catalog items get pre-selected/quantities, influence AI template/notification generation prompts.
-9. [ ] Verify end-to-end via mb browser test on a fresh signup (or superadmin new company) for at least 2 different ICPs.
-10. [ ] Report to Dan; do NOT commit/push until Dan reviews (per his standing preference), but flag readiness.
+## Done
+- Cloned github.com/rempsen/ArrivePingDRv1 → /home/user/nvc360-v4 @ b8c584c (same HEAD the old chat had). bun install OK.
+- Recovered from old chat (text previews on the shared page): nvc360-sandbox-env-FULL.env (Aug 24 snapshot),
+  nvc360-local-dev-SCOPED.env, remediation-plan.md, 11× content.md reports → committed to docs/chat-archive/ (8bce423).
+  NOT recoverable via public share (binary, login-gated download): NVC360-Technical-Architecture-Specification.docx,
+  punchlist-edge-functions.zip, job-report-*.pdf, dl3.pdf, screenshots. Ask Dan to drop them in Attachments if needed.
+- .env written (root): all live third-party creds from the recovered file; DB vars point at LOCAL Postgres 17 stand-in.
+- Local Postgres 17: db `nvc`, migrations 0000–0003 applied (58 tables), roles app_runtime/app_system passworded.
+  Login: dan@nvc360.com / phu9Yae423! (superadmin, created via sign-up + role update). /api/seed fails under RLS — expected.
+- Web: vite build done, server in tmux `web` on :4200. Redis Cloud connected (cred still live).
+- Mobile: packages/mobile/.env (EXPO_PUBLIC_SENTRY_DSN), Metro in tmux `metro` on :4300.
+- Skill recreated: ~/.skills/arriveping-git-push (SKILL.md + scripts/ensure-remote.sh).
+- SSH key generated: ~/.ssh/id_ed25519 — NOT yet authorized on GitHub.
 
-## Progress log
-- Confirmed /home/user/icp-research/ has full research: 00_README, per-ICP folders (01-Industry-Overview, 02-Associations-Sources, 03-Workflows-Best-Practices, 04-NVC360-App-Customization, 05-Knowledge-Base/deep-dive), plus Phase1-Ranking.md and Phase3-Synthesis.md at root. This IS the ingestible source material.
+## Done 2026-09-30 (evening)
+- Deploy key authorized; 8bce423 pushed. `git push origin main` works.
+- Supabase wired: project ujrzjdzcqrvquwasneaq, session pooler aws-0-ca-central-1. `web` on :4200 now runs
+  against the REAL DB (5 companies / 150 users); dan@nvc360.com superadmin login verified.
+  app_runtime / app_system passwords were ROTATED (old ones unrecoverable) → arriveping.com /api/ready
+  reported database:down until its Runable env is updated with the new DATABASE_URL / DATABASE_SYSTEM_URL.
+  Local-Postgres .env kept as .env.local-postgres.bak.
+- packages/mobile/keys/AuthKey.p8 restored (validated EC P-256). eas-cli installed globally; `eas whoami` = nvc360.
+  EXPO_TOKEN lives in packages/mobile/.env (gitignored).
 
-### FINAL STATUS — all 7 items complete, verified via real DB + real HTTP + real AI calls. Nothing committed/pushed (per standing instruction — awaiting Dan's review).
-
-1. **Catalog expansion** — DONE. `catalog-presets.ts` has all 17 ICPs, 30-38 hand-authored items each, CAD pricing. DB-verified insert counts match for multiple ICPs.
-2. **Template minimum bump to 4** — DONE. `template-scout.ts`: schema min 4/max 6, 4th "Emergency / Rush Call" fallback, `padToMinimum()` dedupes by name. Verified live: AI often returns 3, padding kicks in, final DB count always exactly 4 (or more), zero dupes.
-3. **Notification copy generator** — DONE. New `notification-copy-scout.ts`, wired into `company-provisioning.ts` (step 2b-2) and `dispatch.ts`'s `seedNotificationRules(companyId, copy?)`. Verified: real per-tenant branded SMS/email copy in DB (12 of 27 rows branded per tenant), correct terminology per ICP (e.g. "Session"/"Coach" for sports-org vs "Job"/"Technician" for HVAC). **Open flag for Dan**: uses `MODELS.text`, not `MODELS.reasoning` — his Opus instruction was scoped to item 6 (the chatbot); not changed here since notification copy is short-form templated text, not a reasoning-heavy task, but flagging the choice.
-4. **jobNoun/customerNoun fix** — DONE. `dispatch.ts` `defaultMessage()` — 11 hardcoded "work order"/"Customer" strings now use tenant terminology. Verified via direct function calls, zero literal strings remain.
-5. **Qualifying chatbot** — DONE. `onboarding.ts` rewritten: `QualifyingProfile` type (now canonically in `qualifying-tuning.ts`), `buildOnboardingSnapshot()` extended with `structure`/`qualifying`, two-part system prompt (Part 1 brand gaps, Part 2 mandatory 5-question baseline + agent-designed ICP-specific questions grounded in real seeded structure + `icp_knowledge_base` + expert ops knowledge), two new tools (`save_qualifying_baseline`, `save_icp_qualifying_answer`), model = `MODELS.reasoning` (`anthropic/claude-opus-4.6`) per Dan's explicit instruction, `stopWhen: stepCountIs(24)`. Verified end-to-end over real HTTP + real Opus calls for 3 different ICPs (sports-org, HVAC, garage-door/tree-care): baseline fields saved incrementally, ICP-specific questions correctly grounded in the tenant's actual seeded templates (e.g. tied a prime-time question back to the real "Court & Field Rental" template), `finish_onboarding` called correctly on user request.
-6. **Item 7 — wire qualifying answers into provisioning** — DONE. New file `qualifying-tuning.ts`, function `applyQualifyingTuning(companyId, qualifying)`, called once from `finish_onboarding` in `onboarding.ts`, gated on `qualifying.tuningAppliedAt` (idempotent — never compounds on a second finish). Deterministic (not AI-generated) by design — reliable/testable multiply-and-tag pass over real `task_templates.rateModel` JSON:
-   - `offersEmergencyPremium` + `emergencyMultiplierPct`: multiplies `flatRate/timeRate/kmRate/minCharge/firstHourRate/additionalHourRate` on every rush/emergency/after-hours-flavored template (name or category matches `/emergency|rush|urgent|after.?hours|off.?hours|overtime|priority|weekend/i`) and tags the description. If the tenant's ICP-generated set has NO such template, clones the best base template (prefers category "Service") into a new "Emergency / After-Hours Call" template with the multiplier applied, adding an urgency field + premium-confirmation checklist item if missing.
-   - `offersMaintenancePlans`: if true and no maintenance/tune-up/preventive/service-plan-flavored template exists yet, additively clones the base template into a new "Maintenance Plan Visit" template (not rate-multiplied — structural only) with a "next visit due" field + follow-up checklist item. Never touches/removes anything if a suitable template already exists.
-   - `technicianCount`/`vehicleCount`/`jobsPerDay` — deliberately left informational-only (stored in `qualifying_profile`, not wired further): no scheduling/capacity-planning feature exists yet to hand them to, and forcing a change without a real downstream consumer isn't grounded in anything. Flagged to Dan as a deliberate choice, not an oversight.
-   - Verified via 4 real end-to-end/direct runs: (a) HVAC — existing "Residential Emergency / Demand Service" template correctly multiplied by 1.75x (129→225.75, 125→218.75), existing "Membership Maintenance Visit" correctly left untouched/no dupe; (b) sports-org — no existing rush template, new "Emergency / After-Hours Call" correctly created and multiplied by 1.6x (35→56), existing "Facility Inspection & Maintenance Check" correctly matched-and-skipped; (c) tree-care via direct function call — no rush AND no maintenance template existed, BOTH created correctly (emergency 2x-multiplied from base 250/125/2/350 → 500/250/4/700, maintenance additively cloned unmultiplied); (d) idempotency — calling `applyQualifyingTuning` twice with `tuningAppliedAt` already set on the second call correctly no-ops (`applied:false`, zero changes).
-
-### Not done / explicitly deferred (raise with Dan)
-- Frontend `onboarding-chat.tsx` was NOT reviewed/updated this session — only backend. Worth a quick visual pass to confirm the tool-call UI renders sensibly for a 5-10 question qualifying round (no progress indicator like "3 of ~8 answered" exists yet).
-- `notification-copy-scout.ts` model choice (`MODELS.text` vs `MODELS.reasoning`) — flagged above, not changed without Dan's explicit call.
-- No mb/browser UI click-through test performed — all verification was direct HTTP/DB, which is stronger for correctness but doesn't confirm the chat screen renders correctly.
-- Minor UX nit observed in testing (pre-existing, not caused by this session's changes): the Part 1 brand-confirmation loop can get stuck repeatedly asking for "service area" even after the user says "let's finish up" — model eventually does finish, just takes extra turns. Not blocking, not part of item 7, noting for awareness.
-- MAINTENANCE_PATTERN/RUSH_PATTERN are keyword heuristics on template name/category, not full semantic matching — e.g. a facility-upkeep "Inspection & Maintenance Check" template will be treated as satisfying the customer-facing "maintenance plan" qualifying answer even though they're conceptually different. Accepted trade-off for a deterministic, testable v1; flagged as a known limitation.
-
-**Nothing has been committed or pushed.** All work is on disk in `/home/user/arriveping-drv1`, dev server verified healthy on port 4200, `npx tsc --noEmit -p .` is 0 errors as of this final pass.
+## Still open
+5. Google Drive zip (1H8LLu5zx3LliRInVan9J1V2n259kwRCT) is not public — share as "anyone with link" or drop in Attachments.
+6. Confirm whether this chat has a Publish button (Runable project). If it's "Unmanaged", publishing still goes through the old chat.
