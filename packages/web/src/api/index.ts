@@ -254,6 +254,19 @@ const app = new Hono<{ Variables: Variables }>()
     } catch (e) {
       ok = false;
       checks.database = "down";
+      // Surface the failure CLASS (never the connection string) so an operator
+      // hitting /api/ready can tell auth failures (28P01) from pooler
+      // saturation (EMAXCONNSESSION) from DNS/network (ENOTFOUND/ETIMEDOUT)
+      // without needing container logs or Sentry access.
+      // drizzle wraps driver errors in DrizzleQueryError; the useful bits
+      // (SQLSTATE code, driver message) live on `.cause`.
+      const wrapped = e as { cause?: unknown };
+      const err = (wrapped?.cause ?? e) as { code?: string; name?: string; message?: string };
+      const code = String(err?.code ?? err?.name ?? "unknown");
+      const msg = String(err?.message ?? "")
+        .replace(/postgres(ql)?:\/\/\S+/gi, "<url>")
+        .slice(0, 160);
+      checks.database_error = msg ? `${code}: ${msg}` : code;
       captureException(e, { probe: "ready" });
     }
     const { storageMode } = await import("./lib/storage");
