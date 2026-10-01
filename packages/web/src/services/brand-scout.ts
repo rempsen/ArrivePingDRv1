@@ -31,6 +31,7 @@ import { z } from "zod";
 import { gateway, MODELS } from "../api/agent/gateway";
 import { putObject } from "../api/lib/storage";
 import { log } from "../api/lib/logger";
+import { formatPhone } from "../api/lib/validate";
 import { INDUSTRY_LABELS } from "./industry-presets";
 
 export interface BrandProposal {
@@ -800,7 +801,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     hours: text?.hours ?? structured?.hours ?? null,
     address: text?.address ?? structured?.address ?? null,
     email: text?.email ?? structured?.email ?? null,
-    phone: text?.phone ?? structured?.phone ?? null,
+    phone: formatPhone(text?.phone ?? structured?.phone ?? null),
     socials,
     suggestedIndustry: text?.suggestedIndustry ?? null,
     suggestedIndustryOther: text?.suggestedIndustryOther ?? null,

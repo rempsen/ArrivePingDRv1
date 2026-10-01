@@ -200,6 +200,25 @@ export const phone = z
   // is exactly what brand-scout reads off a website (caught on live 2026-10-01).
   .refine((v) => v === "" || /^[+(\d][\d\s()\-.]{5,}$/.test(v), "Phone number doesn't look valid");
 
+/**
+ * Normalize a phone number to the house format `204-632-9434`
+ * (no brackets, dashes between the three groups). Websites publish
+ * "(204) 632-9434", "204.632.9434", "+1 204 632 9434", "2046329434" — all of
+ * those become the same string. Anything that isn't a 10-digit North
+ * American number (or 11 digits with a leading 1) is returned trimmed but
+ * otherwise untouched so international numbers survive.
+ */
+export function formatPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const t = raw.trim();
+  if (!t) return null;
+  const digits = t.replace(/\D/g, "");
+  const ten =
+    digits.length === 10 ? digits : digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : null;
+  if (!ten) return t;
+  return `${ten.slice(0, 3)}-${ten.slice(3, 6)}-${ten.slice(6)}`;
+}
+
 /** Work-order lifecycle states, as consumed by services/booking-status.ts. */
 export const BOOKING_STATUSES = [
   "pending",

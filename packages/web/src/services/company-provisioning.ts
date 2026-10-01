@@ -37,6 +37,7 @@ import {
   imageRef,
   email as emailField,
   phone,
+  formatPhone,
 } from "../api/lib/validate";
 import { scoutStarterForms } from "./form-scout";
 import { scoutStarterTemplates } from "./template-scout";
@@ -460,7 +461,7 @@ export async function provisionCompany(
     id: slug,
     name,
     contactEmail: String(b.contactEmail ?? "").trim(),
-    phone: String(b.phone ?? "").trim(),
+    phone: formatPhone(String(b.phone ?? "")) ?? "",
     plan: b.plan ?? "starter",
     industry: resolvedIndustry,
     industryOther: resolvedIndustry === "other" ? industryOther : "",
@@ -490,7 +491,7 @@ export async function provisionCompany(
     id: slug,
     name,
     email: str(brand.email, String(b.contactEmail ?? "").trim()),
-    phone: str(brand.phone, String(b.phone ?? "").trim()),
+    phone: formatPhone(str(brand.phone, String(b.phone ?? "").trim())) ?? "",
     website: str(b.website),
     address: str(brand.address, undefined as any) || undefined,
     logo: str(brand.logoUrl),
@@ -518,7 +519,7 @@ export async function provisionCompany(
     brandColor: str(brand.primaryColor, "#06B6D4"),
     legalName: name,
     address: str(brand.address),
-    phone: str(brand.phone, String(b.phone ?? "").trim()),
+    phone: formatPhone(str(brand.phone, String(b.phone ?? "").trim())) ?? "",
     email: str(brand.email, String(b.contactEmail ?? "").trim()),
     website: str(b.website),
   }).catch((e) => console.error("[provisioning] brand provisioning failed", e));
