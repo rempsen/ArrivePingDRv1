@@ -10,6 +10,7 @@ import {
   Loader2,
   Bot,
   X,
+  ListChecks,
 } from "lucide-react";
 
 /**
@@ -47,6 +48,97 @@ type ToolEvent = { name: string; input: any; output: any };
 /** One rendered line in the transcript — either a chat bubble or a small
  * "✓ did a thing" pill dropped in between bubbles. */
 type Line = { kind: "msg"; msg: ChatMsg } | { kind: "tool"; tool: ToolEvent; key: number };
+
+/** One row in the live fact panel — everything the AI has extracted from the
+ * conversation so far, not just the quantifiable business numbers. Rows with
+ * a stable `id` (brand/baseline fields) upsert in place if corrected later;
+ * rows with a generated id (catalog items, ICP-specific Q&A) always append,
+ * since each one is its own distinct fact. */
+type Fact = { id: string; label: string; value: string; swatch?: string };
+
+const FIELD_LABELS: Record<string, string> = {
+  tagline: "Tagline",
+  workerNoun: "Worker term",
+  workerNounPlural: "Worker term (plural)",
+  customerNoun: "Customer term",
+  customerNounPlural: "Customer term (plural)",
+  jobNoun: "Job term",
+  jobNounPlural: "Job term (plural)",
+  primaryColor: "Primary color",
+  accentColor: "Accent color",
+  hours: "Hours",
+  serviceArea: "Service area",
+  technicianCount: "Team size",
+  vehicleCount: "Fleet size",
+  jobsPerDay: "Jobs per day",
+  offersMaintenancePlans: "Maintenance plans",
+  offersEmergencyPremium: "Rush pricing",
+  emergencyMultiplierPct: "Rush multiplier",
+};
+
+function formatFieldValue(key: string, val: unknown): string {
+  if (val === null || val === undefined || val === "") return "";
+  if (key === "emergencyMultiplierPct" && typeof val === "number") {
+    const x = val / 100;
+    return `${x % 1 === 0 ? x.toFixed(0) : x.toFixed(1)}x`;
+  }
+  if (typeof val === "boolean") return val ? "Yes" : "No";
+  return String(val);
+}
+
+let factIdSeq = 0;
+function nextFactId(prefix: string): string {
+  factIdSeq += 1;
+  return `${prefix}-${factIdSeq}`;
+}
+
+/** Turns one resolved tool call into zero or more fact-panel rows. This is
+ * the ONLY place the fact panel's content comes from — every tool already
+ * streamed over SSE for the checklist/pill UI feeds it, no backend change
+ * needed. */
+function factsFromTool(t: ToolEvent): Fact[] {
+  switch (t.name) {
+    case "update_brand_profile": {
+      const updated: string[] = Array.isArray(t.output?.updated) ? t.output.updated : [];
+      return updated
+        .filter((k) => t.input?.[k] !== undefined && t.input?.[k] !== "")
+        .map((k) => ({
+          id: k,
+          label: FIELD_LABELS[k] ?? k,
+          value: formatFieldValue(k, t.input[k]),
+          swatch: k === "primaryColor" || k === "accentColor" ? String(t.input[k]) : undefined,
+        }));
+    }
+    case "set_industry":
+      return t.output?.ok
+        ? [{ id: "industry", label: "Industry", value: String(t.output.industry ?? t.input?.industryId ?? "") }]
+        : [];
+    case "add_catalog_item":
+      return [
+        {
+          id: nextFactId("catalog"),
+          label: "Catalog item added",
+          value: String(t.output?.name ?? t.input?.name ?? ""),
+        },
+      ];
+    case "save_qualifying_baseline": {
+      const saved: string[] = Array.isArray(t.output?.saved) ? t.output.saved : [];
+      return saved
+        .filter((k) => t.input?.[k] !== undefined)
+        .map((k) => ({ id: k, label: FIELD_LABELS[k] ?? k, value: formatFieldValue(k, t.input[k]) }));
+    }
+    case "save_icp_qualifying_answer":
+      return [
+        {
+          id: nextFactId("icp"),
+          label: String(t.input?.question ?? "Detail").slice(0, 70),
+          value: String(t.input?.answer ?? "").slice(0, 200),
+        },
+      ];
+    default:
+      return [];
+  }
+}
 
 function toolLabel(t: ToolEvent): string {
   switch (t.name) {
@@ -218,11 +310,23 @@ export function OnboardingChat() {
   const kickedOffRef = useRef(false);
   const toolKeyRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const factsBottomRef = useRef<HTMLDivElement>(null);
   const [checklist, setChecklist] = useState<Snapshot["checklist"] | null>(null);
+  const [facts, setFacts] = useState<Fact[]>([]);
+  // "Question N of M" — M starts at a floor of 5 (the 5 mandatory qualifying
+  // fields) and extends live, 3 steps ahead of wherever we currently are,
+  // the moment the conversation runs longer than first guessed. It only
+  // ever grows, never shrinks, so the number on screen never looks like it
+  // "reset" mid-conversation.
+  const [qProgress, setQProgress] = useState<{ current: number; total: number }>({ current: 0, total: 5 });
 
   useEffect(() => {
     if (statusQ.data) setChecklist(statusQ.data.checklist);
   }, [statusQ.data]);
+
+  useEffect(() => {
+    factsBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [facts]);
 
   const shouldShow = enabled && !dismissed && !!statusQ.data && !statusQ.data.checklist.done;
 
@@ -252,6 +356,15 @@ export function OnboardingChat() {
       setLines((l) => [...l, { kind: "msg", msg: newHistory[newHistory.length - 1] }]);
     }
     setStreaming(true);
+    // Every assistant turn is one more question/step (the system prompt
+    // keeps it to one thought per reply) — advance the live "N of M"
+    // counter the instant this turn starts, not after it finishes, so the
+    // number on screen matches what the user is reading right now.
+    setQProgress((p) => {
+      const current = p.current + 1;
+      const total = Math.max(current + 3, 5, p.total);
+      return { current, total };
+    });
     let assistantText = "";
     setLines((l) => [...l, { kind: "msg", msg: { role: "assistant", content: "" } }]);
 
@@ -274,6 +387,22 @@ export function OnboardingChat() {
       (t) => {
         toolKeyRef.current += 1;
         setLines((l) => [...l, { kind: "tool", tool: t, key: toolKeyRef.current }]);
+        // Fact panel — upsert by id so a correction (tenant changes their
+        // mind about the industry, say) updates the existing row in place
+        // instead of piling up a duplicate; list-type facts (catalog items,
+        // ICP-specific Q&A) always get a fresh id, so each stays its own row.
+        const newFacts = factsFromTool(t);
+        if (newFacts.length) {
+          setFacts((prev) => {
+            const byId = new Map(prev.map((f) => [f.id, f]));
+            const order = prev.map((f) => f.id);
+            for (const nf of newFacts) {
+              byId.set(nf.id, nf);
+              if (!order.includes(nf.id)) order.push(nf.id);
+            }
+            return order.map((id) => byId.get(id)!);
+          });
+        }
         // Optimistic local checklist update so the sidebar feels instant
         // instead of waiting on a refetch.
         setChecklist((c) => {
@@ -333,7 +462,14 @@ export function OnboardingChat() {
 
   return (
     <div className="fixed inset-0 z-[1200] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center">
-      <div className="flex h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-2 shadow-2xl sm:h-[80vh] sm:rounded-2xl">
+      {/* Row: [phantom spacer][chat][fact panel] — the spacer matches the
+          panel's width so the chat card stays dead-center on screen exactly
+          like it always has, with the panel simply appended into the room
+          that opens up to its right on wide screens. Below `lg` the spacer
+          and panel both disappear and this is pixel-identical to before. */}
+      <div className="flex w-full max-w-lg items-stretch justify-center gap-4 lg:max-w-[66rem]">
+        <div className="hidden w-64 shrink-0 lg:block" aria-hidden="true" />
+        <div className="flex h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-2 shadow-2xl sm:h-[80vh] sm:rounded-2xl">
         {/* header */}
         <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-gradient-to-r from-brand/10 to-transparent px-5 py-4">
           <div className="flex items-center gap-2.5">
@@ -354,6 +490,22 @@ export function OnboardingChat() {
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {/* "Question N of M" — always visible while the conversation is
+            still open, extends live, never goes backwards. */}
+        {checklist && !checklist.done && (
+          <div className="flex items-center gap-2.5 border-b border-white/5 bg-white/[0.02] px-5 py-2">
+            <span className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">
+              Question {Math.max(qProgress.current, 1)} of {qProgress.total}
+            </span>
+            <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/5">
+              <div
+                className="h-full rounded-full bg-brand transition-all duration-500 ease-out"
+                style={{ width: `${Math.min(100, (Math.max(qProgress.current, 1) / qProgress.total) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* live checklist */}
         {checklist && (
@@ -450,6 +602,49 @@ export function OnboardingChat() {
         >
           I'll finish this later
         </button>
+        </div>
+
+        {/* fact panel — everything the AI has extracted so far, live. Wide
+            screens only; the chat works exactly the same without it. */}
+        <div className="hidden h-[80vh] w-64 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-2 shadow-2xl lg:flex">
+          <div className="flex items-center gap-2 border-b border-white/5 bg-gradient-to-r from-brand/10 to-transparent px-4 py-4">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand/15 text-cyan-glow">
+              <ListChecks className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="font-display text-sm font-bold text-white">What I'm learning</p>
+              <p className="text-xs text-slate-500">Updates live as we talk</p>
+            </div>
+          </div>
+          <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+            {facts.length === 0 ? (
+              <p className="px-2 pt-8 text-center text-xs leading-relaxed text-slate-600">
+                Nothing yet — answer a question or two and it'll start filling in here.
+              </p>
+            ) : (
+              facts.map((f) => (
+                <div
+                  key={f.id}
+                  className="animate-in fade-in slide-in-from-right-2 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 duration-300"
+                >
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {f.label}
+                  </p>
+                  <div className="mt-0.5 flex items-start gap-1.5 text-xs text-slate-200">
+                    {f.swatch && (
+                      <span
+                        className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white/20"
+                        style={{ backgroundColor: f.swatch }}
+                      />
+                    )}
+                    <span className="line-clamp-3">{f.value || "—"}</span>
+                  </div>
+                </div>
+              ))
+            )}
+            <div ref={factsBottomRef} />
+          </div>
+        </div>
       </div>
     </div>
   );
