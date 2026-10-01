@@ -32,18 +32,27 @@ import { CreditCard, CheckCircle2, ShieldCheck, X } from "lucide-react";
  *    source of truth, this just gives instant UI feedback)
  */
 
-// Cache the Stripe.js singleton per publishable key.
+// Cache the Stripe.js singleton per publishable key + connected account.
+// Payments are DIRECT charges on the tenant's connected Stripe account, so
+// Stripe.js has to be initialised with that account id or the client_secret
+// won't resolve (it belongs to the connected account, not the platform).
 const stripeCache = new Map<string, Promise<Stripe | null>>();
-function stripePromiseFor(pk: string) {
-  if (!stripeCache.has(pk)) stripeCache.set(pk, loadStripe(pk));
-  return stripeCache.get(pk)!;
+function stripePromiseFor(pk: string, stripeAccount?: string) {
+  const key = `${pk}|${stripeAccount ?? ""}`;
+  if (!stripeCache.has(key)) {
+    stripeCache.set(key, loadStripe(pk, stripeAccount ? { stripeAccount } : undefined));
+  }
+  return stripeCache.get(key)!;
 }
 
 type IntentResp = {
   clientSecret?: string;
   paymentIntentId?: string;
   publishableKey?: string;
+  stripeAccount?: string;
   alreadyPaid?: boolean;
+  message?: string;
+  error?: { code?: string; message?: string };
 };
 
 export function StripePayModal({
@@ -77,6 +86,10 @@ export function StripePayModal({
           onPaid();
           return;
         }
+        if (!res.ok) {
+          setError(data.error?.message || data.message || "Card payment is not available for this business yet.");
+          return;
+        }
         if (!data.clientSecret || !data.publishableKey) {
           setError("Could not start payment. Please try again.");
           return;
@@ -92,8 +105,8 @@ export function StripePayModal({
   }, [bookingId, onPaid]);
 
   const stripePromise = useMemo(
-    () => (intent?.publishableKey ? stripePromiseFor(intent.publishableKey) : null),
-    [intent?.publishableKey],
+    () => (intent?.publishableKey ? stripePromiseFor(intent.publishableKey, intent.stripeAccount) : null),
+    [intent?.publishableKey, intent?.stripeAccount],
   );
 
   return (

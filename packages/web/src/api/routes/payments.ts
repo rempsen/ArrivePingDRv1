@@ -2,10 +2,27 @@ import { Hono } from "hono";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, tx } from "../middleware/auth";
+import { requireAuth, requireAdmin, tenantId, tx } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { notify, buildEmailData } from "../../services/notify";
 import { getStripe, stripeEnabled, STRIPE_PUBLISHABLE_KEY, toMinor } from "../../services/stripe";
+import {
+  CONNECT_COUNTRIES,
+  canTakeCards,
+  paymentAccountFor,
+  setUsePlatform,
+  type PaymentAccount,
+  createDashboardLink,
+  createOnboardingLink,
+  describeRequirements,
+  ensureConnectedAccount,
+  loadCompanyConnect,
+  refreshFromStripe,
+  stateFromCompany,
+  type ConnectCountry,
+} from "../../services/stripe-connect";
+import { publicOrigin } from "../lib/request-origin";
+import { isSuperadmin } from "../lib/permissions";
 import { AppError, Err } from "../lib/errors";
 import { log } from "../lib/logger";
 import { capture } from "../lib/analytics";
@@ -13,6 +30,30 @@ import { incr } from "../lib/metrics";
 import { jsonBody, money } from "../lib/validate";
 import { z } from "zod";
 import type { AppEnv } from "../env";
+
+const ConnectStartBody = z.object({
+  country: z.enum(CONNECT_COUNTRIES).default("CA"),
+});
+
+/**
+ * Resolve the tenant's connected Stripe account for a Stripe call, or fail
+ * loudly. Never falls back to the platform account: a charge created there
+ * would deposit the tenant's money into NVC360's bank.
+ */
+async function requireConnected(companyId: string): Promise<PaymentAccount> {
+  const opt = await paymentAccountFor(companyId);
+  if (!opt) {
+    throw new AppError(409, "stripe_not_connected", "This business has not connected a Stripe account yet");
+  }
+  return opt;
+}
+
+/** Same lookup when all we have is an invoice (webhook / sync / refund paths). */
+async function connectedForInvoice(inv: { companyId: string }) {
+  return paymentAccountFor(inv.companyId);
+}
+
+const PlatformBody = z.object({ enabled: z.boolean() });
 
 const RefundBody = z.object({
   amount: money("Refund amount").positive("Refund amount must be greater than zero").optional(),
@@ -180,7 +221,11 @@ export const paymentsRoutes = new Hono<AppEnv>()
     }
 
     const inv = await t.selectOne(schema.invoices, eq(schema.invoices.bookingId, bookingId));
-    return c.json({ invoice: inv ?? null }, 200);
+    // Card payment is only offered when THIS tenant has a connected Stripe
+    // account that can take charges. Without it the portal hides "Pay".
+    const co = await loadCompanyConnect(b.companyId);
+    const cardPayments = { enabled: canTakeCards(co) };
+    return c.json({ invoice: inv ?? null, cardPayments }, 200);
   })
 
   // Create (or reuse) a PaymentIntent for a booking's invoice and return its
@@ -196,16 +241,20 @@ export const paymentsRoutes = new Hono<AppEnv>()
     if (inv.status === "paid") return c.json({ alreadyPaid: true, invoice: inv }, 200);
 
     const stripe = getStripe();
-    const idemKey = c.req.header("Idempotency-Key") || `pi_${inv.id}`;
+    // Direct charge on the tenant's connected account.
+    const acct = await requireConnected(inv.companyId);
+    // Key includes the previous intent id so that after a canceled/failed
+    // intent we get a FRESH one instead of Stripe replaying the dead one.
+    const idemKey = c.req.header("Idempotency-Key") || `pi_${inv.id}_${inv.stripePaymentIntentId ?? "first"}`;
 
     // reuse an existing open intent if we have one (avoids duplicate charges)
     let pi;
     if (inv.stripePaymentIntentId) {
-      pi = await stripe.paymentIntents.retrieve(inv.stripePaymentIntentId).catch(() => null);
+      pi = await stripe.paymentIntents.retrieve(inv.stripePaymentIntentId, acct).catch(() => null);
       if (pi && ["canceled", "succeeded"].includes(pi.status)) pi = null;
       // keep amount in sync if invoice total changed
       if (pi && pi.amount !== toMinor(inv.total)) {
-        pi = await stripe.paymentIntents.update(pi.id, { amount: toMinor(inv.total) });
+        pi = await stripe.paymentIntents.update(pi.id, { amount: toMinor(inv.total) }, acct);
       }
     }
     if (!pi) {
@@ -214,10 +263,10 @@ export const paymentsRoutes = new Hono<AppEnv>()
           amount: toMinor(inv.total),
           currency: inv.currency,
           automatic_payment_methods: { enabled: true },
-          metadata: { invoiceId: inv.id, bookingId, customerId: u.id, number: inv.number },
-          description: `ArrivePing invoice ${inv.number}`,
+          metadata: { invoiceId: inv.id, bookingId, customerId: u.id, number: inv.number, companyId: inv.companyId },
+          description: `Invoice ${inv.number}`,
         },
-        { idempotencyKey: idemKey },
+        { idempotencyKey: idemKey, ...acct },
       );
       await tx(c).update(
         schema.invoices,
@@ -226,7 +275,9 @@ export const paymentsRoutes = new Hono<AppEnv>()
       );
     }
 
-    return c.json({ clientSecret: pi.client_secret, paymentIntentId: pi.id, publishableKey: STRIPE_PUBLISHABLE_KEY }, 200);
+    // `stripeAccount` must be passed to Stripe.js on the browser side too —
+    // a direct charge's client_secret only resolves on the connected account.
+    return c.json({ clientSecret: pi.client_secret, paymentIntentId: pi.id, publishableKey: STRIPE_PUBLISHABLE_KEY, stripeAccount: acct.stripeAccount }, 200);
   })
 
   // Confirm/refresh: poll Stripe for the latest intent state and reconcile.
@@ -238,7 +289,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
     const inv = await t.selectOne(schema.invoices, eq(schema.invoices.bookingId, bookingId));
     if (!inv?.stripePaymentIntentId) throw Err.notFound("No payment in progress");
 
-    const pi = await getStripe().paymentIntents.retrieve(inv.stripePaymentIntentId);
+    const pi = await getStripe().paymentIntents.retrieve(inv.stripePaymentIntentId, await connectedForInvoice(inv));
     // `retrieve` resolves to Stripe's Response<PaymentIntent> wrapper (the intent
     // plus `lastResponse`); the syncer only reads intent fields.
     await syncInvoiceFromIntent(pi as unknown as Parameters<typeof syncInvoiceFromIntent>[0]);
@@ -279,7 +330,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
         reason: "requested_by_customer",
         metadata: { invoiceId: inv.id, bookingId, by: u.id, note: body.reason ?? "" },
       },
-      { idempotencyKey: `refund_${inv.id}_${toMinor(amount)}_${inv.amountRefunded}` },
+      { idempotencyKey: `refund_${inv.id}_${toMinor(amount)}_${inv.amountRefunded}`, ...(await connectedForInvoice(inv)) },
     );
 
     const newRefunded = inv.amountRefunded + amount;
@@ -319,6 +370,92 @@ export const paymentsRoutes = new Hono<AppEnv>()
       eq(schema.paymentLedger.bookingId, c.req.param("bookingId")),
     );
     return c.json({ entries: rows }, 200);
+  })
+
+  // ── Stripe Connect (Settings → Payments) ─────────────────────────────────
+  //
+  // Each tenant connects its own Stripe account via Stripe-hosted onboarding.
+  // Admin-only: this is the business owner wiring up where their money goes.
+
+  // Current connection state. `?refresh=1` re-reads the account from Stripe
+  // (used when the admin lands back from onboarding, before the webhook).
+  .get("/connect/status", requireAdmin, async (c) => {
+    const co = await loadCompanyConnect(tenantId(c));
+    if (!co) throw Err.notFound("Company not found");
+    let requirementsDue: string[] = [];
+    let disabledReason: string | null = null;
+    if (co.stripeAccountId && stripeEnabled && (c.req.query("refresh") === "1" || !co.stripeChargesEnabled)) {
+      try {
+        const acct = await refreshFromStripe(co.stripeAccountId);
+        requirementsDue = describeRequirements(acct);
+        disabledReason = acct.requirements?.disabled_reason ?? null;
+        const fresh = await loadCompanyConnect(tenantId(c));
+        if (fresh) Object.assign(co, fresh);
+      } catch (e) {
+        log.warn("stripe connect refresh failed", { companyId: co.id, err: (e as Error).message });
+      }
+    }
+    return c.json(
+      {
+        enabled: stripeEnabled,
+        countries: CONNECT_COUNTRIES,
+        ...stateFromCompany(co),
+        requirementsDue,
+        disabledReason,
+      },
+      200,
+    );
+  })
+
+  // Create the connected account (first time) and hand back a Stripe-hosted
+  // onboarding URL. Also used to RESUME onboarding when details are missing.
+  .post("/connect/start", requireAdmin, jsonBody(ConnectStartBody), async (c) => {
+    if (!stripeEnabled) throw new AppError(503, "payments_disabled", "Payments are not configured");
+    const u = c.get("user") as SessionUser;
+    const companyId = tenantId(c);
+    const { country } = c.req.valid("json") as { country: ConnectCountry };
+    let accountId: string;
+    try {
+      accountId = await ensureConnectedAccount(companyId, country);
+    } catch (e) {
+      const raw = (e as Error).message ?? "Stripe error";
+      // Account-creation failures here are NVC360-side problems (platform
+      // profile not completed, rolled API key…), not the tenant's. Log the
+      // real reason; show it only to superadmins so Dan can see it while
+      // testing, and give tenants a plain "contact support" message.
+      log.error("stripe connect account create failed", { companyId, err: raw });
+      const msg =
+        u.role === "superadmin"
+          ? `Stripe: ${raw}`
+          : "Stripe setup isn't available right now — ArrivePing's payment account needs attention. Please contact support.";
+      throw new AppError(502, "stripe_connect_failed", msg, { expose: true });
+    }
+    const url = await createOnboardingLink(accountId, publicOrigin(c));
+    capture("stripe.connect_started", companyId, { by: u.id, country });
+    return c.json({ url, accountId }, 200);
+  })
+
+  // Express dashboard sign-in link (balance, payouts, disputes, bank account).
+  .post("/connect/dashboard", requireAdmin, async (c) => {
+    if (!stripeEnabled) throw new AppError(503, "payments_disabled", "Payments are not configured");
+    const co = await loadCompanyConnect(tenantId(c));
+    if (!co?.stripeAccountId) throw Err.conflict("Stripe is not connected yet");
+    const url = await createDashboardLink(co.stripeAccountId);
+    return c.json({ url }, 200);
+  })
+
+  // SUPERADMIN ONLY: route this tenant's card payments through NVC360's own
+  // Stripe account (no connected account). Intended for the ArrivePing tenant,
+  // whose money belongs in the platform bank. Never expose to tenant admins.
+  .post("/connect/platform", requireAdmin, jsonBody(PlatformBody), async (c) => {
+    const u = c.get("user") as SessionUser;
+    if (!isSuperadmin(u.role)) throw Err.forbidden("Superadmin only");
+    const companyId = tenantId(c);
+    const { enabled } = c.req.valid("json") as { enabled: boolean };
+    await setUsePlatform(companyId, enabled);
+    capture("stripe.use_platform_toggled", companyId, { by: u.id, enabled });
+    const co = await loadCompanyConnect(companyId);
+    return c.json({ ok: true, ...(co ? stateFromCompany(co) : {}) }, 200);
   });
 
 // Exported for the webhook route (mounted before auth in api/index.ts).

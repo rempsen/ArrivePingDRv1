@@ -29,6 +29,20 @@
       "when": 1790637381039,
       "tag": "0003_fix_user_fk_cascades",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790865073443,
+      "tag": "0004_charming_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790865883146,
+      "tag": "0005_luxuriant_carlie_cooper",
+      "breakpoints": true
     }
   ]
 }

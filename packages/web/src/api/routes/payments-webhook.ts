@@ -5,8 +5,9 @@ import { db, sdb } from "../database";
 // pre-tenant and go through `sdb`.
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { getStripe, stripeEnabled, STRIPE_WEBHOOK_SECRET, fromMinor } from "../../services/stripe";
+import { getStripe, stripeEnabled, STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET, fromMinor } from "../../services/stripe";
 import { syncInvoiceFromIntent, ledger } from "./payments";
+import { syncAccountFlags } from "../../services/stripe-connect";
 import { log } from "../lib/logger";
 import type Stripe from "stripe";
 import type { AppEnv } from "../env";
@@ -24,9 +25,12 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
 
   // Fail closed in production: never accept an unsigned/unverifiable webhook.
   const isProd = process.env.NODE_ENV === "production";
-  if (isProd && (!STRIPE_WEBHOOK_SECRET || !sig)) {
+  // Two endpoints share this URL: the platform-account one and the
+  // "Connected accounts" one (Stripe Connect). Each has its own secret.
+  const secrets = [STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET].filter(Boolean);
+  if (isProd && (!secrets.length || !sig)) {
     log.error("stripe webhook rejected: signature required in production", {
-      hasSecret: !!STRIPE_WEBHOOK_SECRET,
+      hasSecret: secrets.length > 0,
       hasSig: !!sig,
     });
     return c.json({ error: "webhook signature required" }, 400);
@@ -35,8 +39,19 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
   let event: Stripe.Event;
   const stripe = getStripe();
   try {
-    if (STRIPE_WEBHOOK_SECRET && sig) {
-      event = stripe.webhooks.constructEvent(raw, sig, STRIPE_WEBHOOK_SECRET);
+    if (secrets.length && sig) {
+      let verified: Stripe.Event | null = null;
+      let lastErr: Error | null = null;
+      for (const secret of secrets) {
+        try {
+          verified = stripe.webhooks.constructEvent(raw, sig, secret);
+          break;
+        } catch (e) {
+          lastErr = e as Error;
+        }
+      }
+      if (!verified) throw lastErr ?? new Error("no matching webhook secret");
+      event = verified;
     } else {
       // dev fallback when no signing secret is configured yet — parse only.
       // NEVER reached in prod because STRIPE_WEBHOOK_SECRET will be set.
@@ -99,6 +114,20 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
             }
           }
         }
+        break;
+      }
+      // Connected account finished (or changed) onboarding — mirror the
+      // charges/payouts flags so Settings → Payments and the customer
+      // portal's "Pay" button reflect reality without a manual refresh.
+      case "account.updated": {
+        const acct = event.data.object as Stripe.Account;
+        const companyId = await syncAccountFlags(acct);
+        log.info("stripe connect account updated", {
+          accountId: acct.id,
+          companyId,
+          chargesEnabled: acct.charges_enabled,
+          payoutsEnabled: acct.payouts_enabled,
+        });
         break;
       }
       case "charge.dispute.created": {

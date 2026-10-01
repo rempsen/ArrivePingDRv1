@@ -7,13 +7,14 @@ import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
 import { Field, inputCls, BtnPrimary, ConfirmModal } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
-import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3 } from "lucide-react";
+import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard } from "lucide-react";
 import { useWorkerNoun } from "../../lib/use-brand";
 import { cn } from "../../lib/utils";
 import AutomationPage from "./automation";
 import IntegrationsPage from "./integrations";
 import ApiAccessPage from "./api-access";
 import AuditPage from "./audit";
+import PaymentsSettingsTab from "./payments-settings";
 import {
   DEFAULT_GEOFENCE_RADIUS_M,
   resolveGeofenceRadiusM,
@@ -767,6 +768,7 @@ type SettingsSection = {
 
 const SECTIONS: SettingsSection[] = [
   { key: "company", label: "Company", icon: Building2, render: () => <CompanySettingsTab /> },
+  { key: "payments", label: "Payments", icon: CreditCard, render: () => <PaymentsSettingsTab /> },
   { key: "automation", label: "Automation & AI", icon: Sparkles, render: () => <AutomationPage />, embedded: true },
   { key: "integrations", label: "Integrations", icon: Plug, render: () => <IntegrationsPage />, embedded: true },
   { key: "api", label: "API & MCP", icon: KeyRound, render: () => <ApiAccessPage />, embedded: true },
@@ -777,7 +779,13 @@ const SECTIONS: SettingsSection[] = [
 export default function AdminSettings() {
   // remember last-opened section across reloads
   const [active, setActive] = useState<string>(() => {
-    if (typeof localStorage === "undefined") return "company";
+    if (typeof window === "undefined") return "company";
+    // ?section=payments (used by the Stripe onboarding return URL) wins over the remembered tab
+    const fromQuery = new URLSearchParams(window.location.search).get("section");
+    if (fromQuery && SECTIONS.some((s) => s.key === fromQuery)) {
+      try { localStorage.setItem("settings_section", fromQuery); } catch { /* ignore */ }
+      return fromQuery;
+    }
     return localStorage.getItem("settings_section") ?? "company";
   });
   const section = SECTIONS.find((s) => s.key === active) ?? SECTIONS[0];

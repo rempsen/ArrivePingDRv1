@@ -14,6 +14,14 @@ import { log } from "../api/lib/logger";
 const SECRET = process.env.STRIPE_SECRET_KEY ?? "";
 export const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY ?? "";
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+/**
+ * Signing secret of the SECOND webhook endpoint — the one registered in the
+ * Stripe dashboard with "Listen to events on Connected accounts". Direct
+ * charges on tenants' connected accounts (payment_intent.*, charge.*) and
+ * account.updated arrive through that endpoint, signed with this secret, not
+ * the platform one. Both endpoints point at the same URL.
+ */
+export const STRIPE_CONNECT_WEBHOOK_SECRET = process.env.STRIPE_CONNECT_WEBHOOK_SECRET ?? "";
 
 export const stripeEnabled = SECRET.startsWith("sk_");
 

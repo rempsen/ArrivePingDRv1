@@ -83,6 +83,10 @@ export default function TrackPage() {
     );
   const t = tracking.data as any;
   const inv = (invoice.data as any)?.invoice;
+  // Card checkout is only offered when the business has connected its own
+  // Stripe account (Settings → Payments). Otherwise they collect payment
+  // their own way and the portal just shows the amount.
+  const cardEnabled = !!(invoice.data as any)?.cardPayments?.enabled;
   const currentStep = statusStepIndex(b.status);
   const isActive = isActiveStatus(b.status);
   const isPaid = inv?.status === "paid" || b.paymentStatus === "paid";
@@ -203,13 +207,18 @@ export default function TrackPage() {
                 <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 py-3 font-semibold text-emerald-400">
                   <CheckCircle2 className="h-5 w-5" /> Paid · {inv.number}
                 </div>
-              ) : (
+              ) : cardEnabled ? (
                 <button
                   onClick={() => setPayOpen(true)}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep"
                 >
                   <CreditCard className="h-4.5 w-4.5" /> Pay {money(inv.total)}
                 </button>
+              ) : (
+                <div className="mt-4 rounded-xl border border-white/10 bg-ink px-4 py-3 text-center text-sm text-slate-400">
+                  Amount due · {inv.number}
+                  <div className="mt-0.5 text-xs text-slate-500">Payment is arranged directly with {brand.name}.</div>
+                </div>
               )}
             </div>
           )}

@@ -1163,6 +1163,22 @@ export const companies = pgTable("companies", {
   // Pre-existing tenants are backfilled to non-null at migration time so this
   // new experience only ever appears for tenants provisioned after it shipped.
   onboardingCompletedAt: timestamp("onboarding_completed_at", { mode: "date", withTimezone: true }),
+  // Stripe Connect — each tenant connects its OWN Stripe account (Express
+  // dashboard, Stripe-hosted onboarding) so card payments land in the
+  // tenant's bank, not NVC360's. Charges are DIRECT charges on the connected
+  // account: the tenant pays Stripe's processing fee, owns refunds/disputes,
+  // and ArrivePing takes no platform fee. NULL = not connected → the customer
+  // portal hides card payment for this tenant (see routes/payments.ts).
+  stripeAccountId: text("stripe_account_id"),
+  stripeChargesEnabled: boolean("stripe_charges_enabled").notNull().default(false),
+  stripePayoutsEnabled: boolean("stripe_payouts_enabled").notNull().default(false),
+  stripeDetailsSubmitted: boolean("stripe_details_submitted").notNull().default(false),
+  stripeCountry: text("stripe_country").notNull().default(""), // CA | US
+  stripeConnectedAt: timestamp("stripe_connected_at", { mode: "date", withTimezone: true }),
+  // Superadmin-only switch: charge on NVC360's OWN Stripe account instead of
+  // a connected account. Meant for the ArrivePing tenant (the company that
+  // owns the platform) — its money belongs in the platform bank anyway.
+  stripeUsePlatform: boolean("stripe_use_platform").notNull().default(false),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "stripe_use_platform" boolean DEFAULT false NOT NULL;
