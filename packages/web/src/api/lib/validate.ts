@@ -196,7 +196,9 @@ export const phone = z
   .string()
   .trim()
   .max(32, "Phone number is too long")
-  .refine((v) => v === "" || /^[+\d][\d\s()\-.]{5,}$/.test(v), "Phone number doesn't look valid");
+  // Leading "(" is allowed: "(204) 632-9434" is the most common NA format and
+  // is exactly what brand-scout reads off a website (caught on live 2026-10-01).
+  .refine((v) => v === "" || /^[+(\d][\d\s()\-.]{5,}$/.test(v), "Phone number doesn't look valid");
 
 /** Work-order lifecycle states, as consumed by services/booking-status.ts. */
 export const BOOKING_STATUSES = [

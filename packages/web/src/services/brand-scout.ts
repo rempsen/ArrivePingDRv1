@@ -753,6 +753,13 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
   if (!candidates.length)
     warnings.push("No logo detected on the homepage.");
 
+  const clamp = (v: string | null | undefined, max: number): string | null => {
+    if (!v) return null;
+    const t = v.trim();
+    if (t.length <= max) return t;
+    const cut = t.slice(0, max - 1);
+    return `${cut.slice(0, Math.max(cut.lastIndexOf(","), cut.lastIndexOf(" "), 40))}…`;
+  };
   const normHex = (h: string | null | undefined): string | null => {
     if (!h) return null;
     const v = h.trim();
@@ -785,7 +792,10 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     jobNounPlural: text?.jobNounPlural ?? null,
     tagline: text?.tagline ?? null,
     description: text?.companyDescription ?? structured?.description ?? null,
-    serviceArea: text?.serviceArea ?? structured?.areaServed ?? null,
+    // CompanyCreateBody caps brand.serviceArea at 300 chars; the crawl can
+    // now surface long "areas we serve" lists, so clamp here rather than fail
+    // signup validation downstream.
+    serviceArea: clamp(text?.serviceArea ?? structured?.areaServed ?? null, 300),
     services,
     hours: text?.hours ?? structured?.hours ?? null,
     address: text?.address ?? structured?.address ?? null,
