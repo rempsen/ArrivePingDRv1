@@ -486,7 +486,7 @@ export default function AdminWorkOrders() {
                             onClick={async () => {
                               if (
                                 await confirm({
-                                  title: "Archive this work order?",
+                                  title: `Archive this ${jobNoun.toLowerCase()}?`,
                                   message: "It moves to the archive and can be restored later.",
                                   confirmLabel: "Archive",
                                 })
@@ -530,7 +530,7 @@ export default function AdminWorkOrders() {
                         keeps its shape, so the list does not jump when data
                         lands. */}
                     <div className="mx-4 space-y-2.5" aria-live="polite" aria-busy="true">
-                      <span className="sr-only">Loading work orders…</span>
+                      <span className="sr-only">Loading {jobPlural.toLowerCase()}…</span>
                       {[0, 1, 2, 3, 4].map((i) => (
                         <div
                           key={i}
@@ -633,8 +633,8 @@ export default function AdminWorkOrders() {
                           {!archived && (
                             <button
                               onClick={() => openJob(b)}
-                              title={b.status === "completed" ? "View job report" : "Edit work order"}
-                              aria-label={b.status === "completed" ? "View job report" : "Edit work order"}
+                              title={b.status === "completed" ? "View job report" : `Edit ${jobNoun.toLowerCase()}`}
+                              aria-label={b.status === "completed" ? "View job report" : `Edit ${jobNoun.toLowerCase()}`}
                               className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white lg:px-3"
                             >
                               {b.status === "completed"
@@ -654,7 +654,7 @@ export default function AdminWorkOrders() {
                             onArchive={async () => {
                               if (
                                 await confirm({
-                                  title: "Archive this work order?",
+                                  title: `Archive this ${jobNoun.toLowerCase()}?`,
                                   message: "It moves to the archive and can be restored later.",
                                   confirmLabel: "Archive",
                                 })
@@ -733,6 +733,7 @@ function SortControl({
   onSort: (k: string) => void;
 }) {
   const dirLabel = dir === "asc" ? "ascending" : "descending";
+  const { nounPlural: jobPlural } = useJobNoun();
   // One control, not two. The field picker and the direction toggle are a
   // single decision ("sort by X, this way round"), so they share one bordered
   // group -- previously the chevron button floated beside the select looking
@@ -742,7 +743,7 @@ function SortControl({
       <span className="hidden sm:inline">Sort:</span>
       <div className="flex items-center overflow-hidden rounded-md border border-white/10 bg-ink-2 focus-within:border-brand/60">
         <select
-          aria-label="Sort work orders by"
+          aria-label={`Sort ${jobPlural.toLowerCase()} by`}
           value={sort}
           onChange={(e) => onSort(e.target.value)}
           // h-11 on touch widths: the whole control was 32px tall, which is

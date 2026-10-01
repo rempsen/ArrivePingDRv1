@@ -80,6 +80,8 @@ export const settingsRoutes = new Hono<AppEnv>()
       "reviewRequestEnabled", "reviewRequestDelayMins", "googleReviewUrl",
       // customer-initiated appointment changes (shared/change-policy.ts)
       "allowCustomerReschedule", "allowCustomerCancelRequest", "customerChangeCutoffHours",
+      // who can be assigned work (routes/riders.ts GET /)
+      "officeStaffAssignable",
       // running-late notices (shared/delay-policy.ts)
       "delayNoticeEnabled", "delayNoticeThresholdMins", "delayNoticeAutoSendAfterMins",
     ];
@@ -92,7 +94,7 @@ export const settingsRoutes = new Hono<AppEnv>()
       const n = Math.round(Number(patch.customerChangeCutoffHours));
       patch.customerChangeCutoffHours = Number.isFinite(n) ? Math.min(336, Math.max(0, n)) : 12;
     }
-    for (const k of ["allowCustomerReschedule", "allowCustomerCancelRequest", "delayNoticeEnabled"]) {
+    for (const k of ["allowCustomerReschedule", "allowCustomerCancelRequest", "delayNoticeEnabled", "officeStaffAssignable"]) {
       if (k in patch) patch[k] = patch[k] === true || patch[k] === 1 || patch[k] === "true";
     }
     // Same normalisation for the running-late windows. A 1-minute threshold

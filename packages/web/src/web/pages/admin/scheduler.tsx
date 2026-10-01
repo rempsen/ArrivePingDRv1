@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useConfirm } from "../../components/confirm-dialog";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
+import { api, apiHeaders } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
 import { assignJob } from "../../lib/assign-job";
 import { runWithForceConfirm } from "../../lib/force-confirm";
@@ -29,7 +29,7 @@ import {
   AlertTriangle,
   UserPlus,
 } from "lucide-react";
-import { useWorkerNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 
 type CalView = "day" | "week" | "month";
@@ -53,6 +53,11 @@ export default function SchedulerPage() {
   const confirm = useConfirm();
   const qc = useQueryClient();
   const { noun, nounPlural } = useWorkerNoun();
+  // Tenant's unit-of-work noun ("Work Order" / "Booking" / "Visit"…) — the
+  // sidebar already uses it; the page copy and the New button must agree.
+  const { noun: jobNoun, nounPlural: jobNounPlural } = useJobNoun();
+  const jobLower = jobNoun.toLowerCase();
+  const jobsLower = jobNounPlural.toLowerCase();
   const [dragId, setDragId] = useState<string | null>(null);
   const [overTech, setOverTech] = useState<string | null>(null);
   const [aiFor, setAiFor] = useState<string | null>(null);
@@ -86,7 +91,7 @@ export default function SchedulerPage() {
 
   const skillClassesQ = useQuery({
     queryKey: ["msg-skill-classes"],
-    queryFn: async () => { const r = await fetch("/api/messages/skill-classes"); return r.json(); },
+    queryFn: async () => { const r = await fetch("/api/messages/skill-classes", { headers: apiHeaders() }); return r.json(); },
   });
   const boardSkillClasses: string[] = (skillClassesQ.data?.skillClasses ?? []).map((s: any) => s.name);
 
@@ -128,8 +133,8 @@ export default function SchedulerPage() {
 
   const removeJob = async (b: any) => {
     const ok = await confirm({
-      title: `Archive "${b.title || b.service?.name || "this work order"}"?`,
-      message: "It will be moved to the archive and can be restored later from Work Orders.",
+      title: `Archive "${b.title || b.service?.name || `this ${jobLower}`}"?`,
+      message: `It will be moved to the archive and can be restored later from ${jobNounPlural}.`,
       confirmLabel: "Archive",
     });
     if (ok) del.mutate(b.id);
@@ -348,7 +353,7 @@ export default function SchedulerPage() {
         title="Scheduler"
         // Device-neutral wording: "drag" is a lie on a phone, where HTML5 drag
         // events never fire and Assign is the only way to dispatch.
-        subtitle={`Dispatch work orders to a ${noun.toLowerCase()} — or let AI suggest the best match`}
+        subtitle={`Dispatch ${jobsLower} to a ${noun.toLowerCase()} — or let AI suggest the best match`}
         actions={
           <div className="flex items-center gap-2">
             <div className="flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
@@ -369,7 +374,7 @@ export default function SchedulerPage() {
               onClick={() => setNewDate(new Date())}
               className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-deep"
             >
-              <Plus className="h-4 w-4" /> New Work Order
+              <Plus className="h-4 w-4" /> New {jobNoun}
             </button>
           </div>
         }
@@ -398,7 +403,7 @@ export default function SchedulerPage() {
                 className="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left text-xs hover:bg-white/5"
               >
                 <span className="font-semibold text-slate-200">
-                  {r.title || "Work order"}
+                  {r.title || jobNoun}
                 </span>
                 <span className="rounded-full bg-amber-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-warn">
                   ~{r.minutesLate} min late
@@ -647,7 +652,7 @@ export default function SchedulerPage() {
                           </span>
                           <button
                             type="button"
-                            aria-label="Delete work order"
+                            aria-label={`Delete ${jobLower}`}
                             title="Delete"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -760,7 +765,7 @@ export default function SchedulerPage() {
                           const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);
                           dropOnDayAtTime(d, mins);
                         }}
-                        title="Click a time to add a work order there"
+                        title={`Click a time to add a ${jobLower} there`}
                         className={`relative cursor-pointer border-l border-white/5 transition ${overDay === dayKey ? "drop-active" : ""}`}
                       >
                         {/* persistent hour / half-hour gridlines — always on,
@@ -850,7 +855,7 @@ export default function SchedulerPage() {
                               >
                                 <button
                                   type="button"
-                                  aria-label="Delete work order"
+                                  aria-label={`Delete ${jobLower}`}
                                   title="Delete"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -929,8 +934,8 @@ export default function SchedulerPage() {
                       title="Nothing scheduled"
                       hint={
                         calView === "month"
-                          ? "No work orders this month. Tap New Work Order to add one."
-                          : "No work orders in this range. Use the arrows above to look at another date."
+                          ? `No ${jobsLower} this month. Tap New ${jobNoun} to add one.`
+                          : `No ${jobsLower} in this range. Use the arrows above to look at another date.`
                       }
                     />
                   </div>
@@ -966,7 +971,7 @@ export default function SchedulerPage() {
                           dt.setHours(9, 0, 0, 0);
                           setNewDate(dt);
                         }}
-                        aria-label={`Add a work order on ${d.toDateString()}`}
+                        aria-label={`Add a ${jobLower} on ${d.toDateString()}`}
                         className="-mr-2 ml-auto grid h-11 w-11 place-items-center rounded-full text-slate-400 hover:bg-white/5 hover:text-white"
                       >
                         <Plus className="h-4 w-4" />
@@ -1018,8 +1023,8 @@ export default function SchedulerPage() {
                             <button
                               type="button"
                               onClick={() => removeJob(b)}
-                              aria-label="Delete work order"
-                              title="Delete work order"
+                              aria-label={`Delete ${jobLower}`}
+                              title={`Delete ${jobLower}`}
                               className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-rose-500/10 hover:text-rose-400"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1157,7 +1162,7 @@ export default function SchedulerPage() {
                             e.stopPropagation();
                             removeJob(b);
                           }}
-                          aria-label="Delete work order"
+                          aria-label={`Delete ${jobLower}`}
                           className="-mr-1 ml-auto flex min-h-11 items-center gap-1 px-1 text-xs font-semibold text-slate-500 hover:text-rose-400 lg:mr-0 lg:min-h-0 lg:px-0"
                         >
                           <Trash2 className="h-3 w-3" /> Delete
@@ -1364,7 +1369,7 @@ export default function SchedulerPage() {
                           something the platform cannot do -- HTML5 drag events
                           never fire from touch. Point them at the Assign button
                           that does work instead. */}
-                      <span className="hidden lg:inline">Free — drag a work order here to dispatch</span>
+                      <span className="hidden lg:inline">Free — drag a {jobLower} here to dispatch</span>
                       <span className="lg:hidden">Free — tap Assign on an unassigned job to dispatch</span>
                     </div>
                   ) : (
@@ -1385,8 +1390,8 @@ export default function SchedulerPage() {
                         </button>
                         <button
                           onClick={() => removeJob(b)}
-                          aria-label="Delete work order"
-                          title="Delete work order"
+                          aria-label={`Delete ${jobLower}`}
+                          title={`Delete ${jobLower}`}
                           className="grid h-8 w-8 place-items-center rounded text-slate-600 transition hover:bg-rose-500/10 hover:text-rose-400"
                         >
                           <Trash2 className="h-3.5 w-3.5" />

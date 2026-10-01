@@ -688,6 +688,14 @@ export const companySettings = pgTable("company_settings", {
   // private feedback so the company can fix it before it becomes public.
   googleReviewUrl: text("google_review_url").notNull().default(""),
   website: text("website").notNull().default(""),
+  // ── Who can be assigned work ────────────────────────────────────────────
+  // When true, office staff (admins, managers, dispatchers, project managers)
+  // are eligible for job assignment alongside field staff — they get a rider
+  // profile the first time the roster is read and appear in "Assign …" lists,
+  // on the board and on the fleet map. Essential for solo operators and small
+  // shops where the owner does the work too (Sityr: Ryler books AND sits).
+  // Off hides those profiles from assignment without deleting history.
+  officeStaffAssignable: boolean("office_staff_assignable").notNull().default(true),
   // ── Customer-initiated appointment changes ─────────────────────────────
   // Who owns a change to a booked appointment is a per-company decision, so it
   // lives here rather than being hardcoded. Defaults match the shipped policy

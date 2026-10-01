@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "office_staff_assignable" boolean DEFAULT true NOT NULL;

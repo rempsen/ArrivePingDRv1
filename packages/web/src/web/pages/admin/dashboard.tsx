@@ -9,7 +9,7 @@ import { PageHead } from "./shell";
 import { fmtDate, money, TECH_STATUS } from "../../lib/utils";
 import { RunningLateBoard } from "../../components/running-late-board";
 import { TechAvatar } from "../../components/tech-avatar";
-import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
 import {
   ClipboardList,
   Activity,
@@ -118,6 +118,7 @@ function kpiMoney(n: number) {
 
 export default function AdminDashboard() {
   const { noun: workerNoun, nounPlural: workerPlural } = useWorkerNoun();
+  const { nounPlural: jobPlural } = useJobNoun();
   const { nounPlural: customerPlural } = useCustomerNoun();
   const [fleetSort, setFleetSort] = useState("all");
 
@@ -191,7 +192,7 @@ export default function AdminDashboard() {
 
   const cards = [
     {
-      label: "Work orders",
+      label: jobPlural,
       value: s.totalBookings,
       icon: ClipboardList,
       iconTint: "bg-white/[0.06] text-slate-300",
@@ -368,7 +369,7 @@ export default function AdminDashboard() {
             overflow-hidden clipped "View all" and the price column away. */}
         <div className="nvc-card min-w-0 lg:col-span-2">
           <div className="flex items-center justify-between gap-3 border-b border-white/5 px-5 py-4">
-            <h2 className="truncate font-bold text-white">Recent work orders</h2>
+            <h2 className="truncate font-bold text-white">Recent {jobPlural.toLowerCase()}</h2>
             <Link
               to="/admin/work-orders"
               className="-my-3 flex shrink-0 items-center gap-1 py-3 text-sm font-semibold text-cyan-glow lg:my-0 lg:py-0"
@@ -380,7 +381,7 @@ export default function AdminDashboard() {
             {recent.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 py-14">
                 <ClipboardList className="h-8 w-8 text-slate-700" />
-                <p className="text-sm text-slate-500">No work orders yet</p>
+                <p className="text-sm text-slate-500">No {jobPlural.toLowerCase()} yet</p>
               </div>
             ) : (
               recent.map((b) => (

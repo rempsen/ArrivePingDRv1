@@ -2,7 +2,7 @@ import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
@@ -37,6 +37,13 @@ import { jsonBody,
 /*      off the edge of the world on the fleet map and live tracking            */
 /*  and { email: "nope nope nope" } / { rating: 999 } leaked bare 500s.         */
 /* -------------------------------------------------------------------------- */
+/**
+ * Roles that are "office staff" rather than field staff. These people can be
+ * assigned work when company_settings.officeStaffAssignable is on (see GET /).
+ * `customer` and `rider` are deliberately absent.
+ */
+const OFFICE_STAFF_ROLES = new Set(["superadmin", "admin", "manager", "dispatcher", "project_manager"]);
+
 /** The presence states services/presence.ts actually understands. */
 const RIDER_STATUSES = ["offline", "available", "enroute", "onsite", "break", "busy"] as const;
 const riderStatus = z.enum(RIDER_STATUSES, {
@@ -183,22 +190,60 @@ export const ridersRoutes = new Hono<AppEnv>()
   // list all riders (admin assign UI)
   .get("/", requireAuth, async (c) => {
     const cidList = tenantId(c);
-    const rows = await tx(c).select(schema.riders);
+    const t = tx(c);
+    const rows = await t.select(schema.riders);
     // Reuses the same members+users join team.ts's roster is built from —
     // it already carries membership status and cross-company "isShared".
     const users = await usersForCompany(cidList);
     const byUserId = new Map(users.map((u) => [u.id, u]));
-    const enriched = rows.map((r) => {
-      const ru = byUserId.get(r.userId);
-      return {
-        ...r,
-        name: ru?.name,
-        email: ru?.email,
-        phone: ru?.phone,
-        membershipStatus: ru?.membershipStatus ?? "active",
-        isShared: ru?.isShared ?? false,
-      };
-    });
+
+    // Office staff as assignable workers (company_settings.officeStaffAssignable,
+    // default on). A solo operator books the job AND does it, so the owner
+    // must be pickable in "Assign …" without inventing a second login for
+    // themselves. We materialise a rider profile for each active office-staff
+    // member the first time the roster is read (idempotent: keyed on userId
+    // within this tenant) — the same lazy pattern GET /riders/me already uses
+    // when a staff member opens the mobile app. With the setting off, those
+    // profiles are hidden from this list (not deleted, so history survives).
+    const settings = await t.selectOne(schema.companySettings).catch(() => undefined);
+    const staffAssignable = settings?.officeStaffAssignable ?? true;
+    const haveProfile = new Set(rows.map((r) => r.userId));
+    if (staffAssignable) {
+      const missing = users.filter(
+        (u) =>
+          OFFICE_STAFF_ROLES.has(u.role ?? "") &&
+          (u.membershipStatus ?? "active") === "active" &&
+          !haveProfile.has(u.id),
+      );
+      for (const u of missing) {
+        const [r] = await t.insert(schema.riders, {
+          userId: u.id,
+          phone: u.phone ?? "",
+          status: "available",
+          approval: "active",
+        });
+        if (r) rows.push(r);
+      }
+    }
+
+    const enriched = rows
+      .map((r) => {
+        const ru = byUserId.get(r.userId);
+        const role = ru?.role ?? "rider";
+        const isOfficeStaff = OFFICE_STAFF_ROLES.has(role);
+        return {
+          ...r,
+          name: ru?.name,
+          email: ru?.email,
+          phone: ru?.phone,
+          membershipStatus: ru?.membershipStatus ?? "active",
+          isShared: ru?.isShared ?? false,
+          /** Membership role at this company — lets the UI badge "Admin" etc. */
+          role,
+          isOfficeStaff,
+        };
+      })
+      .filter((r) => staffAssignable || !r.isOfficeStaff);
     return c.json({ riders: enriched }, 200);
   })
   // create a technician (admin): user(role=rider) + rider profile
@@ -413,6 +458,15 @@ export const ridersRoutes = new Hono<AppEnv>()
       eq(schema.bookings.riderId, id),
     );
     await t.delete(schema.riders, eq(schema.riders.id, id));
+
+    // Office staff (admin/manager/…) only hold a rider profile so they can be
+    // assigned work — removing them from the technician list must NOT remove
+    // their login or their seat at the company. That is done from Team.
+    const [member] = await sdb
+      .select()
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.userId, r.userId), eq(schema.memberships.companyId, cid)));
+    if (OFFICE_STAFF_ROLES.has(member?.role ?? "")) return c.json({ ok: true, profileOnly: true }, 200);
 
     // A technician can work for several companies on ONE shared login (see
     // memberships table doc). Hard-deleting `user` here unconditionally used

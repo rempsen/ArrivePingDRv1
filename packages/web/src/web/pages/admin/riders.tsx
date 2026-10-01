@@ -223,13 +223,19 @@ function FieldStaffTab() {
             const meta = TECH_STATUS[r.status] ?? { label: r.status, color: "#64748b" };
             return (
               <div key={r.id} {...activate(() => setDetailId(r.id))} aria-label={`View ${r.name}`} className="nvc-card group relative cursor-pointer p-4 transition hover:border-brand/30">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setDelId(r.id); }}
-                  title="Remove technician"
-                  className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-lg text-slate-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {/* Office staff (admins/managers) are listed here because
+                    Settings → Company → "Who can be assigned" is on. Their
+                    account lives under Internal Team, so no delete button —
+                    turning the setting off is how they leave this list. */}
+                {!r.isOfficeStaff && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDelId(r.id); }}
+                    title="Remove technician"
+                    className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-lg text-slate-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <div className="flex items-center gap-3">
                   <TechAvatar
                     name={r.name}
@@ -257,6 +263,14 @@ function FieldStaffTab() {
                   {r.skillClass && (
                     <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-slate-300">
                       {r.skillClass}
+                    </span>
+                  )}
+                  {r.isOfficeStaff && (
+                    <span
+                      title="Office staff who can also be assigned work. Manage their account under Internal Team; turn this off in Settings → Company → Who can be assigned."
+                      className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-semibold capitalize text-amber-300"
+                    >
+                      {String(r.role ?? "admin").replace("_", " ")}
                     </span>
                   )}
                   {/* Works for another company as well — their login and

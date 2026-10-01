@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { apiHeaders } from "../lib/api";
 import { ok } from "../lib/api-ok";
-import { useWorkerNoun, useCustomerNoun } from "../lib/use-brand";
+import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../lib/use-brand";
 import { api } from "../lib/api";
 import { Modal, Field, inputCls, BtnGhost, BtnPrimary, BtnDanger, ConfirmModal } from "./modal";
 import { PRIORITY_META } from "../lib/utils";
@@ -442,6 +442,9 @@ export function WorkOrderModal({
   const confirm = useConfirm();
   const { noun } = useWorkerNoun();
   const { noun: customerNoun } = useCustomerNoun();
+  // "Work Order" / "Booking" / "Visit" — whatever this tenant calls a job.
+  const { noun: jobNoun } = useJobNoun();
+  const jobLower = jobNoun.toLowerCase();
 
   // core fields
   const [customerId, setCustomerId] = useState("");
@@ -543,12 +546,12 @@ export function WorkOrderModal({
 
   const skillClassesQ = useQuery({
     queryKey: ["msg-skill-classes"],
-    queryFn: async () => { const r = await fetch("/api/messages/skill-classes"); return r.json(); },
+    queryFn: async () => { const r = await fetch("/api/messages/skill-classes", { headers: apiHeaders() }); return r.json(); },
     enabled: open,
   });
   const skillsQ = useQuery({
     queryKey: ["msg-skills"],
-    queryFn: async () => { const r = await fetch("/api/messages/skills"); return r.json(); },
+    queryFn: async () => { const r = await fetch("/api/messages/skills", { headers: apiHeaders() }); return r.json(); },
     enabled: open,
   });
   const allSkillClasses: string[] = (skillClassesQ.data?.skillClasses ?? []).map((s: any) => s.name);
@@ -834,7 +837,7 @@ export function WorkOrderModal({
         if (!res.ok) {
           const e = (await res.json().catch(() => ({}))) as any;
           if (res.status === 409 && e?.forceable) throw new BusyError(e.message);
-          throw new Error(e?.message || "Failed to create work order");
+          throw new Error(e?.message || `Failed to create ${jobLower}`);
         }
         return res.json();
       };
@@ -886,7 +889,7 @@ export function WorkOrderModal({
         if (!res.ok) {
           const e = (await res.json().catch(() => ({}))) as any;
           if (res.status === 409 && e?.forceable) throw new BusyError(e.message);
-          throw new Error(e?.message || "Failed to update work order");
+          throw new Error(e?.message || `Failed to update ${jobLower}`);
         }
         return res.json();
       };
@@ -930,12 +933,12 @@ export function WorkOrderModal({
       onCreated?.();
       onClose();
     },
-    onError: (e: any) => setErr(e.message || "Couldn't archive this work order"),
+    onError: (e: any) => setErr(e.message || `Couldn't archive this ${jobLower}`),
   });
 
   async function deleteWorkOrder() {
     const yes = await confirm({
-      title: "Archive this work order?",
+      title: `Archive this ${jobLower}?`,
       message: "It moves to the archive and can be restored later. Nothing is deleted for good.",
       confirmLabel: "Archive",
     });
@@ -1039,8 +1042,8 @@ export function WorkOrderModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? "Edit Work Order" : "New Work Order"}
-      subtitle={isEdit ? "Adjust any detail of this job" : "Schedule a job on behalf of a client"}
+      title={isEdit ? `Edit ${jobNoun}` : `New ${jobNoun}`}
+      subtitle={isEdit ? `Adjust any detail of this ${jobLower}` : `Schedule a ${jobLower} on behalf of a ${customerNoun.toLowerCase()}`}
       size="lg"
       footer={
         <div className="flex w-full items-center justify-between gap-2">
@@ -1050,7 +1053,7 @@ export function WorkOrderModal({
             {isEdit ? (
               <BtnDanger onClick={deleteWorkOrder} disabled={busy || deleting}>
                 <Trash2 className="h-4 w-4" />
-                {deleting ? "Archiving…" : "Delete Work Order"}
+                {deleting ? "Archiving…" : `Delete ${jobNoun}`}
               </BtnDanger>
             ) : (
               <BtnGhost onClick={onClose}>Cancel</BtnGhost>
@@ -1059,7 +1062,7 @@ export function WorkOrderModal({
           <BtnPrimary onClick={submit} disabled={busy || deleting}>
             {busy
               ? (isEdit ? "Saving…" : "Creating…")
-              : (isEdit ? "Save and Close" : "Create Work Order")}
+              : (isEdit ? "Save and Close" : `Create ${jobNoun}`)}
           </BtnPrimary>
         </div>
       }
@@ -1342,6 +1345,11 @@ export function WorkOrderModal({
                         <span className="font-medium text-slate-200">{r.name}</span>
                         {r.skillClass && (
                           <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${isMatch ? "bg-brand/20 text-brand" : "bg-white/10 text-slate-400"}`}>{r.skillClass}</span>
+                        )}
+                        {r.isOfficeStaff && (
+                          <span className="ml-1 rounded-full bg-amber-warn/15 px-1.5 py-0.5 text-[10px] font-semibold capitalize text-amber-warn" title="Office staff — assignable (Settings → Company)">
+                            {String(r.role ?? "admin").replace("_", " ")}
+                          </span>
                         )}
                         <span className="ml-auto capitalize text-[10px] text-slate-500">{r.status}</span>
                       </button>

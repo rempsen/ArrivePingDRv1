@@ -7,8 +7,8 @@ import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
 import { Field, inputCls, BtnPrimary, ConfirmModal } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
-import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard } from "lucide-react";
-import { useWorkerNoun } from "../../lib/use-brand";
+import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard, UserCheck } from "lucide-react";
+import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { cn } from "../../lib/utils";
 import AutomationPage from "./automation";
 import IntegrationsPage from "./integrations";
@@ -166,6 +166,44 @@ function Toggle({
         )}
       />
     </button>
+  );
+}
+
+/**
+ * Who can be handed a job. Field staff always can; this decides whether the
+ * office (admins, managers, dispatchers, project managers) can too. Solo
+ * operators and small shops need it on — the owner takes the booking and
+ * does the work — so it defaults on. Turning it off hides office staff from
+ * "Assign …" lists, the board and the map without deleting anything.
+ */
+function WhoCanBeAssignedCard({
+  form, set, noun, jobNounPlural,
+}: { form: any; set: (k: string, v: any) => void; noun: string; jobNounPlural: string }) {
+  const on = form.officeStaffAssignable ?? true;
+  return (
+    <div className="nvc-card space-y-4 p-5">
+      <h3 className="flex items-center gap-2 font-bold text-white">
+        <UserCheck className="h-4 w-4 text-brand" /> Who can be assigned {jobNounPlural.toLowerCase()}
+      </h3>
+      <p className="text-xs text-white/50">
+        Every {noun.toLowerCase()} can be assigned. Office staff — admins, managers, dispatchers,
+        project managers — can be too when this is on, which is what a solo operator or a
+        working owner needs.
+      </p>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-white/80">Office staff can be assigned {jobNounPlural.toLowerCase()}</span>
+        <Toggle
+          on={on}
+          label="Toggle office staff assignable"
+          onClick={() => set("officeStaffAssignable", !on)}
+        />
+      </div>
+      <p className="rounded-lg bg-white/5 p-3 text-[11px] leading-relaxed text-white/60">
+        Right now: {on
+          ? `admins and managers show up alongside your ${noun.toLowerCase()}s in "Assign", on the board and on the map.`
+          : `only ${noun.toLowerCase()}s can be assigned. Office staff stay off the board.`}
+      </p>
+    </div>
   );
 }
 
@@ -333,6 +371,7 @@ function RunningLateCard({
 function CompanySettingsTab() {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
+  const { nounPlural: jobNounPlural } = useJobNoun();
   const [form, setForm] = useState<any>(null);
   const [saved, setSaved] = useState(false);
 
@@ -498,6 +537,8 @@ function CompanySettingsTab() {
               />
             </Field>
           </div>
+
+          <WhoCanBeAssignedCard form={form} set={set} noun={noun} jobNounPlural={jobNounPlural} />
 
           <CustomerChangesCard form={form} set={set} noun={noun} />
 
