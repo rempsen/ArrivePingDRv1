@@ -60,6 +60,27 @@ const LOW_TOUCH_BILLING: OverrideMap = {
   "receipt:client": { email: true },
 };
 
+/**
+ * In-home care where the customer is a parent handing over their kids: every
+ * "who is coming and when" moment goes by SMS — assignment (name/photo),
+ * confirmation, en route, arrived, running late, cancellation — and the
+ * written record (completed, card receipt) goes by email. No cash is ever
+ * collected; the card on file is charged through Stripe at completion.
+ */
+const TRUST_FIRST_CARE: OverrideMap = {
+  "created:client": { sms: true },
+  "assigned:client": { sms: true },
+  "accepted:client": { sms: true, email: true },
+  "cancelled:client": { sms: true },
+  "rescheduled:client": { sms: true },
+  "completed:client": { email: true },
+  "receipt:client": { email: true },
+  // The office should hear immediately when a sitter declines or releases a
+  // booking — a parent with no sitter at 6pm is the worst outcome.
+  "declined:office": { sms: true },
+  "released:office": { sms: true },
+};
+
 /** Storm/weather-triggered crew coordination: office/dispatcher needs an immediate heads-up too. */
 const STORM_CREW_ALERT: OverrideMap = {
   "created:office": { sms: true },
@@ -81,6 +102,9 @@ export const NOTIFICATION_OVERRIDES: Record<string, OverrideMap> = {
   "commercial-building-maintenance": { ...URGENT_DISPATCH, ...TENANT_FACING },
   "tree-care": { ...URGENT_DISPATCH, ...STORM_CREW_ALERT },
   "landscaping-grounds-snow": STORM_CREW_ALERT,
+
+  // Care & family services (added 2026-10-01)
+  "childcare-babysitting": TRUST_FIRST_CARE,
 
   "home-builder-developer": LONG_CYCLE_PROJECT,
   "design-build": LONG_CYCLE_PROJECT,

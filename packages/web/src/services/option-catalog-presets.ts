@@ -268,4 +268,35 @@ export const OPTION_CATALOG_PRESETS: Record<string, OptionCategoryPreset[]> = {
       ],
     },
   ],
+
+  // ───────────────────────── Care & Family Services (added 2026-10-01) ─────────────────────────
+  "childcare-babysitting": [
+    {
+      name: "Sitter Experience Level",
+      description: "Per-hour good/better/best on who shows up: screened sitter vs senior sitter vs certified early-childhood educator.",
+      tiers: [
+        { tierLabel: "Good", name: "Screened Sitter", description: "Background-checked, First Aid/CPR certified, 1+ years experience.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Better", name: "Senior Sitter", description: "3+ years experience, infant and special-needs experience, can drive.", priceDelta: 4, isDefault: false },
+        { tierLabel: "Best", name: "Certified Educator (ECE/RECE)", description: "Credentialed early-childhood educator; structured activities and homework support.", priceDelta: 9, isDefault: false },
+      ],
+    },
+    {
+      name: "Booking Notice",
+      description: "How much lead time the parent is giving — drives the same-day surcharge.",
+      tiers: [
+        { tierLabel: "Standard", name: "48h+ Notice", description: "Booked two or more days ahead.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Short", name: "24-48h Notice", description: "Booked the day before.", priceDelta: 10, isDefault: false },
+        { tierLabel: "Same-Day", name: "Under 24h / Same-Day", description: "Backup or emergency care placed with under 24 hours' notice.", priceDelta: 25, isDefault: false },
+      ],
+    },
+    {
+      name: "Number of Children",
+      description: "Per-hour delta for the number of children in care.",
+      tiers: [
+        { tierLabel: "1-2", name: "One or Two Children", description: "Standard rate.", priceDelta: 0, isDefault: true },
+        { tierLabel: "3", name: "Three Children", description: "Adds one additional-child increment.", priceDelta: 3, isDefault: false },
+        { tierLabel: "4+", name: "Four or More Children", description: "Adds two increments; a second sitter may be required for 5+.", priceDelta: 6, isDefault: false },
+      ],
+    },
+  ],
 };

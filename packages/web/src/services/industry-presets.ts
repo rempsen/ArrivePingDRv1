@@ -643,6 +643,51 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     categories: ["Sessions", "Programs", "Compliance"],
   },
 
+  // ───────────────────────── Care & Family Services ─────────────────────────
+  // Added 2026-10-01 at Dan's request (not part of the 2026-07 Phase 1 ranking
+  // program — no rank/fitScore yet). Workflow shape is a direct fit for the
+  // core ArrivePing loop: a parent books a sitter, the sitter is assigned and
+  // confirmed, the parent gets en-route/arrived pings, and the card on file is
+  // charged through Stripe at completion. No cash handling — card only.
+  // icp_knowledge_base row to be curated from Dan's two babysitting ICP docs.
+  {
+    id: "childcare-babysitting",
+    label: "Childcare & Babysitting",
+    group: "Care & Family Services",
+    tier: "core",
+    rationale:
+      "Parents booking in-home sitters want exactly what ArrivePing already does well: a confirmed named sitter, en-route and arrived pings, and card-on-file payment through Stripe with no cash at the door. Trust and safety signals (who is coming, when, and that they're vetted) are the product.",
+    workerNoun: "Sitter",
+    workerNounPlural: "Sitters",
+    customerNoun: "Parent",
+    customerNounPlural: "Parents",
+    jobNoun: "Booking",
+    jobNounPlural: "Bookings",
+    aiTone:
+      "Warm, calm and trust-first. Parents are handing over their children — always name the sitter, state the exact arrival window, and say what happens next. Plain language, no jargon, never casual about safety or lateness. Payment is by card on file through Stripe; never ask for or mention cash.",
+    notificationGuidance:
+      "Parents need to know who is coming and when: sitter-assigned (name + photo), en-route, arrived, and running-late should all be SMS default-on. Booking confirmation plus 24h/2h reminders cut no-shows. Session complete + card receipt go by email so parents have a record. Cancellation must reach the parent by SMS immediately.",
+    services: [
+      { name: "Meet & Greet / Family Intro Visit", category: "Family Intake", durationMins: 30 },
+      { name: "Evening Babysitting", category: "Bookings", durationMins: 240 },
+      { name: "Date-Night Sitting", category: "Bookings", durationMins: 180 },
+      { name: "Daytime Childcare", category: "Bookings", durationMins: 480 },
+      { name: "After-School Care & Pick-Up", category: "Bookings", durationMins: 180 },
+      { name: "Overnight Care", category: "Bookings", durationMins: 720 },
+      { name: "Newborn / Infant Care", category: "Bookings", durationMins: 240 },
+      { name: "Backup / Same-Day Care", category: "Bookings", durationMins: 240 },
+      { name: "Event & Wedding Childcare", category: "Bookings", durationMins: 300 },
+    ],
+    templates: [
+      "Babysitting Booking",
+      "Family Intake & Meet-and-Greet",
+      "Care Notes & Handoff Report",
+      "Recurring Care Schedule",
+      "Incident / Health Report",
+    ],
+    categories: ["Bookings", "Family Intake", "Care Notes", "Safety & Compliance"],
+  },
+
   // ───────────────────────── Aliases (route to a core ICP's template) ─────────────────────────
   // These exist only so a self-selecting signup sees a label that matches
   // their trade; selecting one sets companies.industry to the target ICP's
@@ -812,6 +857,7 @@ export const INDUSTRY_GROUPS: string[] = [
   "Mechanical & Electrical Trades",
   "Grounds, Snow & Trees",
   "Facilities & Property Management",
+  "Care & Family Services",
   "Specialty (Outlier ICPs)",
   "Aliases (route to a core industry)",
 ];
