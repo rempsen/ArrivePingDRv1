@@ -37,6 +37,11 @@ export type IndustryPreset = {
   fitScore?: number; // Phase 1 weighted fit score (0-10)
   aliasOf?: string; // set on tier: "alias" rows — the real ICP id this routes to
   rationale?: string; // one-line "why this ICP" from Phase 1 research, shown to superadmins
+  /** Tenant-SAFE honesty note for outlier ICPs — what ArrivePing covers well for
+   * this trade today and what it deliberately doesn't. Fed to the onboarding
+   * concierge so it sets expectations instead of over-promising. `rationale`
+   * above is internal (GTM language) and must never reach a tenant. */
+  fitNote?: string;
   // Terminology — relabels the app for this tenant. Singular + plural so
   // copy reads naturally. workerNoun already flows through useWorkerNoun();
   // customerNoun/jobNoun are newer and currently apply to the same dynamic
@@ -530,6 +535,8 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     fitScore: 6.2,
     rationale:
       "Outlier: displacement of PM accounting suites (Yardi/AppFolio/Buildium) is blocked by trust accounting/leasing needs. Play the maintenance-ops/work-order layer beside the accounting suite, never replace it.",
+    fitNote:
+      "ArrivePing is the maintenance-operations layer: tenant work-order intake, vendor dispatch, unit turns, owner NTE approvals and vendor COI tracking. It is NOT a property-management accounting suite \u2014 rent roll, trust accounting, leasing and tenant ledgers stay in Yardi/AppFolio/Buildium and ArrivePing sits beside them.",
     workerNoun: "Vendor",
     workerNounPlural: "Vendors",
     customerNoun: "Tenant",
@@ -564,6 +571,8 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     fitScore: 6.4,
     rationale:
       "Highest-scoring outlier. Blocked on a serialized asset-availability/utilization engine NVC 360 doesn't have yet — do not sell ahead of it. Sequence after current onboarding queue clears.",
+    fitNote:
+      "ArrivePing covers the reservation quote, delivery/pickup dispatch and check-out/check-in inspections well. It does NOT yet have a serialized asset-availability or utilization engine, so per-unit fleet availability, cycle billing and telematics are not in the product today \u2014 reservations are scheduled jobs, not inventory holds.",
     workerNoun: "Yard Staff",
     workerNounPlural: "Yard Staff",
     customerNoun: "Customer",
@@ -591,6 +600,8 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     fitScore: 5.7,
     rationale:
       "Outlier: the insurance workflow is captured — Xactimate is mandated on ~80% of claims, structurally locking NVC 360's native estimating out of the largest revenue stream. Serve self-pay/rebuild work opportunistically; don't lead with this ICP.",
+    fitNote:
+      "ArrivePing covers emergency dispatch, drying logs, mitigation-to-rebuild handoff and self-pay/deductible billing. It does NOT integrate with Xactimate or carrier claim portals, so insurance estimating and claim submission stay in those tools; use ArrivePing for the field workflow and the customer-facing side.",
     workerNoun: "Technician",
     workerNounPlural: "Technicians",
     customerNoun: "Customer",
@@ -625,6 +636,8 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     fitScore: 4.4,
     rationale:
       "Outlier, lowest fit — no GTM investment planned until 3+ paying prospects appear. Roster-level signal only (One Team Sports); registration/rosters/payments checkout is an explicit do-not-build.",
+    fitNote:
+      "ArrivePing covers session scheduling, coach assignment, space/court allocation, SMS reminders and coach credential tracking. It does NOT do program registration, rosters, league standings or a parent payments checkout \u2014 those stay in a registration platform and ArrivePing handles the day-of operations.",
     workerNoun: "Coach",
     workerNounPlural: "Coaches",
     customerNoun: "Member",

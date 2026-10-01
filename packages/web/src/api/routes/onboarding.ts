@@ -311,6 +311,39 @@ export const onboardingRoutes = new Hono<AppEnv>()
       const k = snap.knowledge;
       const q = snap.qualifying;
       const icpAnswered = q.icpAnswers?.length ?? 0;
+
+      // Item 2: tell the concierge how well this ICP actually fits so it can
+      // be honest about product coverage and size the qualifying round to
+      // what's genuinely tunable — a 4.4/10 outlier shouldn't get the same
+      // 5-question deep-dive as a core trade where every answer re-tunes a
+      // seeded template. Only the tenant-safe `fitNote` is used; `rationale`
+      // is internal GTM language and never reaches the prompt.
+      const industryPreset = getIndustryPreset(snap.company.industry);
+      const isOutlier = industryPreset?.tier === "outlier";
+      const fitBlock = industryPreset
+        ? isOutlier
+          ? `\nPRODUCT FIT FOR THIS INDUSTRY (be honest, not apologetic):
+This trade is a partial fit for ArrivePing today${typeof industryPreset.fitScore === "number" ? ` (internal fit score ${industryPreset.fitScore}/10 — never quote this number)` : ""}.
+${industryPreset.fitNote ?? ""}
+How to handle it: when the user mentions something in the "does NOT" list,
+say plainly and briefly that ArrivePing doesn't cover that part and what it
+does cover instead — one sentence, no apology, no sales pitch, then move on.
+Don't volunteer the limits unprompted in your opener; set expectations the
+moment they come up. Keep the ICP-specific questions to 1-3 and anchor them
+only on things in the "covers" list that are actually seeded for this tenant
+(templates/catalog/option groups below). Never ask qualifying questions
+about capabilities ArrivePing doesn't have.`
+          : industryPreset.tier === "core"
+            ? `\nPRODUCT FIT FOR THIS INDUSTRY: strong — this is one of the trades ArrivePing's
+templates, catalog and option tiers were built around. Go deep on the
+ICP-specific questions (3-5): every answer should re-tune something seeded.`
+            : ""
+        : snap.company.industry === "other"
+          ? `\nPRODUCT FIT FOR THIS INDUSTRY: unknown — the tenant chose "Other". Nothing
+industry-specific was seeded, so ask ONE question about what they actually
+do day to day, then use add_catalog_item for the 2-3 services they name
+rather than asking template-tuning questions about templates that don't exist.`
+          : "";
       const system = `You are the onboarding concierge inside ArrivePing (a field-service dispatch
 platform). A new tenant, "${snap.company.name}", just signed up and their site was
 auto-scraped for branding. This is the very first thing they see — make it
@@ -382,6 +415,8 @@ without it unless the user explicitly says to skip/finish everything.
     and whether turns are scheduled or on-demand.
     Call save_icp_qualifying_answer for each of these as they're answered.
   Total across both mandatory + ICP-specific: 5-10 questions, one at a time.
+
+${fitBlock}
 
 Rules:
 - One question at a time. Never dump a checklist of questions on them.
