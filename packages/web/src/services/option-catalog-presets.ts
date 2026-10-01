@@ -269,6 +269,106 @@ export const OPTION_CATALOG_PRESETS: Record<string, OptionCategoryPreset[]> = {
     },
   ],
 
+  // ───────────────────────── Outlier ICPs (added 2026-10-01) ─────────────────────────
+  // These three were the only industry presets with no option/tier groups, so
+  // an outlier-tier tenant landed on an empty Options & Tiers page while every
+  // core/adjacent ICP got good/better/best out of the box. Service-level and
+  // add-on tiers below are the conventional upsell shapes in each trade.
+  "property-management-maintenance": [
+    {
+      name: "Work Order Priority",
+      description: "Response-time tier on a tenant maintenance request — drives dispatch urgency and the owner-facing NTE.",
+      tiers: [
+        { tierLabel: "Routine", name: "Routine (3-5 business days)", description: "Non-urgent repair scheduled with the next vendor route.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Urgent", name: "Urgent (24-48h)", description: "Habitability-adjacent issue (no hot water, appliance down) dispatched next business day.", priceDelta: 75, isDefault: false },
+        { tierLabel: "Emergency", name: "Emergency (same-day / after-hours)", description: "Active leak, no heat, lockout or safety issue — immediate dispatch at after-hours rates.", priceDelta: 250, isDefault: false },
+      ],
+    },
+    {
+      name: "Unit Turn Scope",
+      description: "How deep the make-ready goes between tenants.",
+      tiers: [
+        { tierLabel: "Good", name: "Standard Turn", description: "Clean, patch and touch-up paint, smoke/CO test, locks rekeyed.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Better", name: "Refresh Turn", description: "Standard turn plus full repaint and carpet clean or LVP repair.", priceDelta: 1200, isDefault: false },
+        { tierLabel: "Best", name: "Renovation Turn", description: "Refresh turn plus flooring, fixtures and appliance replacement for a rent-lift reposition.", priceDelta: 4500, isDefault: false },
+      ],
+    },
+    {
+      name: "Vendor Tier",
+      description: "Which vendor pool the work order is routed to.",
+      tiers: [
+        { tierLabel: "Standard", name: "In-House / Handyman", description: "Owned maintenance tech for general repairs.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Licensed", name: "Licensed Trade", description: "Licensed plumber/electrician/HVAC with COI on file — required for permitted work.", priceDelta: 95, isDefault: false },
+      ],
+    },
+  ],
+  "equipment-rental": [
+    {
+      name: "Rental Period",
+      description: "Rate basis for the reservation — daily, weekly or 4-week cycle billing.",
+      tiers: [
+        { tierLabel: "Daily", name: "Daily Rate", description: "24-hour rental, returned next business day.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Weekly", name: "Weekly Rate", description: "7-day rental at roughly 3x the daily rate.", priceDelta: 0, isDefault: false },
+        { tierLabel: "4-Week", name: "4-Week Cycle Rate", description: "28-day cycle billing at roughly 3x the weekly rate.", priceDelta: 0, isDefault: false },
+      ],
+    },
+    {
+      name: "Damage Waiver",
+      description: "Optional rental protection plan, typically 10-15% of the rental charge.",
+      tiers: [
+        { tierLabel: "None", name: "Declined — Customer Insured", description: "Customer provides certificate of insurance naming the rental company.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Standard", name: "Rental Protection Plan", description: "Covers accidental damage, excludes theft and negligence.", priceDelta: 45, isDefault: false },
+        { tierLabel: "Plus", name: "Rental Protection Plus", description: "Adds theft coverage and a reduced deductible.", priceDelta: 90, isDefault: false },
+      ],
+    },
+    {
+      name: "Delivery & Pickup",
+      description: "Logistics tier for getting the equipment to and from the site.",
+      tiers: [
+        { tierLabel: "Pickup", name: "Customer Pickup", description: "Customer collects and returns at the yard.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Delivery", name: "Delivery + Pickup (local)", description: "Flatbed delivery and pickup within the standard zone.", priceDelta: 150, isDefault: false },
+        { tierLabel: "Priority", name: "Same-Day Delivery", description: "Priority same-day drop at the site, subject to availability.", priceDelta: 300, isDefault: false },
+      ],
+    },
+    {
+      name: "Fuel & Cleaning",
+      description: "Return-condition handling.",
+      tiers: [
+        { tierLabel: "Standard", name: "Return Full & Clean", description: "Customer returns fuelled and cleaned; charges apply if not.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Prepaid", name: "Prepaid Refuel & Clean", description: "Flat convenience fee; return as-is.", priceDelta: 60, isDefault: false },
+      ],
+    },
+  ],
+  "sports-organization": [
+    {
+      name: "Session Type",
+      description: "Coaching ratio for a booked session.",
+      tiers: [
+        { tierLabel: "Good", name: "Group Session", description: "Standard group training, up to 12 athletes per coach.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Better", name: "Small Group (3-4)", description: "Semi-private session with 3-4 athletes.", priceDelta: 25, isDefault: false },
+        { tierLabel: "Best", name: "Private 1-on-1", description: "Private session with a head coach.", priceDelta: 60, isDefault: false },
+      ],
+    },
+    {
+      name: "Time Slot",
+      description: "Prime-time vs off-peak pricing for court/field/ice time.",
+      tiers: [
+        { tierLabel: "Off-Peak", name: "Off-Peak (weekday daytime)", description: "Weekday sessions before 4pm.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Prime", name: "Prime Time (weekday evening)", description: "Weekday 4-9pm — highest demand window.", priceDelta: 20, isDefault: false },
+        { tierLabel: "Weekend", name: "Weekend", description: "Saturday/Sunday sessions and tournaments.", priceDelta: 15, isDefault: false },
+      ],
+    },
+    {
+      name: "Space Rental",
+      description: "Facility rental tier when a member or outside group books the space itself.",
+      tiers: [
+        { tierLabel: "Half", name: "Half Court / Half Field", description: "Shared space, one hour.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Full", name: "Full Court / Full Field", description: "Exclusive use of the full space, one hour.", priceDelta: 50, isDefault: false },
+        { tierLabel: "Event", name: "Full Facility (event block)", description: "Whole facility for a tournament or camp block, includes staff.", priceDelta: 400, isDefault: false },
+      ],
+    },
+  ],
+
   // ───────────────────────── Care & Family Services (added 2026-10-01) ─────────────────────────
   "childcare-babysitting": [
     {
