@@ -9,11 +9,14 @@ import { log } from "../api/lib/logger";
  * Stripe Connect — one connected account per tenant.
  *
  * Model (decided with Dan, 2026-10-01):
- *  - Connected account controller: Express dashboard, Stripe collects
- *    requirements (hosted onboarding), tenant pays Stripe's processing fee
- *    (`fees.payer: account`), Stripe is liable for negative balances
- *    (`losses.payments: stripe`). This is Stripe's "Stripe handles pricing"
- *    tier — no per-account or per-payout Connect fees for the platform.
+ *  - Connected account controller: FULL Stripe dashboard (the tenant gets a
+ *    normal Stripe login), Stripe collects requirements (hosted onboarding),
+ *    tenant pays Stripe's processing fee (`fees.payer: account`), Stripe is
+ *    liable for negative balances (`losses.payments: stripe`). This is
+ *    Stripe's "Stripe handles pricing" tier — no per-account or per-payout
+ *    Connect fees for the platform. Stripe REQUIRES the full dashboard for
+ *    this combination (Express is only allowed when the platform collects
+ *    fees and carries the losses — verified live 2026-10-01).
  *  - Charges are DIRECT charges (`stripeAccount` request option), so the
  *    money and the Stripe fee both sit on the tenant's account. No
  *    application_fee — ArrivePing takes nothing.
@@ -128,7 +131,7 @@ export async function ensureConnectedAccount(companyId: string, country: Connect
       controller: {
         fees: { payer: "account" },
         losses: { payments: "stripe" },
-        stripe_dashboard: { type: "express" },
+        stripe_dashboard: { type: "full" },
         requirement_collection: "stripe",
       },
       capabilities: {
@@ -138,7 +141,7 @@ export async function ensureConnectedAccount(companyId: string, country: Connect
       business_profile: { name: co.name },
       metadata: { companyId },
     },
-    { idempotencyKey: `connect_acct_${companyId}` },
+    { idempotencyKey: `connect_acct_v2_${companyId}` },
   );
 
   await db
@@ -170,11 +173,13 @@ export async function createOnboardingLink(accountId: string, origin: string) {
   return link.url;
 }
 
-/** One-click sign-in to the tenant's Express dashboard (payouts, balance, disputes). */
-export async function createDashboardLink(accountId: string) {
-  const stripe = getStripe();
-  const link = await stripe.accounts.createLoginLink(accountId);
-  return link.url;
+/**
+ * Where the tenant manages payouts, balance, refunds and disputes. Full-dashboard
+ * accounts sign in at dashboard.stripe.com with the login they created during
+ * onboarding (login links only exist for Express accounts).
+ */
+export async function createDashboardLink(_accountId: string) {
+  return "https://dashboard.stripe.com/";
 }
 
 /**

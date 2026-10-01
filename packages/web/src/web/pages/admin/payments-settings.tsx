@@ -256,7 +256,8 @@ export default function PaymentsSettingsTab() {
             </div>
             <p className="text-sm text-slate-300">
               {customerPlural} now see a <span className="font-semibold text-white">Pay</span> button on their
-              tracking page. Payments, payouts, refunds and disputes are managed in your Stripe dashboard.
+              tracking page. Payments, payouts, refunds and disputes are managed in your own Stripe dashboard —
+              sign in with the email and password you created during setup.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <BtnPrimary disabled={dashboard.isPending} onClick={() => { setErr(""); dashboard.mutate(); }}>
@@ -300,6 +301,7 @@ export default function PaymentsSettingsTab() {
             <ShieldCheck className="h-4 w-4 text-brand" /> What Stripe will ask
           </h3>
           <ul className="space-y-1.5 text-sm text-slate-300">
+            <li>• An email + password for your own Stripe login</li>
             <li>• Business type (individual, corporation…) and legal name</li>
             <li>• Business address, phone, and website or description</li>
             <li>• Business number / tax ID (companies only)</li>

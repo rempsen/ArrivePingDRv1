@@ -109,3 +109,4 @@ crash.*.log
 # Variable files can carry credentials.
 *.auto.tfvars
 shot.png
+.local-shots/
