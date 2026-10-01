@@ -58,10 +58,34 @@ function toolLabel(t: ToolEvent): string {
       return t.output?.ok ? `Set industry to ${t.output.industry}${t.output.catalogSeeded ? ` — seeded ${t.output.catalogSeeded} catalog items` : ""}` : "Updated industry";
     case "add_catalog_item":
       return `Added "${t.output?.name ?? t.input?.name}" to your catalog`;
-    case "finish_onboarding":
-      return "Wrapped up onboarding";
+    case "save_qualifying_baseline": {
+      const saved: string[] = Array.isArray(t.output?.saved) ? t.output.saved : [];
+      const pretty: Record<string, string> = {
+        technicianCount: "team size",
+        vehicleCount: "fleet size",
+        jobsPerDay: "daily volume",
+        offersMaintenancePlans: "maintenance plans",
+        offersEmergencyPremium: "rush pricing",
+        emergencyMultiplierPct: "rush multiplier",
+      };
+      const names = saved.map((s) => pretty[s] ?? s);
+      return names.length ? `Saved ${names.join(", ")}` : "Saved business profile";
+    }
+    case "save_icp_qualifying_answer":
+      return "Noted — will use this to tune your setup";
+    case "finish_onboarding": {
+      const tuning = t.output?.tuning;
+      const bits: string[] = [];
+      if (tuning?.emergencyTemplatesTuned) bits.push(`${tuning.emergencyTemplatesTuned} rush rate${tuning.emergencyTemplatesTuned === 1 ? "" : "s"} adjusted`);
+      if (tuning?.emergencyTemplateCreated) bits.push("rush template added");
+      if (tuning?.maintenanceTemplateCreated) bits.push("maintenance-plan template added");
+      if (tuning?.capacityApplied) bits.push("capacity defaults set");
+      const icp = t.output?.icpTuning;
+      if (icp?.applied && Array.isArray(icp.actions) && icp.actions.length) bits.push(`${icp.actions.length} setup tweak${icp.actions.length === 1 ? "" : "s"} from your answers`);
+      return bits.length ? `Wrapped up onboarding — ${bits.join(", ")}` : "Wrapped up onboarding";
+    }
     default:
-      return t.name;
+      return t.name.replace(/_/g, " ");
   }
 }
 

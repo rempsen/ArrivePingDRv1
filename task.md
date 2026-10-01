@@ -1,45 +1,18 @@
-# Main-chat migration — 2026-09-30
+# task.md — ArrivePing main chat
 
-Goal: make THIS chat the home for ArrivePing / NVC360 (web + iOS + working files),
-replacing the "NVCV4 August 2026" chat (shared: runable.com/shared/c416dd9b-...).
+## 2026-10-01 Agentic onboarding remediation (approved by Dan)
+Source docs: docs/chat-archive/agentic-onboarding-gap-analysis-2026-09-30.md, -remediation-plan-.md
+Approved: 1, 2, 3, 4, 6a, 7. Skipped: 5 (regex→role tag). Test: throwaway tenant on live, screenshots, delete.
+Order: 7 → 4 → 2 → 6a → 1 → 3
 
-## Done
-- Cloned github.com/rempsen/ArrivePingDRv1 → /home/user/nvc360-v4 @ b8c584c (same HEAD the old chat had). bun install OK.
-- Recovered from old chat (text previews on the shared page): nvc360-sandbox-env-FULL.env (Aug 24 snapshot),
-  nvc360-local-dev-SCOPED.env, remediation-plan.md, 11× content.md reports → committed to docs/chat-archive/ (8bce423).
-  NOT recoverable via public share (binary, login-gated download): NVC360-Technical-Architecture-Specification.docx,
-  punchlist-edge-functions.zip, job-report-*.pdf, dl3.pdf, screenshots. Ask Dan to drop them in Attachments if needed.
-- .env written (root): all live third-party creds from the recovered file; DB vars point at LOCAL Postgres 17 stand-in.
-- Local Postgres 17: db `nvc`, migrations 0000–0003 applied (58 tables), roles app_runtime/app_system passworded.
-  Login: dan@nvc360.com / phu9Yae423! (superadmin, created via sign-up + role update). /api/seed fails under RLS — expected.
-- Web: vite build done, server in tmux `web` on :4200. Redis Cloud connected (cred still live).
-- Mobile: packages/mobile/.env (EXPO_PUBLIC_SENTRY_DSN), Metro in tmux `metro` on :4300.
-- Skill recreated: ~/.skills/arriveping-git-push (SKILL.md + scripts/ensure-remote.sh).
-- SSH key generated: ~/.ssh/id_ed25519 — NOT yet authorized on GitHub.
+- [ ] 7 toolLabel pills (onboarding-chat.tsx)
+- [ ] 4 option-catalog presets for property-management-maintenance, equipment-rental, sports-organization
+- [ ] 2 fitScore/tier/outlier note into onboarding chat system prompt
+- [ ] 6a wire technicianCount/vehicleCount/jobsPerDay → capacity defaults
+- [ ] 1 icpAnswers[] → provisioning actions at finish_onboarding (AI translation pass, idempotent)
+- [ ] 3 brand-scout: bounded crawl (services/about) + JSON-LD parse
+- [ ] vite build, boot server, throwaway tenant E2E on live, screenshots, delete tenant
+- [ ] commit + push each step
 
-## Done 2026-09-30 (evening)
-- Deploy key authorized; 8bce423 pushed. `git push origin main` works.
-- Supabase wired: project ujrzjdzcqrvquwasneaq, session pooler aws-0-ca-central-1. `web` on :4200 now runs
-  against the REAL DB (5 companies / 150 users); dan@nvc360.com superadmin login verified.
-  app_runtime / app_system passwords were ROTATED (old ones unrecoverable) → arriveping.com /api/ready
-  reported database:down until its Runable env is updated with the new DATABASE_URL / DATABASE_SYSTEM_URL.
-  Local-Postgres .env kept as .env.local-postgres.bak.
-- packages/mobile/keys/AuthKey.p8 restored (validated EC P-256). eas-cli installed globally; `eas whoami` = nvc360.
-  EXPO_TOKEN lives in packages/mobile/.env (gitignored).
-
-## Still open
-5. Google Drive zip (1H8LLu5zx3LliRInVan9J1V2n259kwRCT) is not public — share as "anyone with link" or drop in Attachments.
-6. Confirm whether this chat has a Publish button (Runable project). If it's "Unmanaged", publishing still goes through the old chat.
-
-## 2026-10-01 — arriveping.com DB outage resolved
-- Cause: app_runtime/app_system passwords rotated (2026-09-30) while the deployed container and
-  the old chat's sandbox server still used the old ones → Supavisor circuit breaker + stale deploy.
-- Fix: new URLs added to home chat Dashboard → Secrets, old sandbox .env updated + server restarted,
-  Publish of 4b8bf98. /api/ready = ok, live sign-in = 200.
-- /api/ready now reports database_error + database_target on failure (a97cb02, 4b8bf98).
-
-## 2026-10-01 — Childcare & Babysitting ICP (commit 47c0a37, pushed)
-- Added `childcare-babysitting` preset (group "Care & Family Services") + notification archetype + 22-item catalog + 3 option categories. No DB migration needed (companies.industry is text).
-- Test tenant `test-sunny-sitters` provisioned in Supabase (admin test-sitters-admin@example.com). Delete when Dan is done looking.
-- PENDING: `icp_knowledge_base` row for `childcare-babysitting` — needs Dan's two Google Drive ICP docs (still private: 1KK2ogMCcvIEuzwgFAEIZt1IQ8tyg8YfM, 1IEAkdBT5rI4z6up0Y6fXjspEmHQlTZZw). Also refine preset copy/services from the docs once read.
-- Deploy: not live until NVCV4 August 2026 chat does `git pull origin main` → Publish.
+## Stripe (parked by Dan until later today/tomorrow)
+- Connect works E2E (12ec366). Needs NVCV4 pull+Publish. $1 ArrivePing-tenant test unpaid. Orphan acct_1ULmueC8cpzmChbM to remove in dashboard. Test tenant test-sunny-sitters + acct_1ULmvQCA4pHmrpfB to delete when done.
