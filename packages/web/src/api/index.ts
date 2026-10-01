@@ -267,6 +267,20 @@ const app = new Hono<{ Variables: Variables }>()
         .replace(/postgres(ql)?:\/\/\S+/gi, "<url>")
         .slice(0, 160);
       checks.database_error = msg ? `${code}: ${msg}` : code;
+      // Which credential is this process actually using? Role name + host are
+      // not secret; the password is reduced to a short hash prefix so an
+      // operator can confirm "the deploy picked up the rotated value" by
+      // comparing against the same fingerprint computed locally.
+      try {
+        const u = new URL(process.env.DATABASE_URL ?? "");
+        const fp = new Bun.CryptoHasher("sha256")
+          .update(decodeURIComponent(u.password))
+          .digest("hex")
+          .slice(0, 8);
+        checks.database_target = `${u.username}@${u.hostname}:${u.port || "5432"} pw#${fp}`;
+      } catch {
+        checks.database_target = "unparseable DATABASE_URL";
+      }
       captureException(e, { probe: "ready" });
     }
     const { storageMode } = await import("./lib/storage");
