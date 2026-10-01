@@ -783,20 +783,30 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
 
   const fromName = (f.emailFromName || "").trim();
   const fromAddr = (f.emailFromAddress || "").trim();
-  const fromLine = fromAddr ? (fromName ? `${fromName} <${fromAddr}>` : fromAddr) : "(not set — shared sender used)";
   const domain = fromAddr.includes("@") ? fromAddr.split("@")[1] : "yourdomain.com";
+  // Public mailbox providers can never be verified — Apple/Google own the DNS.
+  const FREE_MAILBOX = ["icloud.com", "me.com", "mac.com", "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotmail.ca", "live.com", "live.ca", "msn.com", "yahoo.com", "yahoo.ca", "ymail.com", "rogers.com", "aol.com", "protonmail.com", "proton.me", "shaw.ca", "telus.net", "sympatico.ca", "bell.net", "videotron.ca", "mts.net", "mymts.net", "comcast.net", "zoho.com", "mail.com", "gmx.com", "fastmail.com", "hey.com"];
+  const isFreeMailbox = (d: string) => FREE_MAILBOX.includes((d || "").trim().toLowerCase());
 
   const domainsQ = useQuery({
     queryKey: ["email-domains"],
     queryFn: async () => {
       const res = await (api["notif-config"] as any)["email-domains"].$get();
-      return res.json() as Promise<{ domains: any[]; resendAvailable: boolean }>;
+      return res.json() as Promise<{ domains: any[]; resendAvailable: boolean; platformFrom?: string }>;
     },
   });
   const domains = domainsQ.data?.domains || [];
   const fromDomainVerified = domains.some(
     (d: any) => d.status === "verified" && d.domain.toLowerCase() === domain.toLowerCase(),
   );
+  // Mirror of the server's pickSender(): verified → their own address;
+  // otherwise "<Name> via ArrivePing" from the platform address, replies to them.
+  const platformRaw = domainsQ.data?.platformFrom || "ArrivePing by NVC360 <contact@nvc360.com>";
+  const platformAddr = (/<([^>]+)>\s*$/.exec(platformRaw)?.[1] || platformRaw).trim();
+  const viaFrom = fromName ? `${fromName} via ArrivePing <${platformAddr}>` : platformRaw;
+  const effectiveFrom = fromAddr && fromDomainVerified ? `${fromName || domain} <${fromAddr}>` : viaFrom;
+  const effectiveReplyTo = (f.emailReplyTo || "").trim() || (fromAddr.includes("@") && !fromDomainVerified ? fromAddr : "");
+  const fromLine = effectiveFrom;
 
   const addDomain = useMutation({
     mutationFn: async (dom: string) => {
@@ -867,14 +877,21 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
       {/* live From: preview */}
       <div className="mt-3 rounded-xl border border-white/5 bg-ink px-3.5 py-2.5">
         <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Recipients will see</div>
-        <div className="mt-0.5 font-mono text-sm text-cyan-glow">From: {fromLine}</div>
-        {f.emailReplyTo ? <div className="font-mono text-[11px] text-slate-500">Reply-To: {f.emailReplyTo}</div> : null}
+        <div className="mt-0.5 font-mono text-sm text-cyan-glow">From: {effectiveFrom}</div>
+        {effectiveReplyTo ? <div className="font-mono text-[11px] text-slate-500">Reply-To: {effectiveReplyTo}</div> : null}
       </div>
 
       {/* domain-verified warning */}
-      {fromAddr.includes("@") && !domain.endsWith("resend.dev") && !fromDomainVerified && (
+      {fromAddr.includes("@") && !domain.endsWith("resend.dev") && !fromDomainVerified && isFreeMailbox(domain) && (
+        <p className="mt-2 text-[11px] text-slate-400">
+          <span className="font-semibold">{domain}</span> is a public mailbox provider, so it can't be verified as a sending domain — nobody can add DNS records to it.
+          That's fine: your emails go out as <span className="font-mono text-slate-300">{effectiveFrom}</span> and replies land in <span className="font-mono text-slate-300">{fromAddr}</span>.
+          To send from your own address instead, use a domain you own (e.g. yourbusiness.com) and verify it below.
+        </p>
+      )}
+      {fromAddr.includes("@") && !domain.endsWith("resend.dev") && !fromDomainVerified && !isFreeMailbox(domain) && (
         <p className="mt-2 text-[11px] text-amber-400/90">
-          ⚠ Until <span className="font-semibold">{domain}</span> is verified below, emails are sent from our shared address. Add it and complete DNS to send as <span className="font-mono">{fromAddr}</span>.
+          ⚠ Until <span className="font-semibold">{domain}</span> is verified below, emails are sent as <span className="font-mono">{effectiveFrom}</span> with replies to <span className="font-mono">{fromAddr}</span>. Add it and complete DNS to send as <span className="font-mono">{fromAddr}</span>.
         </p>
       )}
       {fromDomainVerified && (
@@ -908,7 +925,8 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
         </div>
         {domErr && <p className="mt-1.5 text-[11px] font-semibold text-amber-400">{domErr}</p>}
         <p className="mt-1.5 text-[11px] text-slate-600">
-          Submit the domain you want to send from. Once approved, the exact DNS records appear here — add them at your registrar (GoDaddy, Namecheap, Cloudflare…). We auto-verify within minutes.
+          Submit a domain you own (e.g. yourbusiness.com). Once approved, the exact DNS records appear here — add them at your registrar (GoDaddy, Namecheap, Cloudflare…). We auto-verify within minutes.
+          Public mailbox domains like icloud.com, gmail.com or outlook.com can't be verified — use the "via ArrivePing" sender above instead.
         </p>
 
         {/* list of domains */}

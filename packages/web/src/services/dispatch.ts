@@ -11,7 +11,7 @@ import { db, sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { eq, and } from "drizzle-orm";
-import { sendEmail } from "./email";
+import { sendEmail, PLATFORM_FROM } from "./email";
 import { renderEmailDesign, designToText, logoDims, type EmailBlock, type EmailBrand } from "./email-render";
 import { verifiedDomainsForCompany } from "./email-domains";
 import { pickSender } from "./sender";
@@ -287,6 +287,7 @@ export async function sendDesignTest(companyId: string, to: string, subject: str
   const sender = pickSender(
     { ...cfg, emailFromName: cfg?.emailFromName || SAMPLE_VARS.company },
     await verifiedDomainsForCompany(companyId).catch((): string[] => []),
+    PLATFORM_FROM,
   );
   const emailFrom = sender.from;
   const subj = interp(subject || `${brand.company}: test email`);
@@ -513,6 +514,7 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
     const sender = pickSender(
       { ...chanCfg, emailFromName: chanCfg?.emailFromName || vars.company },
       await verifiedDomainsForCompany(companyId).catch((): string[] => []),
+      PLATFORM_FROM,
     );
     const emailFrom = sender.from;
     const emailReplyTo = sender.replyTo;

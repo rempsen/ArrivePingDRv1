@@ -7,6 +7,8 @@ import { fireEvent, seedNotificationRules, EVENT_META, defaultTemplateFor, inter
 import { starterDesigns, type EmailBlock } from "../../services/email-render";
 import { putObject } from "../lib/storage";
 import { resendAvailable, triggerVerify, removeDomain } from "../../services/email-domains";
+import { isFreeMailboxDomain } from "../../services/sender";
+import { PLATFORM_FROM } from "../../services/email";
 import { z } from "zod";
 import { jsonBody,
   parseBody,
@@ -423,7 +425,9 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       records: safeParse(r.records),
     }));
     domains.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return c.json({ domains, resendAvailable: resendAvailable() }, 200);
+    // platformFrom: the address tenants send "via" until their own domain is
+    // verified — the settings page previews the exact From line with it.
+    return c.json({ domains, resendAvailable: resendAvailable(), platformFrom: PLATFORM_FROM }, 200);
   })
 
   // Submit a new domain for approval (status starts "pending").
@@ -438,6 +442,19 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       .replace(/^www\./, "");
     if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain))
       return c.json({ message: "Enter a valid domain, e.g. mail.acme.com" }, 400);
+    // Nobody can add DNS records to icloud.com / gmail.com — Apple and Google
+    // own them and Resend refuses them outright. Say so here, in plain words,
+    // instead of letting the request sit "pending" until approval fails.
+    if (isFreeMailboxDomain(domain))
+      return c.json(
+        {
+          message:
+            `${domain} is a public mailbox provider, so it can't be verified — only a domain you own (like yourbusiness.com) can be. ` +
+            `No problem though: leave this blank and your emails go out as "Your business name via ArrivePing", with replies landing in your ${domain} inbox. ` +
+            `Just put your ${domain} address in the From or Reply-to field above.`,
+        },
+        400,
+      );
     const existing = await tx(c).selectOne(
       schema.tenantEmailDomains,
       eq(schema.tenantEmailDomains.domain, domain),

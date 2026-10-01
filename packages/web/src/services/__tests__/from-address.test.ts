@@ -20,7 +20,7 @@ import { describe, it, expect } from "bun:test";
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
 
-const { pickSender } = await import("../sender");
+const { pickSender, isFreeMailboxDomain } = await import("../sender");
 
 const VERIFIED = ["bmdmaterials.com", "nvc360.com"];
 
@@ -123,5 +123,59 @@ describe("pickRetrySender — where a rejected send goes next", () => {
 
   it("gives up rather than retrying as itself", () => {
     expect(pickRetrySender(SHARED, "", SHARED)).toBeUndefined();
+  });
+});
+
+describe("pickSender — 'via ArrivePing' for tenants without a verified domain", () => {
+  const PLATFORM = "ArrivePing by NVC360 <contact@nvc360.com>";
+  const VERIFIED = ["bmdmaterials.com"];
+
+  it("solo operator on icloud.com: branded via-sender, replies to their inbox", () => {
+    const s = pickSender(
+      { emailFromName: "Sityr", emailFromAddress: "rylerbea@icloud.com" },
+      VERIFIED,
+      PLATFORM,
+    );
+    expect(s.from).toBe("Sityr via ArrivePing <contact@nvc360.com>");
+    expect(s.replyTo).toBe("rylerbea@icloud.com");
+  });
+
+  it("explicit reply-to wins over the unverified from-address", () => {
+    const s = pickSender(
+      { emailFromName: "Sityr", emailFromAddress: "rylerbea@icloud.com", emailReplyTo: "office@sityr.ca" },
+      VERIFIED,
+      PLATFORM,
+    );
+    expect(s.replyTo).toBe("office@sityr.ca");
+  });
+
+  it("verified domain is untouched by the platform arg", () => {
+    const s = pickSender(
+      { emailFromName: "BMD Materials", emailFromAddress: "contact@bmdmaterials.com" },
+      VERIFIED,
+      PLATFORM,
+    );
+    expect(s.from).toBe("BMD Materials <contact@bmdmaterials.com>");
+    expect(s.replyTo).toBeUndefined();
+  });
+
+  it("no name → no via-sender (nothing to brand), caller default applies", () => {
+    expect(pickSender({ emailFromAddress: "x@icloud.com" }, VERIFIED, PLATFORM).from).toBeUndefined();
+  });
+
+  it("accepts a bare platform address", () => {
+    expect(pickSender({ emailFromName: "Sityr" }, [], "contact@nvc360.com").from).toBe(
+      "Sityr via ArrivePing <contact@nvc360.com>",
+    );
+  });
+
+  it("without the platform arg, legacy behaviour holds", () => {
+    expect(pickSender({ emailFromName: "Sityr", emailFromAddress: "x@icloud.com" }, VERIFIED).from).toBeUndefined();
+  });
+
+  it("isFreeMailboxDomain", () => {
+    expect(isFreeMailboxDomain("icloud.com")).toBe(true);
+    expect(isFreeMailboxDomain("Gmail.com")).toBe(true);
+    expect(isFreeMailboxDomain("sityr.ca")).toBe(false);
   });
 });

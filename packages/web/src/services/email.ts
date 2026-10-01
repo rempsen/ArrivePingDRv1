@@ -10,6 +10,8 @@ const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
 const FALLBACK_FROM = "ArrivePing by NVC360 <onboarding@resend.dev>";
 const FROM = process.env.EMAIL_FROM || FALLBACK_FROM;
+/** The platform's own sender — what tenants without a verified domain send "via". */
+export const PLATFORM_FROM = FROM;
 
 export interface EmailAttachment {
   filename: string;
@@ -136,7 +138,7 @@ export async function resolveFromAddress(companyId: string): Promise<SenderIdent
       verifiedDomainsForCompany(companyId).catch((): string[] => []),
     ]);
     if (!chan) return {};
-    return pickSender(chan, verified);
+    return pickSender(chan, verified, PLATFORM_FROM);
   } catch (e) {
     console.error("resolveFromAddress failed", e);
     return {};

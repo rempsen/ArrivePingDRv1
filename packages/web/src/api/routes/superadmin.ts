@@ -1,4 +1,5 @@
 import type { AppEnv } from "../env";
+
 /**
  * SUPERADMIN — B2B tenant provisioning & registry.
  *
@@ -44,6 +45,23 @@ import {
 
 import { z } from "zod";
 import { jsonBody, parseBody, optText } from "../lib/validate";
+
+/**
+ * An upstream error surfaced to the console must be readable. When Resend's
+ * edge (Cloudflare) answers with an HTML error page instead of JSON, the SDK
+ * puts the whole page in error.message — that is what Dan saw as
+ * "<!DOCTYPE html><!--[if lt IE 7]>…" under the icloud.com row.
+ */
+function plainError(msg: unknown, fallback: string): string {
+  const raw = String(msg ?? "").trim();
+  if (!raw) return fallback;
+  if (/^\s*<(!doctype|html)/i.test(raw)) {
+    return "The email provider returned an error page instead of an answer (upstream/edge error). Try again in a minute; if it keeps happening the domain is probably not one that can be verified.";
+  }
+  const text = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return text.length > 300 ? text.slice(0, 297) + "…" : text || fallback;
+}
+
 
 type SessionUser = { id: string; name?: string };
 
@@ -470,7 +488,7 @@ export const superadminRoutes = new Hono<AppEnv>()
       });
       return c.json({ domain: { ...updated, records: safeParse(updated.records) } }, 200);
     } catch (e: any) {
-      return c.json({ message: e?.message || "approve failed" }, 502);
+      return c.json({ message: plainError(e?.message, "approve failed") }, 502);
     }
   })
 
