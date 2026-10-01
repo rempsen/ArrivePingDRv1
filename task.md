@@ -1,20 +1,33 @@
-# task.md — ArrivePing main chat
+# Onboarding UX overhaul (Gregor/Joel meeting asks, 2026-10-01)
 
-## 2026-10-01 Agentic onboarding remediation (approved by Dan)
-Source docs: docs/chat-archive/agentic-onboarding-gap-analysis-2026-09-30.md, -remediation-plan-.md
-Approved: 1, 2, 3, 4, 6a, 7. Skipped: 5 (regex→role tag). Test: throwaway tenant on live, screenshots, delete.
-Order: 7 → 4 → 2 → 6a → 1 → 3
+Confirmed with Dan:
+1. Provisioning pop-up — CLIENT-SIDE staged narrative, snaps to real seeded counts on API resolve.
+2. Wording cut ~50% char count — applies to the MODEL'S ACTUAL REPLIES (system prompt brevity rules + hard char budget).
+3. Progress bar "X of Y" always visible, Y extends live — compute client-side from tool events + checklist, no backend change needed.
+4. Fact-extraction side panel — ALL extracted facts, chat stays centered, panel added beside it.
+5. Provisioning pop-up ships on BOTH superadmin "New Company" panel AND public self-serve signup page.
 
-- [x] 7 toolLabel pills (onboarding-chat.tsx) — c0833e0
-- [x] 4 option-catalog presets for property-management-maintenance, equipment-rental, sports-organization — bc6a3e0
-- [x] 2 fitNote (tenant-safe) per outlier ICP + product-fit block in concierge prompt — aa11660
-- [x] 6a technicianCount/jobsPerDay → service/template duration density; vehicles/team → AI dispatch context — 28a6a68
-- [x] 1 icpAnswers[] → provisioning actions at finish_onboarding (services/icp-answer-tuning.ts, once per tenant) — 76d7aa5; verified live on test-sunny-sitters (6 actions, all grounded)
-- [x] 3 brand-scout: ≤3 sub-pages (services/coverage/about) + JSON-LD parse + deterministic fallback — e28a6ed; verified on mrrooter.ca/winnipeg (Plumber JSON-LD, service area from /locations/)
-- [x] vite build + local server boot on new code (/api/ready database ok); public /scout endpoint smoke OK
-- [ ] Dan: NVCV4 `git pull origin main` → Publish → check https://arriveping.com/api/ready
-- [ ] After publish: throwaway tenant E2E on live via public signup → onboarding chat → screenshots → delete tenant
-- [x] commit + push each step
+## Build plan
+- [x] Discovery (prior session)
+- [ ] `services/provisioning-jokes.ts` — ICP-id -> humorous aside line, generic fallback. Covers all 18 ICPs confirmed in industry-presets.ts.
+- [ ] `web/components/provisioning-progress.tsx` — reusable staged pop-up:
+      props: `website`, `industryId`, `done`, `result` (ProvisionResult["seeded"]|null), `error`.
+      Stages: visiting site -> found brand -> branded notifications -> intake forms -> work-order templates -> JOKE -> catalog -> pricing tiers -> admin login -> [on done] final summary with real counts.
+      Timed auto-advance (~7-8s/stage), holds + "still working" pulse on last stage if API not done yet, jumps straight to final the instant `done` flips true. Uses tw-animate-css slide/fade utilities already in repo.
+- [ ] Wire into `admin/companies.tsx` create modal (replace static "Provisioning…" subtitle/button).
+- [ ] Wire into `signup-company.tsx` submit flow (replace plain spinner).
+- [ ] Tighten onboarding chat system prompt (`api/routes/onboarding.ts`) — hard character budget + rewritten brevity rule with before/after example, trim prose elsewhere in the prompt opportunistically.
+- [ ] `onboarding-chat.tsx` overhaul:
+      - Progress bar/label "N of M" at bottom of chat card: M = brand items (3) + baseline (5) + estimatedIcpTotal (starts 4, bumps live if icpAnswered catches up), N = answered so far. Snaps to done on finish_onboarding.
+      - Right-hand fact panel (new sibling column, chat card stays centered): accumulates ALL extracted facts from tool events (brand fields, industry, catalog items added, baseline numbers, ICP Q/A) as animated chips/rows, grouped.
+      - Keep existing checklist pills, tool pills, transcript untouched in spirit.
+- [ ] Build (`bun run build` in packages/web) + visual check via dev server (tmux `web`, port 4200).
+- [ ] Commit + push to rempsen/ArrivePingDRv1 main.
 
-## Stripe (parked by Dan until later today/tomorrow)
-- Connect works E2E (12ec366). Needs NVCV4 pull+Publish. $1 ArrivePing-tenant test unpaid. Orphan acct_1ULmueC8cpzmChbM to remove in dashboard. Test tenant test-sunny-sitters + acct_1ULmvQCA4pHmrpfB to delete when done.
+## Notes
+- `ProvisionResult.seeded` shape: `{ forms, templates, services, catalogItems, optionCategories, notificationCopyBranded }`.
+- Superadmin create mutation returns the full `ProvisionResult` (has `.company`, `.seeded`).
+- Self-serve signup returns `{ companySlug, companyName, admin, seeded }`.
+- `form.industry` available in both forms at submit time for joke selection.
+- tw-animate-css already imported in styles.css — use `animate-in fade-in slide-in-from-*` utility classes, no new deps needed.
+- `motion` package is installed but unused anywhere yet — NOT introducing it; tw-animate-css covers everything needed, keeps the diff smaller.

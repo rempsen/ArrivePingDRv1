@@ -5,6 +5,7 @@ import { authClient, captureToken } from "../lib/auth";
 import { Logo } from "../components/brand";
 import { Loader } from "../components/loader";
 import { Field, inputCls } from "../components/modal";
+import { ProvisioningProgress, type ProvisioningSeeded } from "../components/provisioning-progress";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../services/industry-presets";
 import {
   Building2,
@@ -82,6 +83,11 @@ export default function SignupCompanyPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState("");
+  // Provisioning pop-up — the form swaps for this staged narrative the
+  // instant the account is submitted, instead of just a spinner on the
+  // button, same pattern as the superadmin "New Company" panel.
+  const [provisionResult, setProvisionResult] = useState<ProvisioningSeeded | null>(null);
+  const [provisionDone, setProvisionDone] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -149,19 +155,24 @@ export default function SignupCompanyPage() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
+      setProvisionResult((d as any)?.seeded ?? null);
 
-      // Sign the new admin in with the credentials they just typed, then hand
-      // off to /admin — the onboarding chat picks up from there.
+      // Sign the new admin in with the credentials they just typed. Reveal
+      // the final "all set" line for a beat before handing off to /admin —
+      // the onboarding chat picks up from there.
       const { error } = await authClient.signIn.email(
         { email: adminEmail, password: adminPassword },
         { onSuccess: (ctx) => captureToken(ctx) },
       );
       if (error) throw new Error(error.message);
+      setProvisionDone(true);
+      await new Promise((r) => setTimeout(r, 1600));
       window.location.assign("/admin");
     } catch (e: any) {
       setErr(e.message || "Something went wrong");
-    } finally {
       setSubmitting(false);
+      setProvisionResult(null);
+      setProvisionDone(false);
     }
   }
 
@@ -210,6 +221,22 @@ export default function SignupCompanyPage() {
           <div className="mb-6 md:hidden">
             <Logo light />
           </div>
+          {submitting ? (
+            <>
+              <h2 className="font-display text-3xl font-bold tracking-tight text-white">Setting up {name || "your company"}</h2>
+              <p className="mt-1 text-slate-400">Hang tight — this takes about a minute.</p>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-ink-2 px-2 py-2">
+                <ProvisioningProgress
+                  website={website}
+                  industryId={industry}
+                  done={provisionDone}
+                  result={provisionResult}
+                  error={err || null}
+                />
+              </div>
+            </>
+          ) : (
+          <>
           <h2 className="font-display text-3xl font-bold tracking-tight text-white">Set up your company</h2>
           <p className="mt-1 text-slate-400">Two minutes, mostly done for you.</p>
 
@@ -338,6 +365,8 @@ export default function SignupCompanyPage() {
               )}
             </button>
           </form>
+          </>
+          )}
 
           <p className="mt-5 text-center text-sm text-slate-500">
             Already set up?{" "}

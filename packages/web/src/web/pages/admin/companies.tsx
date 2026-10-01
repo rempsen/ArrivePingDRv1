@@ -6,6 +6,7 @@ import { activeCompany, switchCompany } from "../../lib/tenant";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../../services/industry-presets";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
 import { FullLoader } from "../../components/loader";
+import { ProvisioningProgress, type ProvisioningSeeded } from "../../components/provisioning-progress";
 import { PageHead } from "./shell";
 import {
   Modal,
@@ -116,6 +117,11 @@ export default function CompaniesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleteErr, setDeleteErr] = useState("");
+  // Provisioning pop-up state: swaps the create modal's body for a staged
+  // progress narrative. Stays true a beat after the mutation resolves so
+  // the final "all set" line is readable before the modal closes.
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionResult, setProvisionResult] = useState<ProvisioningSeeded | null>(null);
   const setBrandField = <K extends keyof BrandProposal>(
     k: K,
     v: BrandProposal[K],
@@ -163,15 +169,25 @@ export default function CompaniesPage() {
       if (!res.ok) throw new Error((d as any).message || "Failed");
       return d;
     },
-    onSuccess: () => {
+    onSuccess: (d: any) => {
       qc.invalidateQueries({ queryKey: ["superadmin", "companies"] });
-      setOpen(false);
-      setForm({ ...EMPTY });
-      setBrand(null);
-      setScoutedFor("");
-      setErr("");
+      setProvisionResult(d?.seeded ?? null);
+      // Hold on the final "all set" line for a moment before closing —
+      // matching the onboarding chat's own close-delay convention.
+      setTimeout(() => {
+        setOpen(false);
+        setForm({ ...EMPTY });
+        setBrand(null);
+        setScoutedFor("");
+        setErr("");
+        setProvisioning(false);
+        setProvisionResult(null);
+      }, 1800);
     },
-    onError: (e: any) => setErr(e.message),
+    onError: (e: any) => {
+      setProvisioning(false);
+      setErr(e.message);
+    },
   });
 
   const deleteCompany = useMutation({
@@ -467,34 +483,44 @@ export default function CompaniesPage() {
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
-        title="Provision a new company"
-        subtitle={create.isPending ? "⏳ Provisioning — this can take up to a minute, please don't close this window." : undefined}
+        onClose={() => {
+          if (!provisioning) setOpen(false);
+        }}
+        title={provisioning ? "Setting up the new tenant" : "Provision a new company"}
+        subtitle={provisioning ? "Please don't close this window — this takes about a minute." : undefined}
         footer={
-          <>
-            <BtnGhost onClick={() => setOpen(false)} disabled={create.isPending}>Cancel</BtnGhost>
-            <BtnPrimary
-              onClick={() => create.mutate()}
-              disabled={
-                create.isPending ||
-                !form.name ||
-                !form.industry ||
-                (form.industry === "other" && !form.industryOther.trim()) ||
-                !form.adminEmail ||
-                !form.adminPassword
-              }
-            >
-              {create.isPending ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Provisioning…
-                </span>
-              ) : (
-                "Create company"
-              )}
-            </BtnPrimary>
-          </>
+          provisioning ? undefined : (
+            <>
+              <BtnGhost onClick={() => setOpen(false)}>Cancel</BtnGhost>
+              <BtnPrimary
+                onClick={() => {
+                  setProvisioning(true);
+                  setProvisionResult(null);
+                  create.mutate();
+                }}
+                disabled={
+                  !form.name ||
+                  !form.industry ||
+                  (form.industry === "other" && !form.industryOther.trim()) ||
+                  !form.adminEmail ||
+                  !form.adminPassword
+                }
+              >
+                Create company
+              </BtnPrimary>
+            </>
+          )
         }
       >
+        {provisioning ? (
+          <ProvisioningProgress
+            website={form.website}
+            industryId={form.industry}
+            done={!create.isPending && !!provisionResult}
+            result={provisionResult}
+            error={create.isError ? err || "Something went wrong." : null}
+          />
+        ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Company name">
@@ -669,6 +695,7 @@ export default function CompaniesPage() {
 
           {err && <p className="text-sm text-red-400">{err}</p>}
         </div>
+        )}
       </Modal>
     </div>
   );
