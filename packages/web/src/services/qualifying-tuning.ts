@@ -29,6 +29,8 @@ export type QualifyingProfile = {
   icpAnswers?: { question: string; answer: string }[];
   /** Set once applyQualifyingTuning() has run, so it never re-runs and compounds the multiplier. */
   tuningAppliedAt?: string;
+  /** Set once the ICP-answer → provisioning pass (icp-answer-tuning.ts) has run. */
+  icpTuningAppliedAt?: string;
 };
 
 const RUSH_PATTERN = /emergency|rush|urgent|after.?hours|off.?hours|overtime|priority|weekend/i;
@@ -75,7 +77,140 @@ export type TuningSummary = {
   emergencyTemplatesTuned: number;
   emergencyTemplateCreated: boolean;
   maintenanceTemplateCreated: boolean;
+  /** Capacity pass (technicianCount + jobsPerDay → service/template durations). */
+  capacityApplied: boolean;
+  capacityNote?: string;
 };
+
+/** Average open span per working day from company_settings.hours
+ * (`[{day,open,close}]`, "HH:MM"). Falls back to an 8-hour day when the
+ * field is freeform text, empty, or unparseable. */
+export function workdayMinutesFromHours(hoursJson: string | null | undefined): number {
+  const FALLBACK = 480;
+  try {
+    const parsed = JSON.parse(hoursJson || "");
+    if (!Array.isArray(parsed)) return FALLBACK;
+    const spans: number[] = [];
+    for (const row of parsed) {
+      const open = String(row?.open ?? "");
+      const close = String(row?.close ?? "");
+      const m1 = /^(\d{1,2}):(\d{2})/.exec(open);
+      const m2 = /^(\d{1,2}):(\d{2})/.exec(close);
+      if (!m1 || !m2) continue;
+      const span = Number(m2[1]) * 60 + Number(m2[2]) - (Number(m1[1]) * 60 + Number(m1[2]));
+      if (span >= 120 && span <= 24 * 60) spans.push(span);
+    }
+    if (!spans.length) return FALLBACK;
+    return Math.round(spans.reduce((a, b) => a + b, 0) / spans.length);
+  } catch {
+    return FALLBACK;
+  }
+}
+
+/** Share of a tech's day that is actually on-site (the rest is driving,
+ * parts runs, paperwork). Field-service benchmarks put wrench time at
+ * 60-75%; 70% is the middle of that band. */
+const ON_SITE_SHARE = 0.7;
+/** Within this band the seeded durations already match the stated volume —
+ * don't churn the catalog over noise. */
+const NO_CHANGE_BAND: [number, number] = [0.7, 1.4];
+/** Hard clamp on how far one pass may move durations. */
+const FACTOR_CLAMP: [number, number] = [0.5, 2.0];
+
+function round15(mins: number): number {
+  return Math.max(15, Math.min(480, Math.round(mins / 15) * 15));
+}
+
+/**
+ * Pure helper: given the stated volume and the seeded durations, decide the
+ * rescale factor (or null for "leave it"). Exported for tests/debugging.
+ */
+export function capacityFactor(input: {
+  technicianCount?: number;
+  jobsPerDay?: number;
+  workdayMins: number;
+  seededAvgMins: number;
+}): { factor: number; impliedMins: number; jobsPerTech: number } | null {
+  const techs = Math.max(1, Math.floor(input.technicianCount ?? 1));
+  const jobs = input.jobsPerDay;
+  if (typeof jobs !== "number" || !(jobs > 0)) return null;
+  if (!(input.seededAvgMins > 0)) return null;
+  const jobsPerTech = jobs / techs;
+  if (!(jobsPerTech > 0)) return null;
+  const impliedMins = (input.workdayMins * ON_SITE_SHARE) / jobsPerTech;
+  const raw = impliedMins / input.seededAvgMins;
+  if (raw >= NO_CHANGE_BAND[0] && raw <= NO_CHANGE_BAND[1]) return null;
+  const factor = Math.min(FACTOR_CLAMP[1], Math.max(FACTOR_CLAMP[0], raw));
+  return { factor, impliedMins, jobsPerTech };
+}
+
+/**
+ * Item 6a — the capacity consumer for technicianCount + jobsPerDay.
+ *
+ * The seeded service `durationMins` and template `estimatedMins` are the
+ * numbers the scheduler actually runs on: availability clash detection
+ * (services/availability.ts), the calendar slot size (routes/calendar.ts),
+ * AI dispatch workload projection (services/ai-dispatch.ts) and the
+ * customer's calendar invite (services/email.ts). They were seeded as
+ * industry-typical values. A shop telling us "3 techs, 24 jobs a day" is
+ * telling us their real jobs are ~40 minutes, not the 90 the preset
+ * assumed — so rescale the seeded durations toward the implied density.
+ *
+ * Conservative on purpose: no change inside a 0.7-1.4x band, factor clamped
+ * to 0.5-2x, every duration rounded to 15 minutes and kept in 15-480.
+ * Ratios between services are preserved (a 30-min inspection stays shorter
+ * than a 3-hour install). vehicleCount isn't a duration signal — it feeds
+ * the AI dispatcher's context instead (routes/ai.ts).
+ */
+async function applyCapacityDefaults(
+  companyId: string,
+  qualifying: QualifyingProfile,
+  summary: TuningSummary,
+): Promise<void> {
+  const tdbc = tdb(companyId);
+  const settings = await tdbc.selectOne(schema.companySettings);
+  const services = (await tdbc.select(schema.services)).filter((s) => s.active);
+  if (!services.length) {
+    summary.capacityNote = "no services to size";
+    return;
+  }
+  const seededAvgMins = services.reduce((a, s) => a + (s.durationMins || 60), 0) / services.length;
+  const workdayMins = workdayMinutesFromHours(settings?.hours);
+  const decision = capacityFactor({
+    technicianCount: qualifying.technicianCount,
+    jobsPerDay: qualifying.jobsPerDay,
+    workdayMins,
+    seededAvgMins,
+  });
+  if (!decision) {
+    summary.capacityNote =
+      typeof qualifying.jobsPerDay === "number"
+        ? "seeded durations already match stated volume"
+        : "jobsPerDay not captured";
+    return;
+  }
+
+  for (const svc of services) {
+    const next = round15((svc.durationMins || 60) * decision.factor);
+    if (next !== svc.durationMins) {
+      await tdbc.update(schema.services, { durationMins: next }, eq(schema.services.id, svc.id));
+    }
+  }
+  const templates = await tdbc.select(schema.taskTemplates);
+  for (const tpl of templates) {
+    if (!tpl.estimatedMins) continue;
+    const next = round15(tpl.estimatedMins * decision.factor);
+    if (next !== tpl.estimatedMins) {
+      await tdbc.update(schema.taskTemplates, { estimatedMins: next }, eq(schema.taskTemplates.id, tpl.id));
+    }
+  }
+  summary.capacityApplied = true;
+  summary.capacityNote = `Rescaled default durations x${decision.factor.toFixed(2)} (about ${Math.round(
+    decision.jobsPerTech * 10,
+  ) / 10} jobs per tech per day over a ${Math.round(workdayMins / 60)}h day implies ~${round15(
+    decision.impliedMins,
+  )} min on site; seeded average was ${Math.round(seededAvgMins)} min)`;
+}
 
 /**
  * Tune the tenant's already-seeded work-order templates using their
@@ -94,12 +229,10 @@ export type TuningSummary = {
  *    Never removes or edits anything if a suitable template already exists
  *    — additive only.
  *
- * technicianCount / vehicleCount / jobsPerDay are intentionally NOT wired
- * into provisioning here — they're capacity/context signals with no
- * concrete downstream consumer yet (no scheduling/capacity-planning
- * feature exists in the app to hand them to). They stay stored in
- * qualifying_profile for future use rather than forcing a change that
- * isn't grounded in anything real.
+ *  - technicianCount + jobsPerDay: rescale seeded service/template
+ *    durations toward the implied job density (applyCapacityDefaults
+ *    above). vehicleCount is surfaced to the AI dispatcher as operating
+ *    context in routes/ai.ts rather than changing any seeded data.
  */
 export async function applyQualifyingTuning(
   companyId: string,
@@ -110,11 +243,21 @@ export async function applyQualifyingTuning(
     emergencyTemplatesTuned: 0,
     emergencyTemplateCreated: false,
     maintenanceTemplateCreated: false,
+    capacityApplied: false,
   };
 
   if (qualifying.tuningAppliedAt) {
     summary.reason = "already applied";
     return summary;
+  }
+
+  // Capacity pass first and independently — it doesn't need templates to
+  // exist, and a failure here must not stop the template tuning below.
+  try {
+    await applyCapacityDefaults(companyId, qualifying, summary);
+  } catch (e) {
+    console.error("[qualifying-tuning] capacity pass failed", e);
+    summary.capacityNote = "error";
   }
 
   try {
@@ -123,6 +266,7 @@ export async function applyQualifyingTuning(
 
     if (!templates.length) {
       summary.reason = "no templates to tune";
+      summary.applied = true;
       return summary;
     }
 
@@ -232,6 +376,9 @@ export async function applyQualifyingTuning(
   } catch (e) {
     console.error("[qualifying-tuning] applyQualifyingTuning failed", e);
     summary.reason = "error";
+    // If the capacity pass already rewrote durations, report applied so the
+    // caller stamps tuningAppliedAt and a retry can't rescale them twice.
+    summary.applied = summary.capacityApplied;
     return summary;
   }
 }

@@ -43,8 +43,37 @@ export const aiRoutes = new Hono<AppEnv>()
       typicalDurationMins(companyId, b.serviceId),
     ]);
 
+    // Operating context from the onboarding qualifying chat (team size,
+    // fleet, volume) — lets the model reason about a 5-tech/3-van shop
+    // differently from a 20-tech fleet. Best-effort: missing or malformed
+    // profile just means no context line.
+    let operation: string | undefined;
+    let workerNoun: string | undefined;
+    try {
+      const settingsRow = await t.selectOne(schema.companySettings);
+      workerNoun = settingsRow?.workerNoun?.toLowerCase() || undefined;
+      const qp = JSON.parse(settingsRow?.qualifyingProfile || "{}") as {
+        technicianCount?: number;
+        vehicleCount?: number;
+        jobsPerDay?: number;
+      };
+      const bits: string[] = [];
+      if (typeof qp.technicianCount === "number") bits.push(`${qp.technicianCount} ${workerNoun ?? "technician"}s on the team`);
+      if (typeof qp.vehicleCount === "number") {
+        bits.push(`${qp.vehicleCount} vehicle${qp.vehicleCount === 1 ? "" : "s"}`);
+        if (typeof qp.technicianCount === "number" && qp.vehicleCount > 0 && qp.vehicleCount < qp.technicianCount) {
+          bits.push("fewer vehicles than people, so some ride as crews — a tech without their own vehicle is only as mobile as whoever they're paired with");
+        }
+      }
+      if (typeof qp.jobsPerDay === "number") bits.push(`about ${qp.jobsPerDay} jobs a day`);
+      if (bits.length) operation = bits.join("; ");
+    } catch {
+      operation = undefined;
+    }
+
     const result = await rankCandidates({
       tz: await companyTimeZone(t.companyId),
+      operation,
       job: {
         id: b.id,
         title: b.title,
@@ -72,7 +101,7 @@ export const aiRoutes = new Hono<AppEnv>()
         freeInMins: Math.round(load.get(r.id)?.freeInMins ?? 0),
       })),
       typicalMins,
-    });
+    }, { workerNoun });
 
     const best = result.best;
     return c.json(

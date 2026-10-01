@@ -710,10 +710,12 @@ export const companySettings = pgTable("company_settings", {
   // JSON blob captured by the post-signup onboarding chat's qualifying
   // questions (technician/vehicle counts, jobs/day, maintenance-plan and
   // emergency-premium posture, plus ICP-specific Q&A the agent designed
-  // itself). See services/onboarding-qualifying.ts for the shape. "{}" =
-  // never asked / tenant skipped. Best-effort context for future features
-  // (capacity-aware suggestions, rush pricing) — never load-bearing for
-  // provisioning, which already ran before this exists.
+  // itself). See services/qualifying-tuning.ts for the shape. "{}" =
+  // never asked / tenant skipped. Consumed once at finish_onboarding by
+  // applyQualifyingTuning (rush/maintenance templates, service-duration
+  // density from techs + jobs/day) and applyIcpAnswerTuning (ICP Q&A →
+  // catalog/options/templates), and read live by AI dispatch for operating
+  // context. Best-effort: nothing here blocks provisioning or booking.
   qualifyingProfile: text("qualifying_profile").notNull().default("{}"),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),

@@ -93,6 +93,9 @@ export interface RankInput {
     scheduledAt: number | null;
   };
   service: { name: string; category: string; durationMins: number } | null;
+  /** One-line operating context (team size, fleet, daily volume) from the
+   * onboarding qualifying profile. Prose for the model only — never parsed. */
+  operation?: string;
   /** tenant's technicians, already scoped */
   techs: Array<{
     id: string;
@@ -285,7 +288,7 @@ export async function rankCandidates(
   );
 
   const prompt = `You are the dispatcher for a field-service company. Pick the best ${noun} for this job and rank the rest.
-
+${input.operation ? `\nOPERATION\n- ${input.operation}\n` : ""}
 JOB
 - ${job.title || "(untitled work order)"}
 - service: ${input.service ? `${input.service.name} (${input.service.category})` : "unspecified"}
