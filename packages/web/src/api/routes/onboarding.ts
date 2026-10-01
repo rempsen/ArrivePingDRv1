@@ -42,6 +42,7 @@ import {
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
 import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qualifying-tuning";
+import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
 import {
   getIndustryPreset,
   industryLabel,
@@ -658,7 +659,31 @@ correction like that — it reads like you weren't listening.`;
               console.error("[onboarding] qualifying tuning failed", e);
             }
 
-            return { ok: true, summary: summary ?? "", tuning };
+            // Item 1: the ICP-specific Q/A pairs saved via
+            // save_icp_qualifying_answer finally get a consumer. Re-read the
+            // settings row (the block above may have stamped tuningAppliedAt)
+            // and run once, gated on icpTuningAppliedAt. Never blocks finishing.
+            let icpTuning: IcpTuningSummary | null = null;
+            try {
+              const row = await t.selectOne(schema.companySettings);
+              let current: QualifyingProfile = {};
+              try {
+                current = JSON.parse(row?.qualifyingProfile || "{}");
+              } catch {
+                current = {};
+              }
+              if (!current.icpTuningAppliedAt) {
+                icpTuning = await applyIcpAnswerTuning(cid, current);
+                if (icpTuning.applied) {
+                  const updated: QualifyingProfile = { ...current, icpTuningAppliedAt: new Date().toISOString() };
+                  await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
+                }
+              }
+            } catch (e) {
+              console.error("[onboarding] icp answer tuning failed", e);
+            }
+
+            return { ok: true, summary: summary ?? "", tuning, icpTuning };
           },
         }),
       } as const;
