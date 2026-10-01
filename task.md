@@ -30,3 +30,10 @@ replacing the "NVCV4 August 2026" chat (shared: runable.com/shared/c416dd9b-...)
 ## Still open
 5. Google Drive zip (1H8LLu5zx3LliRInVan9J1V2n259kwRCT) is not public — share as "anyone with link" or drop in Attachments.
 6. Confirm whether this chat has a Publish button (Runable project). If it's "Unmanaged", publishing still goes through the old chat.
+
+## 2026-10-01 — arriveping.com DB outage resolved
+- Cause: app_runtime/app_system passwords rotated (2026-09-30) while the deployed container and
+  the old chat's sandbox server still used the old ones → Supavisor circuit breaker + stale deploy.
+- Fix: new URLs added to home chat Dashboard → Secrets, old sandbox .env updated + server restarted,
+  Publish of 4b8bf98. /api/ready = ok, live sign-in = 200.
+- /api/ready now reports database_error + database_target on failure (a97cb02, 4b8bf98).
