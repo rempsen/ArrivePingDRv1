@@ -141,7 +141,11 @@ export async function ensureConnectedAccount(companyId: string, country: Connect
       business_profile: { name: co.name },
       metadata: { companyId },
     },
-    { idempotencyKey: `connect_acct_v2_${companyId}` },
+    // Per-attempt key: Stripe replays the cached response for a reused key for
+    // 24h — including errors — so a fixed per-tenant key kept returning this
+    // morning's "platform profile incomplete" rejection after it was approved.
+    // The stripe_account_id column (checked above) is what prevents duplicates.
+    { idempotencyKey: `connect_acct_${companyId}_${crypto.randomUUID()}` },
   );
 
   await db

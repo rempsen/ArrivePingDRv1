@@ -428,7 +428,9 @@ export const paymentsRoutes = new Hono<AppEnv>()
         u.role === "superadmin"
           ? `Stripe: ${raw}`
           : "Stripe setup isn't available right now — ArrivePing's payment account needs attention. Please contact support.";
-      throw new AppError(502, "stripe_connect_failed", msg, { expose: true });
+      // 409 not 502: Cloudflare replaces origin 502/504 bodies with its own
+      // "error code: 502" page, which hid this message in production.
+      throw new AppError(409, "stripe_connect_failed", msg, { expose: true });
     }
     const url = await createOnboardingLink(accountId, publicOrigin(c));
     capture("stripe.connect_started", companyId, { by: u.id, country });
