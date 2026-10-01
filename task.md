@@ -37,3 +37,9 @@ replacing the "NVCV4 August 2026" chat (shared: runable.com/shared/c416dd9b-...)
 - Fix: new URLs added to home chat Dashboard → Secrets, old sandbox .env updated + server restarted,
   Publish of 4b8bf98. /api/ready = ok, live sign-in = 200.
 - /api/ready now reports database_error + database_target on failure (a97cb02, 4b8bf98).
+
+## 2026-10-01 — Childcare & Babysitting ICP (commit 47c0a37, pushed)
+- Added `childcare-babysitting` preset (group "Care & Family Services") + notification archetype + 22-item catalog + 3 option categories. No DB migration needed (companies.industry is text).
+- Test tenant `test-sunny-sitters` provisioned in Supabase (admin test-sitters-admin@example.com). Delete when Dan is done looking.
+- PENDING: `icp_knowledge_base` row for `childcare-babysitting` — needs Dan's two Google Drive ICP docs (still private: 1KK2ogMCcvIEuzwgFAEIZt1IQ8tyg8YfM, 1IEAkdBT5rI4z6up0Y6fXjspEmHQlTZZw). Also refine preset copy/services from the docs once read.
+- Deploy: not live until NVCV4 August 2026 chat does `git pull origin main` → Publish.
