@@ -56,6 +56,7 @@ import { teamRoutes } from "./routes/team";
 import { superadminRoutes } from "./routes/superadmin";
 import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
+import { demoRequestRoutes } from "./routes/demo-request";
 import { punchlistRoutes } from "./routes/punchlist";
 import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
 
@@ -186,6 +187,8 @@ const app = new Hono<{ Variables: Variables }>()
   // NOT CORS). Mounted before basePath/authMiddleware so it stays unauthenticated.
   .use("/api/public/*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "X-Public-Key"] }))
   .route("/api/public/forms", publicFormsRoutes)
+  // PUBLIC "Book a demo" form on the marketing site — emails contact@nvc360.com.
+  .route("/api/public/demo-request", demoRequestRoutes)
   // PUBLIC self-serve onboarding — scrape-on-URL-entry + tenant signup.
   // Unauthenticated by design (nobody has a login yet); each op has its own
   // IP-keyed rate limiter (see routes/onboarding.ts).
