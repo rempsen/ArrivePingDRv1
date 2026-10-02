@@ -790,15 +790,9 @@
   font-size: 14px;
   color: var(--ink-secondary);
 }
-@media (max-width: 1023px) {
-  .site .showcase {
-    grid-template-columns: 200px minmax(0, 1fr);
-  }
-  .site .showcase-chapter {
-    padding: 32px 24px 40px;
-  }
-}
-@media (max-width: 767px), (max-height: 600px) {
+/* below the desktop breakpoint the rail becomes a sticky chip strip — a
+   200px column at tablet widths wrapped every chapter name onto three lines */
+@media (max-width: 1023px), (max-height: 600px) {
   .site .showcase {
     display: block;
   }
@@ -853,7 +847,7 @@
     border-radius: 0 0 var(--radius-demo) var(--radius-demo);
   }
   .site .showcase-chapter {
-    padding: 28px 20px 36px;
+    padding: 32px 24px 40px;
     /* native anchor jumps (no JS) also clear the sticky chip strip */
     scroll-margin-top: calc(var(--header-offset) + 64px + 24px);
   }
@@ -864,6 +858,11 @@
   .site .showcase__head {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+@media (max-width: 639px) {
+  .site .showcase-chapter {
+    padding: 28px 20px 36px;
   }
 }
 

@@ -15,6 +15,7 @@
   color: var(--ink);
   padding: 2.4em;
   display: grid;
+  align-content: center;
   overflow: hidden;
   background:
     radial-gradient(120% 90% at 50% 0%, #ffffff 0%, var(--surface-muted) 70%);
@@ -293,6 +294,7 @@
   color: var(--ink-muted);
 }
 .site .row__who {
+  display: block;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -317,6 +319,7 @@
 .site .row__empty {
   color: var(--ink-muted);
   font-size: 0.85em;
+  white-space: nowrap;
   border: 1px dashed var(--line-strong);
   border-radius: 999px;
   padding: 0.1em 0.65em;

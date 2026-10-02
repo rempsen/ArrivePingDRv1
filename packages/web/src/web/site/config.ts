@@ -200,7 +200,7 @@ export const audiences = [
 export const pricing = {
   title: "Simple per-vehicle pricing",
   body: "One licence per vehicle, billed monthly. Larger fleets pay a lower rate per vehicle.",
-  note: "Prices in CAD/USD confirmed at demo. Custom integrations are quoted separately.",
+  note: "Prices in CAD/USD confirmed at demo. Every tier includes the dispatch board, the technician app and customer arrival pages.",
   tiers: [
     { name: "Starter", range: "1–14 vehicles", price: "$30", unit: "per vehicle / month" },
     { name: "Growth", range: "15–49 vehicles", price: "$27.50", unit: "per vehicle / month", featured: true },

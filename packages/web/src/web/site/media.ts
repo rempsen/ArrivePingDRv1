@@ -39,7 +39,7 @@ export const mediaSlots: MediaSlot[] = [
   {
     id: "hero-overview",
     kind: "dom",
-    aspectRatio: "16 / 9",
+    aspectRatio: "16 / 7",
     mobileAspectRatio: "3 / 4",
     fit: "contain",
     muted: true,
@@ -113,7 +113,7 @@ export const mediaSlots: MediaSlot[] = [
   {
     id: "closing-motif",
     kind: "dom",
-    aspectRatio: "4 / 3",
+    aspectRatio: "16 / 10",
     fit: "contain",
     muted: true,
     repeat: false,
