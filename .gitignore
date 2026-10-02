@@ -110,3 +110,6 @@ crash.*.log
 *.auto.tfvars
 shot.png
 .local-shots/
+.env.eas
+.env.asc
+.env.asc2
