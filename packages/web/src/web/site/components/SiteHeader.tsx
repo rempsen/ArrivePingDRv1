@@ -15,7 +15,14 @@ export function useAnchorNav() {
     (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
       if (!href.startsWith("#")) return;
       const id = href.slice(1);
-      if (!document.getElementById(id)) return;
+      if (!document.getElementById(id)) {
+        // Section anchors only exist on the landing page; from /privacy etc. go home first.
+        if (window.location.pathname !== "/") {
+          e.preventDefault();
+          window.location.assign(`/${href}`);
+        }
+        return;
+      }
       e.preventDefault();
       scrollToAnchor(id, reduced);
       history.replaceState(null, "", href);

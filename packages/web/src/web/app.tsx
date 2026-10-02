@@ -27,6 +27,8 @@ const IntakeForm = lazyRoute(() => import("./pages/intake-form"));
 const JoinTech = lazyRoute(() => import("./pages/join-tech"));
 const JoinCompany = lazyRoute(() => import("./pages/join-company"));
 const SignupCompanyPage = lazyRoute(() => import("./pages/signup-company"));
+const PrivacyPage = lazyRoute(() => import("./pages/privacy"));
+const TermsPage = lazyRoute(() => import("./pages/terms"));
 const CustomerApp = lazyRoute(() => import("./pages/customer"));
 const RiderApp = lazyRoute(() => import("./pages/rider"));
 const AdminApp = lazyRoute(() => import("./pages/admin"));
@@ -104,6 +106,8 @@ function App() {
         <RouteErrorBoundary name="public">
         <Switch>
           <Route path="/" component={Index} />
+          <Route path="/privacy" component={PrivacyPage} />
+          <Route path="/terms" component={TermsPage} />
           <Route path="/sign-in">{() => <AuthPage mode="sign-in" />}</Route>
           <Route path="/sign-up">{() => <AuthPage mode="sign-up" />}</Route>
           <Route path="/get-started" component={SignupCompanyPage} />

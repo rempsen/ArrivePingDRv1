@@ -34,7 +34,7 @@ export function Hero() {
               {hero.secondary.label} <Arrow />
             </a>
           </div>
-          <p className="hero__fine enter enter--3">No app for customers · Technicians use the ArrivePing mobile app · Setup in days, not months</p>
+          <p className="hero__fine enter enter--3">No app for customers · Technicians use the ArrivePing mobile app · Up and running in hours</p>
         </div>
         <div className="hero__stage enter--stage">
           <MediaSlot id="hero-overview" raised />

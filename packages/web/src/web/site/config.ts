@@ -26,6 +26,8 @@ export const brand = {
     who: "#who-its-for",
     pricing: "#pricing",
     faqs: "#faqs",
+    privacy: "/privacy",
+    terms: "/terms",
   },
 } as const;
 
@@ -158,7 +160,7 @@ export const workflow = [
   {
     step: "01",
     title: "Set up the appointment",
-    body: "Add the customer, the job and the time — by hand, from an intake form, or from your schedule.",
+    body: "Add the customer, the job and the time — from your office dispatch, by hand, or straight from an intake form.",
   },
   {
     step: "02",
@@ -223,7 +225,7 @@ export const faqs = [
   },
   {
     q: "How long does setup take?",
-    a: "You create your company, invite technicians and add appointments. A guided onboarding walks you through each step, and our team is available during setup.",
+    a: "Most teams are up and running within hours. You create your company, invite technicians and add appointments. A guided onboarding walks you through each step, and our team is available during setup.",
   },
   {
     q: "Does it replace our scheduling or invoicing tools?",
@@ -270,6 +272,13 @@ export const footer = {
         { label: "Book a demo", href: brand.urls.demo },
         { label: "Sign in", href: brand.urls.signIn },
         { label: brand.contactEmail, href: `mailto:${brand.contactEmail}` },
+      ],
+    },
+    {
+      heading: "Legal",
+      links: [
+        { label: "Privacy Policy", href: brand.urls.privacy },
+        { label: "Terms & Conditions", href: brand.urls.terms },
       ],
     },
   ],
