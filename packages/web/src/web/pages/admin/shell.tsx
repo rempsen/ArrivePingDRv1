@@ -259,8 +259,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // overflow-x-clip (not -hidden): hidden turns this div into the scroll
+  // container for position:sticky, which silently breaks every sticky bar
+  // inside the admin (e.g. the Companies A–Z index). clip only clips.
   return (
-    <div className="min-h-screen overflow-x-hidden bg-ink text-slate-200">
+    <div className="min-h-screen overflow-x-clip bg-ink text-slate-200">
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[228px] flex-col border-r border-white/[0.06] bg-ink-2 md:flex">
         <div className="flex h-24 items-center border-b border-white/5 px-5">

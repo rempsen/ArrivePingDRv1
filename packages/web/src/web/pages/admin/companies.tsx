@@ -8,6 +8,7 @@ import { AddressAutocomplete } from "../../components/address-autocomplete";
 import { FullLoader } from "../../components/loader";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../../components/provisioning-progress";
 import { PageHead } from "./shell";
+import { CompanyFinder, useCompanyFinder } from "../../components/company-finder";
 import {
   Modal,
   Field,
@@ -128,6 +129,8 @@ export default function CompaniesPage() {
   ) => setBrand((b) => (b ? { ...b, [k]: v } : b));
 
   const active = activeCompany();
+
+  const finder = useCompanyFinder();
 
   const { data, isLoading } = useQuery({
     queryKey: ["superadmin", "companies"],
@@ -265,10 +268,89 @@ export default function CompaniesPage() {
       </div>
     );
 
-  if (isLoading) return <FullLoader />;
   const companies = ((data as any)?.companies ?? []) as Company[];
+  if (isLoading) return <FullLoader />;
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const renderCard = (co: Company) => {
+    const isActive = active === co.id || (!active && co.id === "default");
+    return (
+      <div
+        key={co.id}
+        className="rounded-2xl border border-white/5 bg-ink-2 p-5 transition hover:border-brand/30"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand/15 text-cyan-glow">
+              <Building2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-100">{co.name}</p>
+              <p className="text-xs text-slate-500">{co.id}</p>
+            </div>
+          </div>
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+              PLAN_TINT[co.plan] ?? PLAN_TINT.starter
+            }`}
+          >
+            {co.plan}
+          </span>
+        </div>
+
+        <div className="mt-4 space-y-1.5 text-sm text-slate-400">
+          {co.contactEmail && (
+            <p className="flex items-center gap-2">
+              <Mail className="h-3.5 w-3.5" /> {co.contactEmail}
+            </p>
+          )}
+          {co.phone && (
+            <p className="flex items-center gap-2">
+              <Phone className="h-3.5 w-3.5" /> {co.phone}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+          <span
+            className={`text-xs font-medium ${
+              co.status === "active" ? "text-emerald-live" : "text-slate-500"
+            }`}
+          >
+            {co.status}
+          </span>
+          <div className="flex items-center gap-2">
+            {co.id !== "default" && (
+              <button
+                onClick={() => {
+                  setDeleteTarget(co);
+                  setDeleteConfirmName("");
+                  setDeleteErr("");
+                }}
+                title="Delete company"
+                className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-500 transition hover:border-red-500/40 hover:text-red-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {isActive ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand/15 px-3 py-1.5 text-xs font-semibold text-cyan-glow">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Active
+              </span>
+            ) : (
+              <button
+                onClick={() => switchCompany(co.id)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-brand hover:text-brand"
+              >
+                <LogIn className="h-3.5 w-3.5" /> Switch to
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="p-5 md:p-8">
@@ -355,86 +437,18 @@ export default function CompaniesPage() {
         );
       })()}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {companies.map((co) => {
-          const isActive = active === co.id || (!active && co.id === "default");
-          return (
-            <div
-              key={co.id}
-              className="rounded-2xl border border-white/5 bg-ink-2 p-5 transition hover:border-brand/30"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand/15 text-cyan-glow">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-100">{co.name}</p>
-                    <p className="text-xs text-slate-500">{co.id}</p>
-                  </div>
-                </div>
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                    PLAN_TINT[co.plan] ?? PLAN_TINT.starter
-                  }`}
-                >
-                  {co.plan}
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-1.5 text-sm text-slate-400">
-                {co.contactEmail && (
-                  <p className="flex items-center gap-2">
-                    <Mail className="h-3.5 w-3.5" /> {co.contactEmail}
-                  </p>
-                )}
-                {co.phone && (
-                  <p className="flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5" /> {co.phone}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
-                <span
-                  className={`text-xs font-medium ${
-                    co.status === "active" ? "text-emerald-live" : "text-slate-500"
-                  }`}
-                >
-                  {co.status}
-                </span>
-                <div className="flex items-center gap-2">
-                  {co.id !== "default" && (
-                    <button
-                      onClick={() => {
-                        setDeleteTarget(co);
-                        setDeleteConfirmName("");
-                        setDeleteErr("");
-                      }}
-                      title="Delete company"
-                      className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-slate-500 transition hover:border-red-500/40 hover:text-red-400"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {isActive ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand/15 px-3 py-1.5 text-xs font-semibold text-cyan-glow">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Active
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => switchCompany(co.id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-brand hover:text-brand"
-                    >
-                      <LogIn className="h-3.5 w-3.5" /> Switch to
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <CompanyFinder
+        finder={finder}
+        items={companies}
+        getName={(co) => co.name}
+        getFields={(co) => [co.name, co.id, co.contactEmail, co.phone]}
+        noun="companies"
+        renderGrid={(rows) => (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {rows.map((co) => renderCard(co))}
+          </div>
+        )}
+      />
 
       {/* Delete-company confirmation — type the exact name, this is irreversible */}
       <Modal
