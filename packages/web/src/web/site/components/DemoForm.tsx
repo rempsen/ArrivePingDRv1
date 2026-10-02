@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { brand, closing } from "../config";
 
 type Status = { kind: "idle" } | { kind: "loading" } | { kind: "ok" } | { kind: "error"; message: string };
@@ -11,6 +11,13 @@ export function DemoForm() {
   const [values, setValues] = useState({ name: "", email: "", company: "", teamSize: "", website: "" });
   const [errors, setErrors] = useState<Partial<Record<keyof typeof values, string>>>({});
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const okRef = useRef<HTMLDivElement>(null);
+
+  // The form unmounts on success; move focus to the confirmation so keyboard
+  // and screen-reader users are not dropped back to <body>.
+  useEffect(() => {
+    if (status.kind === "ok") okRef.current?.focus();
+  }, [status.kind]);
 
   const set = (k: keyof typeof values) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setValues((v) => ({ ...v, [k]: e.target.value }));
@@ -41,7 +48,11 @@ export function DemoForm() {
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: { message?: string } };
       if (!res.ok || !data.ok) {
-        setStatus({ kind: "error", message: data.error?.message || `We couldn't send your request. Please email ${brand.contactEmail}.` });
+        const message =
+          res.status === 429
+            ? `Too many requests from this connection. Please try again in a few minutes, or email ${brand.contactEmail}.`
+            : data.error?.message || `We couldn't send your request. Please email ${brand.contactEmail}.`;
+        setStatus({ kind: "error", message });
         return;
       }
       setStatus({ kind: "ok" });
@@ -52,7 +63,7 @@ export function DemoForm() {
 
   if (status.kind === "ok") {
     return (
-      <div className="form-card" role="status" aria-live="polite">
+      <div className="form-card" role="status" aria-live="polite" tabIndex={-1} ref={okRef}>
         <h3>Thanks — we'll be in touch.</h3>
         <p className="small">
           Your request has gone to the ArrivePing team. Expect a reply from {brand.contactEmail} within one business day.

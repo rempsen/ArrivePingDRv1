@@ -436,6 +436,7 @@
 .site .hero {
   padding-top: clamp(48px, 7vw, 88px);
   padding-bottom: clamp(48px, 6vw, 80px);
+  overflow-x: clip; /* the stage wash below bleeds past the container on purpose; never widen the page */
 }
 .site .hero__copy {
   text-align: center;
@@ -555,6 +556,11 @@
 @media (max-width: 639px) {
   .site .slot {
     aspect-ratio: var(--ar-m, var(--ar, 16 / 10));
+  }
+  /* DOM scenes stack to one column on phones; let the slot take the scene's
+     own height instead of clipping it (video slots keep the fixed ratio). */
+  .site .slot:has(> .scene) {
+    aspect-ratio: auto;
   }
 }
 .site .slot--raised {
@@ -848,6 +854,8 @@
   }
   .site .showcase-chapter {
     padding: 28px 20px 36px;
+    /* native anchor jumps (no JS) also clear the sticky chip strip */
+    scroll-margin-top: calc(var(--header-offset) + 64px + 24px);
   }
   .site .showcase-support {
     grid-template-columns: minmax(0, 1fr);
@@ -1166,6 +1174,9 @@
   border-radius: var(--radius-demo);
   padding: 28px;
   box-shadow: var(--shadow-overlay);
+}
+.site .form-card[tabindex="-1"]:focus {
+  outline: none; /* programmatic focus only; the live region announces it */
 }
 .site .form-card h3 {
   font-size: 22px;

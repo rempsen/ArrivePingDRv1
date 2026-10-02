@@ -101,8 +101,11 @@
 }
 @container (max-width: 560px) {
   .site .scene {
+    position: relative;
+    inset: auto;
     font-size: 11px;
-    padding: 1.6em;
+    /* room for the "Illustrative demo" label above and the controls below */
+    padding: 3.8em 1.4em 5em;
   }
   .site .scene__pair,
   .site .scene--hero .scene__pair--connected {

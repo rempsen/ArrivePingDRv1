@@ -106,9 +106,18 @@ export function useScrollspy(containerRef: RefObject<HTMLElement | null>, ids: r
 }
 
 /** Scroll to an in-page anchor below the measured header; instant under reduced motion. */
-export function scrollToAnchor(id: string, reduced: boolean, extra = 24) {
+/** Extra offset needed when the target sits under the sticky chapter strip (narrow screens). */
+export function stickyRailExtra(el: Element): number {
+  const chapters = el.closest(".showcase-chapters");
+  const rail = chapters?.parentElement?.querySelector<HTMLElement>(".showcase-rail");
+  if (!rail || getComputedStyle(rail).position !== "sticky") return 0;
+  return rail.getBoundingClientRect().height;
+}
+
+export function scrollToAnchor(id: string, reduced: boolean, extra?: number) {
   const el = document.getElementById(id);
   if (!el) return;
-  const top = el.getBoundingClientRect().top + window.scrollY - readHeaderOffset() - extra;
+  const gap = extra ?? 24 + stickyRailExtra(el);
+  const top = el.getBoundingClientRect().top + window.scrollY - readHeaderOffset() - gap;
   window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
 }

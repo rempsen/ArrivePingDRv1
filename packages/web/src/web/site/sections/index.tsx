@@ -93,17 +93,10 @@ export function Showcase() {
 
   const railRef = useRef<HTMLElement>(null);
 
-  // On narrow screens the rail is a sticky horizontal strip; offset anchors by its height.
-  const railExtra = () => {
-    const rail = railRef.current;
-    if (!rail) return 24;
-    const stuck = getComputedStyle(rail).position === "sticky";
-    return stuck ? rail.getBoundingClientRect().height + 16 : 24;
-  };
-
   const onRail = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
-    scrollToAnchor(id, reduced, railExtra());
+    // scrollToAnchor adds the sticky chip strip's height on narrow screens.
+    scrollToAnchor(id, reduced);
     history.replaceState(null, "", `#${id}`);
   };
 
