@@ -57,11 +57,17 @@ function Page() {
   }, []);
 
   // The marketing page owns the light canvas; the rest of the app is dark.
+  // It is also the only public, indexable route, so it declares its canonical URL.
   useEffect(() => {
     const prev = document.documentElement.style.backgroundColor;
     document.documentElement.style.backgroundColor = "#fafafa";
+    const canonical = document.createElement("link");
+    canonical.rel = "canonical";
+    canonical.href = "https://arriveping.com/";
+    document.head.appendChild(canonical);
     return () => {
       document.documentElement.style.backgroundColor = prev;
+      canonical.remove();
     };
   }, []);
 

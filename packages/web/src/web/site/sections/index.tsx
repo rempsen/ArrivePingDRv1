@@ -68,8 +68,11 @@ const icons: Record<string, JSX.Element> = {
 
 export function BenefitsStrip() {
   return (
-    <section className="section--tight">
+    <section className="section--tight" aria-labelledby="benefits-title">
       <div className="container">
+        <h2 id="benefits-title" className="visually-hidden">
+          Why teams use ArrivePing
+        </h2>
         <div className="benefits">
           {benefits.map((b, i) => (
             <div key={b.title} className="benefit" data-reveal="" data-reveal-delay={String(i)}>
