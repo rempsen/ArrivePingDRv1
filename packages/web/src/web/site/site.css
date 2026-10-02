@@ -942,6 +942,10 @@
   position: relative;
   min-width: 0;
 }
+.site picture {
+  display: block;
+  min-width: 0;
+}
 .site .story__photo {
   aspect-ratio: 3 / 2;
   width: 100%;
@@ -989,6 +993,7 @@
   background: var(--surface);
 }
 .site .audience img {
+  display: block;
   aspect-ratio: 3 / 2;
   width: 100%;
   object-fit: cover;

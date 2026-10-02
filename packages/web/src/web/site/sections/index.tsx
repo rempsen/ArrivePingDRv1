@@ -257,7 +257,10 @@ export function OutcomeStories() {
               <p className="story__a">{st.answer}</p>
             </div>
             <div className="story__media" data-reveal="" data-reveal-delay="1">
-              <img className="story__photo" src={st.image.src} alt={st.image.alt} loading="lazy" width={1200} height={800} />
+              <picture>
+                <source type="image/webp" srcSet={st.image.src.replace(/\.jpg$/, ".webp")} />
+                <img className="story__photo" src={st.image.src} alt={st.image.alt} loading="lazy" width={1200} height={800} />
+              </picture>
               <div className="story__card">
                 <MediaSlot id={st.scene} raised />
               </div>
@@ -282,7 +285,10 @@ export function Audiences() {
         <div className="audiences">
           {audiences.map((a, i) => (
             <div key={a.label} className="audience" data-reveal="" data-reveal-delay={String(Math.min(3, i))}>
-              <img src={a.image} alt="" loading="lazy" width={900} height={600} />
+              <picture>
+                <source type="image/webp" srcSet={a.image.replace(/\.jpg$/, ".webp")} />
+                <img src={a.image} alt="" loading="lazy" width={900} height={600} />
+              </picture>
               <span>{a.label}</span>
             </div>
           ))}
