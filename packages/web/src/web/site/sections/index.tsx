@@ -1,5 +1,5 @@
 import { useEffect, useRef, type JSX } from "react";
-import { audiences, benefits, brand, chapters, closing, faqs, hero, pricing, stories, workflow } from "../config";
+import { audiences, benefits, brand, chapters, closing, faqs, hero, pricing, stats, stories, story, workflow } from "../config";
 import { MediaSlot } from "../components/MediaSlot";
 import { DemoForm } from "../components/DemoForm";
 import { useAnchorNav } from "../components/SiteHeader";
@@ -79,6 +79,7 @@ export function BenefitsStrip() {
               <div className="benefit__icon">{icons[b.icon]}</div>
               <h3>{b.title}</h3>
               <p>{b.body}</p>
+              <span className="benefit__stat">{b.stat}</span>
             </div>
           ))}
         </div>
@@ -289,7 +290,10 @@ export function Audiences() {
                 <source type="image/webp" srcSet={a.image.replace(/\.jpg$/, ".webp")} />
                 <img src={a.image} alt="" loading="lazy" width={900} height={600} />
               </picture>
-              <span>{a.label}</span>
+              <div className="audience__copy">
+                <span className="audience__label">{a.label}</span>
+                <p className="audience__body">{a.body}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -354,6 +358,44 @@ export function FAQ() {
               <p className="faq__a">{f.a}</p>
             </details>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Our story ---------------- */
+export function OurStory() {
+  return (
+    <section id="our-story" className="section section--divided anchor">
+      <div className="container">
+        <div className="ourstory">
+          <div className="ourstory__copy" data-reveal="">
+            <span className="eyebrow">{story.eyebrow}</span>
+            <h2 className="h-section">
+              {story.title} <span className="h-muted">{story.titleMuted}</span>
+            </h2>
+            <p className="lede">{story.body}</p>
+            <blockquote className="ourstory__quote">
+              “{story.quote}”
+              <cite>{story.quoteAttribution}</cite>
+            </blockquote>
+          </div>
+
+          <div className="ourstory__stats" data-reveal="" data-reveal-delay="1">
+            {stats.map((s) => (
+              <div key={s.label} className="ourstat">
+                <div className="ourstat__value">{s.value}</div>
+                <p className="ourstat__label">{s.label}</p>
+                {"source" in s && s.source && <span className="ourstat__source">{s.source}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="ourstory__guarantee" data-reveal="">
+          <h3>{story.guarantee.title}</h3>
+          <p>{story.guarantee.body}</p>
         </div>
       </div>
     </section>

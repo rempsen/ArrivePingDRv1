@@ -101,16 +101,19 @@ export const benefits = [
     title: "Customers know what's happening",
     body: "A text or email link opens a live arrival page — no app, no account. The arrival window and technician status stay current.",
     icon: "customer",
+    stat: "1 in 3 customers comment on live tracking & ETA",
   },
   {
     title: "Dispatchers see every arrival",
     body: "One board shows who is assigned, who is travelling and who has arrived, so the day can be adjusted before it slips.",
     icon: "board",
+    stat: "20% average reduction in field labour costs",
   },
   {
     title: "Technicians stay coordinated",
     body: "The mobile app shares status as the technician heads out and arrives, without extra phone calls back to the office.",
     icon: "technician",
+    stat: "48% of rework is caused by miscommunication",
   },
 ] as const;
 
@@ -192,12 +195,61 @@ export const stories = [
 ] as const;
 
 export const audiences = [
-  { label: "HVAC & mechanical", image: "/img/site/industry-hvac.jpg" },
-  { label: "Plumbing & electrical", image: "/img/site/industry-plumbing.jpg" },
-  { label: "Installers & construction", image: "/img/site/industry-construction.jpg" },
-  { label: "Property maintenance", image: "/img/site/industry-property-management.jpg" },
-  { label: "Delivery & logistics", image: "/img/site/industry-delivery-logistics.jpg" },
+  {
+    label: "HVAC & mechanical",
+    body: "Send live ETAs and close more calls per day — no more holding the whole afternoon open for one visit.",
+    image: "/img/site/industry-hvac.jpg",
+  },
+  {
+    label: "Plumbing & electrical",
+    body: "Dispatch the nearest qualified tech to urgent calls and keep the customer posted without a round of phone tag.",
+    image: "/img/site/industry-plumbing.jpg",
+  },
+  {
+    label: "Installers & construction",
+    body: "Coordinate crews across multiple sites from one board, with live status instead of check-in calls.",
+    image: "/img/site/industry-construction.jpg",
+  },
+  {
+    label: "Property maintenance",
+    body: "Track every contractor and maintenance visit across your portfolio from a single dashboard.",
+    image: "/img/site/industry-property-management.jpg",
+  },
+  {
+    label: "Delivery & logistics",
+    body: "Give customers a live arrival window for their delivery instead of a daylong \"sometime today\" wait.",
+    image: "/img/site/industry-delivery-logistics.jpg",
+  },
 ] as const;
+
+/* ------------------------------------------------------------------ */
+/* Proof points & founder story                                        */
+/* ------------------------------------------------------------------ */
+
+export const stats = [
+  {
+    value: "1B+",
+    label: "Hours lost each year to inefficient service appointment windows",
+    source: "U.S. Bureau of Labor Statistics",
+  },
+  { value: "20%", label: "Average reduction in field labour costs for ArrivePing teams" },
+  { value: "800+", label: "Field technicians run by our team before ArrivePing was built" },
+] as const;
+
+export const story = {
+  eyebrow: "Why we built this",
+  title: "We didn't build this in a lab.",
+  titleMuted: "We built it in the field.",
+  body:
+    "ArrivePing comes out of NVC360, a specialty subcontracting operation that ran more than 800 field technicians. We lived the friction firsthand — dispatchers tied to the phone, customers demanding updates, routes that didn't add up, margin lost in every communication gap. We looked for a platform that fixed it. It didn't exist, so we built one — and we're making it available to every field service team facing the same problem.",
+  quote: "800+ technicians. One lesson learned: your customers' time is your reputation.",
+  quoteAttribution: "ArrivePing / NVC360 founding team, Winnipeg, MB",
+  guarantee: {
+    title: "A guarantee, not just a pitch.",
+    body:
+      "No large upfront cost, no ripping out the tools you already use, onboarding built around how your team actually works. If ArrivePing doesn't make your dispatch day calmer within the first month, we'll refund it — no questions asked.",
+  },
+} as const;
 
 export const pricing = {
   title: "Simple per-vehicle pricing",

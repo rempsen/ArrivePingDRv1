@@ -14,6 +14,7 @@ import {
   Audiences,
   Pricing,
   FAQ,
+  OurStory,
   ClosingCTA,
 } from "../site/sections";
 import "../site/site.css";
@@ -86,6 +87,7 @@ function Page() {
         <Audiences />
         <Pricing />
         <FAQ />
+        <OurStory />
         <ClosingCTA />
       </main>
       <SiteFooter />
