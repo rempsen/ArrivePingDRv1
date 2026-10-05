@@ -8,7 +8,10 @@ export function SiteFooter() {
       <div className="container">
         <div className="footer__grid">
           <div className="footer__brand">
-            <img src={brand.logoDark} alt={brand.lockup} width={150} height={24} />
+            <div className="footer__logo">
+              <img src={brand.icon} alt="" width={36} height={36} className="header__mark" aria-hidden="true" />
+              <img src={brand.logoDark} alt={brand.lockup} width={220} height={40} />
+            </div>
             <p>{footer.description}</p>
           </div>
           {footer.columns.map((col) => (
@@ -27,7 +30,10 @@ export function SiteFooter() {
           ))}
         </div>
         <div className="footer__bottom">
-          <span>{footer.legal}</span>
+          <span className="footer__bottom-brand">
+            <img src={brand.icon} alt="" width={16} height={16} className="footer__mini-mark" aria-hidden="true" />
+            {footer.legal}
+          </span>
           <span>{brand.launch}</span>
         </div>
       </div>

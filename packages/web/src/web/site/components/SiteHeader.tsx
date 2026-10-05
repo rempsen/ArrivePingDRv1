@@ -61,7 +61,8 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
     <header ref={ref} className="header">
       <div className="container header__inner">
         <a href="/" className="header__logo" aria-label={`${brand.product} home`}>
-          <img src={brand.logoDark} alt={brand.lockup} width={160} height={26} />
+          <img src={brand.icon} alt="" width={36} height={36} className="header__mark" aria-hidden="true" />
+          <img src={brand.logoDark} alt={brand.lockup} width={220} height={40} />
         </a>
         <nav className="nav" aria-label="Primary">
           {nav.map((n) => (
@@ -103,7 +104,10 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
         <div className="drawer" onClick={close} role="presentation">
           <div id="site-drawer" className="drawer__panel" role="dialog" aria-modal="true" aria-label="Menu" onClick={(e) => e.stopPropagation()}>
             <div className="drawer__top">
-              <img src={brand.logoDark} alt={brand.lockup} height={24} style={{ height: 24, width: "auto" }} />
+              <div className="drawer__brand">
+                <img src={brand.icon} alt="" width={28} height={28} className="header__mark" aria-hidden="true" />
+                <img src={brand.logoDark} alt={brand.lockup} height={24} style={{ height: 24, width: "auto" }} />
+              </div>
               <button type="button" className="btn btn--ghost btn--sm" onClick={close} aria-label="Close menu">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

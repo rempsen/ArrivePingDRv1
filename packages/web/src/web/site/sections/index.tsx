@@ -416,6 +416,7 @@ export function OurStory() {
 export function ClosingCTA() {
   return (
     <section id="book-a-demo" className="closing anchor">
+      <img src={brand.icon} alt="" aria-hidden="true" className="closing__watermark" />
       <div className="container closing__grid">
         <div data-reveal="">
           <span className="eyebrow" style={{ color: "#b9bcc4" }}>
