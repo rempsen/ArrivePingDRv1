@@ -6,6 +6,7 @@ provider "registry.terraform.io/xrizur/dockercompose" {
   constraints = "~> 1.1"
   hashes = [
     "h1:ah9W2KX67IvuVYZAWvpXxtLZLlDF0MqXUIUj3kUQ6fM=",
+    "h1:yaZKmxIwKnpObfuWv+CAYfdbnx3jneBHB50POsEcWw4=",
     "zh:0966ac08a806d7662df1de237ecb0a4e247c178936320abd125532039adf8b2b",
     "zh:1f6b84152daf5af4c72e448053eaa192853046d34ebcf9fa42307bf44c57edb7",
     "zh:6b9c58a3b6f24717b9734bbd5763b98ca980a511c86f08d76a8c9767e6f0d4f6",

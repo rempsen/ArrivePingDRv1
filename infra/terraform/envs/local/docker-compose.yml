@@ -1,34 +1,30 @@
 services:
   db:
-    image: ghcr.io/tursodatabase/libsql-server:latest
+    image: postgres:16
     restart: unless-stopped
     ports:
-    - 8080:8080
-    - 5001:5001
+    - 5432:5432
     environment:
-      SQLD_NODE: primary
+      POSTGRES_DB: nvc360
+      POSTGRES_PASSWORD: postgres_local
+      POSTGRES_USER: postgres
+    command:
+    - postgres
+    - -c
+    - ssl=on
+    - -c
+    - ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+    - -c
+    - ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
     volumes:
-    - sqld-data:/var/lib/sqld
-    platform: linux/amd64
-  db-studio:
-    image: oven/bun:alpine
-    ports:
-    - 4983:4983
-    depends_on:
-    - db
-    - web
-    environment:
-      DATABASE_URL: http://db:8080
-    entrypoint:
-    - bunx
-    - drizzle-kit
-    - studio
-    - --host
-    - 0.0.0.0
-    volumes:
-    - ../../../..//packages/web:/app
-    - node-modules:/app/node_modules
-    working_dir: /app
+    - pg-data:/var/lib/postgresql/data
+    - /Users/joel/code/nvc360/ArrivePingDRv1/infra/terraform/envs/local/init-roles.sql:/docker-entrypoint-initdb.d/init-roles.sql:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U postgres -d nvc360
+      interval: 5s
+      retries: 10
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -43,16 +39,23 @@ services:
     - redis
     environment:
       BETTER_AUTH_URL: http://localhost:5173
-      DATABASE_URL: http://db:8080
+      DATABASE_SYSTEM_URL: postgres://app_system:app_system_local@db:5432/nvc360
+      DATABASE_URL: postgres://app_runtime:app_runtime_local@db:5432/nvc360
       REDIS_URL: redis://redis:6379
+      SUPABASE_MIGRATION_URL: postgres://postgres:postgres_local@db:5432/nvc360
     entrypoint:
     - /bin/sh
-    - /app/entrypoint.sh
+    - /repo/dev/docker/entrypoint.sh
     volumes:
-    - ../../../..//packages/web:/app
-    - ../../../..//dev/docker/entrypoint.sh:/app/entrypoint.sh
-    - node-modules:/app/node_modules
-    working_dir: /app
+    - /Users/joel/code/nvc360/ArrivePingDRv1:/repo
+    - node-modules:/repo/node_modules
+    - web-node-modules:/repo/packages/web/node_modules
+    - desktop-node-modules:/repo/packages/desktop/node_modules
+    - mobile-node-modules:/repo/packages/mobile/node_modules
+    working_dir: /repo/packages/web
 volumes:
+  desktop-node-modules: {}
+  mobile-node-modules: {}
   node-modules: {}
-  sqld-data: {}
+  pg-data: {}
+  web-node-modules: {}
