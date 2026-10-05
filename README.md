@@ -17,7 +17,7 @@ packages/
       api/
         index.ts             Hono routes (.basePath('api')) + AppType export
         database/
-          index.ts           Database client (Turso/LibSQL)
+          index.ts           Database client (Postgres)
           schema.ts          Drizzle schema
       web/
         main.tsx             App entry
