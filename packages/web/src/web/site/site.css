@@ -434,6 +434,8 @@
 
 /* ---------- Hero ---------- */
 .site .hero {
+  position: relative;
+  isolation: isolate;
   padding-top: clamp(48px, 7vw, 88px);
   padding-bottom: clamp(48px, 6vw, 80px);
   overflow-x: clip; /* the stage wash below bleeds past the container on purpose; never widen the page */
@@ -1077,12 +1079,14 @@
   background: var(--surface);
 }
 .site .ourstat__value {
+  display: block;
   font-family: var(--font-heading);
   font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 .site .ourstat__label {
   margin-top: 8px;
@@ -1633,8 +1637,108 @@
   }
 }
 
+/* ---------- Motion accents (aurora / spotlight / count-up / beam) ---------- */
+@property --beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Ambient aurora wash — cheap transform/opacity drift behind the hero. */
+.site .aurora {
+  position: absolute;
+  inset: -14% -10% -4%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 1;
+  background:
+    radial-gradient(36% 40% at 14% 20%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 70%),
+    radial-gradient(30% 34% at 86% 8%, color-mix(in srgb, #7c5cff 20%, transparent) 0%, transparent 70%),
+    radial-gradient(40% 44% at 50% 96%, color-mix(in srgb, var(--accent) 17%, transparent) 0%, transparent 70%);
+  filter: blur(42px);
+  will-change: transform;
+  animation: aurora-drift 20s var(--ease-standard) infinite alternate;
+}
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-2.5%, 2%, 0) scale(1.07);
+  }
+  100% {
+    transform: translate3d(2.5%, -2%, 0) scale(1);
+  }
+}
+
+/* Cursor-follow spotlight on cards — one listener on the parent grid,
+   each `.spot` card reads --mx/--my set directly on itself. */
+.site .spot {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.site .spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 320ms var(--ease-standard);
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 72%);
+}
+.site .spot:hover::before,
+.site .spot:focus-within::before {
+  opacity: 1;
+}
+.site .spot > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Animated border beam — a thin light that orbits a card or button's edge. */
+.site .beam {
+  position: relative;
+}
+.site .beam::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--beam-angle),
+    transparent 0deg,
+    transparent 250deg,
+    color-mix(in srgb, var(--accent) 85%, white) 296deg,
+    var(--accent) 320deg,
+    transparent 344deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: beam-spin 3.4s linear infinite;
+}
+@keyframes beam-spin {
+  to {
+    --beam-angle: 360deg;
+  }
+}
+
+@media (max-width: 639px) {
+  .site .aurora {
+    opacity: 0.55;
+  }
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
+  .site .aurora,
+  .site .beam::after {
+    animation: none;
+  }
   .site .enter,
   .site .enter--stage,
   .site .drawer__panel {

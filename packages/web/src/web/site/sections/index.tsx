@@ -5,6 +5,7 @@ import { DemoForm } from "../components/DemoForm";
 import { useAnchorNav } from "../components/SiteHeader";
 import { usePlayback } from "../motion/playback";
 import { scrollToAnchor, useScrollspy } from "../motion/use-scrollspy";
+import { Aurora, CountUp, handleSpotlight } from "../motion/effects";
 
 const Arrow = () => (
   <svg className="arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -17,6 +18,7 @@ export function Hero() {
   const go = useAnchorNav();
   return (
     <section className="hero">
+      <Aurora />
       <div className="container">
         <div className="hero__copy">
           <span className="eyebrow enter">{hero.eyebrow}</span>
@@ -27,7 +29,7 @@ export function Hero() {
           </h1>
           <p className="hero__lede enter enter--3">{hero.body}</p>
           <div className="hero__ctas enter enter--3">
-            <a href={hero.primary.href} className="btn btn--primary" onClick={(e) => go(e, hero.primary.href)}>
+            <a href={hero.primary.href} className="btn btn--primary beam" onClick={(e) => go(e, hero.primary.href)}>
               {hero.primary.label}
             </a>
             <a href={hero.secondary.href} className="btn btn--secondary" onClick={(e) => go(e, hero.secondary.href)}>
@@ -313,21 +315,29 @@ export function Pricing() {
           <h2 className="h-section">{pricing.title}</h2>
           <p className="lede">{pricing.body}</p>
         </div>
-        <div className="tiers">
-          {pricing.tiers.map((t, i) => (
-            <div key={t.name} className={`tier${"featured" in t && t.featured ? " tier--featured" : ""}`} data-reveal="" data-reveal-delay={String(i)}>
-              <div className="tier__name">
-                {t.name}
-                {"featured" in t && t.featured && <span className="tier__tag">Most common</span>}
+        <div className="tiers" onMouseMove={handleSpotlight}>
+          {pricing.tiers.map((t, i) => {
+            const featured = "featured" in t && t.featured;
+            return (
+              <div
+                key={t.name}
+                className={`tier spot${featured ? " tier--featured beam" : ""}`}
+                data-reveal=""
+                data-reveal-delay={String(i)}
+              >
+                <div className="tier__name">
+                  {t.name}
+                  {featured && <span className="tier__tag">Most common</span>}
+                </div>
+                <div className="tier__range">{t.range}</div>
+                <div className="tier__price">{t.price}</div>
+                <div className="tier__unit">{t.unit}</div>
+                <a href={brand.urls.demo} className={`btn ${featured ? "btn--primary" : "btn--secondary"}`} onClick={(e) => go(e, brand.urls.demo)}>
+                  Book a demo
+                </a>
               </div>
-              <div className="tier__range">{t.range}</div>
-              <div className="tier__price">{t.price}</div>
-              <div className="tier__unit">{t.unit}</div>
-              <a href={brand.urls.demo} className={`btn ${"featured" in t && t.featured ? "btn--primary" : "btn--secondary"}`} onClick={(e) => go(e, brand.urls.demo)}>
-                Book a demo
-              </a>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <p className="pricing__note" data-reveal="">
           {pricing.note}
@@ -382,10 +392,10 @@ export function OurStory() {
             </blockquote>
           </div>
 
-          <div className="ourstory__stats" data-reveal="" data-reveal-delay="1">
+          <div className="ourstory__stats" data-reveal="" data-reveal-delay="1" onMouseMove={handleSpotlight}>
             {stats.map((s) => (
-              <div key={s.label} className="ourstat">
-                <div className="ourstat__value">{s.value}</div>
+              <div key={s.label} className="ourstat spot">
+                <CountUp value={s.value} className="ourstat__value" />
                 <p className="ourstat__label">{s.label}</p>
                 {"source" in s && s.source && <span className="ourstat__source">{s.source}</span>}
               </div>
