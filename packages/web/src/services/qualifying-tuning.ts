@@ -273,7 +273,7 @@ export async function applyQualifyingTuning(
     // Prefer a "Service" category template as the clone base (most likely to
     // carry a sensible time-based rate), else just the first template.
     const baseTemplate =
-      templates.find((t) => t.category.toLowerCase() === "service") ?? templates[0];
+      templates.find((t) => t.category.toLowerCase() === "service") ?? templates[0]!;
 
     // ── emergency / rush premium ──────────────────────────────────────
     if (qualifying.offersEmergencyPremium && qualifying.emergencyMultiplierPct) {

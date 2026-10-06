@@ -232,6 +232,7 @@ export const catalogRoutes = new Hono<AppEnv>()
       components: normComponents(b.components),
       serviceId: b.serviceId ?? null,
     });
+    if (!row) throw new Error("Failed to insert catalog item");
     await auditItem(c, "create", row.id, `Created ${row.kind} "${row.name}"`);
     const [dec] = decorate([row]);
     return c.json({ item: dec }, 201);

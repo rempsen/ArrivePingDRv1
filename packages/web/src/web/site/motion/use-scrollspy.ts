@@ -68,7 +68,7 @@ export function useScrollspy(containerRef: RefObject<HTMLElement | null>, ids: r
       const header = readHeaderOffset();
       const readingLine = header + (window.innerHeight - header) * 0.3;
       const pos = window.scrollY + readingLine;
-      let next = tops[0].id;
+      let next = tops[0]!.id;
       for (const t of tops) if (t.top <= pos) next = t.id;
       if (next !== activeRef.current) {
         activeRef.current = next;

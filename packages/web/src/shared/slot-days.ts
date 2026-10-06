@@ -38,7 +38,7 @@ export type SlotDay = {
 /** Shift a YYYY-MM-DD key by whole days without touching a time zone. */
 function addDays(key: string, n: number): string {
   const [y, m, d] = key.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  const dt = new Date(Date.UTC(y!, m! - 1, d! + n));
   return dt.toISOString().slice(0, 10);
 }
 
@@ -111,5 +111,5 @@ export function resolveSelectedDay(days: SlotDay[], selectedKey: string, selecte
     const owning = days.find((d) => d.times.some((t) => t.value === selectedSlot));
     if (owning) return owning.key;
   }
-  return days[0].key;
+  return days[0]!.key;
 }

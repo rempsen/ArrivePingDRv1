@@ -131,6 +131,7 @@ async function findOrCreatePunchlistService(companyId: string): Promise<string> 
     basePrice: 0,
     durationMins: 60,
   });
+  if (!row) throw new Error("Failed to create punch list service");
   return row.id;
 }
 
@@ -174,6 +175,7 @@ async function upsertProject(
     createdAt: new Date(),
     updatedAt: new Date(),
   } as any);
+  if (!customer) throw new Error("Failed to create project customer");
   await attachMembership({ userId: customer.id, companyId, role: "customer", status: "active" });
 
   const serviceId = await findOrCreatePunchlistService(companyId);
@@ -187,6 +189,7 @@ async function upsertProject(
     address: input.address || "",
     notes: `Punch list project synced from BMD Punch List. External project id: ${input.externalId}`,
   });
+  if (!booking) throw new Error("Failed to create project booking");
 
   const [project] = await t.insert(schema.punchlistProjects, {
     externalId: input.externalId,
@@ -195,6 +198,7 @@ async function upsertProject(
     bookingId: booking.id,
     customerId: customer.id,
   });
+  if (!project) throw new Error("Failed to create punch list project");
 
   await audit({
     companyId,
@@ -255,6 +259,7 @@ async function upsertTrade(
     notes: "Auto-created by the BMD Punch List integration on first assignment.",
     status: "available",
   });
+  if (!rider) throw new Error("Failed to create technician");
 
   const [trade] = await t.insert(schema.punchlistTrades, {
     externalTradeKey: key,
@@ -263,6 +268,7 @@ async function upsertTrade(
     contactEmail: input.contactEmail || "",
     contactPhone: input.contactPhone || "",
   });
+  if (!trade) throw new Error("Failed to create punch list trade");
 
   await audit({
     companyId,
@@ -354,6 +360,7 @@ export const punchlistRoutes = new Hono<AppEnv>()
     let row: typeof schema.deficiencies.$inferSelect;
     if (existing) {
       const [updated] = await t.update(schema.deficiencies, descriptiveFields, eq(schema.deficiencies.id, existing.id));
+      if (!updated) throw new Error("Failed to update deficiency");
       row = updated;
     } else {
       const [created] = await t.insert(schema.deficiencies, {
@@ -363,6 +370,7 @@ export const punchlistRoutes = new Hono<AppEnv>()
         status: "open",
         ...descriptiveFields,
       });
+      if (!created) throw new Error("Failed to create deficiency");
       row = created;
     }
 
@@ -506,6 +514,7 @@ export const punchlistRoutes = new Hono<AppEnv>()
       { photosAfter: JSON.stringify(photos), updatedAt: new Date() },
       eq(schema.deficiencies.id, existing.id),
     );
+    if (!row) return c.json({ message: "Not found" }, 404);
     const project = await t.selectOne(schema.punchlistProjects, eq(schema.punchlistProjects.id, row.projectId));
     pushDeficiencyWebhook(tenantId(c), row, project?.externalId ?? "").catch(() => {});
     return c.json({ deficiency: row }, 201);

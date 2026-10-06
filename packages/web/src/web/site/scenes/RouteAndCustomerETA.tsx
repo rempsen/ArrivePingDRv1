@@ -16,7 +16,7 @@ export function RouteAndCustomerETA() {
   const ref = useRef<HTMLDivElement>(null);
   const clock = useSceneClock(ref, { marks: MARKS, total: 6800 });
   const s = clock.step;
-  const p = PROGRESS[Math.min(s, PROGRESS.length - 1)];
+  const p = PROGRESS[Math.min(s, PROGRESS.length - 1)] ?? 0;
   const { appointment: a, technician: t, company } = fixture;
 
   const pathRef = useRef<SVGPathElement>(null);

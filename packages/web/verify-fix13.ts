@@ -74,6 +74,7 @@ console.log("\n── superadmin: brand patch ──");
   check("brand: 'hi' -> 400", rejects(await req("PATCH", `/superadmin/companies/${TARGET}/brand`, { brand: "hi" })));
 
   const [mid] = await db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, TARGET));
+  if (!mid) throw new Error("company settings row not found");
   check("demo tenant untouched by rejected patches", mid.logo === snap.logo && mid.brandColor === snap.brandColor && mid.email === snap.email && mid.jobNoun === snap.jobNoun);
 
   // A real reviewed proposal — brand-scout emits explicit nulls for anything it
@@ -89,6 +90,7 @@ console.log("\n── superadmin: brand patch ──");
   });
   check("real proposal with nulls -> 200", real.s === 200, JSON.stringify(real.j)?.slice(0, 160));
   const [applied] = await db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, TARGET));
+  if (!applied) throw new Error("company settings row not found");
   check("valid values actually applied", applied.brandColor === "#123456" && applied.tagline === "ZZ verify tagline");
 }
 
@@ -145,6 +147,7 @@ await db.update(schema.companySettings).set({
   services: snap.services, socials: snap.socials, updatedAt: snap.updatedAt,
 }).where(eq(schema.companySettings.companyId, TARGET));
 const [back] = await db.select().from(schema.companySettings).where(eq(schema.companySettings.companyId, TARGET));
+if (!back) throw new Error("company settings row not found");
 check(`${TARGET} settings restored to the snapshot`, back.brandColor === snap.brandColor && back.tagline === snap.tagline && back.logo === snap.logo && back.email === snap.email);
 
 console.log(`\n${pass}/${pass + fails.length} passed`);

@@ -100,8 +100,8 @@ for (const target of [25, 75, 150]) {
   console.log(`  ${String(r.count).padStart(3)} bookings → ${r.ms.toFixed(0).padStart(4)} ms, ${(r.size / 1024).toFixed(0)} KB`);
 }
 
-const first = results[0];
-const last = results[results.length - 1];
+const first = results[0]!;
+const last = results[results.length - 1]!;
 
 console.log("\n--- scaling ---");
 // Old code: ~58.7 ms per booking (822ms/14). Projected cost for the largest run.

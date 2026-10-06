@@ -269,7 +269,7 @@ export default function AdminZones() {
         draftMarkersRef.current.push(m);
       });
     } else if (drawMode === "rectangle" && rectA && draft.length > 0) {
-      const hoverPt = draft[0]; // hover point stored in draft
+      const hoverPt = draft[0]!; // hover point stored in draft (draft.length > 0 checked above)
       const poly = rectToPolygon(rectA[0], rectA[1], hoverPt[0], hoverPt[1]);
       draftLayerRef.current = L.polygon(poly as L.LatLngExpression[], {
         color: "#f59e0b",

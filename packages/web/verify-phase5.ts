@@ -147,44 +147,44 @@ try {
   const noskill = { ...baseTech, id: "nsk", name: "Skilless Sam", lat: 43.655, lng: -79.385, skills: "landscaping" };
 
   let s = scoreCandidates({ job, service, techs: [far, near], typicalMins: 90 });
-  check("closer tech ranks first", s[0].techId === "near", s.map((x) => x.techId));
-  check("distanceKm + etaMins computed", s[0].distanceKm != null && s[0].etaMins != null, s[0]);
+  check("closer tech ranks first", s[0]!.techId === "near", s.map((x) => x.techId));
+  check("distanceKm + etaMins computed", s[0]!.distanceKm != null && s[0]!.etaMins != null, s[0]);
 
   s = scoreCandidates({ job, service, techs: [offline, far], typicalMins: null });
-  check("offline tech ranks below a far online tech", s[0].techId === "far", s.map((x) => x.techId));
+  check("offline tech ranks below a far online tech", s[0]!.techId === "far", s.map((x) => x.techId));
 
-  s = scoreCandidates({ job, service, techs: [noloc] });
-  check("unknown location → distanceKm null (not a bogus number)", s[0].distanceKm === null, s[0]);
-  check("unknown location → locationKnown false", s[0].locationKnown === false, s[0]);
+  s = scoreCandidates({ job, service, techs: [noloc], typicalMins: null });
+  check("unknown location → distanceKm null (not a bogus number)", s[0]!.distanceKm === null, s[0]);
+  check("unknown location → locationKnown false", s[0]!.locationKnown === false, s[0]);
 
-  s = scoreCandidates({ job, service, techs: [noskill, far] });
+  s = scoreCandidates({ job, service, techs: [noskill, far], typicalMins: null });
   check("skillMatch detected correctly", s.find((x) => x.techId === "nsk")!.skillMatch === false && s.find((x) => x.techId === "far")!.skillMatch === true, s);
 
   // implausible distance is discarded rather than surfaced
   const antipode = { ...baseTech, id: "ap", name: "Antipode Al", lat: -33.86, lng: 151.2 };
-  s = scoreCandidates({ job, service, techs: [antipode] });
-  check("distance beyond service radius → null, not a bogus 16000km", s[0].distanceKm === null, s[0]);
+  s = scoreCandidates({ job, service, techs: [antipode], typicalMins: null });
+  check("distance beyond service radius → null, not a bogus 16000km", s[0]!.distanceKm === null, s[0]);
 
   // NEW in phase 5: workload matters
   const busyNear = { ...near, id: "busy", name: "Busy Ben", openJobs: 3, freeInMins: 180 };
-  s = scoreCandidates({ job, service, techs: [busyNear, far] });
+  s = scoreCandidates({ job, service, techs: [busyNear, far], typicalMins: null });
   check(
     "a loaded nearby tech can lose to a free further tech (workload counts)",
-    s[0].techId === "far",
+    s[0]!.techId === "far",
     s.map((x) => ({ id: x.techId, score: x.score })),
   );
   check("openJobs + freeInMins surfaced on candidates", s.some((x) => x.openJobs === 3 && x.freeInMins === 180), s);
 
   const urgentJob = { ...job, priority: "urgent" };
-  const su = scoreCandidates({ job: urgentJob, service, techs: [busyNear, far] });
-  check("urgent job penalises a tech who isn't free soon", su[0].techId === "far", su.map((x) => x.techId));
+  const su = scoreCandidates({ job: urgentJob, service, techs: [busyNear, far], typicalMins: null });
+  check("urgent job penalises a tech who isn't free soon", su[0]!.techId === "far", su.map((x) => x.techId));
 
-  check("empty candidate list → empty ranking (no crash)", scoreCandidates({ job, service, techs: [] }).length === 0);
+  check("empty candidate list → empty ranking (no crash)", scoreCandidates({ job, service, techs: [], typicalMins: null }).length === 0);
 
   // ── reasoning text ──
-  const r1 = heuristicReasoning(scoreCandidates({ job, service, techs: [near] })[0]);
+  const r1 = heuristicReasoning(scoreCandidates({ job, service, techs: [near], typicalMins: null })[0]!);
   check("fallback reasoning names the tech and the distance", !!r1 && r1.includes("Near Nick") && r1.includes("km away"), r1);
-  const r2 = heuristicReasoning(scoreCandidates({ job, service, techs: [noloc] })[0]);
+  const r2 = heuristicReasoning(scoreCandidates({ job, service, techs: [noloc], typicalMins: null })[0]!);
   check("fallback reasoning admits unknown location instead of asserting distance", !!r2 && r2.includes("Location data is unavailable"), r2);
   check("reasoning of null candidate is null", heuristicReasoning(null) === null);
 
@@ -231,7 +231,7 @@ try {
   check("every ranked candidate id is real (nothing hallucinated)", ai.ranked.every((c) => ["far", "near", "nsk", "nol"].includes(c.techId)), ai.ranked.map((c) => c.techId));
   check("each candidate carries a plain-English rationale", ai.ranked.every((c) => !!c.rationale && c.rationale.length > 10), ai.ranked.map((c) => c.rationale));
   check("summary reasoning present", !!ai.reasoning && ai.reasoning.length > 15, ai.reasoning);
-  check("measured numbers are unchanged by the model", ai.ranked.find((c) => c.techId === "nol")!.distanceKm === null && ai.ranked.find((c) => c.techId === "near")!.distanceKm === scoreCandidates({ job, service, techs: [near] })[0].distanceKm, ai.ranked.map((c) => [c.techId, c.distanceKm]));
+  check("measured numbers are unchanged by the model", ai.ranked.find((c) => c.techId === "nol")!.distanceKm === null && ai.ranked.find((c) => c.techId === "near")!.distanceKm === scoreCandidates({ job, service, techs: [near], typicalMins: null })[0]!.distanceKm, ai.ranked.map((c) => [c.techId, c.distanceKm]));
   if (ai.source === "ai") {
     console.log(`     top pick: ${ai.best?.name} — ${ai.best?.rationale}`);
     console.log(`     summary : ${ai.reasoning}`);
@@ -285,7 +285,7 @@ try {
     check("minutesLate is a positive number", (mine?.minutesLate ?? 0) > 0, mine?.minutesLate);
     check("risk carries a human-readable reason", !!mine?.reason && mine.reason.length > 5, mine?.reason);
     check("risk carries the tech name", typeof mine?.techName === "string", mine?.techName);
-    check("risks are sorted worst-first", risks.every((r, i) => i === 0 || risks[i - 1].minutesLate >= r.minutesLate), risks.map((r) => r.minutesLate));
+    check("risks are sorted worst-first", risks.every((r, i) => i === 0 || risks[i - 1]!.minutesLate >= r.minutesLate), risks.map((r) => r.minutesLate));
 
     // a job just scheduled to start now is NOT late
     const fine = await makeBooking({

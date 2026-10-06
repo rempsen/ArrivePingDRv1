@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { Hono } from "hono";
+import type { AppEnv } from "../../env";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 // Must be set BEFORE importing the database module (it reads env at import).
@@ -37,7 +38,7 @@ const B = "payint-company-b";
 // exactly what the production authMiddleware sets (user + companyId), driven by
 // request headers so each call can act as a chosen tenant/role.
 // ---------------------------------------------------------------------------
-const app = new Hono().use("*", async (c, next) => {
+const app = new Hono<AppEnv>().use("*", async (c, next) => {
   const companyId = c.req.header("X-Test-Company") || "default";
   const uid = c.req.header("X-Test-User");
   const role = c.req.header("X-Test-Role") || "owner";

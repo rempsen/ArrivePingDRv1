@@ -102,7 +102,7 @@ export function EmailEditor({
       const j = i + dir;
       if (i < 0 || j < 0 || j >= bs.length) return bs;
       const copy = [...bs];
-      [copy[i], copy[j]] = [copy[j], copy[i]];
+      [copy[i], copy[j]] = [copy[j]!, copy[i]!];
       return copy;
     });
   };

@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { Hono } from "hono";
+import type { AppEnv } from "../../env";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
@@ -34,7 +35,7 @@ const ADMIN_USER = "sdel-user-admin";
 const RIDER = "sdel-rider";
 const SVC = "sdel-svc";
 
-const app = new Hono().use("*", async (c, next) => {
+const app = new Hono<AppEnv>().use("*", async (c, next) => {
   c.set("companyId", c.req.header("X-Test-Company") || CO);
   const uid = c.req.header("X-Test-User");
   const role = c.req.header("X-Test-Role") || "rider";

@@ -294,7 +294,7 @@ async function serveStatic(
   if (request.headers.get("if-none-match") === etag) {
     return new Response(null, {
       status: 304,
-      headers: { ETag: etag, "Cache-Control": baseHeaders["Cache-Control"] },
+      headers: { ETag: etag, "Cache-Control": cacheControl },
     });
   }
   return new Response(file, {

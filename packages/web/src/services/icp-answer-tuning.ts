@@ -297,7 +297,7 @@ RULES
               break;
             }
             for (let j = 0; j < tiers.length; j++) {
-              const x = tiers[j];
+              const x = tiers[j]!;
               await t.insert(schema.optionCategoryItems, {
                 categoryId: catRow.id,
                 tierLabel: x.tierLabel,

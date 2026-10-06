@@ -58,7 +58,7 @@ export function ImportMenu({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickType, setPickType] = useState(false);
-  const [type, setType] = useState<ImportType | null>(activeType ?? (types.length === 1 ? types[0] : null));
+  const [type, setType] = useState<ImportType | null>(activeType ?? (types.length === 1 ? types[0]! : null));
   const [busy, setBusy] = useState<"csv" | "xlsx" | "template" | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
@@ -77,7 +77,7 @@ export function ImportMenu({
 
   function openMenu() {
     if (activeType) { setType(activeType); setMenuOpen(true); return; }
-    if (types.length === 1) { setType(types[0]); setMenuOpen(true); return; }
+    if (types.length === 1) { setType(types[0]!); setMenuOpen(true); return; }
     setPickType(true);
   }
 

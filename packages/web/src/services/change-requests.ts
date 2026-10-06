@@ -121,6 +121,7 @@ async function insertRequest(args: {
     proposedAt: args.proposedAt ?? null,
     previousAt: args.previousAt ?? null,
   });
+  if (!row) throw new Error("Failed to insert change request");
   return row;
 }
 

@@ -103,7 +103,7 @@ export const ridersRoutes = new Hono<AppEnv>()
     const t = tx(c);
     let r = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
     if (!r) {
-      [r] = await t.insert(schema.riders, { userId: u.id, status: "available" });
+      r = (await t.insert(schema.riders, { userId: u.id, status: "available" }))[0]!;
     }
     // Self-heal: derive the true status from active jobs so a stale "busy"
     // (left behind by a cancel/reassign) clears itself when the app loads.
@@ -163,7 +163,7 @@ export const ridersRoutes = new Hono<AppEnv>()
     const t = tx(c);
     let existing = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
     if (!existing) {
-      [existing] = await t.insert(schema.riders, { userId: u.id, status: "available" });
+      existing = (await t.insert(schema.riders, { userId: u.id, status: "available" }))[0]!;
     }
     const form = await c.req.formData();
     const file = form.get("file");
@@ -348,7 +348,7 @@ export const ridersRoutes = new Hono<AppEnv>()
       const rows = tags
         .map((t2: any) => (typeof t2 === "string" ? t2 : t2?.id))
         .filter(Boolean)
-        .map((tagId: string) => ({ tagId, entityId: r.id, entityType: "tech" as const }));
+        .map((tagId: string) => ({ tagId, entityId: r!.id, entityType: "tech" as const }));
       if (rows.length) await t.insert(schema.entityTags, rows);
     }
     return c.json({ rider: { ...r, name, email, phone } }, 201);
@@ -377,7 +377,7 @@ export const ridersRoutes = new Hono<AppEnv>()
     // Editing ONLY user-table fields (just the name, or just the email) left
     // `patch` empty, and drizzle throws "No values to set" -> raw 500. Skip the
     // rider-table write when there is nothing on it to change.
-    let r = existing;
+    let r: typeof existing | undefined = existing;
     if (Object.keys(patch).length) {
       [r] = await tx(c).update(
         schema.riders,

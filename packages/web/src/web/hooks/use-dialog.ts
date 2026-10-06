@@ -83,8 +83,8 @@ export function useDialog({
         panel.focus({ preventScroll: true });
         return;
       }
-      const firstEl = items[0];
-      const lastEl = items[items.length - 1];
+      const firstEl = items[0]!;
+      const lastEl = items[items.length - 1]!;
       const active = document.activeElement as HTMLElement | null;
 
       if (e.shiftKey && (active === firstEl || !panel.contains(active))) {

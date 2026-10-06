@@ -436,11 +436,11 @@ export default function AdminWorkOrders() {
                           <span
                             className="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
                             style={{
-                              color: PRIORITY_META[b.priority].color,
-                              background: `${PRIORITY_META[b.priority].color}22`,
+                              color: PRIORITY_META[b.priority]!.color,
+                              background: `${PRIORITY_META[b.priority]!.color}22`,
                             }}
                           >
-                            {PRIORITY_META[b.priority].label}
+                            {PRIORITY_META[b.priority]!.label}
                           </span>
                         )}
                         {archived && (
@@ -617,11 +617,11 @@ export default function AdminWorkOrders() {
                               <span
                                 className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
                                 style={{
-                                  color: PRIORITY_META[b.priority].color,
-                                  background: `${PRIORITY_META[b.priority].color}22`,
+                                  color: PRIORITY_META[b.priority]!.color,
+                                  background: `${PRIORITY_META[b.priority]!.color}22`,
                                 }}
                               >
-                                {PRIORITY_META[b.priority].label}
+                                {PRIORITY_META[b.priority]!.label}
                               </span>
                             )}
                             {archived && (

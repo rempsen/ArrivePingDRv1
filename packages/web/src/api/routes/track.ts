@@ -486,6 +486,7 @@ export const trackRoutes = new Hono<AppEnv>()
       body,
       channel: "app",
     });
+    if (!m) throw new Error("Failed to insert message");
     // in-app notify + text the assigned technician so they get a real SMS
     if (b.riderId) {
       const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));

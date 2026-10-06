@@ -20,7 +20,7 @@ const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 function maskEmail(s: string): string {
   return s.replace(EMAIL_RE, (m) => {
-    const [u, d] = m.split("@");
+    const [u = "", d] = m.split("@");
     const head = u.length <= 2 ? u[0] ?? "" : u.slice(0, 2);
     return `${head}***@${d}`;
   });

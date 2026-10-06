@@ -24,6 +24,7 @@ import { streamSSE } from "hono/streaming";
 import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { db } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
@@ -170,7 +171,7 @@ async function buildOnboardingSnapshot(cid: string) {
       const [settings] = settingsWhere
         ? await tx.select().from(schema.companySettings).where(settingsWhere).limit(1)
         : await tx.select().from(schema.companySettings).limit(1);
-      const selectAll = async <T extends typeof schema.intakeForms>(table: T) => {
+      const selectAll = async <T extends PgTable>(table: T) => {
         const where = t.scope(table);
         const q = tx.select().from(table as never);
         return (where ? await q.where(where) : await q) as T["$inferSelect"][];

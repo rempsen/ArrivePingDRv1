@@ -245,7 +245,7 @@ export function pickSubpages(html: string, base: string): string[] {
   const aRe = /<a\b[^>]*href\s*=\s*["']([^"'#]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
   while ((m = aRe.exec(html))) {
-    const href = m[1].trim();
+    const href = m[1]!.trim();
     if (!href || /^(mailto:|tel:|javascript:|sms:)/i.test(href)) continue;
     const abs = absolutize(base, href);
     if (!abs) continue;
@@ -262,7 +262,7 @@ export function pickSubpages(html: string, base: string): string[] {
     u.hash = "";
     u.search = "";
     const key = u.toString();
-    const text = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    const text = m[2]!.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
     const score = subpageScore(path, text);
     if (!score) continue;
     scored.set(key, Math.max(scored.get(key) ?? 0, score));
@@ -280,14 +280,14 @@ export function pickSubpages(html: string, base: string): string[] {
       : /about|story|who-we-are|company|team/.test(p)
         ? "about"
         : "svc";
-    buckets[bucket].push(url);
+    buckets[bucket]!.push(url);
     void score;
   }
   const out: string[] = [];
-  for (const b of ["svc", "area", "about"]) if (buckets[b][0]) out.push(buckets[b][0]);
+  for (const b of ["svc", "area", "about"]) if (buckets[b]![0]) out.push(buckets[b]![0]);
   // top up from leftover services pages if a bucket was empty
   for (const b of ["svc", "area", "about"])
-    for (const u of buckets[b].slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
+    for (const u of buckets[b]!.slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
   return out.slice(0, MAX_SUBPAGES);
 }
 
@@ -393,7 +393,7 @@ export function extractJsonLd(html: string, base: string): StructuredHints | nul
   const re = /<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
-    const raw = m[1].trim();
+    const raw = m[1]!.trim();
     if (!raw) continue;
     try {
       flattenLd(JSON.parse(raw), nodes);

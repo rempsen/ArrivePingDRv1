@@ -352,8 +352,9 @@ export function OnboardingChat() {
   async function runTurn(newHistory: ChatMsg[], showUserBubble = true) {
     setErr("");
     historyRef.current = newHistory;
-    if (showUserBubble) {
-      setLines((l) => [...l, { kind: "msg", msg: newHistory[newHistory.length - 1] }]);
+    const lastMsg = newHistory[newHistory.length - 1];
+    if (showUserBubble && lastMsg) {
+      setLines((l) => [...l, { kind: "msg", msg: lastMsg }]);
     }
     setStreaming(true);
     // Every assistant turn is one more question/step (the system prompt
@@ -376,7 +377,7 @@ export function OnboardingChat() {
           const copy = l.slice();
           for (let i = copy.length - 1; i >= 0; i--) {
             const item = copy[i];
-            if (item.kind === "msg" && item.msg.role === "assistant") {
+            if (item?.kind === "msg" && item.msg.role === "assistant") {
               copy[i] = { kind: "msg", msg: { role: "assistant", content: assistantText } };
               break;
             }

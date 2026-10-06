@@ -62,7 +62,7 @@ function splitAddress(addr: string): { local: string; domain: string } | null {
 /** Bare address out of "Name <addr>" or "addr". */
 function bareAddress(from: string): string {
   const m = /<([^>]+)>\s*$/.exec(from.trim());
-  return (m ? m[1] : from).trim();
+  return (m?.[1] ?? from).trim();
 }
 
 /**
@@ -114,7 +114,7 @@ export function pickSender(
 /** The domain part of "Name <user@host>" or a bare "user@host", lowercased. */
 export function senderDomain(addr: string | undefined | null): string {
   const m = /<([^>]+)>\s*$/.exec((addr || "").trim());
-  const bare = (m ? m[1] : addr || "").trim();
+  const bare = (m?.[1] ?? (addr || "")).trim();
   return (bare.split("@")[1] || "").trim().toLowerCase();
 }
 

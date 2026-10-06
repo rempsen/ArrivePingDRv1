@@ -106,11 +106,11 @@ export function regionFromAddress(address: string): string | null {
   };
   for (const [city, code] of Object.entries(caCities)) if (a.includes(city)) return code;
   const caAbbr = a.match(/\b(ab|bc|mb|nb|nl|ns|nt|nu|on|pe|qc|sk|yt)\b/);
-  if (caAbbr && /canada|,\s*(ab|bc|mb|nb|nl|ns|nt|nu|on|pe|qc|sk|yt)\b/.test(a)) return caAbbr[1].toUpperCase();
+  if (caAbbr && /canada|,\s*(ab|bc|mb|nb|nl|ns|nt|nu|on|pe|qc|sk|yt)\b/.test(a)) return caAbbr[1]!.toUpperCase();
   // US states by abbrev
   const usAbbr = a.match(/\b([a-z]{2})\b\s*\d{5}/); // "NY 10001"
   if (usAbbr) {
-    const st = usAbbr[1].toUpperCase();
+    const st = usAbbr[1]!.toUpperCase();
     if (US[st]) return `US-${st}`;
   }
   return null;

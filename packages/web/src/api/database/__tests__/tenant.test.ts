@@ -97,12 +97,12 @@ describe("tdb write isolation", () => {
       // attempt to plant the row in company B — the helper must override this
       companyId: B as any,
     } as any);
-    expect(row.companyId).toBe(A);
+    expect(row!.companyId).toBe(A);
 
     // confirm it is visible to A and invisible to B
-    const seenByA = await tdb(A).selectOne(schema.services, eq(schema.services.id, row.id));
-    const seenByB = await tdb(B).selectOne(schema.services, eq(schema.services.id, row.id));
-    expect(seenByA?.id).toBe(row.id);
+    const seenByA = await tdb(A).selectOne(schema.services, eq(schema.services.id, row!.id));
+    const seenByB = await tdb(B).selectOne(schema.services, eq(schema.services.id, row!.id));
+    expect(seenByA?.id).toBe(row!.id);
     expect(seenByB).toBeUndefined();
   });
 
@@ -126,8 +126,8 @@ describe("tdb write isolation", () => {
       { name: "renamed", companyId: B as any } as any,
       eq(schema.services.id, "a1"),
     );
-    expect(moved.companyId).toBe(A); // still owned by A
-    expect(moved.name).toBe("renamed");
+    expect(moved!.companyId).toBe(A); // still owned by A
+    expect(moved!.name).toBe("renamed");
   });
 
   it("delete cannot remove another company's row", async () => {

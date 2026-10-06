@@ -90,7 +90,8 @@ export function RouteHistoryMap({
     }
     // connect segments so the line doesn't have visible gaps at the boundary
     for (let i = 1; i < segments.length; i++) {
-      segments[i].pts.unshift(segments[i - 1].pts[segments[i - 1].pts.length - 1]);
+      const prev = segments[i - 1]!;
+      segments[i]!.pts.unshift(prev.pts[prev.pts.length - 1]!);
     }
     const allBounds: [number, number][] = [];
     for (const seg of segments) {
@@ -104,8 +105,8 @@ export function RouteHistoryMap({
       allBounds.push(...seg.pts);
     }
 
-    const start = pings[0];
-    const end = pings[pings.length - 1];
+    const start = pings[0]!;
+    const end = pings[pings.length - 1]!;
     const startMarker = L.marker([start.lat, start.lng], { icon: pinIcon("#0ea5e9", "A") }).addTo(map);
     layersRef.current.push(startMarker);
     allBounds.push([start.lat, start.lng]);
@@ -121,7 +122,7 @@ export function RouteHistoryMap({
     }
 
     if (allBounds.length > 1) map.fitBounds(L.latLngBounds(allBounds).pad(0.15));
-    else map.setView(allBounds[0], 15);
+    else map.setView(allBounds[0]!, 15);
   }, [pings, destination]);
 
   return <div ref={elRef} className={className ?? "h-full w-full"} />;

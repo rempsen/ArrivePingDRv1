@@ -140,7 +140,8 @@ export default function IntakeForm() {
       // every custom field answer
       (cfg?.fields || []).forEach((f) => {
         if (!f.enabled || CORE_KEYS.has(f.key)) return;
-        if (v[f.key] != null && v[f.key] !== "") fd.append(f.key, v[f.key]);
+        const val = v[f.key];
+        if (val != null && val !== "") fd.append(f.key, val);
       });
       // bot guard (see MIN_FILL_MS above)
       fd.append(HONEYPOT_FIELD, hpRef.current?.value || "");
