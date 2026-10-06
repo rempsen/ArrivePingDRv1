@@ -41,8 +41,9 @@ function MoneyInput({ label, val, onSet, placeholder }: {
   );
 }
 
-// kept for the upcoming free-text rate field; not wired up yet
-function _TextInput({ label, val, onSet, placeholder }: {
+// kept for the upcoming free-text rate field; not wired up yet (exported so it
+// is not an unused local under noUnusedLocals)
+export function _TextInput({ label, val, onSet, placeholder }: {
   label: string; val: string; onSet: (s: string) => void; placeholder?: string;
 }) {
   return (

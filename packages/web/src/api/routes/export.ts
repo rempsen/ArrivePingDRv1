@@ -159,7 +159,7 @@ export async function toPdf(
   const weights = columns.map((c) => c.width ?? DEFAULT_WEIGHTS[c.key] ?? 1);
   const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
   const colWidths = weights.map((w) => (usableW * w) / totalWeight);
-  const colX = colWidths.reduce<number[]>((acc, w, i) => {
+  const colX = colWidths.reduce<number[]>((acc, _w, i) => {
     acc.push(i === 0 ? margin : acc[i - 1]! + colWidths[i - 1]!);
     return acc;
   }, []);
