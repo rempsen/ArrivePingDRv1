@@ -229,7 +229,7 @@ export function InternalTeamTab() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {employees.map((e: any) => {
-            const meta = ROLE_META[e.role] ?? ROLE_META.dispatcher;
+            const meta = ROLE_META[e.role] ?? ROLE_META.dispatcher!;
             const Icon = meta.icon;
             return (
               <div key={e.id} className="nvc-card group relative p-4">
@@ -426,7 +426,7 @@ function RolePicker({ value, onChange }: { value: string; onChange: (r: string) 
     <Field label="Role">
       <div className="grid grid-cols-1 gap-2">
         {roles.map((r) => {
-          const meta = ROLE_META[r];
+          const meta = ROLE_META[r]!;
           const Icon = meta.icon;
           const active = value === r;
           return (
@@ -600,7 +600,7 @@ export function RolesPermissionsTab() {
 
   if (cat.isLoading) return <FullLoader label="Loading permissions…" />;
 
-  const activeMeta = ROLE_META[activeRole];
+  const activeMeta = ROLE_META[activeRole]!;
   const isAdmin = activeRole === "admin" || activeRole === "superadmin";
   const dirty = !!draft[activeRole];
 
@@ -632,7 +632,7 @@ export function RolesPermissionsTab() {
       {/* role rail */}
       <div className="flex shrink-0 gap-2 overflow-x-auto lg:w-56 lg:flex-col">
         {roles.map((r: any) => {
-          const meta = ROLE_META[r.key];
+          const meta = ROLE_META[r.key]!;
           const Icon = meta.icon;
           const sel = activeRole === r.key;
           return (

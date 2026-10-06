@@ -209,12 +209,12 @@ export default function AdminClients() {
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-1.5">
-          {[
+          {([
             ["all", "All"],
             ["customer", customerNounPlural],
             ["rider", nounPlural],
             ["admin", "Dispatchers"],
-          ].map(([r, label]) => (
+          ] as const).map(([r, label]) => (
             <button
               key={r}
               onClick={() => setRole(r)}
@@ -571,7 +571,7 @@ function parseAddressFields(formatted: string): {
   const line = parts[0] ?? formatted;
   const city = parts.length >= 2 ? parts[1] : undefined;
   // "ON M5V 2T6" -> region "ON", postal "M5V 2T6"
-  const regionChunk = parts.length >= 3 ? parts[2] : "";
+  const regionChunk = parts[2] ?? "";
   const m = regionChunk.match(/^([A-Za-z]{2,})\s*(.*)$/);
   return {
     line,

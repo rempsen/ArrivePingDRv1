@@ -121,15 +121,17 @@ function templateFieldsToCustomFields(rawFields: string | null | undefined): Cus
     text: "text", number: "number", checkbox: "checkbox", select: "select",
     date: "date", photo: "file", signature: "file",
   };
-  return parsed
-    .filter((f) => f && f.type && TYPE_MAP[f.type as string])
-    .map((f) => ({
+  return parsed.flatMap((f): CustomField[] => {
+    const type = f && f.type ? TYPE_MAP[f.type as string] : undefined;
+    if (!type) return [];
+    return [{
       id: uid(),
-      type: TYPE_MAP[f.type as string],
+      type,
       label: f.label || "",
       required: !!f.required,
       ...(f.type === "select" ? { options: Array.isArray(f.options) ? f.options : [] } : {}),
-    }));
+    }];
+  });
 }
 
 // ─── Pill for the type picker ────────────────────────────────────────────────
@@ -964,7 +966,7 @@ export function WorkOrderModal({
       const idx = prev.findIndex((p) => p.itemId === li.itemId);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = buildLineItem(item, (prev[idx].qty || 0) + qty, catalogLookup);
+        next[idx] = buildLineItem(item, (prev[idx]?.qty || 0) + qty, catalogLookup);
         return next;
       }
       return [...prev, li];

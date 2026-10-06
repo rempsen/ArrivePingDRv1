@@ -20,7 +20,7 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
-  LayoutChangeEvent,
+  type LayoutChangeEvent,
 } from "react-native";
 import { R } from "../lib/theme";
 

@@ -322,8 +322,8 @@ export async function channelAllowed(
   if (cfg.quietHoursEnabled && cfg.quietChannels.split(",").map((s) => s.trim()).includes(channel)) {
     const tz = await companyTimeZone(companyId);
     const cur = zonedMinutesOfDay(now, tz);
-    const [sh, sm] = cfg.quietStart.split(":").map(Number);
-    const [eh, em] = cfg.quietEnd.split(":").map(Number);
+    const [sh = 0, sm = 0] = cfg.quietStart.split(":").map(Number);
+    const [eh = 0, em = 0] = cfg.quietEnd.split(":").map(Number);
     const start = sh * 60 + sm, end = eh * 60 + em;
     const inQuiet = start <= end ? cur >= start && cur < end : cur >= start || cur < end;
     if (inQuiet) return false;

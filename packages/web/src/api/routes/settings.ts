@@ -21,7 +21,7 @@ async function getOrInit(c: any) {
       id: tenantId(c), // unique per tenant (PK)
     });
   }
-  return row;
+  return row!;
 }
 
 export const settingsRoutes = new Hono<AppEnv>()

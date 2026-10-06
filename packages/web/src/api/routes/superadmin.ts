@@ -478,6 +478,7 @@ export const superadminRoutes = new Hono<AppEnv>()
       return c.json({ message: "RESEND_API_KEY not configured" }, 503);
     try {
       const updated = await createDomainInResend(id);
+      if (!updated) return c.json({ message: "not found" }, 404);
       await audit({
         actorId: me?.id,
         actorName: me?.name,
@@ -506,6 +507,7 @@ export const superadminRoutes = new Hono<AppEnv>()
     if (!row.resendDomainId)
       return c.json({ message: "Not approved yet" }, 409);
     const updated = await triggerVerify(id);
+    if (!updated) return c.json({ message: "not found" }, 404);
     return c.json({ domain: { ...updated, records: safeParse(updated.records) } }, 200);
   })
 

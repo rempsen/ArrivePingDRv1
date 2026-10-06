@@ -152,7 +152,7 @@ export const aiRoutes = new Hono<AppEnv>()
           bestI = i;
         }
       });
-      const next = remaining.splice(bestI, 1)[0];
+      const next = remaining.splice(bestI, 1)[0]!;
       totalKm += bestD;
       ordered.push({
         id: next.id,

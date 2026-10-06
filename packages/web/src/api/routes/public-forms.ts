@@ -626,6 +626,7 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       // client list, which is membership-scoped now.
       if (customer) await attachMembership({ userId: customer.id, companyId, role: "customer", status: "active" });
     }
+    if (!customer) return c.json({ message: "We couldn't process your request right now. Please try again shortly." }, 503);
 
     // ---- optional photo upload ----
     let photoUrl = "";
@@ -670,6 +671,7 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       }),
       price: svc.basePrice,
     });
+    if (!booking) return c.json({ message: "We couldn't process your request right now. Please try again shortly." }, 503);
 
     // ---- audit submission + bump count ----
     await t.insert(schema.intakeSubmissions, {
@@ -803,6 +805,7 @@ async function submitWorkOrder(c: any, companyId: string, form: typeof schema.in
       // client list, which is membership-scoped now.
       if (customer) await attachMembership({ userId: customer.id, companyId, role: "customer", status: "active" });
     }
+    if (!customer) return c.json({ message: "We couldn't process your request right now. Please try again shortly." }, 503);
     customerId = customer.id;
   } else if (!(await isMember(customerId, companyId))) {
     // A client id submitted directly (rather than resolved via name/email
@@ -872,6 +875,7 @@ async function submitWorkOrder(c: any, companyId: string, form: typeof schema.in
     lineItems: JSON.stringify(lineItems),
     price: svc.basePrice,
   });
+  if (!b) return c.json({ message: "We couldn't process your request right now. Please try again shortly." }, 503);
 
   const bill = await recomputeBooking(companyId, b.id);
 

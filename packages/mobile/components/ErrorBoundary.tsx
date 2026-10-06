@@ -29,7 +29,7 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { errors: [], expanded: false, expandedIndex: null, copied: false };
+  override state: State = { errors: [], expanded: false, expandedIndex: null, copied: false };
 
   private onError = (e: ErrorEvent) => {
     Sentry.captureException(e.error || new Error(e.message));
@@ -56,14 +56,14 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  componentDidMount() {
+  override componentDidMount() {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       window.addEventListener("error", this.onError);
       window.addEventListener("unhandledrejection", this.onUnhandledRejection);
     }
   }
 
-  componentWillUnmount() {
+  override componentWillUnmount() {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       window.removeEventListener("error", this.onError);
       window.removeEventListener("unhandledrejection", this.onUnhandledRejection);
@@ -78,7 +78,7 @@ export class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
     this.setState((prev) => {
       const updated = prev.errors.map((e) =>
@@ -113,7 +113,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ errors: [], expanded: false, expandedIndex: null, copied: false });
   };
 
-  render() {
+  override render() {
     const { errors, expanded, expandedIndex, copied } = this.state;
 
     if (errors.length === 0 || Platform.OS !== "web") return this.props.children;
@@ -129,7 +129,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <Text style={s.sadFace}>:(</Text>
             <Text style={s.crashTitle}>Something went wrong</Text>
             <Text style={s.crashSub} numberOfLines={3}>
-              {errors[0].message}
+              {errors[0]!.message}
             </Text>
           </View>
         </View>

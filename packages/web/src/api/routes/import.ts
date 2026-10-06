@@ -124,10 +124,10 @@ function parseCsv(text: string): Record<string, string>[] {
     out.push(cur);
     return out;
   };
-  const headers = parseLine(lines[0]).map((h) => h.trim());
+  const headers = parseLine(lines[0]!).map((h) => h.trim());
   const rows: Record<string, string>[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cells = parseLine(lines[i]);
+    const cells = parseLine(lines[i]!);
     if (cells.every((c) => !c.trim())) continue;
     const row: Record<string, string> = {};
     headers.forEach((h, idx) => { row[h] = (cells[idx] ?? "").trim(); });
@@ -154,7 +154,7 @@ async function stripSpreadsheetNamespacePrefix(buf: Buffer): Promise<Buffer> {
   let changed = false;
   for (const name of Object.keys(zip.files)) {
     const entry = zip.files[name];
-    if (entry.dir || !name.endsWith(".xml")) continue;
+    if (!entry || entry.dir || !name.endsWith(".xml")) continue;
     const text = await entry.async("string");
     const m = text.match(nsRe);
     if (!m) continue;
@@ -410,7 +410,7 @@ export const importRoutes = new Hono<AppEnv>()
     const cid = tenantId(c);
     const results: { row: number; email: string; ok: boolean; status?: string; reason?: string }[] = [];
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      const row = rows[i]!;
       const result =
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })

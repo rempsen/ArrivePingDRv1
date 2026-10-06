@@ -56,7 +56,7 @@ function toFieldMap(err: z.ZodError): Record<string, string> {
 function summarize(fields: Record<string, string>): string {
   const entries = Object.entries(fields);
   if (!entries.length) return "Invalid request";
-  const [k, v] = entries[0];
+  const [k, v] = entries[0]!;
   const rest = entries.length - 1;
   const base = k === "_" ? v : `${k}: ${v}`;
   return rest > 0 ? `${base} (and ${rest} more ${rest === 1 ? "problem" : "problems"})` : base;

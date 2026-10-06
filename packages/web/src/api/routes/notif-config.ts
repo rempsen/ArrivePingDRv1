@@ -168,6 +168,7 @@ async function getOrCreateChannels(c: any) {
       emailFromAddress: co?.email || "",
     });
   }
+  if (!row) throw new Error("failed to load notification channels");
   return row;
 }
 
@@ -480,6 +481,7 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     if (!row.resendDomainId)
       return c.json({ message: "Awaiting approval — not yet created in Resend." }, 409);
     const updated = await triggerVerify(id);
+    if (!updated) return c.json({ message: "not found" }, 404);
     return c.json({ domain: { ...updated, records: safeParse(updated.records) } }, 200);
   })
 

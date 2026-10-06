@@ -52,6 +52,7 @@ export async function issueDefaultTenantKey(opts: {
     createdBy: opts.createdBy ?? "",
     createdByName: opts.createdByName ?? "system",
   });
+  if (!row) throw new Error("failed to insert API key");
   return { id: row.id, prefix: row.prefix, raw: gen.raw };
 }
 
@@ -89,6 +90,7 @@ export async function ensureDefaultPublicKey(opts: {
     createdBy: opts.createdBy ?? "",
     createdByName: opts.createdByName ?? "system",
   });
+  if (!row) throw new Error("failed to insert API key");
   return { id: row.id, prefix: row.prefix, publicKey: gen.raw, created: true };
 }
 

@@ -339,7 +339,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const whereExpr = conds.length ? and(...conds) : undefined;
 
     const { count, rows } = await t.transaction(async (txn) => {
-      const [{ count }] = await txn
+      const [countRow] = await txn
         .select({ count: sql<number>`count(*)` })
         .from(schema.bookings)
         .where(whereExpr as any);
@@ -351,7 +351,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
         .orderBy(dir(orderCol))
         .limit(pageSize)
         .offset((page - 1) * pageSize);
-      return { count, rows };
+      return { count: countRow?.count ?? 0, rows };
     });
 
     const enriched = await enrichRows(rows);
@@ -366,7 +366,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const format = (c.req.query("format") || "csv").toLowerCase();
     const colsParam = c.req.query("columns");
     const pickedKeys = colsParam ? colsParam.split(",").map((s) => s.trim()).filter((k) => COL_BY_KEY[k]) : JOB_COLUMNS.filter((c) => c.group === "summary").map((c) => c.key);
-    const cols = pickedKeys.map((k) => COL_BY_KEY[k]);
+    const cols = pickedKeys.flatMap((k) => { const col = COL_BY_KEY[k]; return col ? [col] : []; });
 
     const cid = tenantId(c);
     const t = tx(c);
@@ -431,6 +431,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
     const [enriched] = await enrichRows([b]);
+    if (!enriched) return c.json({ message: "Not found" }, 404);
     await logExport(cid, u, format, 1, { jobId: id }, JOB_COLUMNS.map((c) => c.key));
     const stamp = Date.now();
     const pre = await tenantFilePrefix(cid);

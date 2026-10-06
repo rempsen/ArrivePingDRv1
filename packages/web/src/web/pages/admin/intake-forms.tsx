@@ -345,7 +345,7 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
       const j = i + dir;
       if (i < 0 || j < 0 || j >= cur.length) return cur;
       const next = [...cur];
-      [next[i], next[j]] = [next[j], next[i]];
+      [next[i], next[j]] = [next[j]!, next[i]!];
       return next;
     });
   const addField = (sectionId: string) => {

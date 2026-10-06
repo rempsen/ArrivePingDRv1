@@ -137,9 +137,9 @@ export const propertyPublicRoutes = new Hono<AppEnv>()
         stats: {
           totalJobs: history.length,
           firstServiceAt: history.length
-            ? history[history.length - 1].completedAt
+            ? history[history.length - 1]!.completedAt
             : null,
-          lastServiceAt: history.length ? history[0].completedAt : null,
+          lastServiceAt: history.length ? history[0]!.completedAt : null,
         },
         history,
       },

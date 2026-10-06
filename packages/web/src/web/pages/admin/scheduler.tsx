@@ -333,7 +333,7 @@ export default function SchedulerPage() {
             month: "short",
             day: "numeric",
           })
-        : `${calDays[0].toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${calDays[6].toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        : `${calDays[0]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${calDays[6]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 
   const today = new Date();
 

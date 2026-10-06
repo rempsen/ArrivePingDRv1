@@ -88,8 +88,8 @@ describe("billing service tenant isolation", () => {
 
     // Company A resolves to MB (its row). Company B must resolve to ON —
     // the OLD code read id="default" and would have wrongly returned MB here.
-    expect(await resolveRegion(A, bkA)).toBe("MB");
-    expect(await resolveRegion(B, bkB)).toBe("ON");
+    expect(await resolveRegion(A, bkA!)).toBe("MB");
+    expect(await resolveRegion(B, bkB!)).toBe("ON");
   });
 
   it("recomputeBooking refuses a booking from another company (fail-closed)", async () => {

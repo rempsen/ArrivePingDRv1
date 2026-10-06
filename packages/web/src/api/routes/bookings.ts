@@ -478,7 +478,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
       const countQ = tx
         .select({ n: sql<number>`count(*)` })
         .from(schema.bookings);
-      const [{ n }] = await (scoped ? countQ.where(scoped) : countQ);
+      const [countRow] = await (scoped ? countQ.where(scoped) : countQ);
+      const n = countRow?.n ?? 0;
 
       // Sort in SQL (was an in-memory sort over every row).
       const baseQ = tx
@@ -604,6 +605,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       requiredSkills: (body as any).requiredSkills ?? "",
       price: svc.basePrice,
     });
+    if (!b) throw new Error("Failed to insert booking");
 
     // compute estimate from rate model + region (no actuals yet -> uses included-only quote)
     const bill = await recomputeBooking(co, b.id);
@@ -784,6 +786,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       requiredSkills: (body as any).requiredSkills ?? "",
       price: svc.basePrice,
     });
+    if (!b) throw new Error("Failed to insert booking");
 
     const bill = await recomputeBooking(co, b.id);
 
@@ -857,6 +860,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     }
     const set: Record<string, unknown> = { scheduledAt };
     const [b] = await t.update(schema.bookings, set, eq(schema.bookings.id, id));
+    if (!b) return c.json({ message: "Not found" }, 404);
     // A `rescheduled` notification exists and is on by default for the client
     // (email) and the tech (SMS) — but only the customer-initiated change-request
     // flow ever fired it. When the office moved a job on the calendar, the tech's
@@ -1301,6 +1305,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
         409,
       );
     const [b] = await t.update(schema.bookings, { status: "cancelled" }, eq(schema.bookings.id, id));
+    if (!b) return c.json({ message: "Not found" }, 404);
     await fireEvent("cancelled", id);
     // free the assigned tech so they don't stay stuck "busy" after a cancel
     if (prev?.riderId) await reconcileRiderStatus(co, prev.riderId);
@@ -1441,6 +1446,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       phase,
       customerVisible,
     });
+    if (!p) throw new Error("Failed to insert job photo");
     // Timeline entry so the photo shows up in the customer's job history and
     // permanent record, not just the admin gallery.
     const me = c.get("user") as SessionUser;

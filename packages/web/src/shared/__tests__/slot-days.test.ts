@@ -28,8 +28,8 @@ describe("groupSlotsByDay", () => {
   it("buckets slots into calendar days on the company's clock", () => {
     const days = groupSlotsByDay([slot(AUG18_9AM), slot(AUG18_5PM), slot(AUG19_9AM)], WPG);
     expect(days.map((d) => d.key)).toEqual(["2026-08-18", "2026-08-19"]);
-    expect(days[0].times.map((t) => t.value)).toEqual([AUG18_9AM, AUG18_5PM]);
-    expect(days[1].times).toHaveLength(1);
+    expect(days[0]!.times.map((t) => t.value)).toEqual([AUG18_9AM, AUG18_5PM]);
+    expect(days[1]!.times).toHaveLength(1);
   });
 
   it("groups by the COMPANY's day, not UTC — a 5 PM Winnipeg slot is not tomorrow", () => {
@@ -38,7 +38,7 @@ describe("groupSlotsByDay", () => {
     const evening = "2026-08-19T00:00:00.000Z"; // 7 PM Aug 18 in Winnipeg
     const wpg = groupSlotsByDay([slot(AUG18_9AM), slot(evening)], WPG);
     expect(wpg).toHaveLength(1);
-    expect(wpg[0].key).toBe("2026-08-18");
+    expect(wpg[0]!.key).toBe("2026-08-18");
 
     const utc = groupSlotsByDay([slot(AUG18_9AM), slot(evening)], "UTC");
     expect(utc).toHaveLength(2);
@@ -46,22 +46,22 @@ describe("groupSlotsByDay", () => {
 
   it("labels the day for humans and the time without repeating the date", () => {
     const [d] = groupSlotsByDay([slot(AUG18_9AM)], WPG);
-    expect(d.label).toBe("Tuesday, Aug 18");
-    expect(d.weekday).toBe("Tue");
-    expect(d.dayNum).toBe("18");
-    expect(d.times[0].label).toBe("9:00 AM");
+    expect(d!.label).toBe("Tuesday, Aug 18");
+    expect(d!.weekday).toBe("Tue");
+    expect(d!.dayNum).toBe("18");
+    expect(d!.times[0]!.label).toBe("9:00 AM");
   });
 
   it("marks today and tomorrow relative to the company's clock", () => {
     const now = new Date(AUG18_9AM); // Tue Aug 18, mid-morning Winnipeg
     const days = groupSlotsByDay([slot(AUG18_5PM), slot(AUG19_9AM)], WPG, now);
-    expect(days[0].relative).toBe("Today");
-    expect(days[1].relative).toBe("Tomorrow");
+    expect(days[0]!.relative).toBe("Today");
+    expect(days[1]!.relative).toBe("Tomorrow");
   });
 
   it("leaves later days unlabelled rather than inventing a relative name", () => {
     const days = groupSlotsByDay([slot(AUG18_9AM)], WPG, new Date("2026-08-10T14:00:00.000Z"));
-    expect(days[0].relative).toBe("");
+    expect(days[0]!.relative).toBe("");
   });
 
   it("returns nothing for an empty slot list instead of an empty day", () => {

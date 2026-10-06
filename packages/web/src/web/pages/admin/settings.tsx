@@ -829,7 +829,7 @@ export default function AdminSettings() {
     }
     return localStorage.getItem("settings_section") ?? "company";
   });
-  const section = SECTIONS.find((s) => s.key === active) ?? SECTIONS[0];
+  const section = SECTIONS.find((s) => s.key === active) ?? SECTIONS[0]!;
 
   function select(key: string) {
     setActive(key);

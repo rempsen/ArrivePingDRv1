@@ -192,9 +192,9 @@ export const formsRoutes = new Hono<AppEnv>()
     });
     await audit({
       actorId: me?.id, actorName: me?.name, action: "create",
-      entityType: "intake_form", entityId: row.id, summary: `Created intake form "${title}"`,
+      entityType: "intake_form", entityId: row!.id, summary: `Created intake form "${title}"`,
     });
-    return c.json({ form: mask(row) }, 201);
+    return c.json({ form: mask(row!) }, 201);
   })
 
   // update — any tenant admin

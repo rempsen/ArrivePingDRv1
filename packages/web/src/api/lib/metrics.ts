@@ -80,7 +80,7 @@ export function recordHttp(method: string, path: string, status: number, ms: num
   s.sumMs += ms;
   const secs = ms / 1000;
   for (let i = 0; i < BUCKETS_S.length; i++) {
-    if (secs <= BUCKETS_S[i]) s.buckets[i]++;
+    if (secs <= BUCKETS_S[i]!) s.buckets[i]!++;
   }
   // Cap series count defensively — never let a pathological route blow memory.
   if (http.size > 2000) {
@@ -103,8 +103,8 @@ function quantileFromBuckets(buckets: number[], total: number, q: number): numbe
   let prevCum = 0;
   let prevBound = 0;
   for (let i = 0; i < BUCKETS_S.length; i++) {
-    const cum = buckets[i];
-    const bound = BUCKETS_S[i];
+    const cum = buckets[i] ?? 0;
+    const bound = BUCKETS_S[i]!;
     if (cum >= rank) {
       // linear interpolation within [prevBound, bound]
       const span = cum - prevCum || 1;
@@ -115,7 +115,7 @@ function quantileFromBuckets(buckets: number[], total: number, q: number): numbe
     prevCum = cum;
     prevBound = bound;
   }
-  return Math.round(BUCKETS_S[BUCKETS_S.length - 1] * 1000); // +Inf bucket
+  return Math.round(BUCKETS_S[BUCKETS_S.length - 1]! * 1000); // +Inf bucket
 }
 
 // ---- Exposition ------------------------------------------------------------
@@ -184,7 +184,7 @@ export function renderJson() {
   const allBuckets = Array.from({ length: BUCKETS_S.length }, () => 0);
   let allSum = 0;
   for (const s of http.values()) {
-    for (let i = 0; i < BUCKETS_S.length; i++) allBuckets[i] += s.buckets[i];
+    for (let i = 0; i < BUCKETS_S.length; i++) allBuckets[i]! += s.buckets[i]!;
     allSum += s.sumMs;
   }
 

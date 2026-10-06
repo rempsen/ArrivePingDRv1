@@ -41,7 +41,7 @@ function MoneyInput({ label, val, onSet, placeholder }: {
   );
 }
 
-// @ts-expect-error kept for the upcoming free-text rate field; not wired up yet
+// kept for the upcoming free-text rate field; not wired up yet
 function _TextInput({ label, val, onSet, placeholder }: {
   label: string; val: string; onSet: (s: string) => void; placeholder?: string;
 }) {
@@ -134,7 +134,7 @@ export function RateModelEditor({
     onUnitLinesChange?.(next.filter((l) => l.qty > 0 && l.unitPrice > 0));
     // legacy compat
     const valid = next.filter((l) => l.qty > 0 && l.unitPrice > 0);
-    onUnitLineChange?.(valid.length > 0 ? valid[0] : null);
+    onUnitLineChange?.(valid[0] ?? null);
   }
 
   function updateLine(id: string, patch: Partial<PerUnitLine>) {

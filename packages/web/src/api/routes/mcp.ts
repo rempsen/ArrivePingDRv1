@@ -126,7 +126,7 @@ const TOOLS: ToolDef[] = [
         price: num(a.price, 0)!,
         status: a.riderId ? "assigned" : "pending",
       });
-      await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "booking", entityId: wo.id, summary: `Created work order via MCP "${wo.title || wo.id}"` });
+      await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "booking", entityId: wo!.id, summary: `Created work order via MCP "${wo!.title || wo!.id}"` });
       return { workOrder: wo };
     },
   },
@@ -283,8 +283,8 @@ const TOOLS: ToolDef[] = [
       );
       // Clients are scoped by membership now — without this row the client
       // would not appear on this company's client list.
-      await attachMembership({ userId: client.id, companyId: t.companyId, role: "customer", status: "active" });
-      await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "client", entityId: client.id, summary: `Created client via MCP "${client.name}"` });
+      await attachMembership({ userId: client!.id, companyId: t.companyId, role: "customer", status: "active" });
+      await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "client", entityId: client!.id, summary: `Created client via MCP "${client!.name}"` });
       return { client };
     },
   },
@@ -443,8 +443,8 @@ const TOOLS: ToolDef[] = [
         surgeMultiplier: num(a.surgeMultiplier, 1)!,
         active: true,
       });
-      await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "service_zone", entityId: zone.id, summary: `Created zone via MCP "${zone.name}"` });
-      return { zone: { ...zone, polygon: JSON.parse(zone.polygon) } };
+      await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "service_zone", entityId: zone!.id, summary: `Created zone via MCP "${zone!.name}"` });
+      return { zone: { ...zone!, polygon: JSON.parse(zone!.polygon) } };
     },
   },
 

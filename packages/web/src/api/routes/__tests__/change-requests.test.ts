@@ -26,6 +26,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
 import { Hono } from "hono";
+import type { AppEnv } from "../../env";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
@@ -56,7 +57,7 @@ const SVC = "chg-svc";
 const HOUR = 3_600_000;
 const NEW_EVENTS = ["change_requested", "change_declined", "rescheduled"] as const;
 
-const app = new Hono().use("*", async (c, next) => {
+const app = new Hono<AppEnv>().use("*", async (c, next) => {
   c.set("companyId", c.req.header("X-Test-Company") || CO);
   const uid = c.req.header("X-Test-User");
   const role = c.req.header("X-Test-Role") || "customer";
@@ -584,6 +585,6 @@ describe("notification rules for the new change events", () => {
         eq(schema.notificationRules.event, "change_requested"),
       ));
     expect(rows).toHaveLength(1);
-    expect(rows[0].enabled).toBe(false);
+    expect(rows[0]!.enabled).toBe(false);
   });
 });

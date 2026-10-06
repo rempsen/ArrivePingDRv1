@@ -14,12 +14,12 @@ describe("computeSubtotal — flat rate", () => {
     const r = computeSubtotal(rm({ flatRate: 100, includedMinutes: 60, includedKm: 20 }), 45, 10);
     expect(r.subtotal).toBe(100);
     expect(r.items).toHaveLength(1);
-    expect(r.items[0].label).toContain("incl. 60 min + 20 km");
+    expect(r.items[0]!.label).toContain("incl. 60 min + 20 km");
   });
 
   it("labels flat rate without inclusions when none configured", () => {
     const r = computeSubtotal(rm({ flatRate: 80 }), 0, 0);
-    expect(r.items[0].label).toBe("Flat rate");
+    expect(r.items[0]!.label).toBe("Flat rate");
     expect(r.subtotal).toBe(80);
   });
 });

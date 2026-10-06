@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Pressable,
   Image,
-  PressableProps,
+  type PressableProps,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { C, R, STATUS, initials, assetUrl } from "../lib/theme";
@@ -118,7 +118,7 @@ export function Button({
     ghost: { bg: "transparent", fg: C.sub },
     outline: { bg: "transparent", fg: C.text, border: C.borderHi },
   };
-  const p = palette[variant];
+  const p = palette[variant] ?? palette.primary!;
   // Small tactile confirmation on every tap — the kind of polish detail that
   // makes an app feel responsive/premium rather than just functional. Skipped
   // for destructive-feeling states (disabled/loading) since nothing happened.

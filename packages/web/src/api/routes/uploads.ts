@@ -56,6 +56,7 @@ export const uploadsRoutes = new Hono<AppEnv>()
       label,
       uploadedBy: me?.name || "",
     });
+    if (!row) throw new Error("Failed to save attachment");
     await audit({ actorId: me?.id, actorName: me?.name, action: "create", entityType: "attachment", entityId: row.id, summary: `Uploaded ${file.name} to ${entityType}` });
     return c.json({ attachment: row }, 201);
   })
