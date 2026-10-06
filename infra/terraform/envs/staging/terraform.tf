@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    godaddy = {
+      source  = "zaneatwork/godaddy"
+      version = "1.9.10"
+    }
   }
 
   # State lives in S3 in the project account, versioned and encrypted, with
@@ -35,4 +39,22 @@ provider "aws" {
       Repo        = "rempsen/NVC360V4-5823-0110"
     }
   }
+}
+
+# Credentials live in SSM Parameter Store (infra/terraform/envs/core/secrets.tf),
+# filled in by hand — never in this repo. Same AWS account/region as this env,
+# so a plain data lookup is enough; no remote state needed.
+data "aws_ssm_parameter" "godaddy_api_key" {
+  name            = "/nvc360/godaddy/api_key"
+  with_decryption = true
+}
+
+data "aws_ssm_parameter" "godaddy_api_secret" {
+  name            = "/nvc360/godaddy/api_secret"
+  with_decryption = true
+}
+
+provider "godaddy" {
+  key    = data.aws_ssm_parameter.godaddy_api_key.value
+  secret = data.aws_ssm_parameter.godaddy_api_secret.value
 }

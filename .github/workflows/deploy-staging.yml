@@ -225,19 +225,20 @@ jobs:
         if: steps.gate.outputs.configured == 'true'
         run: |
           set -euo pipefail
-          URL=$(aws elbv2 describe-load-balancers \
-            --names nvc360-staging-alb \
-            --query 'LoadBalancers[0].DNSName' --output text)
-          echo "Smoke testing http://$URL"
+          # Port 80 only redirects to HTTPS now, so test the real public URL
+          # (custom domain, ACM cert). Keep in sync with the staging env's
+          # `domain` in infra/terraform/envs/staging/main.tf.
+          URL="https://demo.v4.nvc360.com"
+          echo "Smoke testing $URL"
 
           # /api/ready does a real database round-trip, so this asserts the app
           # is genuinely serving, not just that a container started.
           for i in $(seq 1 20); do
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://$URL/api/ready" || true)
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/ready" || true)
             if [ "$CODE" = "200" ]; then
               echo "Staging is healthy."
               # The SPA shell must also render, or we shipped an API-only box.
-              curl -fsS "http://$URL/" | grep -qi "<div id=\"root\"" \
+              curl -fsS "$URL/" | grep -qi "<div id=\"root\"" \
                 && echo "SPA shell served." && exit 0
               echo "::error::API is healthy but the SPA shell did not render."
               exit 1

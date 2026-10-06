@@ -24,8 +24,13 @@ output "log_group" {
 }
 
 output "alb_dns_name" {
-  description = "Public DNS name of the staging load balancer. Point a CNAME at this, then set var.staging_url."
+  description = "Public DNS name of the staging load balancer. CNAME target for the staging_url hostname."
   value       = module.nvc360.alb_dns_name
+}
+
+output "staging_url" {
+  description = "HTTPS entry point for staging (custom domain, ACM cert validated via GoDaddy DNS). The container's APP_URL/WEBSITE_URL are set to this automatically."
+  value       = module.nvc360.staging_url
 }
 
 output "ecs_cluster_name" {
@@ -44,7 +49,7 @@ output "database_endpoint" {
 }
 
 output "better_auth_secret" {
-  description = "Generated BETTER_AUTH_SECRET value — read with -raw and set it as that key in the app-config secret."
+  description = "Generated BETTER_AUTH_SECRET value. Terraform keeps this in sync in the app-config-managed secret automatically; exposed here for reference."
   value       = module.nvc360.better_auth_secret
   sensitive   = true
 }
