@@ -4,6 +4,7 @@ import * as schema from "../database/schema";
 import { db } from "../database";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { audit } from "../lib/audit";
+import { putObject } from "../lib/storage";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; name?: string };
@@ -55,6 +56,30 @@ export const settingsRoutes = new Hono<AppEnv>()
       // best-effort; default to empty
     }
     return c.json({ settings: { ...settings, industry, industryOther, officeAddress, officeLat, officeLng } }, 200);
+  })
+  // ---- company logo upload (multipart field: file) ----
+  // Pasted share links (Google Drive, Dropbox, OneDrive…) are HTML pages, not
+  // images, so they never render in the console sidebar. Uploading stores the
+  // real file under our own storage and writes its URL to settings.logo.
+  .post("/logo", requireAdmin, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const form = await c.req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) return c.json({ message: "No file" }, 400);
+    if (file.size > 4 * 1024 * 1024) return c.json({ message: "Logo too large (max 4MB)" }, 400);
+    if (file.type && !["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"].includes(file.type))
+      return c.json({ message: `Unsupported type ${file.type}` }, 400);
+    const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "png";
+    const key = `company-logos/${tenantId(c)}/${crypto.randomUUID()}.${ext}`;
+    const stored = await putObject(key, Buffer.from(await file.arrayBuffer()), file.type || "image/png");
+    const existing = await getOrInit(c);
+    await tx(c).update(schema.companySettings, { logo: stored.url, updatedAt: new Date() } as any, undefined);
+    await audit({
+      actorId: me?.id, actorName: me?.name, action: "update",
+      entityType: "company_settings", entityId: existing.id,
+      summary: "Uploaded company logo",
+    });
+    return c.json({ url: stored.url }, 200);
   })
   .put("/", requireAdmin, async (c) => {
     const me = c.get("user") as SessionUser;

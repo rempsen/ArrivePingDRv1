@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { Link, useLocation } from "wouter";
-import { Logo } from "../../components/brand";
+import { Logo, TenantLogo } from "../../components/brand";
 import { DispatchMessenger } from "../../components/dispatch-messenger";
 import { OnboardingChat } from "../../components/onboarding-chat";
 import { TenantSwitcher } from "../../components/tenant-switcher";
 import { useAuth } from "../../hooks/use-auth";
-import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useCustomerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
 import { authClient, clearToken } from "../../lib/auth";
 import { cn } from "../../lib/utils";
 import {
@@ -122,6 +122,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { nounPlural: workerPlural } = useWorkerNoun();
   const { nounPlural: customerPlural } = useCustomerNoun();
   const { nounPlural: jobPlural } = useJobNoun();
+  const brand = useBrand();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // superadmins get a "Companies" (tenant registry) entry at the bottom of Operations.
@@ -233,6 +234,25 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  /** Sidebar masthead: THIS company's logo + name, so a dispatcher at
+   *  Prairie Comfort HVAC sees Prairie Comfort HVAC, not our wordmark.
+   *  ArrivePing moves to a small "Powered by" lockup in the footer. */
+  function TenantIdentity({ compact }: { compact?: boolean }) {
+    return (
+      <Link
+        to="/admin"
+        title={brand.name}
+        className={cn("flex min-w-0 items-center gap-3 rounded-xl transition-colors hover:bg-white/[0.03]", compact ? "px-1 py-1" : "px-2 py-1.5")}
+      >
+        <TenantLogo src={brand.logo} name={brand.name} color={brand.brandColor} className={compact ? "h-9 w-9 text-sm" : "h-11 w-11 text-base"} />
+        <span className="min-w-0 flex-1">
+          <span className={cn("block font-display font-bold tracking-tight text-white", compact ? "truncate text-[14px] leading-tight" : "line-clamp-2 text-[13.5px] leading-[1.2]")}>{brand.name}</span>
+          <span className="mt-0.5 block truncate text-[11px] leading-tight text-slate-500">{brand.tagline || "Dispatch console"}</span>
+        </span>
+      </Link>
+    );
+  }
+
   function UserFooter() {
     return (
       <div className="border-t border-white/[0.06] p-3">
@@ -255,6 +275,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <LogOut className="h-3.5 w-3.5" />
           </button>
         </div>
+        <div className="mt-2.5 flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-600">
+          <span>Powered by</span>
+          <Logo to="/admin" imgClassName="h-4 opacity-70" className="py-0" />
+        </div>
       </div>
     );
   }
@@ -266,8 +290,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen overflow-x-clip bg-ink text-slate-200">
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[228px] flex-col border-r border-white/[0.06] bg-ink-2 md:flex">
-        <div className="flex h-24 items-center border-b border-white/5 px-5">
-          <Logo to="/admin" imgClassName="h-20" />
+        <div className="flex h-[76px] items-center border-b border-white/5 px-3">
+          <TenantIdentity />
         </div>
         <TenantSwitcher />
         {/* nvc-fade-b: the nav list is taller than the viewport on a laptop, so
@@ -280,16 +304,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* mobile top bar with hamburger */}
-      <header className="sticky top-0 z-30 flex h-24 items-center justify-between border-b border-white/5 bg-ink-2 px-4 md:hidden">
-        <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/5 bg-ink-2 px-3 md:hidden">
+        <div className="flex min-w-0 items-center gap-1">
           <button
             onClick={() => setDrawerOpen(true)}
             aria-label="Open menu"
-            className="grid h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/5"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-white/5"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <Logo to="/admin" imgClassName="h-20" />
+          <TenantIdentity compact />
         </div>
       </header>
 
@@ -302,8 +326,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             onClick={() => setDrawerOpen(false)}
           />
           <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/5 bg-ink-2 shadow-2xl">
-            <div className="flex h-24 items-center justify-between gap-2 border-b border-white/5 px-4">
-              <Logo to="/admin" imgClassName="h-20" />
+            <div className="flex h-16 items-center justify-between gap-2 border-b border-white/5 px-3">
+              <TenantIdentity compact />
               <button
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close menu"
@@ -343,6 +367,13 @@ export function PageHead({
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
+  // Browser tab reads "Jobs · Prairie Comfort HVAC" — the tenant's name, not ours.
+  const { name } = useBrand();
+  useEffect(() => {
+    const prev = document.title;
+    document.title = `${title} · ${name}`;
+    return () => { document.title = prev; };
+  }, [title, name]);
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
