@@ -12,6 +12,12 @@ interface LiveMapProps {
   destination?: LatLng | null;
   /** road-following route points from driver -> destination (Uber-style) */
   route?: LatLng[] | null;
+  /**
+   * True when `route` is a straight-line guess rather than real streets (the
+   * server's last-resort estimate). Drawn dashed so it reads as "roughly this
+   * way", never as the path the van will take.
+   */
+  routeApprox?: boolean;
   /** live ETA in minutes, rendered as a badge on the driver marker */
   etaMins?: number | null;
   riderLabel?: string;
@@ -50,7 +56,14 @@ const homeIcon = L.divIcon({
   iconAnchor: [18, 36],
 });
 
-export function LiveMap({ rider, destination, route, etaMins, className }: LiveMapProps) {
+export function LiveMap({
+  rider,
+  destination,
+  route,
+  routeApprox,
+  etaMins,
+  className,
+}: LiveMapProps) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const riderMarker = useRef<L.Marker | null>(null);
@@ -157,26 +170,40 @@ export function LiveMap({ rider, destination, route, etaMins, className }: LiveM
       }
     }
 
-    // road-following route line (falls back to straight 2-pt line server-side)
-    if (rider && destination) {
-      const pts: [number, number][] =
-        route && route.length > 1
-          ? route.map((p) => [p.lat, p.lng])
-          : [
-              [rider.lat, rider.lng],
-              [destination.lat, destination.lng],
-            ];
+    // Route line: only drawn from server-supplied road geometry. There is
+    // deliberately no client-side straight-line fallback — when the tech is on
+    // site (route null) or the server has nothing, a bare line between the van
+    // and the house looked like a route through back yards.
+    const hasRoute = !!(rider && destination && route && route.length > 1);
+    if (hasRoute) {
+      const pts: [number, number][] = route!.map((p) => [p.lat, p.lng]);
+      const style: L.PolylineOptions = {
+        color: "#0ea5e9",
+        weight: routeApprox ? 4 : 5,
+        opacity: routeApprox ? 0.7 : 0.9,
+        dashArray: routeApprox ? "6 10" : undefined,
+        lineJoin: "round",
+        lineCap: "round",
+      };
       if (!lineRef.current) {
-        lineRef.current = L.polyline(pts, {
-          color: "#0ea5e9",
-          weight: 5,
-          opacity: 0.9,
-          lineJoin: "round",
-          lineCap: "round",
-        }).addTo(map);
+        lineRef.current = L.polyline(pts, style).addTo(map);
       } else {
         lineRef.current.setLatLngs(pts);
+        lineRef.current.setStyle(style);
       }
+    } else if (lineRef.current) {
+      lineRef.current.remove();
+      lineRef.current = null;
+    }
+
+    // Frame: route if we have one, else both pins, else follow the van.
+    if (rider && destination) {
+      const pts: [number, number][] = hasRoute
+        ? route!.map((p) => [p.lat, p.lng])
+        : [
+            [rider.lat, rider.lng],
+            [destination.lat, destination.lng],
+          ];
       map.fitBounds(L.latLngBounds(pts).pad(0.25), { animate: true });
     } else if (rider) {
       map.panTo([rider.lat, rider.lng], { animate: true });
@@ -188,6 +215,7 @@ export function LiveMap({ rider, destination, route, etaMins, className }: LiveM
 	destination?.lng,
 	etaMins,
 	route,
+	routeApprox,
 	rider,
 	destination
 ]);

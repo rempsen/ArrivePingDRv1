@@ -128,6 +128,11 @@ const DELAY_VISIBLE_STATUSES = new Set([
   "enroute",
 ]);
 
+/** Tech is dispatched and driving: compute a live road route + ETA. */
+const EN_ROUTE_STATUSES = new Set(["assigned", "accepted", "enroute"]);
+/** Nobody is driving yet; keep whatever scheduled ETA the booking carries. */
+const PRE_DISPATCH_STATUSES = new Set(["pending", "confirmed", "unassigned"]);
+
 async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   const t = tdb(b.companyId);
   const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
@@ -178,21 +183,33 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
       ? { lat: tech.lat, lng: tech.lng }
       : null;
 
+  // Road-following route + live ETA while the tech is driving to the job.
+  // `routeProvider` tells the client whether `route` traces real streets
+  // ("google" / "osrm") or is a straight-line guess ("estimate") so it can draw
+  // the guess as a dashed approximation instead of passing it off as a route.
   let route: { lat: number; lng: number }[] | null = null;
+  let routeProvider: string | null = null;
   let etaMins = b.etaMins;
   let etaDistanceKm = b.etaDistanceKm ?? null;
   if (
     techLocation &&
-    ["assigned", "enroute"].includes(b.status) &&
+    EN_ROUTE_STATUSES.has(b.status) &&
     b.lat != null &&
     b.lng != null
   ) {
     const r = await cachedRoute(b.id, techLocation.lat, techLocation.lng, b.lat, b.lng);
     if (r) {
       route = r.path.map(([lat, lng]) => ({ lat, lng }));
+      routeProvider = r.provider;
       etaMins = r.etaMins;
       etaDistanceKm = r.distanceKm;
     }
+  } else if (!EN_ROUTE_STATUSES.has(b.status) && !PRE_DISPATCH_STATUSES.has(b.status)) {
+    // Tech is on site (or the job is done): an ETA is meaningless now, and the
+    // last driving ETA used to linger as a "3 min" badge on the van marker
+    // next to a "Your technician has arrived!" card.
+    etaMins = null;
+    etaDistanceKm = null;
   }
 
   // ── Customer-facing job history ─────────────────────────────────────────
@@ -288,6 +305,7 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
     tech,
     techLocation,
     route,
+    routeProvider,
   };
 }
 

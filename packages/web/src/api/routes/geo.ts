@@ -76,11 +76,20 @@ export async function computeEta(
 }
 
 /**
- * Compute a road-following driving route from origin -> destination.
- * Uses Google Directions API (traffic-aware) for an Uber/Lyft-style route line
- * plus live ETA. Returns the decoded path as [lat,lng] points so the client can
- * draw the actual streets the driver will take, not a straight line.
- * Falls back to a 2-point straight line + haversine ETA when no key/route.
+ * Compute live driving route origin -> destination.
+ *
+ * Road-following path (Uber/Lyft-style) plus live ETA. Sources, in order:
+ *   1. Google Directions (traffic-aware) — step-level polylines stitched
+ *      together, because `overview_polyline` is heavily simplified and on a
+ *      short urban hop can collapse to a handful of points that cut corners.
+ *   2. OSRM public demo router — keyless, no traffic, but still real streets.
+ *      Used when there is no Google key, Google denies the request, or it
+ *      times out, so the customer never sees a line drawn through buildings.
+ *   3. Straight 2-point line + haversine ETA (`provider: "estimate"`) — last
+ *      resort only. Callers can tell it apart via `provider` and render it as
+ *      an approximation (dashed) rather than a route.
+ *
+ * Returns the decoded path as [lat,lng] points.
  */
 export async function computeRoute(
   oLat: number,
@@ -105,25 +114,53 @@ export async function computeRoute(
       url.searchParams.set("mode", "driving");
       url.searchParams.set("departure_time", "now");
       url.searchParams.set("key", KEY);
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS) });
       const data = await r.json();
       const route = data.routes?.[0];
       const leg = route?.legs?.[0];
-      if (route?.overview_polyline?.points && leg) {
-        const path = decodePolyline(route.overview_polyline.points);
-        const dur = leg.duration_in_traffic ?? leg.duration;
-        return {
-          path,
-          etaMins: Math.max(1, Math.round((dur?.value ?? 0) / 60)),
-          distanceKm: Math.round(((leg.distance?.value ?? 0) / 1000) * 10) / 10,
-          durationText: dur?.text ?? "",
-          provider: "google",
-        };
+      if (route && leg) {
+        // Stitch per-step polylines for a faithful street trace; fall back to
+        // the overview line if a step is missing its geometry.
+        let path: [number, number][] = [];
+        const steps: any[] = Array.isArray(leg.steps) ? leg.steps : [];
+        if (steps.length && steps.every((st) => st?.polyline?.points)) {
+          for (const st of steps) {
+            const seg = decodePolyline(st.polyline.points);
+            // consecutive steps share their boundary point — drop the duplicate
+            if (path.length && seg.length && samePoint(path[path.length - 1], seg[0])) seg.shift();
+            path.push(...seg);
+          }
+        }
+        if (path.length < 2 && route.overview_polyline?.points) {
+          path = decodePolyline(route.overview_polyline.points);
+        }
+        if (path.length >= 2) {
+          const dur = leg.duration_in_traffic ?? leg.duration;
+          return {
+            path,
+            etaMins: Math.max(1, Math.round((dur?.value ?? 0) / 60)),
+            distanceKm: Math.round(((leg.distance?.value ?? 0) / 1000) * 10) / 10,
+            durationText: dur?.text ?? "",
+            provider: "google",
+          };
+        }
       }
-    } catch {
-      // fall through to straight-line estimate
+      // Surface the reason instead of silently drawing a straight line. Typical:
+      // REQUEST_DENIED (Directions API not enabled, or key restricted to
+      // browser referrers so server calls are blocked), OVER_QUERY_LIMIT.
+      warnOnce(
+        `directions:${data.status}`,
+        `[geo] Google Directions returned ${data.status ?? "no routes"}${
+          data.error_message ? ` — ${data.error_message}` : ""
+        }; falling back to OSRM`,
+      );
+    } catch (e) {
+      warnOnce("directions:error", `[geo] Google Directions failed: ${(e as Error)?.message}`);
     }
   }
+
+  const osrm = await osrmRoute(oLat, oLng, dLat, dLng);
+  if (osrm) return osrm;
 
   const km = haversineKm(oLat, oLng, dLat, dLng);
   const etaMins = Math.max(1, Math.round((km / AVG_KMH) * 60));
@@ -137,6 +174,59 @@ export async function computeRoute(
     durationText: `${etaMins} min`,
     provider: "estimate",
   };
+}
+
+const ROUTE_TIMEOUT_MS = 4_000;
+
+function samePoint(a: [number, number], b: [number, number]) {
+  return Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+}
+
+// One log line per distinct failure per ~5 minutes — the public tracking page
+// polls every few seconds and a misconfigured key would otherwise flood logs.
+const warned = new Map<string, number>();
+function warnOnce(key: string, msg: string) {
+  const now = Date.now();
+  const last = warned.get(key) ?? 0;
+  if (now - last < 5 * 60_000) return;
+  warned.set(key, now);
+  console.warn(msg);
+}
+
+/**
+ * OSRM public demo server. No key, no traffic data, fair-use only — fine as a
+ * fallback at our poll cadence (routes are cached ~12s per booking upstream).
+ */
+async function osrmRoute(oLat: number, oLng: number, dLat: number, dLng: number) {
+  try {
+    const url =
+      `https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}` +
+      `?overview=full&geometries=geojson&steps=false`;
+    const r = await fetch(url, {
+      signal: AbortSignal.timeout(ROUTE_TIMEOUT_MS),
+      headers: { "User-Agent": "ArrivePing/1.0 (+https://arriveping.com)" },
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const route = data.routes?.[0];
+    const coords: [number, number][] | undefined = route?.geometry?.coordinates;
+    if (data.code !== "Ok" || !coords || coords.length < 2) {
+      warnOnce(`osrm:${data.code}`, `[geo] OSRM returned ${data.code ?? "no route"}`);
+      return null;
+    }
+    const etaMins = Math.max(1, Math.round((route.duration ?? 0) / 60));
+    return {
+      // GeoJSON is [lng,lat]; we hand out [lat,lng]
+      path: coords.map(([lng, lat]) => [lat, lng] as [number, number]),
+      etaMins,
+      distanceKm: Math.round(((route.distance ?? 0) / 1000) * 10) / 10,
+      durationText: `${etaMins} min`,
+      provider: "osrm",
+    };
+  } catch (e) {
+    warnOnce("osrm:error", `[geo] OSRM failed: ${(e as Error)?.message}`);
+    return null;
+  }
 }
 
 /** Decode a Google encoded polyline into [lat,lng] pairs. */

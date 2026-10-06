@@ -907,6 +907,7 @@ export default function TrackPublic() {
                     rider={data.techLocation}
                     destination={data.destination}
                     route={data.route}
+                    routeApprox={data.routeProvider === "estimate"}
                     etaMins={data.etaMins}
                     className="h-[340px] w-full"
                   />
