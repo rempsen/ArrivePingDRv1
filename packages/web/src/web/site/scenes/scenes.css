@@ -18,7 +18,7 @@
   align-content: center;
   overflow: hidden;
   background:
-    radial-gradient(120% 90% at 50% 0%, #ffffff 0%, var(--surface-muted) 70%);
+    radial-gradient(120% 90% at 50% 0%, var(--surface-muted) 0%, var(--surface) 70%);
 }
 .site .scene--hero {
   font-size: clamp(9px, 1.6cqw, 18px);
@@ -268,7 +268,7 @@
 }
 .site .avatar--accent {
   background: var(--ink);
-  color: #fff;
+  color: var(--inverse-text);
   border-color: var(--ink);
 }
 
@@ -357,9 +357,9 @@
   color: var(--ink);
 }
 .site .ui-btn--solid {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
+  background: var(--action-solid);
+  border-color: var(--action-solid);
+  color: var(--action-solid-text);
 }
 .site .ui-btn[data-pressed="true"] {
   transform: scale(0.98);
@@ -598,7 +598,7 @@
 }
 .site .route__van {
   fill: var(--accent);
-  stroke: #fff;
+  stroke: var(--canvas);
   stroke-width: 2;
 }
 .site .route__van--arrived {
@@ -644,7 +644,7 @@
 .site .chip[data-active="true"] {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--inverse-text);
 }
 .site .textarea {
   min-height: 4.6em;
@@ -737,7 +737,7 @@
   content: "";
   width: 0.35em;
   height: 0.55em;
-  border: solid var(--p-gray-950);
+  border: solid var(--closing-bg);
   border-width: 0 1.5px 1.5px 0;
   transform: translateY(-0.08em) rotate(45deg);
 }
@@ -747,7 +747,7 @@
 }
 .site .status-step[data-state="active"] i {
   border-color: #fff;
-  box-shadow: inset 0 0 0 0.25em var(--p-gray-950), inset 0 0 0 0.6em #fff;
+  box-shadow: inset 0 0 0 0.25em var(--closing-bg), inset 0 0 0 0.6em #fff;
 }
 .site .status-step time {
   font-variant-numeric: tabular-nums;

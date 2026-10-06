@@ -25,34 +25,49 @@
   --p-amber-50: #faf1dd;
   --p-red-700: #a73535;
 
-  /* semantic roles */
-  --canvas: var(--p-gray-0);
-  --surface: var(--p-gray-50);
-  --surface-muted: var(--p-gray-100);
-  --ink: var(--p-gray-900);
-  --ink-secondary: var(--p-gray-600);
-  --ink-muted: var(--p-gray-500);
-  --line: var(--p-gray-200);
-  --line-strong: var(--p-gray-300);
-  --action-solid: var(--p-gray-900);
-  --action-solid-hover: #34373d;
-  --action-solid-text: #ffffff;
-  --accent: var(--p-blue-600);
-  --accent-hover: var(--p-blue-700);
-  --accent-soft: var(--p-blue-50);
-  --success: var(--p-green-700);
-  --success-soft: var(--p-green-50);
-  --warning: var(--p-amber-700);
-  --warning-soft: var(--p-amber-50);
-  --danger: var(--p-red-700);
-  --focus: var(--p-blue-600);
+  /* raw palette — dark (matches the product console: ink canvas, slate cards, cyan accent) */
+  --p-ink-950: #070b12;
+  --p-ink-900: #0c1220;
+  --p-ink-850: #10182a;
+  --p-ink-800: #162036;
+  --p-slate-100: #f1f5fb;
+  --p-slate-300: #b7c2d4;
+  --p-slate-400: #8a97ad;
+  --p-cyan-500: #0ea5e9;
+  --p-cyan-400: #38bdf8;
+  --p-cyan-300: #7dd3fc;
+
+  /* semantic roles — DARK is the default. Components reference roles only.
+     To go back to the light look, add data-theme="light" on the `.site` root. */
+  --canvas: var(--p-ink-950);
+  --surface: var(--p-ink-900);
+  --surface-muted: var(--p-ink-850);
+  --ink: var(--p-slate-100);
+  --ink-secondary: var(--p-slate-300);
+  --ink-muted: var(--p-slate-400);
+  --line: rgb(255 255 255 / 9%);
+  --line-strong: rgb(255 255 255 / 18%);
+  --action-solid: var(--p-cyan-500);
+  --action-solid-hover: var(--p-cyan-400);
+  --action-solid-text: #051018;
+  --accent: var(--p-cyan-400);
+  --accent-hover: var(--p-cyan-300);
+  --accent-soft: rgb(14 165 233 / 14%);
+  --success: #4ade80;
+  --success-soft: rgb(34 197 94 / 14%);
+  --warning: #fbbf24;
+  --warning-soft: rgb(245 158 11 / 14%);
+  --danger: #f87171;
+  --focus: var(--p-cyan-400);
+  --closing-bg: var(--p-ink-900);
+  --inverse-text: var(--p-ink-950);
 
   --radius-control: 7px;
   --radius-card: 12px;
   --radius-demo: 16px;
-  --shadow-overlay: 0 12px 32px rgb(32 37 34 / 10%);
-  --shadow-demo: 0 18px 48px rgb(32 37 34 / 7%);
-  --shadow-panel: 0 1px 2px rgb(32 37 34 / 4%), 0 8px 24px rgb(32 37 34 / 6%);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 55%);
+  --shadow-demo: 0 18px 48px rgb(0 0 0 / 45%);
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 35%);
 
   --page-max: 1184px;
   --gutter: 24px;
@@ -78,6 +93,35 @@
   font-feature-settings: "cv11", "ss01";
   min-height: 100vh;
   position: relative;
+}
+
+/* Light look (previous default) — opt in with data-theme="light" on the .site root. */
+.site[data-theme="light"] {
+  --canvas: var(--p-gray-0);
+  --surface: var(--p-gray-50);
+  --surface-muted: var(--p-gray-100);
+  --ink: var(--p-gray-900);
+  --ink-secondary: var(--p-gray-600);
+  --ink-muted: var(--p-gray-500);
+  --line: var(--p-gray-200);
+  --line-strong: var(--p-gray-300);
+  --action-solid: var(--p-gray-900);
+  --action-solid-hover: #34373d;
+  --action-solid-text: #ffffff;
+  --accent: var(--p-blue-600);
+  --accent-hover: var(--p-blue-700);
+  --accent-soft: var(--p-blue-50);
+  --success: var(--p-green-700);
+  --success-soft: var(--p-green-50);
+  --warning: var(--p-amber-700);
+  --warning-soft: var(--p-amber-50);
+  --danger: var(--p-red-700);
+  --focus: var(--p-blue-600);
+  --closing-bg: var(--p-gray-950);
+  --inverse-text: #ffffff;
+  --shadow-overlay: 0 12px 32px rgb(32 37 34 / 10%);
+  --shadow-demo: 0 18px 48px rgb(32 37 34 / 7%);
+  --shadow-panel: 0 1px 2px rgb(32 37 34 / 4%), 0 8px 24px rgb(32 37 34 / 6%);
 }
 
 .site *,
@@ -307,13 +351,23 @@
   position: sticky;
   top: 0;
   z-index: 40;
+  isolation: isolate;
+  border-bottom: 1px solid var(--line);
+}
+/* The frosted glass lives on a pseudo-element: `backdrop-filter` on the header
+   itself would turn it into the containing block for the fixed-position menu
+   drawer, pinning the drawer inside the 64px bar. */
+.site .header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: color-mix(in srgb, var(--canvas) 86%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
   -webkit-backdrop-filter: saturate(1.4) blur(10px);
-  border-bottom: 1px solid var(--line);
 }
 @supports not (backdrop-filter: blur(1px)) {
-  .site .header {
+  .site .header::before {
     background: var(--canvas);
   }
 }
@@ -396,11 +450,26 @@
     gap: 6px;
   }
 }
+@media (max-width: 639px) {
+  /* Phones: shrink the lockup so it never runs under the CTA. */
+  .site .header__logo {
+    min-width: 0;
+    gap: 8px;
+  }
+  .site .header__logo img:not(.header__mark) {
+    height: 30px;
+  }
+  .site .header__logo .header__mark {
+    height: 30px;
+    width: 30px;
+    border-radius: 7px;
+  }
+}
 .site .drawer {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: color-mix(in srgb, var(--ink) 30%, transparent);
+  background: rgb(0 0 0 / 55%);
   display: flex;
   justify-content: flex-end;
 }
@@ -872,7 +941,7 @@
   }
   .site .rail__link[aria-current="location"] {
     background: var(--ink);
-    color: #fff;
+    color: var(--inverse-text);
     border-color: var(--ink);
   }
   .site .showcase-chapters {
@@ -1270,7 +1339,8 @@
 .site .closing {
   position: relative;
   overflow: hidden;
-  background: var(--p-gray-950);
+  background: var(--closing-bg);
+  border-top: 1px solid var(--line);
   color: #fff;
   padding-block: clamp(56px, 8vw, 104px);
 }
@@ -1281,7 +1351,8 @@
   transform: translateY(-50%);
   width: clamp(360px, 36vw, 560px);
   height: auto;
-  opacity: 0.1;
+  opacity: 0.08;
+  z-index: 0;
   pointer-events: none;
   user-select: none;
 }
@@ -1291,6 +1362,8 @@
   }
 }
 .site .closing__grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 6fr 5fr;
   gap: clamp(32px, 5vw, 72px);
@@ -1406,7 +1479,7 @@
 .site .form-status--err {
   border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
   color: var(--danger);
-  background: #fbeeee;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 .site .hp {
   position: absolute;

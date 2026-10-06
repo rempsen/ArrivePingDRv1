@@ -62,7 +62,7 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
       <div className="container header__inner">
         <a href="/" className="header__logo" aria-label={`${brand.product} home`}>
           <img src={brand.icon} alt="" width={36} height={36} className="header__mark" aria-hidden="true" />
-          <img src={brand.logoDark} alt={brand.lockup} width={220} height={40} />
+          <img src={brand.logoLight} alt={brand.lockup} width={220} height={40} />
         </a>
         <nav className="nav" aria-label="Primary">
           {nav.map((n) => (
@@ -106,7 +106,7 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
             <div className="drawer__top">
               <div className="drawer__brand">
                 <img src={brand.icon} alt="" width={28} height={28} className="header__mark" aria-hidden="true" />
-                <img src={brand.logoDark} alt={brand.lockup} height={24} style={{ height: 24, width: "auto" }} />
+                <img src={brand.logoLight} alt={brand.lockup} height={24} style={{ height: 24, width: "auto" }} />
               </div>
               <button type="button" className="btn btn--ghost btn--sm" onClick={close} aria-label="Close menu">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">

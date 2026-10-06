@@ -210,7 +210,7 @@ function StepArt({ index }: { index: number }) {
         <rect x="16" y="34" width="90" height="8" rx="3" fill="var(--surface-muted)" stroke="var(--line)" />
         <rect x="16" y="48" width="160" height="8" rx="3" fill="var(--surface-muted)" stroke="var(--line)" />
         <rect x="196" y="40" width="68" height="18" rx="5" fill="var(--ink)" />
-        <text x="230" y="52.5" textAnchor="middle" fontSize="9" fill="#fff" fontFamily="Inter Variable, Inter, sans-serif" fontWeight="500">
+        <text x="230" y="52.5" textAnchor="middle" fontSize="9" fill="var(--inverse-text)" fontFamily="Inter Variable, Inter, sans-serif" fontWeight="500">
           Save
         </text>
       </svg>
@@ -221,7 +221,7 @@ function StepArt({ index }: { index: number }) {
         <rect x="1" y="1" width="278" height="70" rx="10" {...common} stroke="var(--line)" />
         <path d="M24 50 C 60 50, 90 20, 140 28 S 220 50, 256 22" {...common} stroke="var(--line-strong)" />
         <path d="M24 50 C 60 50, 90 20, 140 28" {...common} stroke="var(--accent)" strokeWidth={2} />
-        <circle cx="140" cy="28" r="6" fill="var(--accent)" stroke="#fff" strokeWidth="2" />
+        <circle cx="140" cy="28" r="6" fill="var(--accent)" stroke="var(--canvas)" strokeWidth="2" />
         <circle cx="256" cy="22" r="4" fill="var(--surface)" stroke="var(--ink)" strokeWidth="1.5" />
         <rect x="150" y="38" width="98" height="20" rx="10" fill="var(--accent-soft)" />
         <text x="199" y="51.5" textAnchor="middle" fontSize="9.5" fill="var(--accent)" fontFamily="Inter Variable, Inter, sans-serif" fontWeight="500">
@@ -416,7 +416,7 @@ export function OurStory() {
 export function ClosingCTA() {
   return (
     <section id="book-a-demo" className="closing anchor">
-      <img src={brand.icon} alt="" aria-hidden="true" className="closing__watermark" />
+      <img src={brand.watermark} alt="" aria-hidden="true" className="closing__watermark" />
       <div className="container closing__grid">
         <div data-reveal="">
           <span className="eyebrow" style={{ color: "#b9bcc4" }}>

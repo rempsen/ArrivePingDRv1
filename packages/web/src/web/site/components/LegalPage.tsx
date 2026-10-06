@@ -38,7 +38,7 @@ function Body({ doc }: { doc: LegalDoc }) {
   useEffect(() => {
     const prevBg = document.documentElement.style.backgroundColor;
     const prevTitle = document.title;
-    document.documentElement.style.backgroundColor = "#fafafa";
+    document.documentElement.style.backgroundColor = "#070b12";
     document.title = `${doc.title} · ${brand.product}`;
     const canonical = document.createElement("link");
     canonical.rel = "canonical";
