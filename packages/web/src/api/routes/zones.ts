@@ -62,6 +62,7 @@ export const zonesRoutes = new Hono<AppEnv>()
       surgeMultiplier: b.surgeMultiplier ?? 1,
       active: b.active ?? true,
     });
+    if (!zone) throw new Error("Failed to create zone");
     await audit({ actorId: me?.id, actorName: me?.name, action: "create", entityType: "service_zone", entityId: zone.id, summary: `Created zone "${b.name}"` });
     return c.json({ zone: { ...zone, polygon: safeParse(zone.polygon) } }, 201);
   })

@@ -166,7 +166,7 @@ export function renderEmailDesign(
 function shade(hex: string): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return "#0e7490";
-  const n = parseInt(m[1], 16);
+  const n = parseInt(m[1]!, 16);
   const r = Math.max(0, ((n >> 16) & 255) * 0.7) | 0;
   const g = Math.max(0, ((n >> 8) & 255) * 0.7) | 0;
   const b = Math.max(0, (n & 255) * 0.7) | 0;
@@ -184,7 +184,7 @@ function shade(hex: string): string {
 export function contrastText(bg: string | undefined | null, light = "#ffffff", dark = "#0f172a"): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(bg ?? "").trim());
   if (!m) return light;
-  const n = parseInt(m[1], 16);
+  const n = parseInt(m[1]!, 16);
   const r = (n >> 16) & 255;
   const g = (n >> 8) & 255;
   const b = n & 255;

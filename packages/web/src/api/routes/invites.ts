@@ -111,6 +111,7 @@ export const invitesRoutes = new Hono<AppEnv>()
       skillClass: b.skillClass || "General",
       invitedBy: u.id,
     });
+    if (!inv) throw new Error("failed to create invite");
 
     const link = `${SITE}/join/${inv.token}`;
     const company = await companyName(inv.companyId);

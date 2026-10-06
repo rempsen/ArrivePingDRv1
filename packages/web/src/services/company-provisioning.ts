@@ -275,7 +275,7 @@ export async function seedOptionCatalogForCompany(
   let inserted = 0;
   const t = tdb(companyId);
   for (let i = 0; i < categories.length; i++) {
-    const cat = categories[i];
+    const cat = categories[i]!;
     const [catRow] = await t.insert(schema.optionCategories, {
       name: cat.name,
       description: cat.description,
@@ -285,7 +285,7 @@ export async function seedOptionCatalogForCompany(
     if (!catRow) continue;
     inserted++;
     for (let j = 0; j < cat.tiers.length; j++) {
-      const tier = cat.tiers[j];
+      const tier = cat.tiers[j]!;
       await t.insert(schema.optionCategoryItems, {
         categoryId: catRow.id,
         tierLabel: tier.tierLabel,

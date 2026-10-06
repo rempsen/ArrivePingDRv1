@@ -172,7 +172,7 @@ export async function loadEmailBrand(companyId?: string): Promise<TenantEmailBra
 function darken(hex: string): string {
   const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
   if (!m) return "#0e7490";
-  const n = parseInt(m[1], 16);
+  const n = parseInt(m[1]!, 16);
   const r = (((n >> 16) & 255) * 0.7) | 0;
   const g = (((n >> 8) & 255) * 0.7) | 0;
   const b = ((n & 255) * 0.7) | 0;

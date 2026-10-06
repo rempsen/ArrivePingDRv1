@@ -74,6 +74,7 @@ export const tagsRoutes = new Hono<AppEnv>()
       color: b.color || "#06B6D4",
       scope: b.scope || "both",
     });
+    if (!tag) throw new Error("failed to create tag");
     await audit({ actorId: me?.id, actorName: me?.name, action: "create", entityType: "tag", entityId: tag.id, summary: `Created tag "${b.label}"` });
     return c.json({ tag }, 201);
   })

@@ -30,7 +30,7 @@ export function isInsideGeofence(
 export function pathDistanceKm(points: { lat: number; lng: number }[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
-    const d = haversineKm(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
+    const d = haversineKm(points[i - 1]!.lat, points[i - 1]!.lng, points[i]!.lat, points[i]!.lng);
     if (d > 0.005 && d < 5) total += d;
   }
   return Math.round(total * 100) / 100;

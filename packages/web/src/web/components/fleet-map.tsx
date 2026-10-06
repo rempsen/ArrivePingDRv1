@@ -268,11 +268,12 @@ export function FleetMap({
       const statusColor = STATUS_META[t.status]?.color ?? t.color;
       const icon = techIcon(statusColor, initials, active, dim && selectedId !== t.id, t.photoUrl);
       const tip = techTooltip(t, noun);
-      if (markers.current[t.id]) {
-        markers.current[t.id].setLatLng([t.lat, t.lng]).setIcon(icon);
-        markers.current[t.id].setTooltipContent(tip);
-        markers.current[t.id].off("click");
-        markers.current[t.id].on("click", () => onSelect?.(t.id));
+      const existing = markers.current[t.id];
+      if (existing) {
+        existing.setLatLng([t.lat, t.lng]).setIcon(icon);
+        existing.setTooltipContent(tip);
+        existing.off("click");
+        existing.on("click", () => onSelect?.(t.id));
       } else {
         const m = L.marker([t.lat, t.lng], { icon, riseOnHover: true }).addTo(map);
         m.on("click", () => onSelect?.(t.id));
@@ -285,7 +286,7 @@ export function FleetMap({
     // remove stale
     for (const id of Object.keys(markers.current)) {
       if (!seen.has(id)) {
-        map.removeLayer(markers.current[id]);
+        map.removeLayer(markers.current[id]!);
         delete markers.current[id];
       }
     }
@@ -325,11 +326,12 @@ export function FleetMap({
       seen.add(j.id);
       const icon = jobIcon(j.color);
       const tip = jobTooltip(j);
-      if (jobMarkers.current[j.id]) {
-        jobMarkers.current[j.id].setLatLng([j.lat, j.lng]).setIcon(icon);
-        jobMarkers.current[j.id].setTooltipContent(tip);
-        jobMarkers.current[j.id].off("click");
-        jobMarkers.current[j.id].on("click", () => onSelectJob?.(j.id));
+      const existing = jobMarkers.current[j.id];
+      if (existing) {
+        existing.setLatLng([j.lat, j.lng]).setIcon(icon);
+        existing.setTooltipContent(tip);
+        existing.off("click");
+        existing.on("click", () => onSelectJob?.(j.id));
       } else {
         const m = L.marker([j.lat, j.lng], { icon, riseOnHover: true }).addTo(map);
         m.on("click", () => onSelectJob?.(j.id));
@@ -341,7 +343,7 @@ export function FleetMap({
     }
     for (const id of Object.keys(jobMarkers.current)) {
       if (!seen.has(id)) {
-        map.removeLayer(jobMarkers.current[id]);
+        map.removeLayer(jobMarkers.current[id]!);
         delete jobMarkers.current[id];
       }
     }

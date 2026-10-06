@@ -140,7 +140,7 @@ export async function seed() {
           locationUpdatedAt: new Date(),
           completedJobs: Math.floor(Math.random() * 200 + 50),
         }).returning();
-        techIds.push(prof.id);
+        if (prof) techIds.push(prof.id);
       }
     }
   }
@@ -171,12 +171,13 @@ export async function seed() {
 
   for (const w of WO) {
     const s = findSvc(w.cat);
+    if (!s) throw new Error(`seed: no service for category ${w.cat}`);
     const tmpl = tmplFor(w.cat);
     await db.insert(schema.bookings).values({
-      customerId: clientIds[w.client],
+      customerId: clientIds[w.client]!,
       serviceId: s.id,
       templateId: tmpl?.id ?? null,
-      riderId: w.tech !== null ? techIds[w.tech] : null,
+      riderId: w.tech !== null ? techIds[w.tech] ?? null : null,
       title: w.title,
       priority: w.priority,
       status: w.status,
@@ -187,7 +188,7 @@ export async function seed() {
       notes: "",
       price: s.basePrice,
       paymentStatus: w.status === "completed" ? "paid" : "unpaid",
-      customerPhone: CLIENTS[w.client].phone,
+      customerPhone: CLIENTS[w.client]!.phone,
       etaMins: w.eta ?? null,
     });
   }

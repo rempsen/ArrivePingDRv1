@@ -50,7 +50,9 @@ export type AnalyticsEvent =
   | "booking.completed"
   | "invoice.paid"
   | "dispatch.assigned"
-  | "user.signed_in";
+  | "user.signed_in"
+  | "stripe.connect_started"
+  | "stripe.use_platform_toggled";
 
 /**
  * Capture a business event. Fire-and-forget: never throws, never blocks the

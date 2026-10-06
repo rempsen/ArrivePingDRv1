@@ -122,16 +122,16 @@ export const messagesRoutes = new Hono<AppEnv>()
         isNull(schema.bookings.deletedAt),
       ),
     );
-    const active = activeAll.slice(0, 1);
+    const activeJob = activeAll[0];
 
     let job: { id: string; title: string; messages: any[] } | null = null;
-    if (active.length) {
+    if (activeJob) {
       const jobMsgs = await t.select(
         schema.messages,
-        eq(schema.messages.bookingId, active[0].id),
+        eq(schema.messages.bookingId, activeJob.id),
       );
       jobMsgs.sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
-      job = { id: active[0].id, title: active[0].title || "Active Job", messages: jobMsgs };
+      job = { id: activeJob.id, title: activeJob.title || "Active Job", messages: jobMsgs };
     }
 
     return c.json({ direct, job }, 200);
@@ -765,6 +765,7 @@ export const messagesRoutes = new Hono<AppEnv>()
       body,
       channel: "app",
     });
+    if (!m) return c.json({ message: "Could not send message" }, 500);
 
     {
       if (u.role !== "customer") {

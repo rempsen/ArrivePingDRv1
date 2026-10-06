@@ -135,7 +135,7 @@ export function scoreCandidates(input: RankInput): Candidate[] {
     const km = rawKm != null && rawKm <= MAX_SERVICE_RADIUS_KM ? rawKm : null;
     const skillMatch = !!(
       service &&
-      t.skills.toLowerCase().includes(service.category.toLowerCase().split(" ")[0])
+      t.skills.toLowerCase().includes(service.category.toLowerCase().split(" ")[0] ?? "")
     );
     const avail = t.status === "available";
 

@@ -46,7 +46,7 @@ const STEP_INDEX: Record<string, number> = {
 
 /** Stage index, or 0 for anything unrecognised (never -1: that reads as "before the start"). */
 export function statusStepIndex(status: unknown): number {
-  return typeof status === "string" && status in STEP_INDEX ? STEP_INDEX[status] : 0;
+  return typeof status === "string" && status in STEP_INDEX ? STEP_INDEX[status] ?? 0 : 0;
 }
 
 /** Is this a status we actually know about? */

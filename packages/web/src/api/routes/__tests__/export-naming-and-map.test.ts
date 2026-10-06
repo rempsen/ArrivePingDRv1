@@ -54,7 +54,7 @@ describe("route basemap", () => {
   test("returns null for degenerate input instead of throwing", async () => {
     process.env.GOOGLE_MAPS_API_KEY = "fake-key-not-used";
     expect(await fetchRouteBasemap([])).toBeNull();
-    expect(await fetchRouteBasemap([route[0]])).toBeNull();
+    expect(await fetchRouteBasemap([route[0]!])).toBeNull();
     expect(
       await fetchRouteBasemap([
         { lat: NaN, lng: NaN, phase: "enroute" },

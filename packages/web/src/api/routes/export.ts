@@ -18,7 +18,7 @@ export type { JobRoutePoint };
 /* ------------------------------- CSV -------------------------------- */
 export function toCsv(rows: Record<string, any>[], columns?: string[]): string {
   if (!rows.length) return columns?.length ? columns.join(",") + "\n" : "";
-  const cols = columns?.length ? columns : Object.keys(rows[0]);
+  const cols = columns?.length ? columns : Object.keys(rows[0]!);
   const esc = (v: any) => {
     if (v == null) return "";
     if (v instanceof Date) return v.toISOString();
@@ -160,7 +160,7 @@ export async function toPdf(
   const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
   const colWidths = weights.map((w) => (usableW * w) / totalWeight);
   const colX = colWidths.reduce<number[]>((acc, w, i) => {
-    acc.push(i === 0 ? margin : acc[i - 1] + colWidths[i - 1]);
+    acc.push(i === 0 ? margin : acc[i - 1]! + colWidths[i - 1]!);
     return acc;
   }, []);
   const PAD = 5;
@@ -233,7 +233,7 @@ export async function toPdf(
   const drawTableHeader = () => {
     page.drawRectangle({ x: margin, y: y - 16, width: usableW, height: 18, color: rgb(0.06, 0.09, 0.16) });
     columns.forEach((c, i) => {
-      dt(fitText(c.label, bold, headSize, colWidths[i] - PAD * 2), { x: colX[i] + PAD, y: y - 12, size: headSize, font: bold, color: rgb(1, 1, 1) });
+      dt(fitText(c.label, bold, headSize, colWidths[i]! - PAD * 2), { x: colX[i]! + PAD, y: y - 12, size: headSize, font: bold, color: rgb(1, 1, 1) });
     });
     y -= 20;
   };
@@ -258,10 +258,10 @@ export async function toPdf(
     if (ri % 2 === 0) page.drawRectangle({ x: margin, y: y - (rowH - 2), width: usableW, height: rowH, color: rgb(0.96, 0.97, 0.98) });
     columns.forEach((c, i) => {
       const isNumeric = c.kind === "money" || c.kind === "num" || c.kind === "pct";
-      const text = fitText(fmt(r[c.key], c.kind), font, rowSize, colWidths[i] - PAD * 2);
+      const text = fitText(fmt(r[c.key], c.kind), font, rowSize, colWidths[i]! - PAD * 2);
       const x = isNumeric
-        ? colX[i] + colWidths[i] - PAD - font.widthOfTextAtSize(text, rowSize)
-        : colX[i] + PAD;
+        ? colX[i]! + colWidths[i]! - PAD - font.widthOfTextAtSize(text, rowSize)
+        : colX[i]! + PAD;
       dt(text, { x, y: y - rowH + 5, size: rowSize, font, color: ink });
     });
     y -= rowH;
@@ -297,7 +297,7 @@ export type JobBrand = { name?: string; logo?: string; brandColor?: string };
  *  anything unparsable so a bad/missing tenant color never breaks the PDF. */
 function hexRgb(hex?: string) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex ?? "");
-  const h = m ? m[1] : "0ea5e9";
+  const h = m?.[1] ?? "0ea5e9";
   return rgb(
     parseInt(h.slice(0, 2), 16) / 255,
     parseInt(h.slice(2, 4), 16) / 255,
@@ -552,12 +552,16 @@ export async function buildJobPdf(
       return: rgb(0.13, 0.77, 0.37),
     };
     for (let i = 1; i < route.length; i++) {
-      const a = toXY(route[i - 1].lat, route[i - 1].lng);
-      const b = toXY(route[i].lat, route[i].lng);
-      page.drawLine({ start: a, end: b, thickness: 2.5, color: PHASE_COLOR[route[i].phase] ?? rgb(0.6, 0.65, 0.7) });
+      const prev = route[i - 1]!;
+      const cur = route[i]!;
+      const a = toXY(prev.lat, prev.lng);
+      const b = toXY(cur.lat, cur.lng);
+      page.drawLine({ start: a, end: b, thickness: 2.5, color: PHASE_COLOR[cur.phase] ?? rgb(0.6, 0.65, 0.7) });
     }
-    const start = toXY(route[0].lat, route[0].lng);
-    const end = toXY(route[route.length - 1].lat, route[route.length - 1].lng);
+    const first = route[0]!;
+    const last = route[route.length - 1]!;
+    const start = toXY(first.lat, first.lng);
+    const end = toXY(last.lat, last.lng);
     page.drawCircle({ x: start.x, y: start.y, size: 6, color: rgb(0.06, 0.65, 0.91), borderColor: rgb(1, 1, 1), borderWidth: 1.5 });
     page.drawCircle({ x: end.x, y: end.y, size: 6, color: rgb(0.94, 0.27, 0.27), borderColor: rgb(1, 1, 1), borderWidth: 1.5 });
     y = boxY - 10;
@@ -580,7 +584,7 @@ export async function buildJobPdf(
     ];
     const xAt = (i: number) => margin + cols.slice(0, i).reduce((s, c) => s + c.w * usableW, 0);
     const drawCell = (text: string, i: number, yy: number, f = font, color = ink) => {
-      const c = cols[i];
+      const c = cols[i]!;
       const cx = xAt(i);
       const cw = c.w * usableW;
       if (c.align === "r") {

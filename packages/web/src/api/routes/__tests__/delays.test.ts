@@ -20,6 +20,7 @@
  */
 import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
 import { Hono } from "hono";
+import type { AppEnv } from "../../env";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
@@ -45,7 +46,7 @@ const RIDER = "dly-rider";
 const SVC = "dly-svc";
 const MIN = 60_000;
 
-const app = new Hono().use("*", async (c, next) => {
+const app = new Hono<AppEnv>().use("*", async (c, next) => {
   c.set("companyId", c.req.header("X-Test-Company") || CO);
   const uid = c.req.header("X-Test-User");
   const role = c.req.header("X-Test-Role") || "customer";
@@ -242,8 +243,8 @@ describe("sweep — detection", () => {
     const r = await sweepDelays();
     expect(r.flagged).toBe(1);
     const rows = await listDelays(CO);
-    expect(rows[0].reason).toBe("eta_overrun");
-    expect(rows[0].slipMins).toBeGreaterThanOrEqual(34);
+    expect(rows[0]!.reason).toBe("eta_overrun");
+    expect(rows[0]!.slipMins).toBeGreaterThanOrEqual(34);
   });
 
   it("ignores a job the tech has already arrived at", async () => {

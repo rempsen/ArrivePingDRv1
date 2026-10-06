@@ -104,6 +104,7 @@ export const customFieldsRoutes = new Hono<AppEnv>()
       section: b.section || "General",
       sortOrder: b.sortOrder ?? existing.length,
     });
+    if (!field) throw new Error("Failed to create custom field");
     await audit({ actorId: me?.id, actorName: me?.name, action: "create", entityType: "custom_field", entityId: field.id, summary: `Added field "${b.label}" to ${b.entity}` });
     return c.json({ field }, 201);
   })

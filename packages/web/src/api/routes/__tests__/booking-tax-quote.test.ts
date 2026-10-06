@@ -27,6 +27,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { Hono } from "hono";
+import type { AppEnv } from "../../env";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 // Must be set BEFORE importing the database module (it reads env at import).
@@ -53,7 +54,7 @@ const CASES = [
   { key: "unknown", address: "somewhere unlabelled 12345", region: "SK", fromAddress: false },
 ];
 
-const app = new Hono().use("*", async (c, next) => {
+const app = new Hono<AppEnv>().use("*", async (c, next) => {
   c.set("companyId", c.req.header("X-Test-Company") || "default");
   const uid = c.req.header("X-Test-User");
   c.set("user", uid ? { id: uid, role: "customer", email: `${uid}@t.test`, name: uid } : null);

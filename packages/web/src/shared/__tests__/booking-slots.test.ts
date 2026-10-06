@@ -69,7 +69,7 @@ describe("nextSlots", () => {
   it("falls back to the same default zone the server uses when unset", () => {
     // DEFAULT_TZ is America/Winnipeg; an empty or junk value must not throw and
     // must produce the same slots as naming that zone explicitly.
-    const hour = (tz: string) => zonedParts(new Date(nextSlots(tz)[0].value), "America/Winnipeg").hour;
+    const hour = (tz: string) => zonedParts(new Date(nextSlots(tz)[0]!.value), "America/Winnipeg").hour;
     expect(HOURS).toContain(hour(""));
     expect(HOURS).toContain(hour("Not/AZone"));
     expect(nextSlots("").length).toBe(nextSlots("America/Winnipeg").length);
@@ -78,11 +78,11 @@ describe("nextSlots", () => {
   it("labels the slot in the tenant's zone, naming the zone for out-of-zone customers", () => {
     // Out-of-zone customer: the label must carry a zone name, otherwise "9 AM"
     // on screen is ambiguous. Kiritimati is nobody's local zone.
-    const away = nextSlots("Pacific/Kiritimati")[0].label;
+    const away = nextSlots("Pacific/Kiritimati")[0]!.label;
     expect(away).toMatch(/\+14|LINT|GMT/);
     // Customer in the company's own zone: no zone suffix, just the time.
     const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const home = nextSlots(localTz)[0].label;
+    const home = nextSlots(localTz)[0]!.label;
     expect(home).toMatch(/\d+ (AM|PM)$/);
   });
 

@@ -250,7 +250,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
     // reuse an existing open intent if we have one (avoids duplicate charges)
     let pi;
     if (inv.stripePaymentIntentId) {
-      pi = await stripe.paymentIntents.retrieve(inv.stripePaymentIntentId, acct).catch(() => null);
+      pi = await stripe.paymentIntents.retrieve(inv.stripePaymentIntentId, {}, acct).catch(() => null);
       if (pi && ["canceled", "succeeded"].includes(pi.status)) pi = null;
       // keep amount in sync if invoice total changed
       if (pi && pi.amount !== toMinor(inv.total)) {
@@ -289,7 +289,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
     const inv = await t.selectOne(schema.invoices, eq(schema.invoices.bookingId, bookingId));
     if (!inv?.stripePaymentIntentId) throw Err.notFound("No payment in progress");
 
-    const pi = await getStripe().paymentIntents.retrieve(inv.stripePaymentIntentId, await connectedForInvoice(inv));
+    const pi = await getStripe().paymentIntents.retrieve(inv.stripePaymentIntentId, {}, await connectedForInvoice(inv));
     // `retrieve` resolves to Stripe's Response<PaymentIntent> wrapper (the intent
     // plus `lastResponse`); the syncer only reads intent fields.
     await syncInvoiceFromIntent(pi as unknown as Parameters<typeof syncInvoiceFromIntent>[0]);
@@ -411,7 +411,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
   // onboarding URL. Also used to RESUME onboarding when details are missing.
   .post("/connect/start", requireAdmin, jsonBody(ConnectStartBody), async (c) => {
     if (!stripeEnabled) throw new AppError(503, "payments_disabled", "Payments are not configured");
-    const u = c.get("user") as SessionUser;
+    const u = c.get("user") as SessionUser & { role?: string };
     const companyId = tenantId(c);
     const { country } = c.req.valid("json") as { country: ConnectCountry };
     let accountId: string;
@@ -450,7 +450,7 @@ export const paymentsRoutes = new Hono<AppEnv>()
   // Stripe account (no connected account). Intended for the ArrivePing tenant,
   // whose money belongs in the platform bank. Never expose to tenant admins.
   .post("/connect/platform", requireAdmin, jsonBody(PlatformBody), async (c) => {
-    const u = c.get("user") as SessionUser;
+    const u = c.get("user") as SessionUser & { role?: string };
     if (!isSuperadmin(u.role)) throw Err.forbidden("Superadmin only");
     const companyId = tenantId(c);
     const { enabled } = c.req.valid("json") as { enabled: boolean };

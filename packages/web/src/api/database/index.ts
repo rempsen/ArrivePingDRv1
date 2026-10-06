@@ -35,7 +35,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const BASE_DELAYS = [100, 250, 600, 1200, 2000];
 
 function nextDelay(attempt: number): number {
-  const base = BASE_DELAYS[Math.min(attempt, BASE_DELAYS.length - 1)];
+  const base = BASE_DELAYS[Math.min(attempt, BASE_DELAYS.length - 1)]!;
   const jitter = base * 0.25 * (Math.random() * 2 - 1);
   return Math.max(0, Math.round(base + jitter));
 }

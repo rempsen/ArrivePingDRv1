@@ -157,6 +157,7 @@ export const payoutsRoutes = new Hono<AppEnv>()
         breakdown: JSON.stringify(agg.jobs),
         status: "pending",
       });
+      if (!p) throw Err.internal("Failed to create payout");
       // Stamp the jobs this payout covers so they are never paid again, and
       // write the per-job pay back onto the booking so the job screen, the
       // Earnings screen and this payout all show the same number.

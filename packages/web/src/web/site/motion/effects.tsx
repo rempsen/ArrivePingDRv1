@@ -40,8 +40,8 @@ export function handleSpotlight(e: React.MouseEvent<HTMLElement>) {
 function parseStat(raw: string): { prefix: string; target: number; decimals: number; suffix: string } {
   const m = raw.match(/^([^\d]*)([\d.]+)(.*)$/);
   if (!m) return { prefix: "", target: 0, decimals: 0, suffix: raw };
-  const [, prefix, numStr, suffix] = m;
-  const decimals = numStr.includes(".") ? numStr.split(".")[1].length : 0;
+  const [, prefix = "", numStr = "", suffix = ""] = m;
+  const decimals = numStr.includes(".") ? (numStr.split(".")[1]?.length ?? 0) : 0;
   return { prefix, target: parseFloat(numStr), decimals, suffix };
 }
 

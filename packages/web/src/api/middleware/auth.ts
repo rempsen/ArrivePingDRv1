@@ -349,7 +349,7 @@ function bearer(c: { req: { header: (k: string) => string | undefined } }) {
   const h = c.req.header("Authorization") || c.req.header("authorization");
   if (!h) return null;
   const m = /^Bearer\s+(.+)$/i.exec(h.trim());
-  return m ? m[1].trim() : null;
+  return m ? m[1]!.trim() : null;
 }
 
 /**

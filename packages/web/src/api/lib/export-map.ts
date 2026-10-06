@@ -51,7 +51,7 @@ export async function fetchSiteBasemap(route: JobRoutePoint[]): Promise<Buffer |
   const clean = (route || []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
   if (!key || !clean.length) return null;
   const onsite = clean.filter((p) => p.phase === "onsite");
-  const pool = onsite.length ? onsite : [clean[clean.length - 1]];
+  const pool = onsite.length ? onsite : [clean[clean.length - 1]!];
   const lat = pool.reduce((s, p) => s + p.lat, 0) / pool.length;
   const lng = pool.reduce((s, p) => s + p.lng, 0) / pool.length;
   const center = `${lat.toFixed(6)},${lng.toFixed(6)}`;
@@ -85,7 +85,7 @@ function thin<T>(arr: T[], max: number): T[] {
   if (arr.length <= max) return arr;
   const step = (arr.length - 1) / (max - 1);
   const out: T[] = [];
-  for (let i = 0; i < max; i++) out.push(arr[Math.round(i * step)]);
+  for (let i = 0; i < max; i++) out.push(arr[Math.round(i * step)]!);
   return out;
 }
 
@@ -119,7 +119,7 @@ export async function fetchRouteBasemap(
   for (const p of clean) {
     const last = runs[runs.length - 1];
     if (last && last.phase === p.phase) last.pts.push(p);
-    else runs.push({ phase: p.phase, pts: last ? [last.pts[last.pts.length - 1], p] : [p] });
+    else runs.push({ phase: p.phase, pts: last ? [last.pts[last.pts.length - 1]!, p] : [p] });
   }
   // budget the total number of points across all paths so the URL stays sane
   const budget = 300;
@@ -135,7 +135,7 @@ export async function fetchRouteBasemap(
     const color = PHASE_HEX[r.phase] ?? "0x94a3b8";
     params.push(`path=color:${color}ff%7Cweight:5%7Cenc:${encodeURIComponent(encodePolyline(pts))}`);
   }
-  const a = clean[0], b = clean[clean.length - 1];
+  const a = clean[0]!, b = clean[clean.length - 1]!;
   params.push(`markers=${encodeURIComponent(`color:0x0ea5e9|label:A|${a.lat.toFixed(6)},${a.lng.toFixed(6)}`)}`);
   params.push(`markers=${encodeURIComponent(`color:0xef4444|label:B|${b.lat.toFixed(6)},${b.lng.toFixed(6)}`)}`);
   void jobAddress; // reserved: could add a job-site marker once geocoded server-side

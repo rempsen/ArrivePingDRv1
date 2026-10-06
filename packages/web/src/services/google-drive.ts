@@ -96,7 +96,7 @@ async function ensureFolder(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const j = (await r.json()) as { files?: { id: string }[] };
-  if (r.ok && j.files && j.files.length > 0) return j.files[0].id;
+  if (r.ok && j.files && j.files.length > 0) return j.files[0]!.id;
 
   // Create it.
   const cr = await fetch(`${DRIVE_FILES}?fields=id`, {
@@ -202,7 +202,7 @@ export async function uploadToDrive(
     fileId: j.id,
     name: j.name || opts.name,
     webViewLink: j.webViewLink || `https://drive.google.com/file/d/${j.id}/view`,
-    folder: segments[0],
+    folder: segments[0]!,
     folderPath: segments.join("/"),
     folderLink: `https://drive.google.com/drive/folders/${folderId}`,
   };

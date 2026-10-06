@@ -69,8 +69,8 @@ describe("per-tenant error alerting", () => {
     err("acme"); // still within cooldown -> suppressed
     await flush();
     expect(hits.length).toBe(1);
-    expect(hits[0].tenant).toBe("acme");
-    expect(hits[0].count).toBeGreaterThanOrEqual(3);
+    expect(hits[0]?.tenant).toBe("acme");
+    expect(hits[0]?.count).toBeGreaterThanOrEqual(3);
   });
 
   it("counts tenants independently", async () => {
@@ -82,6 +82,6 @@ describe("per-tenant error alerting", () => {
     err("bolt");
     await flush();
     expect(hits.length).toBe(1);
-    expect(hits[0].tenant).toBe("acme");
+    expect(hits[0]?.tenant).toBe("acme");
   });
 });

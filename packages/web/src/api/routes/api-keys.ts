@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { requireAdmin, tx } from "../middleware/auth";
 import { generateApiKey, generatePublicKey } from "../middleware/auth";
 import { audit } from "../lib/audit";
+import { Err } from "../lib/errors";
 import { z } from "zod";
 import { jsonBody, shortText } from "../lib/validate";
 import { publicOrigin } from "../lib/request-origin";
@@ -149,6 +150,7 @@ export const apiKeysRoutes = new Hono<AppEnv>()
       createdByName: me?.name ?? "",
       expiresAt: expiresAt ? new Date(expiresAt) : null,
     });
+    if (!row) throw Err.internal("Failed to create API key");
     await audit({
       actorId: me?.id,
       actorName: me?.name,

@@ -34,7 +34,7 @@ type Props = {
 type State = { error: Error | null; resetKey?: string };
 
 class Boundary extends Component<Props, State> {
-  state: State = { error: null };
+  override state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
@@ -52,7 +52,7 @@ class Boundary extends Component<Props, State> {
       : { resetKey: props.resetKey };
   }
 
-  componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+  override componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     reportError(error, {
       boundary: this.props.name,
       componentStack: info.componentStack ?? undefined,
@@ -60,7 +60,7 @@ class Boundary extends Component<Props, State> {
     });
   }
 
-  render() {
+  override render() {
     const { error } = this.state;
     if (!error) return this.props.children;
 

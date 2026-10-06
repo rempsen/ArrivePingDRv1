@@ -203,7 +203,7 @@ function WorkOrderBuilder({ companyId, slug, cfg, services, brand, publicKey }: 
       const idx = prev.findIndex((p) => p.itemId === li.itemId);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = buildLineItem(item, (prev[idx].qty || 0) + qty, lookup);
+        next[idx] = buildLineItem(item, (prev[idx]!.qty || 0) + qty, lookup);
         return next;
       }
       return [...prev, li];

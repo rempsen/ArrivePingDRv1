@@ -95,7 +95,7 @@ console.log("\n── custom fields: the drawer-killer ──");
   const good = await req("POST", "/custom-fields", { label: "ZZ verify field", type: "select", entity: "tech", options: ["A", "B"] });
   check("valid select field -> 201 with array options", good.s === 201 && JSON.parse(good.j?.field?.options ?? "null")?.length === 2, `${good.s}`);
   if (good.j?.field?.id) created.fields.push(good.j.field.id);
-  const fid = created.fields[0];
+  const fid = created.fields[0]!;
 
   check("type nonsense -> 400", rejects(await req("POST", "/custom-fields", { label: "ZZ v", type: "nuclear-launch", entity: "tech" }), "type"));
   check("entity nonsense -> 400", rejects(await req("POST", "/custom-fields", { label: "ZZ v", type: "text", entity: "whatever" })));
@@ -114,7 +114,7 @@ console.log("\n── custom fields: the drawer-killer ──");
 
 console.log("\n── custom fields: stored values ──");
 {
-  const fid = created.fields[0];
+  const fid = created.fields[0]!;
   const vp = `/custom-fields/values/tech/zz-verify-vals`;
   const good = await req("PUT", vp, { values: { [fid]: "A" } });
   check("valid values -> 200", good.s === 200, `${good.s}`);
