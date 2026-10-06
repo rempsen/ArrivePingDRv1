@@ -19,6 +19,7 @@
     "db:migrate": "turbo db:migrate",
     "db:push": "turbo db:push",
     "db:studio": "turbo db:studio",
+    "make-superadmin": "bun --env-file=.env scripts/make-superadmin.ts",
     "kill:port": "lsof -t -i :${PORT:-4200} | xargs kill -9"
   },
   "devDependencies": {
