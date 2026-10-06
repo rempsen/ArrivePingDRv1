@@ -282,6 +282,7 @@ export default function PaymentsSettingsTab() {
               : "This company must connect its own Stripe account (above). Switch on only for the ArrivePing tenant — it sends this company’s money to NVC360’s bank."}
           </p>
           <label className="inline-flex cursor-pointer items-center gap-3 text-sm text-white">
+            {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the text inside the wrapping <label> */}
             <input
               type="checkbox"
               className="h-4 w-4 accent-amber-400"

@@ -1086,6 +1086,7 @@ export function WorkOrderModal({
                 onChange={(e) => setNewCustomerName(e.target.value)}
                 placeholder={`${customerNoun} name`}
                 className={inputCls}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- user just clicked "new customer"; focus moves to the field they asked for
                 autoFocus
               />
               <button

@@ -101,7 +101,11 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
       </div>
 
       {open && (
+        // Backdrop click is a pointer convenience only; keyboard users close with Escape (see the keydown handler) or the Close button.
+        // eslint-disable-next-line jsx-a11y/click-events-have-key-events
         <div className="drawer" onClick={close} role="presentation">
+          {/* The click handler only stops propagation so clicks inside the panel don't hit the backdrop. */}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/prefer-tag-over-role -- <dialog> would need showModal() and changes the existing drawer animation/styling */}
           <div id="site-drawer" className="drawer__panel" role="dialog" aria-modal="true" aria-label="Menu" onClick={(e) => e.stopPropagation()}>
             <div className="drawer__top">
               <div className="drawer__brand">
