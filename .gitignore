@@ -108,6 +108,8 @@ crash.log
 crash.*.log
 # Variable files can carry credentials.
 *.auto.tfvars
+terraform.tfvars
+!terraform.tfvars.example
 shot.png
 .local-shots/
 .env.eas

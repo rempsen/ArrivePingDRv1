@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# Vercel AI Gateway key: https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fapi-keys
+vercel_api_key = ""
