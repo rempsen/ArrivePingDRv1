@@ -73,18 +73,23 @@ export function TenantSwitcher() {
   }, [open]);
 
   const isSuper = role === "superadmin" || !!data?.superadmin;
-  const companies = ((data?.companies ?? []) as Company[]).filter(
-    (c) => c.status !== "suspended",
+  const companies = useMemo(
+    () => ((data?.companies ?? []) as Company[]).filter((c) => c.status !== "suspended"),
+    [data?.companies],
   );
   // The server is the source of truth for what we're acting as; localStorage is
   // only a hint (and may be stale after a membership is revoked).
   const active = stored ?? data?.activeCompanyId ?? "default";
 
-  const list = isSuper
-    ? companies.some((c) => c.id === "default")
-      ? companies
-      : [{ id: "default", name: "ArrivePing (Home)" }, ...companies]
-    : companies;
+  const list = useMemo(
+    () =>
+      isSuper
+        ? companies.some((c) => c.id === "default")
+          ? companies
+          : [{ id: "default", name: "ArrivePing (Home)" }, ...companies]
+        : companies,
+    [isSuper, companies],
+  );
   const current = list.find((c) => c.id === active);
 
   // Alphabetical, with the platform home tenant pinned to the top so it's
@@ -158,6 +163,8 @@ export function TenantSwitcher() {
     return (
       <button
         key={c.id}
+        // a <button> keeps native click/keyboard behaviour inside the combobox listbox; <option> cannot hold this layout.
+        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="option"
         data-idx={i}
         aria-selected={c.id === active}
@@ -208,6 +215,8 @@ export function TenantSwitcher() {
       </button>
 
       {open && (
+        // Keyboard handling for the whole popup (arrows/Enter/Escape) is delegated here from the focused search/option.
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions
         <div
           className="absolute left-3 right-3 z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-ink-2 shadow-2xl"
           onKeyDown={onKey}
@@ -225,6 +234,7 @@ export function TenantSwitcher() {
               />
             </div>
           )}
+          {/* eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- custom grouped listbox; <select> can't render this */}
           <div ref={listRef} className="max-h-80 overflow-y-auto py-1" role="listbox">
             {flat.length === 0 ? (
               <p className="px-3 py-4 text-center text-xs text-slate-500">

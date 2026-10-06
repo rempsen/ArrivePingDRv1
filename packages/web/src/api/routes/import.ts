@@ -401,7 +401,7 @@ export const importRoutes = new Hono<AppEnv>()
     let rows: Record<string, string>[];
     try {
       rows = await parseUpload(file);
-    } catch (e: any) {
+    } catch {
       return c.json({ message: "Could not read that file — check it's a valid CSV or Excel export" }, 400);
     }
     if (!rows.length) return c.json({ message: "No rows found in that file" }, 400);

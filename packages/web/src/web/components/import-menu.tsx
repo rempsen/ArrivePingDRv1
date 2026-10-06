@@ -157,7 +157,7 @@ export function ImportMenu({
             <MenuItem icon={Download} label="Download template" onClick={() => downloadTemplate("csv")} />
           </div>
         )}
-        <input ref={fileRef} type="file" className="hidden" onChange={onFileSelected} />
+        <input ref={fileRef} type="file" className="hidden" aria-label="Choose a file to import" onChange={onFileSelected} />
       </div>
 
       {/* which entity type — only shown when the tab is "All" (or the page offers more than one type) */}

@@ -346,8 +346,11 @@ export default function FleetPage() {
             />
           ) : (
             unassignedQueue.map((b: any) => (
+              // eslint-disable-next-line jsx-a11y/control-has-associated-label -- card has visible text content
               <div
                 key={b.id}
+                // card contains nested content (a <button> can't hold it); has tabIndex + Enter/Space handler
+                // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
                 role="button"
                 tabIndex={0}
                 title="Click to view & edit"

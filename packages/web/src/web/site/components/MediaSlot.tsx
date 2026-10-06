@@ -47,6 +47,7 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
 
   return (
     <>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- decorative, muted, looping background media with no audio track */}
       <video
         ref={ref}
         className="slot__media"

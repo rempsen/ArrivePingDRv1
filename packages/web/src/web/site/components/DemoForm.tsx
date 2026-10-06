@@ -63,6 +63,7 @@ export function DemoForm() {
 
   if (status.kind === "ok") {
     return (
+      // eslint-disable-next-line jsx-a11y/prefer-tag-over-role -- focus target for the success message; keeps the .form-card block styling
       <div className="form-card" role="status" aria-live="polite" tabIndex={-1} ref={okRef}>
         <h3>Thanks — we'll be in touch.</h3>
         <p className="small">
@@ -80,15 +81,19 @@ export function DemoForm() {
       <p className="small">{closing.body}</p>
       <div className="form-grid">
         <Field id={`${uid}-name`} label={f.fields.name} error={errors.name}>
+          {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <input id={`${uid}-name`} name="name" autoComplete="name" value={values.name} onChange={set("name")} required aria-invalid={!!errors.name} />
         </Field>
         <Field id={`${uid}-email`} label={f.fields.email} error={errors.email}>
+          {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <input id={`${uid}-email`} name="email" type="email" inputMode="email" autoComplete="email" value={values.email} onChange={set("email")} required aria-invalid={!!errors.email} />
         </Field>
         <Field id={`${uid}-company`} label={f.fields.company} error={errors.company}>
+          {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <input id={`${uid}-company`} name="company" autoComplete="organization" value={values.company} onChange={set("company")} required aria-invalid={!!errors.company} />
         </Field>
         <Field id={`${uid}-size`} label={f.fields.teamSize}>
+          {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <select id={`${uid}-size`} name="teamSize" value={values.teamSize} onChange={set("teamSize")}>
             <option value="">Select…</option>
             {f.teamSizes.map((t) => (
@@ -101,6 +106,7 @@ export function DemoForm() {
         {/* honeypot — hidden from people, filled by bots */}
         <div className="hp" aria-hidden="true">
           <label htmlFor={`${uid}-website`}>Website</label>
+          {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <input id={`${uid}-website`} name="website" tabIndex={-1} autoComplete="off" value={values.website} onChange={set("website")} />
         </div>
         <button type="submit" className="btn btn--primary" disabled={loading}>
