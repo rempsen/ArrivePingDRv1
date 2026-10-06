@@ -645,9 +645,11 @@ function LogoField({
 
   return (
     <Field label="Logo">
-      <div className="flex items-start gap-3">
-        <div className="relative">
-          <TenantLogo src={value} name={name} color={color} className="h-14 w-14 text-lg" />
+      <div className="flex flex-col gap-3">
+        <div className="relative w-full max-w-[200px]">
+          {/* Same treatment as the sidebar masthead: logo on a white plate, name under it. */}
+          <TenantLogo src={value} name={name} color={color} variant="plate" className="h-16 w-full" fallbackClassName="mx-auto h-14 w-14 text-lg" />
+          <p className="mt-1.5 truncate text-center text-[12px] font-bold text-white">{name || "Company name"}</p>
           {value && !isShare && (
             <img src={value} alt="" aria-hidden className="hidden" onError={() => setLoadFailed(true)} onLoad={() => setLoadFailed(false)} />
           )}
@@ -668,7 +670,7 @@ function LogoField({
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
           </div>
           <input aria-label="Logo URL" className={`${inputCls} text-xs`} value={value} onChange={(e) => onChange(e.target.value)} placeholder="…or paste a direct image URL (https://…/logo.png)" />
-          <p className="text-[11px] text-slate-500">PNG, SVG, JPG or WebP up to 4MB. Shows in the sidebar and browser tab for everyone on your team.</p>
+          <p className="text-[11px] text-slate-500">PNG, SVG, JPG or WebP up to 4MB. Shown large at the top of the sidebar with your company name underneath, for everyone on your team. A wide logo with a transparent or white background looks best.</p>
           {(isShare || loadFailed) && (
             <p className="flex items-start gap-1.5 rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] leading-snug text-amber-200">
               <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-warn" />

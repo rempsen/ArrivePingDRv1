@@ -236,19 +236,46 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   /** Sidebar masthead: THIS company's logo + name, so a dispatcher at
    *  Prairie Comfort HVAC sees Prairie Comfort HVAC, not our wordmark.
-   *  ArrivePing moves to a small "Powered by" lockup in the footer. */
+   *  ArrivePing moves to a small "Powered by" lockup in the footer.
+   *
+   *  Rule for every tenant (Dan, 2026-10-06): the logo is the hero — shown
+   *  large on a white plate the full width of the sidebar — with the company
+   *  name printed underneath. No tagline here: the logo usually carries the
+   *  name already and a third line just made everything smaller. The tagline
+   *  still shows on the customer-facing booking/tracking pages.
+   *  `compact` (mobile top bar + drawer) keeps the same logo-then-name order
+   *  but side by side, because the bar is only 64px tall. */
   function TenantIdentity({ compact }: { compact?: boolean }) {
+    if (compact) {
+      return (
+        <Link to="/admin" title={brand.name} className="flex min-w-0 items-center gap-2.5 rounded-xl px-1 py-1 transition-colors hover:bg-white/[0.03]">
+          <TenantLogo
+            src={brand.logo}
+            name={brand.name}
+            color={brand.brandColor}
+            variant="plate"
+            className="h-10 max-w-[132px] px-2 py-1"
+            fallbackClassName="h-9 w-9 text-sm"
+          />
+          <span className="min-w-0 truncate font-display text-[14px] font-bold leading-tight tracking-tight text-white">{brand.name}</span>
+        </Link>
+      );
+    }
     return (
       <Link
         to="/admin"
         title={brand.name}
-        className={cn("flex min-w-0 items-center gap-3 rounded-xl transition-colors hover:bg-white/[0.03]", compact ? "px-1 py-1" : "px-2 py-1.5")}
+        className="flex w-full min-w-0 flex-col items-center gap-2.5 rounded-xl px-2 py-1 text-center transition-colors hover:bg-white/[0.03]"
       >
-        <TenantLogo src={brand.logo} name={brand.name} color={brand.brandColor} className={compact ? "h-9 w-9 text-sm" : "h-11 w-11 text-base"} />
-        <span className="min-w-0 flex-1">
-          <span className={cn("block font-display font-bold tracking-tight text-white", compact ? "truncate text-[14px] leading-tight" : "line-clamp-2 text-[13.5px] leading-[1.2]")}>{brand.name}</span>
-          <span className="mt-0.5 block truncate text-[11px] leading-tight text-slate-500">{brand.tagline || "Dispatch console"}</span>
-        </span>
+        <TenantLogo
+          src={brand.logo}
+          name={brand.name}
+          color={brand.brandColor}
+          variant="plate"
+          className="h-[72px] w-full"
+          fallbackClassName="h-16 w-16 text-2xl"
+        />
+        <span className="line-clamp-2 w-full font-display text-[15px] font-bold leading-[1.2] tracking-tight text-white">{brand.name}</span>
       </Link>
     );
   }
@@ -290,7 +317,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen overflow-x-clip bg-ink text-slate-200">
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[228px] flex-col border-r border-white/[0.06] bg-ink-2 md:flex">
-        <div className="flex h-[76px] items-center border-b border-white/5 px-3">
+        <div className="border-b border-white/5 px-3 py-3">
           <TenantIdentity />
         </div>
         <TenantSwitcher />
