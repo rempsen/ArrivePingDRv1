@@ -163,7 +163,7 @@ export default function AdminCatalog() {
   const allCollapsed = grouped.every(([c]) => collapsed[c]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 pb-24 md:px-8">
+    <div className="w-full min-w-0 space-y-5 px-4 py-6 pb-24 md:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-extrabold text-white">Catalog</h1>

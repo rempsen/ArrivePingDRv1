@@ -886,7 +886,7 @@ export default function AdminSettings() {
  */
 function EmbeddedSection({ children }: { children: React.ReactNode }) {
   return (
-    <div className="[&_.mx-auto]:mx-0 [&_.mx-auto]:max-w-none [&_.mx-auto]:!px-0 [&_.mx-auto]:!py-0 [&_.mx-auto]:!pb-0">
+    <div className="[&_.page-wrap]:!px-0 [&_.page-wrap]:!py-0 [&_.page-wrap]:!pb-0">
       {children}
     </div>
   );

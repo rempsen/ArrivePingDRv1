@@ -41,14 +41,12 @@ export function Logo({
 }
 
 /** Standard padded content wrapper for dispatcher console pages.
- *  `wide` bumps the cap from max-w-6xl (72rem) to max-w-[86rem] — ~20%
- *  wider — for pages like the Scheduler calendar where the default width
- *  crowds day cells and truncates job chips. Opt-in per page so every
- *  other admin page keeps its current width. */
-export function PageWrap({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
-  return (
-    <div className={`mx-auto px-4 py-6 pb-24 md:px-8 ${wide ? "max-w-[86rem]" : "max-w-6xl"}`}>{children}</div>
-  );
+ *  Fluid: fills whatever width the shell gives it (sidebar excluded) so the
+ *  Jobs list, calendar, map, etc. grow with the browser window instead of
+ *  floating in a centred 72rem column with dead space either side.
+ *  `wide` is kept for backwards compatibility and is now a no-op. */
+export function PageWrap({ children }: { children: React.ReactNode; wide?: boolean }) {
+  return <div className="page-wrap w-full min-w-0 px-4 py-6 pb-24 md:px-8">{children}</div>;
 }
 
 export function StatusBadge({ status }: { status: string }) {

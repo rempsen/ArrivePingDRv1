@@ -102,7 +102,7 @@ export default function IntakeFormsPage() {
   const keysQ = useQuery({ queryKey: ["api-keys"], queryFn: () => jget<{ keys: PubKey[] }>("/api/api-keys") });
   const publicKeys = (keysQ.data?.keys ?? []).filter((k) => k.keyType === "public");
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <div className="w-full min-w-0 px-4 py-6 md:px-8">
       <div className="mb-5">
         <h1 className="font-display text-2xl font-bold text-white">Intake Forms</h1>
         <p className="mt-1 text-sm text-slate-400">Build customer-facing forms with custom sections, fields, and a designated recipient. Each submission creates a pipeline lead and emails your recipient.</p>
