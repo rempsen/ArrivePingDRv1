@@ -265,14 +265,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <Link
         to="/admin"
         title={brand.name}
-        className="flex w-full min-w-0 flex-col items-center gap-2.5 rounded-xl px-2 py-1 text-center transition-colors hover:bg-white/[0.03]"
+        className="flex w-full min-w-0 flex-col items-center gap-2.5 rounded-xl py-1 text-center transition-colors hover:bg-white/[0.03]"
       >
         <TenantLogo
           src={brand.logo}
           name={brand.name}
           color={brand.brandColor}
           variant="plate"
-          className="h-[72px] w-full"
+          className="h-20 w-full px-2 py-2"
           fallbackClassName="h-16 w-16 text-2xl"
         />
         <span className="line-clamp-2 w-full font-display text-[15px] font-bold leading-[1.2] tracking-tight text-white">{brand.name}</span>
