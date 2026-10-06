@@ -18,6 +18,7 @@ import {
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 import { WorkOrderModal } from "../../components/work-order-modal";
+import { JobDetailModal } from "../../components/job-detail-modal";
 import { EmptyState } from "../../components/empty-state";
 
 const QUICK = [
@@ -87,13 +88,40 @@ export default function AdminWorkOrders() {
   const [assignFor, setAssignFor] = useState<any>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [editJob, setEditJob] = useState<any>(null);
+  const [viewJob, setViewJob] = useState<any>(null);
   const [, navigate] = useLocation();
-  // Completed jobs are historical records now — clicking one opens the
-  // read-only report page instead of the editable work-order form.
-  // Cancelled (and every other status) keep the old edit-modal behavior.
-  const openJob = (b: any) => {
-    if (b.status === "completed") navigate(`/admin/jobs/${b.id}/report`);
-    else setEditJob(b);
+  // Tapping a row opens the wide read-only detail view first (every status,
+  // completed included — it carries a "Report" button). The row's own
+  // Edit / Report button still jumps straight to the editor / report page:
+  // completed jobs are historical records, so their shortcut is the report,
+  // not the form.
+  const openJob = (b: any) => setViewJob(b);
+  // The list row is a display shape — it has no raw lineItems JSON, template,
+  // custom fields, staff notes, or skill requirements. Handing it straight to
+  // WorkOrderModal used to open the editor with those blank, so "Save" could
+  // silently wipe them. Load the full booking first (same as the report
+  // page's "Edit anyway"), then open the editor on that.
+  const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
+  const openEditor = async (b: any) => {
+    if (b.status === "completed") { navigate(`/admin/jobs/${b.id}/report`); return; }
+    setEditLoadingId(b.id);
+    try {
+      const data = await qc.fetchQuery({
+        queryKey: ["booking-edit-source", b.id],
+        queryFn: async () => {
+          const res = await fetch(`/api/bookings/${b.id}`, { credentials: "include", headers: apiHeaders() });
+          if (!res.ok) throw new Error(`request failed (${res.status})`);
+          return res.json() as Promise<{ booking: any }>;
+        },
+        staleTime: 0,
+      });
+      setViewJob(null);
+      setEditJob(data.booking ?? b);
+    } catch (e: any) {
+      toast({ kind: "error", key: "job-edit-load", message: `Couldn't load this ${jobNoun.toLowerCase()} for editing.`, detail: e?.message });
+    } finally {
+      setEditLoadingId(null);
+    }
   };
 
   const [quick, setQuick] = useState(
@@ -268,6 +296,19 @@ export default function AdminWorkOrders() {
         open={editJob !== null}
         editBooking={editJob ?? undefined}
         onClose={() => setEditJob(null)}
+      />
+      <JobDetailModal
+        job={viewJob}
+        open={viewJob !== null}
+        onClose={() => setViewJob(null)}
+        onEdit={() => viewJob && openEditor(viewJob)}
+        editLoading={editLoadingId !== null}
+        onAssign={() => {
+          const b = viewJob;
+          setViewJob(null);
+          setAssignFor(b);
+        }}
+        onReport={() => viewJob && navigate(`/admin/jobs/${viewJob.id}/report`)}
       />
 
       {/* quick pills + search + filter toggle */}
@@ -459,7 +500,7 @@ export default function AdminWorkOrders() {
                       )}
                       {!archived && (
                         <button
-                          onClick={() => openJob(b)}
+                          onClick={() => openEditor(b)}
                           className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/10 px-3.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white"
                         >
                           {b.status === "completed" ? (
@@ -632,7 +673,7 @@ export default function AdminWorkOrders() {
                             )}
                           {!archived && (
                             <button
-                              onClick={() => openJob(b)}
+                              onClick={() => openEditor(b)}
                               title={b.status === "completed" ? "View job report" : `Edit ${jobNoun.toLowerCase()}`}
                               aria-label={b.status === "completed" ? "View job report" : `Edit ${jobNoun.toLowerCase()}`}
                               className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white lg:px-3"

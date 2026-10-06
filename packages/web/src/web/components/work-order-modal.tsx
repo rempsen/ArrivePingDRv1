@@ -858,6 +858,8 @@ export function WorkOrderModal({
       // null = the dispatcher backed out of the "book it anyway?" question.
       if (!data) return;
       qc.invalidateQueries({ queryKey: ["bookings"] });
+      qc.invalidateQueries({ queryKey: ["jobSearch"] });
+      qc.invalidateQueries({ queryKey: ["job-report"] });
       qc.invalidateQueries({ queryKey: ["scheduler"] });
       qc.invalidateQueries({ queryKey: ["riders"] });
       reset();
@@ -909,6 +911,8 @@ export function WorkOrderModal({
     onSuccess: (data) => {
       if (!data) return;
       qc.invalidateQueries({ queryKey: ["bookings"] });
+      qc.invalidateQueries({ queryKey: ["jobSearch"] });
+      qc.invalidateQueries({ queryKey: ["job-report"] });
       qc.invalidateQueries({ queryKey: ["scheduler"] });
       qc.invalidateQueries({ queryKey: ["riders"] });
       onCreated?.();

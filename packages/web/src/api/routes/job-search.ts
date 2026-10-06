@@ -504,21 +504,25 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
 
-    const svc = b.serviceId ? await t.selectOne(schema.services, eq(schema.services.id, b.serviceId)) : undefined;
-    const cust = b.customerId ? await t.selectOne(schema.user, eq(schema.user.id, b.customerId)) : undefined;
+    // Every lookup below depends only on the booking row, so run them side by
+    // side. Each tenant-db call is its own short transaction (BEGIN +
+    // set_config + query + COMMIT), so done one after another this endpoint
+    // cost ~3.7 s from a far-away client; in parallel it's one round of
+    // latency. The Jobs-list detail view opens on every row tap, so it matters.
+    const [svc, cust, rp, photoRows, pingRows] = await Promise.all([
+      b.serviceId ? t.selectOne(schema.services, eq(schema.services.id, b.serviceId)) : Promise.resolve(undefined),
+      b.customerId ? t.selectOne(schema.user, eq(schema.user.id, b.customerId)) : Promise.resolve(undefined),
+      b.riderId ? t.selectOne(schema.riders, eq(schema.riders.id, b.riderId)) : Promise.resolve(undefined),
+      t.select(schema.jobPhotos, eq(schema.jobPhotos.bookingId, id)),
+      t.select(schema.trackingPings, eq(schema.trackingPings.bookingId, id)),
+    ]);
     let rider: any = null;
-    if (b.riderId) {
-      const rp = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
-      if (rp) {
-        const ru = await t.selectOne(schema.user, eq(schema.user.id, rp.userId));
-        rider = { id: rp.id, name: ru?.name, phone: ru?.phone, photoUrl: rp.photoUrl, vehicle: rp.vehicle };
-      }
+    if (rp) {
+      const ru = await t.selectOne(schema.user, eq(schema.user.id, rp.userId));
+      rider = { id: rp.id, name: ru?.name, phone: ru?.phone, photoUrl: rp.photoUrl, vehicle: rp.vehicle };
     }
 
-    const photoRows = await t.select(schema.jobPhotos, eq(schema.jobPhotos.bookingId, id));
     photoRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
-
-    const pingRows = await t.select(schema.trackingPings, eq(schema.trackingPings.bookingId, id));
     pingRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
 
     let lineItems: any[] = [];

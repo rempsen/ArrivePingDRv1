@@ -30,13 +30,18 @@ export function Modal({
   subtitle?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
   const { panelRef, dialogProps, titleId } = useDialog({ open, onClose });
 
   if (!open) return null;
+  // "xl" is the landscape read-only detail view (job detail): wide enough for
+  // a 3-column grid on a laptop, still a full-width sheet on phones.
   const maxW =
-    size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-2xl" : "max-w-lg";
+    size === "sm" ? "max-w-sm"
+    : size === "lg" ? "max-w-2xl"
+    : size === "xl" ? "max-w-5xl"
+    : "max-w-lg";
 
   return createPortal(
     // z-[1050]: must sit above slide-in side drawers (z-[1000] — Directory's
