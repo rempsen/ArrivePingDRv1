@@ -20,19 +20,24 @@
 locals {
   container_name = "web"
 
-  # Config keys pulled from Secrets Manager into the container environment.
-  # One secret holding a JSON object, injected key by key using ECS's
-  # "<secret-arn>:<json-key>::" syntax — Secrets Manager bills per secret per
+  # Config keys pulled from Secrets Manager into the container environment,
+  # injected key by key using ECS's "<secret-arn>:<json-key>::" syntax across
+  # two JSON-object secrets (main.tf) — Secrets Manager bills per secret per
   # month, and this app needs ~25 keys.
   #
-  # DATABASE_URL / DATABASE_SYSTEM_URL are NOT here: they are injected from
-  # their own Terraform-managed secrets (migrate.tf) so the role passwords stay
-  # in sync. DATABASE_AUTH_TOKEN was a Turso leftover and is gone.
+  # managed_secret_keys: Terraform generates or derives these itself and keeps
+  # them in sync. manual_secret_keys: developers set these by hand via the AWS
+  # console; Terraform only seeds placeholders so the task can start.
   #
   # Deliberately absent: S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY (the task role
   # supplies credentials) and S3_ENDPOINT (unset = real AWS S3).
-  secret_keys = [
+  managed_secret_keys = [
+    "DATABASE_URL",
+    "DATABASE_SYSTEM_URL",
     "BETTER_AUTH_SECRET",
+  ]
+
+  manual_secret_keys = [
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "GOOGLE_MAPS_API_KEY",
@@ -145,31 +150,23 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
-  # With a certificate, force HTTPS. Without one, serve HTTP so staging is
-  # reachable before DNS and ACM are sorted out.
   default_action {
-    type = var.acm_certificate_arn == "" ? "forward" : "redirect"
+    type = "redirect"
 
-    target_group_arn = var.acm_certificate_arn == "" ? aws_lb_target_group.web.arn : null
-
-    dynamic "redirect" {
-      for_each = var.acm_certificate_arn == "" ? [] : [1]
-      content {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
     }
   }
 }
 
 resource "aws_lb_listener" "https" {
-  count             = var.acm_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.web.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.web.certificate_arn
 
   default_action {
     type             = "forward"
@@ -204,15 +201,10 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
 
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
-    sid     = "ReadInjectedSecrets"
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = [
-      aws_secretsmanager_secret.app_config.arn,
-      aws_secretsmanager_secret.app_db_url.arn,
-      aws_secretsmanager_secret.app_db_system_url.arn,
-      aws_secretsmanager_secret.migrate_config.arn,
-    ]
+    sid       = "ReadInjectedSecrets"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.app_config.arn, aws_secretsmanager_secret.app_config_managed.arn, aws_secretsmanager_secret.migrate_config.arn]
   }
 }
 
@@ -301,19 +293,21 @@ resource "aws_ecs_task_definition" "web" {
         { name = "SENTRY_ENV", value = "staging" },
         # The app self-pings this to stay warm; point it at the ALB so the
         # request traverses the real path rather than localhost.
-        { name = "APP_URL", value = var.staging_url },
-        { name = "WEBSITE_URL", value = var.staging_url },
+        { name = "APP_URL", value = local.staging_url },
+        { name = "WEBSITE_URL", value = local.staging_url },
       ]
 
       secrets = concat(
         [
-          { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.app_db_url.arn },
-          { name = "DATABASE_SYSTEM_URL", valueFrom = aws_secretsmanager_secret.app_db_system_url.arn },
-        ],
-        [
-          for k in local.secret_keys : {
+          for k in local.manual_secret_keys : {
             name      = k
             valueFrom = "${aws_secretsmanager_secret.app_config.arn}:${k}::"
+          }
+        ],
+        [
+          for k in local.managed_secret_keys : {
+            name      = k
+            valueFrom = "${aws_secretsmanager_secret.app_config_managed.arn}:${k}::"
           }
         ],
       )

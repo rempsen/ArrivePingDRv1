@@ -22,35 +22,6 @@ resource "random_password" "app_system" {
   special = false
 }
 
-locals {
-  db_host = aws_db_instance.postgres.endpoint # host:port
-}
-
-# Plain-string secrets injected straight into the web container. Managed here
-# (not in app_config, which Terraform seeds once and never touches again) so a
-# regenerated password always reaches the app.
-resource "aws_secretsmanager_secret" "app_db_url" {
-  name                    = "${var.name_prefix}/app-database-url"
-  description             = "DATABASE_URL for the web container (app_runtime role, RLS enforced)."
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "app_db_url" {
-  secret_id     = aws_secretsmanager_secret.app_db_url.id
-  secret_string = "postgresql://app_runtime:${random_password.app_runtime.result}@${local.db_host}/nvc360?sslmode=require"
-}
-
-resource "aws_secretsmanager_secret" "app_db_system_url" {
-  name                    = "${var.name_prefix}/app-database-system-url"
-  description             = "DATABASE_SYSTEM_URL for the web container (app_system role, BYPASSRLS)."
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "app_db_system_url" {
-  secret_id     = aws_secretsmanager_secret.app_db_system_url.id
-  secret_string = "postgresql://app_system:${random_password.app_system.result}@${local.db_host}/nvc360?sslmode=require"
-}
-
 resource "aws_secretsmanager_secret" "migrate_config" {
   name                    = "${var.name_prefix}/migrate-config"
   description             = "Env for the one-off migration task: master URL plus app role passwords."
@@ -60,7 +31,7 @@ resource "aws_secretsmanager_secret" "migrate_config" {
 resource "aws_secretsmanager_secret_version" "migrate_config" {
   secret_id = aws_secretsmanager_secret.migrate_config.id
   secret_string = jsonencode({
-    MIGRATION_DATABASE_URL = aws_secretsmanager_secret_version.db_url.secret_string
+    MIGRATION_DATABASE_URL = local.master_database_url
     APP_RUNTIME_PASSWORD   = random_password.app_runtime.result
     APP_SYSTEM_PASSWORD    = random_password.app_system.result
   })
