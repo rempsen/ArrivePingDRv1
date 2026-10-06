@@ -278,6 +278,28 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = ["arn:aws:ecs:${var.region}:${local.account_id}:service/${var.name_prefix}/${var.name_prefix}-web"]
   }
 
+  # One-off migration task, run before each deploy. RunTask is scoped to the
+  # migrate family's revisions; DescribeTasks to this cluster's tasks.
+  statement {
+    sid       = "EcsMigrate"
+    effect    = "Allow"
+    actions   = ["ecs:RunTask"]
+    resources = ["arn:aws:ecs:${var.region}:${local.account_id}:task-definition/${var.name_prefix}-migrate:*"]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [aws_ecs_cluster.main.arn]
+    }
+  }
+
+  statement {
+    sid       = "EcsMigrateObserve"
+    effect    = "Allow"
+    actions   = ["ecs:DescribeTasks"]
+    resources = ["arn:aws:ecs:${var.region}:${local.account_id}:task/${var.name_prefix}/*"]
+  }
+
   # The rolling deploy's new task definition revision references these roles;
   # ECS itself (not the deploy role) launches the task, so this is scoped to
   # exactly the two roles the task definition uses and to the ECS service
