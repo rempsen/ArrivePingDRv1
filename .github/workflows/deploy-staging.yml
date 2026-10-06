@@ -124,14 +124,58 @@ jobs:
             VITE_SENTRY_ENV=staging
             VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
 
-      # Database migrations deliberately DO NOT run here yet.
+      # Migrations run as a one-off Fargate task BEFORE the service rolls.
       #
-      # Migrations in this repo are forward-only with no down-migrations, and
-      # staging has no database of its own until the Turso account-ownership
-      # question is resolved (or RDS Postgres is turned on). Running migrations
-      # from CI against a shared database before staging has its own is how you
-      # migrate production by accident. This step lands with the staging
-      # database, not before it.
+      # RDS is private (reachable only from the task security group), so they
+      # cannot run from the Actions runner. The task uses the new image, the
+      # service's own subnets/security group, and the master credentials from
+      # the migrate-config secret; it also creates the app_runtime/app_system
+      # roles and sets their passwords. Migrations are forward-only and
+      # additive-by-convention, so the previous image keeps working against the
+      # migrated schema if the deploy then rolls back. If this step fails the
+      # service is not touched.
+      - name: Run database migrations
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${SHA}"
+          MIGRATE_FAMILY="${ECS_CLUSTER}-migrate"
+
+          aws ecs describe-task-definition --task-definition "$MIGRATE_FAMILY" \
+            --query 'taskDefinition' > /tmp/migrate-taskdef.json
+
+          jq --arg IMAGE "$IMAGE" '
+            .containerDefinitions |= map(.image = $IMAGE)
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+          ' /tmp/migrate-taskdef.json > /tmp/migrate-newdef.json
+
+          MIGRATE_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file:///tmp/migrate-newdef.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          NETCFG=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration' --output json)
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" --launch-type FARGATE \
+            --task-definition "$MIGRATE_ARN" \
+            --network-configuration "$NETCFG" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $TASK_ARN"
+
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+
+          CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$CODE" != "0" ]; then
+            echo "::error::Migration task exited with code $CODE. Logs: CloudWatch /nvc360/nvc360-staging/app, stream migrate/migrate/${TASK_ARN##*/}"
+            exit 1
+          fi
+          echo "Migrations applied."
 
       - name: Deploy to ECS
         if: steps.gate.outputs.configured == 'true'
@@ -142,12 +186,12 @@ jobs:
           IMAGE="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${SHA}"
           echo "Deploying $IMAGE"
 
-          # Take the live task definition, swap only the image, register a new
-          # revision. Everything else (secrets, env, roles, limits) stays as
-          # Terraform defined it.
-          TASK_DEF=$(aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
-            --query 'services[0].taskDefinition' --output text)
+          # Take the newest ACTIVE revision of the web family, swap only the
+          # image, register a new revision. Everything else (secrets, env,
+          # roles, limits) stays as Terraform defined it. Using the family
+          # (not the service's current revision) means a `terraform apply` that
+          # adds or changes env/secrets reaches the next deploy.
+          TASK_DEF="$ECS_SERVICE"
 
           aws ecs describe-task-definition --task-definition "$TASK_DEF" \
             --query 'taskDefinition' > /tmp/taskdef.json

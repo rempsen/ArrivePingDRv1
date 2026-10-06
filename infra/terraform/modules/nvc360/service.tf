@@ -25,11 +25,13 @@ locals {
   # "<secret-arn>:<json-key>::" syntax — Secrets Manager bills per secret per
   # month, and this app needs ~25 keys.
   #
+  # DATABASE_URL / DATABASE_SYSTEM_URL are NOT here: they are injected from
+  # their own Terraform-managed secrets (migrate.tf) so the role passwords stay
+  # in sync. DATABASE_AUTH_TOKEN was a Turso leftover and is gone.
+  #
   # Deliberately absent: S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY (the task role
   # supplies credentials) and S3_ENDPOINT (unset = real AWS S3).
   secret_keys = [
-    "DATABASE_URL",
-    "DATABASE_AUTH_TOKEN",
     "BETTER_AUTH_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
@@ -202,10 +204,15 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
 
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
-    sid       = "ReadInjectedSecrets"
-    effect    = "Allow"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.app_config.arn]
+    sid     = "ReadInjectedSecrets"
+    effect  = "Allow"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      aws_secretsmanager_secret.app_config.arn,
+      aws_secretsmanager_secret.app_db_url.arn,
+      aws_secretsmanager_secret.app_db_system_url.arn,
+      aws_secretsmanager_secret.migrate_config.arn,
+    ]
   }
 }
 
@@ -298,12 +305,18 @@ resource "aws_ecs_task_definition" "web" {
         { name = "WEBSITE_URL", value = var.staging_url },
       ]
 
-      secrets = [
-        for k in local.secret_keys : {
-          name      = k
-          valueFrom = "${aws_secretsmanager_secret.app_config.arn}:${k}::"
-        }
-      ]
+      secrets = concat(
+        [
+          { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.app_db_url.arn },
+          { name = "DATABASE_SYSTEM_URL", valueFrom = aws_secretsmanager_secret.app_db_system_url.arn },
+        ],
+        [
+          for k in local.secret_keys : {
+            name      = k
+            valueFrom = "${aws_secretsmanager_secret.app_config.arn}:${k}::"
+          }
+        ],
+      )
 
       logConfiguration = {
         logDriver = "awslogs"
