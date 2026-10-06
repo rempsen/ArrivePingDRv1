@@ -134,24 +134,33 @@ export default function Jobs() {
       {/* Today's earnings summary strip */}
       {(stats.jobsDone > 0 || stats.totalToday > 0) && (
         <View style={s.statsStrip}>
+          {/* Each stat is value-over-label (not one long row): three
+              "$188.00 earned today"-style phrases don't fit side by side on a
+              390pt phone and overlapped the dividers. */}
           <View style={s.statItem}>
-            <CheckCircle color={C.green} size={16} weight="fill" />
-            <Text style={s.statVal}>{stats.jobsDone}</Text>
-            <Text style={s.statLbl}>done today</Text>
+            <View style={s.statTop}>
+              <CheckCircle color={C.green} size={15} weight="fill" />
+              <Text style={s.statVal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{stats.jobsDone}</Text>
+            </View>
+            <Text style={s.statLbl} numberOfLines={1}>done today</Text>
           </View>
           <View style={s.statDivider} />
-          <View style={s.statItem}>
-            <CurrencyDollar color={C.green} size={16} weight="fill" />
-            <Text style={s.statVal}>{money(stats.earnings)}</Text>
-            <Text style={s.statLbl}>earned today</Text>
+          <View style={[s.statItem, s.statItemWide]}>
+            <View style={s.statTop}>
+              <CurrencyDollar color={C.green} size={15} weight="fill" />
+              <Text style={s.statVal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{money(stats.earnings)}</Text>
+            </View>
+            <Text style={s.statLbl} numberOfLines={1}>earned today</Text>
           </View>
           {stats.totalToday > 0 && (
             <>
               <View style={s.statDivider} />
               <View style={s.statItem}>
-                <Clock color={C.sub} size={16} weight="fill" />
-                <Text style={s.statVal}>{stats.jobsDone}/{stats.totalToday}</Text>
-                <Text style={s.statLbl}>jobs</Text>
+                <View style={s.statTop}>
+                  <Clock color={C.sub} size={15} weight="fill" />
+                  <Text style={s.statVal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{stats.jobsDone}/{stats.totalToday}</Text>
+                </View>
+                <Text style={s.statLbl} numberOfLines={1}>jobs today</Text>
               </View>
             </>
           )}
@@ -331,13 +340,15 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     gap: 0,
   },
-  statItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
-  statVal: { color: C.green, fontSize: 14, fontWeight: "800" },
+  statItem: { flex: 1, minWidth: 0, alignItems: "center", justifyContent: "center", gap: 2, paddingHorizontal: 4 },
+  statItemWide: { flex: 1.5 },
+  statTop: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%" },
+  statVal: { color: C.green, fontSize: 15, fontWeight: "800", flexShrink: 1 },
   statLbl: { color: C.muted, fontSize: 11 },
-  statDivider: { width: 1, height: 24, backgroundColor: C.border },
+  statDivider: { width: 1, height: 28, backgroundColor: C.border, marginHorizontal: 4 },
   elsewhere: {
     flexDirection: "row",
     alignItems: "center",
