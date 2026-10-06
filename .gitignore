@@ -88,6 +88,7 @@ packages/web/scripts/
 !scripts/restore-icp-knowledge-base.ts
 !scripts/icp-knowledge-base.json
 !scripts/README-icp-knowledge-base.md
+!scripts/make-superadmin.ts
 !packages/mobile/scripts/
 packages/mobile/scripts/*
 !packages/mobile/scripts/generate-ios-certs.py
