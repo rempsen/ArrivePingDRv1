@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useConfirm } from "../../components/confirm-dialog";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,7 @@ import { runWithForceConfirm } from "../../lib/force-confirm";
 import { FullLoader } from "../../components/loader";
 import { PageWrap, StatusBadge } from "../../components/brand";
 import { PageHead } from "./shell";
-import { PRIORITY_META } from "../../lib/utils";
+import { PRIORITY_META, STATUS_META } from "../../lib/utils";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { EmptyState } from "../../components/empty-state";
 import {
@@ -48,6 +48,32 @@ function sameDay(a: Date, b: Date) {
   );
 }
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "~3258 min late" is unreadable; dispatchers think in hours and days. */
+function fmtLate(mins: number): string {
+  const m = Math.max(0, Math.round(mins));
+  if (m < 60) return `~${m} min late`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h < 24) return rem ? `~${h} h ${rem} min late` : `~${h} h late`;
+  const d = Math.floor(h / 24);
+  const hh = h % 24;
+  return hh ? `~${d} d ${hh} h late` : `~${d} d late`;
+}
+
+/** Compact clock for narrow calendar chips: "8:00a", "1:30p". */
+function fmtShort(mins: number): string {
+  const h = Math.floor(mins / 60) % 24;
+  const m = mins % 60;
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")}${h >= 12 ? "p" : "a"}`;
+}
+
+/** Week view keeps at most this many side-by-side lanes per day; anything
+ *  past that collapses into a "+N" pill that opens the Day view, where
+ *  there's room to read every chip. Day view has the full width, so it
+ *  lays every lane out. */
+const WEEK_MAX_LANES = 3;
 
 export default function SchedulerPage() {
   const confirm = useConfirm();
@@ -191,6 +217,25 @@ export default function SchedulerPage() {
   }, []);
   const nowMins = now.getHours() * 60 + now.getMinutes();
 
+  // Measured width of the week/day grid so each chip can pick a layout that
+  // actually fits its pixels (full / medium / narrow) instead of wrapping
+  // badges and time ranges character-by-character in a 30px lane.
+  // Callback ref (not useEffect) because the grid mounts only after the
+  // bookings query resolves — an effect keyed on view/mode would miss it.
+  const gridObs = useRef<ResizeObserver | null>(null);
+  const [gridWidth, setGridWidth] = useState(0);
+  const gridRef = (el: HTMLDivElement | null) => {
+    gridObs.current?.disconnect();
+    gridObs.current = null;
+    if (!el) return;
+    setGridWidth(el.clientWidth);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setGridWidth(el.clientWidth));
+    ro.observe(el);
+    gridObs.current = ro;
+  };
+  useEffect(() => () => gridObs.current?.disconnect(), []);
+
   // map a cursor Y within a day column to a snapped half-hour time (minutes from midnight)
   function timeFromOffset(el: HTMLElement, clientY: number): number {
     const rect = el.getBoundingClientRect();
@@ -212,12 +257,16 @@ export default function SchedulerPage() {
   // calendar) instead of one blind vertical stack — greedy interval-lane
   // assignment, then a pairwise pass to size each chip to how many lanes its
   // own overlap cluster actually needs.
-  function layoutDayJobs(jobs: any[]) {
-    const items = jobs.map((b) => {
-      const start = new Date(b.scheduledAt as any).getTime();
-      const durMin = b.service?.durationMins || 60;
-      return { b, start, end: start + durMin * 60_000, durMin, lane: 0 };
-    });
+  function layoutDayJobs(jobs: any[], maxLanes = Infinity) {
+    const items = jobs
+      .map((b) => {
+        const start = new Date(b.scheduledAt as any).getTime();
+        const durMin = b.service?.durationMins || 60;
+        return { b, start, end: start + durMin * 60_000, durMin, lane: 0 };
+      })
+      // earliest first; on a tie the longer job takes the leftmost lane so the
+      // short ones nest beside it instead of forcing an extra column.
+      .sort((a, b) => a.start - b.start || b.durMin - a.durMin);
     const laneEnds: number[] = [];
     for (const it of items) {
       let assigned = laneEnds.findIndex((end) => end <= it.start);
@@ -236,7 +285,13 @@ export default function SchedulerPage() {
           cols = Math.max(cols, other.lane + 1);
         }
       }
-      return { ...it, cols };
+      // Over the lane cap, the last visible lane is reserved for the "+N"
+      // overflow pill and every job that would have landed there or beyond
+      // is folded into it.
+      const overflow = cols > maxLanes;
+      const visibleCols = overflow ? maxLanes : cols;
+      const hidden = overflow && it.lane >= maxLanes - 1;
+      return { ...it, cols: visibleCols, hidden };
     });
   }
 
@@ -406,7 +461,7 @@ export default function SchedulerPage() {
                   {r.title || jobNoun}
                 </span>
                 <span className="rounded-full bg-amber-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-warn">
-                  ~{r.minutesLate} min late
+                  {fmtLate(r.minutesLate)}
                 </span>
                 <span className="truncate text-slate-500">
                   {r.techName ? `${r.techName} — ` : ""}
@@ -710,6 +765,7 @@ export default function SchedulerPage() {
                   and full job detail, capped so the page doesn't run forever */}
               <div className="max-h-[760px] overflow-y-auto">
                 <div
+                  ref={gridRef}
                   className="relative grid"
                   style={{
                     gridTemplateColumns: `52px repeat(${calDays.length}, 1fr)`,
@@ -731,7 +787,19 @@ export default function SchedulerPage() {
 
                   {calDays.map((d, i) => {
                     const jobs = jobsOn(d);
-                    const laid = layoutDayJobs(jobs);
+                    const laid = layoutDayJobs(
+                      jobs,
+                      calView === "week" ? WEEK_MAX_LANES : Infinity,
+                    );
+                    const colPx = gridWidth > 0 ? (gridWidth - 52) / calDays.length : 0;
+                    // hidden jobs, grouped by start time -> one "+N" pill each
+                    const overflowGroups = new Map<number, typeof laid>();
+                    for (const it of laid) {
+                      if (!it.hidden) continue;
+                      const g = overflowGroups.get(it.start) ?? [];
+                      g.push(it);
+                      overflowGroups.set(it.start, g);
+                    }
                     const dayKey = d.toISOString().slice(0, 10);
                     const isToday = sameDay(d, today);
                     return (
@@ -816,16 +884,49 @@ export default function SchedulerPage() {
                             Click a time to add
                           </div>
                         ) : (
-                          laid.map(({ b, start, durMin, lane, cols }) => {
+                          <>
+                          {laid.filter((it) => !it.hidden).map(({ b, start, durMin, lane, cols }) => {
                             const startOfDay = new Date(start);
                             const startMinsOfDay = startOfDay.getHours() * 60 + startOfDay.getMinutes();
                             const clampedStart = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, startMinsOfDay));
                             const topPx = ((clampedStart - DAY_START_MIN) / 60) * HOUR_PX;
                             const rawHeightPx = (Math.min(durMin, DAY_END_MIN - clampedStart) / 60) * HOUR_PX;
                             const heightPx = Math.max(rawHeightPx, 30);
-                            const compact = heightPx < 54;
                             const widthPct = 100 / cols;
                             const leftPct = lane * widthPct;
+                            // pixel width this chip really gets -> pick a layout
+                            // that fits. 0 before the first measurement; treat
+                            // that as "full" so SSR/first paint isn't skeletal.
+                            const chipPx = colPx > 0 ? colPx / cols - 4 : 999;
+                            const density: "full" | "medium" | "narrow" =
+                              chipPx >= 150 ? "full" : chipPx >= 84 ? "medium" : "narrow";
+                            const oneLine = heightPx < 54;
+                            // under ~52px even "1:35p" clips — drop the suffix
+                            const tiny = chipPx < 52;
+                            const startLabel =
+                              density === "full" ? fmtMins(startMinsOfDay)
+                              : tiny ? fmtShort(startMinsOfDay).replace(/[ap]$/, "")
+                              : fmtShort(startMinsOfDay);
+                            // narrow chips clip with a soft fade instead of an
+                            // ellipsis eating 2 of 5 visible characters
+                            const fade: CSSProperties = {
+                              overflow: "hidden",
+                              whiteSpace: "nowrap",
+                              maskImage: "linear-gradient(to right, #000 72%, transparent 100%)",
+                              WebkitMaskImage: "linear-gradient(to right, #000 72%, transparent 100%)",
+                            };
+                            const statusColor = STATUS_META[b.status]?.color ?? "#64748b";
+                            const statusLabel = STATUS_META[b.status]?.label ?? b.status;
+                            const techFirst = b.rider?.name ? String(b.rider.name).split(" ")[0] : "";
+                            const tip = [
+                              `${fmtMins(startMinsOfDay)} – ${fmtMins(startMinsOfDay + durMin)}`,
+                              b.title || b.service?.name,
+                              b.customer?.name,
+                              statusLabel,
+                              b.rider?.name ? `${noun}: ${b.rider.name}` : `Unassigned`,
+                            ]
+                              .filter(Boolean)
+                              .join("\n");
                             return (
                               <div tabIndex={0}
                                 key={b.id}
@@ -842,39 +943,101 @@ export default function SchedulerPage() {
                                     openJob(b);
                                   }
                                 }}
-                                title="Click to edit"
-                                className="group/chip absolute z-[5] cursor-pointer overflow-hidden rounded-lg border-l-2 bg-ink-3/90 text-left shadow-sm transition hover:z-20 hover:bg-ink-3"
+                                title={tip}
+                                className="group/chip absolute z-[5] cursor-pointer overflow-hidden rounded-md border-l-2 bg-ink-3/95 text-left shadow-sm ring-1 ring-white/[0.06] transition hover:z-20 hover:bg-ink-3 hover:ring-white/15"
                                 style={{
                                   top: `${topPx}px`,
                                   height: `${heightPx}px`,
                                   left: `calc(${leftPct}% + 2px)`,
                                   width: `calc(${widthPct}% - 4px)`,
                                   borderColor: PRIORITY_META[b.priority]?.color ?? "#3b82f6",
-                                  padding: compact ? "3px 6px" : "6px 8px",
+                                  padding:
+                                    tiny ? "3px 3px" : density === "narrow" || oneLine ? "3px 4px" : density === "medium" ? "4px 6px" : "6px 8px",
                                 }}
                               >
-                                <button
-                                  type="button"
-                                  aria-label={`Delete ${jobLower}`}
-                                  title="Delete"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeJob(b);
-                                  }}
-                                  className="absolute right-1 top-1 hidden rounded p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 group-hover/chip:block"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                                {compact ? (
-                                  <p className="truncate pr-4 text-[10px] font-semibold text-white">
-                                    <span className="font-bold text-cyan-glow">
-                                      {fmtMins(startMinsOfDay)}
-                                    </span>{" "}
+                                {density !== "narrow" && (
+                                  <button
+                                    type="button"
+                                    aria-label={`Delete ${jobLower}`}
+                                    title="Delete"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeJob(b);
+                                    }}
+                                    className="absolute right-1 top-1 hidden rounded p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 group-hover/chip:block"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                )}
+                                {oneLine ? (
+                                  <p
+                                    className="pr-1 text-[10px] font-semibold leading-tight text-white"
+                                    style={density === "narrow" ? fade : undefined}
+                                  >
+                                    <span className="font-bold text-cyan-glow">{startLabel}</span>{" "}
                                     {b.title || b.service?.name}
                                   </p>
+                                ) : density === "narrow" ? (
+                                  <>
+                                    <p className="flex items-center gap-1 text-[10px] font-bold leading-tight text-cyan-glow" style={fade}>
+                                      {!tiny && (
+                                        <span
+                                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                                          style={{ background: statusColor }}
+                                          aria-label={statusLabel}
+                                        />
+                                      )}
+                                      {startLabel}
+                                    </p>
+                                    <p className="text-[10px] font-semibold leading-tight text-white" style={fade}>
+                                      {b.title || b.service?.name}
+                                    </p>
+                                    {b.rider && heightPx >= 66 && (
+                                      <TechAvatar
+                                        name={b.rider.name}
+                                        photoUrl={(b.rider as any).photoUrl}
+                                        color={b.rider.color}
+                                        className="mt-1 h-4 w-4"
+                                        textClassName="text-[7px]"
+                                      />
+                                    )}
+                                  </>
+                                ) : density === "medium" ? (
+                                  <>
+                                    <p className="flex items-center gap-1 truncate text-[10px] font-bold leading-tight text-cyan-glow">
+                                      <span
+                                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                                        style={{ background: statusColor }}
+                                        aria-label={statusLabel}
+                                      />
+                                      <span className="truncate">
+                                        {fmtShort(startMinsOfDay)} – {fmtShort(startMinsOfDay + durMin)}
+                                      </span>
+                                    </p>
+                                    <p className="truncate text-[11px] font-semibold leading-snug text-white">
+                                      {b.title || b.service?.name}
+                                    </p>
+                                    {b.customer?.name && heightPx >= 70 && (
+                                      <p className="truncate text-[10px] leading-tight text-slate-500">
+                                        {b.customer.name}
+                                      </p>
+                                    )}
+                                    {b.rider && heightPx >= 86 && (
+                                      <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-semibold text-slate-300">
+                                        <TechAvatar
+                                          name={b.rider.name}
+                                          photoUrl={(b.rider as any).photoUrl}
+                                          color={b.rider.color}
+                                          className="h-3.5 w-3.5 shrink-0"
+                                          textClassName="text-[7px]"
+                                        />
+                                        <span className="truncate">{techFirst}</span>
+                                      </span>
+                                    )}
+                                  </>
                                 ) : (
                                   <>
-                                    <p className="text-[10px] font-bold text-cyan-glow">
+                                    <p className="truncate text-[10px] font-bold leading-tight text-cyan-glow">
                                       {fmtMins(startMinsOfDay)} – {fmtMins(startMinsOfDay + durMin)}
                                     </p>
                                     <p className="truncate pr-4 text-xs font-semibold text-white">
@@ -885,26 +1048,72 @@ export default function SchedulerPage() {
                                         {b.customer.name}
                                       </p>
                                     )}
-                                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                                      <StatusBadge status={b.status} />
-                                      {b.rider && (
-                                        <span className="flex items-center gap-1 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
-                                          <TechAvatar
-                                            name={b.rider.name}
-                                            photoUrl={(b.rider as any).photoUrl}
-                                            color={b.rider.color}
-                                            className="h-3.5 w-3.5"
-                                            textClassName="text-[7px]"
-                                          />
-                                          {b.rider.name}
-                                        </span>
-                                      )}
-                                    </div>
+                                    {heightPx >= 88 && (
+                                      <div className="mt-1 flex flex-nowrap items-center gap-1 overflow-hidden">
+                                        <StatusBadge status={b.status} />
+                                        {b.rider && (
+                                          <span className="flex min-w-0 items-center gap-1 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
+                                            <TechAvatar
+                                              name={b.rider.name}
+                                              photoUrl={(b.rider as any).photoUrl}
+                                              color={b.rider.color}
+                                              className="h-3.5 w-3.5 shrink-0"
+                                              textClassName="text-[7px]"
+                                            />
+                                            <span className="truncate">{b.rider.name}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </>
                                 )}
                               </div>
                             );
-                          })
+                          })}
+                          {/* "+N" overflow pills: the lanes the week column
+                              couldn't fit. One pill per start time, in the
+                              reserved last lane; click = open that day. */}
+                          {[...overflowGroups.entries()].map(([start, group]) => {
+                            const st = new Date(start);
+                            const startMinsOfDay = st.getHours() * 60 + st.getMinutes();
+                            const clampedStart = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, startMinsOfDay));
+                            const topPx = ((clampedStart - DAY_START_MIN) / 60) * HOUR_PX;
+                            const cols = group[0].cols;
+                            const widthPct = 100 / cols;
+                            const leftPct = (cols - 1) * widthPct;
+                            // span the longest hidden job so the lane still
+                            // reads as "busy" for its whole duration
+                            const longest = Math.max(...group.map((g) => g.durMin));
+                            const heightPx = Math.max(
+                              30,
+                              (Math.min(longest, DAY_END_MIN - clampedStart) / 60) * HOUR_PX,
+                            );
+                            const names = group
+                              .map((g) => `${fmtMins(startMinsOfDay)} ${g.b.title || g.b.service?.name || jobNoun}`)
+                              .join("\n");
+                            return (
+                              <button
+                                type="button"
+                                key={`more-${start}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAnchor(new Date(d));
+                                  setCalView("day");
+                                }}
+                                title={`${group.length} more — open the day to see them:\n${names}`}
+                                className="absolute z-[6] flex items-start justify-center rounded-md border border-dashed border-white/15 bg-ink-2/80 pt-1.5 text-[10px] font-bold text-slate-300 shadow-sm transition hover:border-brand/60 hover:bg-ink-2 hover:text-white"
+                                style={{
+                                  top: `${topPx}px`,
+                                  height: `${heightPx}px`,
+                                  left: `calc(${leftPct}% + 2px)`,
+                                  width: `calc(${widthPct}% - 4px)`,
+                                }}
+                              >
+                                +{group.length}
+                              </button>
+                            );
+                          })}
+                          </>
                         )}
                       </div>
                     );
