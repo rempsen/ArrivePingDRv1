@@ -63,6 +63,8 @@ resource "dockercompose_stack" "nvc360-v4" {
       DATABASE_SYSTEM_URL    = "postgres://app_system:app_system_local@db:5432/nvc360"
       BETTER_AUTH_URL        = local.app_url
       REDIS_URL              = "redis://redis:6379"
+      # AI Gateway (agent/gateway.ts). Unset AI_GATEWAY_BASE_URL = Vercel's.
+      AI_GATEWAY_API_KEY = var.vercel_api_key
     }
 
     volumes = [
