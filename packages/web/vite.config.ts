@@ -79,7 +79,7 @@ export default defineConfig(({ command, mode }) => {
 				output: {
 					manualChunks(id) {
 						if (!id.includes("node_modules")) return;
-						if (id.includes("leaflet")) return "vendor-maps";
+						if (id.includes("leaflet") || id.includes("maplibre")) return "vendor-maps";
 						if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
 						if (id.includes("pdf-lib")) return "vendor-pdf";
 						// better-auth lazily initializes its exports (only on first

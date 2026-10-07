@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { money } from "../lib/utils";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { attachBasemap } from "@/lib/basemap";
 import { useWorkerNoun } from "../lib/use-brand";
 
 // The zoom every tenant lands on when they open the Map page. z11 is a
@@ -221,17 +222,7 @@ export function FleetMap({
       FLEET_DEFAULT_ZOOM,
     );
     L.control.zoom({ position: "bottomleft" }).addTo(map);
-    L.tileLayer(
-      // Esri "World Dark Gray Base" — keyless raster tiles (no API key / account required).
-      // Replaces CARTO's basemaps.cartocdn.com, which now requires a paid/free API key and
-      // stamps unauthenticated requests with an "API KEY REQUIRED" watermark across every tile.
-      // maxNativeZoom: 16 — Esri's cache for this layer has no real imagery past
-      // z16 in most areas; deeper requests 404 into a generic "Map data not yet
-      // available" placeholder tile. Leaflet upscales the z16 tile instead of
-      // requesting past it, so zooming in past 16 still shows the map, just softer.
-      "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom: 19, maxNativeZoom: 16 },
-    ).addTo(map);
+    attachBasemap(map, { toggle: "bottomright" });
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 200);
     return () => {

@@ -177,9 +177,39 @@
 }
 
 /* leaflet container rounding */
-.leaflet-container { font-family: var(--font-sans); background: #0c1220; }
+.leaflet-container { font-family: var(--font-sans); background: #070b12; }
 .leaflet-tile { filter: none; }
 .leaflet-marker-icon { cursor: pointer; }
+
+/* ArrivePing basemap (src/web/lib/basemap) ------------------------------
+   Satellite mode: dim + desaturate Esri imagery and lay an ink tint over it
+   so aerial photos keep the product's dark tone instead of glowing. The tint
+   sits at z-index 250 — above tiles (200), below overlays/markers (400+). */
+.leaflet-layer.ap-sat-layer { filter: brightness(0.68) saturate(0.72) contrast(1.08); }
+.leaflet-layer.ap-sat-labels { opacity: 0.95; }
+.leaflet-container.ap-basemap-sat::after {
+  content: ""; position: absolute; inset: 0; z-index: 250; pointer-events: none;
+  background: rgba(7, 11, 18, 0.30);
+}
+.leaflet-container .maplibregl-canvas { outline: none; }
+
+/* Map / Satellite toggle button */
+.leaflet-bar.ap-basemap-toggle { border: 0; box-shadow: none; }
+.ap-basemap-toggle button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 10px;
+  border-radius: 9999px; border: 1px solid rgba(14, 165, 233, 0.35);
+  background: rgba(7, 11, 18, 0.86); color: #cbd5e1;
+  font: 600 12px/1 var(--font-sans); letter-spacing: 0.01em;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.8);
+  cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+}
+.ap-basemap-toggle button:hover { color: #fff; border-color: rgba(14, 165, 233, 0.8); background: rgba(14, 165, 233, 0.14); }
+.ap-basemap-toggle button:focus-visible { outline: 2px solid #0ea5e9; outline-offset: 2px; }
+.ap-basemap-toggle button[aria-pressed="true"] { color: #0ea5e9; }
+.ap-basemap-toggle svg { flex: none; }
+.ap-basemap-toggle--compact button { width: 30px; padding: 0; justify-content: center; }
 
 /* job/tech hover tooltip card */
 .leaflet-tooltip.nvc-tip {
