@@ -84,6 +84,8 @@ beforeAll(async () => {
   await sql.execute(ddlFor(schema.invoices));
   await sql.execute(ddlFor(schema.paymentLedger));
   await sql.execute(ddlFor(schema.riders));
+  // payments routes read the tenant's Stripe Connect state from `companies`.
+  await sql.execute(ddlFor(schema.companies));
 
   // One booking + one PAID invoice per company. Company A's invoice has a
   // ledger charge entry; both companies' data live side by side so the
