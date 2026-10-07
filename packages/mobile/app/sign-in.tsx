@@ -66,7 +66,7 @@ export default function SignIn() {
           showsVerticalScrollIndicator={false}
         >
           <View style={s.brandWrap}>
-            <Image source={require("../assets/nvc-logo.png")} style={s.logo} resizeMode="contain" />
+            <Image source={require("../assets/arriveping-wordmark.png")} style={s.logo} resizeMode="contain" />
             <Text style={s.kicker}>Technician App</Text>
             <Text style={s.title}>Sign in to your shift</Text>
             <Text style={s.sub}>Jobs, routes, and earnings — all in one place.</Text>
@@ -125,7 +125,8 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   scroll: { flexGrow: 1, justifyContent: "center", padding: 24, gap: 36 },
   brandWrap: { alignItems: "center", gap: 6 },
-  logo: { width: 150, height: 64, marginBottom: 14 },
+  // 1047×305 white wordmark on the dark canvas (was the black NVC roundel, invisible on #070b12)
+  logo: { width: 220, height: 64, marginBottom: 14 },
   kicker: {
     color: C.brand,
     fontSize: 12,

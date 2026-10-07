@@ -748,8 +748,13 @@ export default function JobDetail() {
   try { checklist = JSON.parse(j.checklistState || "[]"); } catch {}
   let fields: Record<string, any> = {};
   try { fields = JSON.parse(j.fieldData || "{}"); } catch {}
+  // `__`-prefixed keys are server-internal bookkeeping (iOS Live Activity push
+  // tokens live here). The API strips them now, but never render one if an
+  // older server hands it back.
   const fieldEntries = Object.entries(fields)
-    .filter(([k, v]) => v != null && v !== "" && k !== "_customFields");
+    .filter(([k, v]) => v != null && v !== "" && k !== "_customFields" && !k.startsWith("__"));
+  // What the tech actually takes home for this job (dispatch fills it in).
+  const techPay = Number((j as any).techPay) || 0;
 
   // per-unit line items — what the tech is paid by measured unit (cost = tech pay)
   let unitLines: any[] = [];
@@ -989,12 +994,12 @@ export default function JobDetail() {
             )}
           </View>
 
-          {/* Staff Notes — internal, driver-only */}
+          {/* Notes from dispatch — internal, driver-only, never shown to the customer */}
           {j.staffNotes ? (
             <View style={[s.block, s.staffNotesBlock]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 8 }}>
                 <Warning color="#f59e0b" size={16} weight="fill" />
-                <Text style={[s.blockTitle, { color: "#f59e0b" }]}>Staff Notes (Dispatcher Only)</Text>
+                <Text style={[s.blockTitle, { color: "#f59e0b" }]}>Notes from dispatch</Text>
               </View>
               <Text style={s.staffNotesText}>{j.staffNotes}</Text>
             </View>
@@ -1127,7 +1132,7 @@ export default function JobDetail() {
                       return (
                         <View key={cf.id} style={s.fieldRow}>
                           <Text style={s.fieldKey}>{cf.label}</Text>
-                          <Text style={[s.fieldVal, { color: C.brand }]}>${Number(cf.amount).toFixed(2)} flat fee</Text>
+                          <Text style={[s.fieldVal, { color: C.brand }]}>{money(Number(cf.amount))} flat fee</Text>
                         </View>
                       );
                     }
@@ -1136,8 +1141,8 @@ export default function JobDetail() {
                         <View key={cf.id} style={s.fieldRow}>
                           <Text style={s.fieldKey}>{cf.label}</Text>
                           <Text style={[s.fieldVal, { color: C.brand }]}>
-                            ${cf.logicRate ?? 0}/{cf.logicUnit ?? "unit"}
-                            {val != null && val !== "" ? ` × ${val} = ${(Number(cf.logicRate || 0) * Number(val || 0)).toFixed(2)}` : ""}
+                            {money(Number(cf.logicRate ?? 0))}/{cf.logicUnit ?? "unit"}
+                            {val != null && val !== "" ? ` × ${val} = ${money(Number(cf.logicRate || 0) * Number(val || 0))}` : ""}
                           </Text>
                         </View>
                       );
@@ -1756,7 +1761,7 @@ export default function JobDetail() {
                   if (mileageStr) lines.push(`📍 Total mileage: ${mileageStr}`);
                   lines.push(`📸 Photos: ${photoCount}`);
                   if (unchecked > 0) lines.push(`⚠️ ${unchecked} checklist item${unchecked > 1 ? "s" : ""} not done`);
-                  lines.push(`💰 Earning: ${money(j.price)}`);
+                  if (techPay > 0) lines.push(`💰 Earning: ${money(techPay)}`);
 
                   Alert.alert(
                     "Complete job?",
@@ -1795,7 +1800,7 @@ export default function JobDetail() {
           <View style={s.footer}>
             <View style={s.doneBanner}>
               <CheckSquare color={C.green} size={20} weight="fill" />
-              <Text style={s.doneTxt}>{jobNoun} completed · {money(j.price)} earned</Text>
+              <Text style={s.doneTxt}>{jobNoun} completed{techPay > 0 ? ` · ${money(techPay)} earned` : ""}</Text>
             </View>
           </View>
         )}
