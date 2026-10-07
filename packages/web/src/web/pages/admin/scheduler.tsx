@@ -28,6 +28,7 @@ import {
   Loader2,
   AlertTriangle,
   UserPlus,
+  X,
 } from "lucide-react";
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
@@ -91,6 +92,7 @@ export default function SchedulerPage() {
   const [assignFor, setAssignFor] = useState<string | null>(null);
   // skill class filter for board view
   const [skillFilter, setSkillFilter] = useState<string>("");
+  const [focusTech, setFocusTech] = useState<string | null>(null);
   const [mode, setMode] = useState<"board" | "calendar">("calendar");
   const [calView, setCalView] = useState<CalView>("week");
   const [anchor, setAnchor] = useState(() => new Date());
@@ -1531,22 +1533,97 @@ export default function SchedulerPage() {
               )}
             </div>
           )}
-          {filteredTechs.map((t) => {
+          {/* technician tiles -- roughly 1in square so 15+ fit on a laptop
+              screen and every tech is a drop target without scrolling. The
+              count bubble is the committed (not completed/cancelled) job
+              count; click a tile to open that tech's job list below. */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
+            {filteredTechs.map((t) => {
+              const jobs = byTech(t.id);
+              const over = overTech === t.id;
+              const focused = focusTech === t.id;
+              // dim this tile if dragging a job that requires a different skill class
+              const skillMismatch = dragSkillClass && (t as any).skillClass !== dragSkillClass;
+              const statusDot =
+                t.status === "available"
+                  ? "bg-emerald-400"
+                  : t.status === "onsite" || t.status === "busy" || t.status === "enroute"
+                    ? "bg-brand"
+                    : t.status === "break"
+                      ? "bg-amber-warn"
+                      : "bg-slate-600";
+              return (
+                <div
+                  key={t.id}
+                  // oxlint-disable-next-line prefer-tag-over-role -- a drop target needs to be a div
+                  role="button"
+                  tabIndex={0}
+                  title={`${t.name} · ${jobs.length} ${jobs.length === 1 ? jobLower : jobsLower} · ${t.status}`}
+                  onClick={() => setFocusTech((v) => (v === t.id ? null : t.id))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setFocusTech((v) => (v === t.id ? null : t.id));
+                    }
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setOverTech(t.id);
+                  }}
+                  onDragLeave={() => setOverTech((v) => (v === t.id ? null : v))}
+                  onDrop={() => onDrop(t.id)}
+                  className={`nvc-card relative flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 p-2 text-center transition ${
+                    over ? "drop-active" : ""
+                  } ${focused ? "border-brand/60 ring-1 ring-brand/40" : ""} ${
+                    skillMismatch ? "opacity-40 pointer-events-none" : ""
+                  }`}
+                >
+                  {jobs.length > 0 && (
+                    <span
+                      aria-label={`${jobs.length} ${jobsLower}`}
+                      className="absolute right-1.5 top-1.5 grid h-6 min-w-6 place-items-center rounded-full bg-brand px-1.5 text-[11px] font-bold leading-none text-white shadow"
+                    >
+                      {jobs.length}
+                    </span>
+                  )}
+                  <div className="relative">
+                    <TechAvatar
+                      name={t.name}
+                      photoUrl={(t as any).photoUrl}
+                      color={t.color}
+                      className="h-10 w-10"
+                      textClassName="text-xs"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-ink-2 ${statusDot}`}
+                    />
+                  </div>
+                  <p className="w-full truncate text-[11px] font-semibold leading-tight text-white">
+                    {t.name}
+                  </p>
+                  <p className="w-full truncate text-[10px] leading-tight text-slate-500">
+                    {(t as any).skillClass || t.status}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* selected technician's job list */}
+          {(() => {
+            const t = focusTech ? techs.find((x) => x.id === focusTech) : null;
+            if (!t) {
+              return (
+                <p className="px-1 text-xs text-slate-500">
+                  <span className="hidden lg:inline">Drag a {jobLower} from the Unassigned list onto a {noun.toLowerCase()} to dispatch it. </span>
+                  Click a tile to see that {noun.toLowerCase()}'s {jobsLower}.
+                </p>
+              );
+            }
             const jobs = byTech(t.id);
-            const over = overTech === t.id;
-            // dim this lane if dragging a job that requires a different skill class
-            const skillMismatch = dragSkillClass && (t as any).skillClass !== dragSkillClass;
             return (
-              <div
-                key={t.id}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setOverTech(t.id);
-                }}
-                onDragLeave={() => setOverTech((v) => (v === t.id ? null : v))}
-                onDrop={() => onDrop(t.id)}
-                className={`nvc-card p-3 transition ${over ? "drop-active" : ""} ${skillMismatch ? "opacity-40 pointer-events-none" : ""}`}
-              >
+              <div className="nvc-card p-3">
                 <div className="mb-2 flex items-center gap-3">
                   <TechAvatar
                     name={t.name}
@@ -1556,29 +1633,29 @@ export default function SchedulerPage() {
                     textClassName="text-xs"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-white">
-                      {t.name}
-                    </p>
+                    <p className="truncate font-semibold text-white">{t.name}</p>
                     <p className="text-xs text-slate-500">
-                      {t.skillClass} · {jobs.length} jobs
+                      {(t as any).skillClass ? `${(t as any).skillClass} · ` : ""}
+                      {jobs.length} {jobs.length === 1 ? jobLower : jobsLower}
                     </p>
                   </div>
                   <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] capitalize text-slate-400">
                     {t.status}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setFocusTech(null)}
+                    aria-label="Close"
+                    className="grid h-8 w-8 place-items-center rounded text-slate-500 hover:bg-white/5 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {jobs.length === 0 ? (
-                    // A drop target has to look like one even when idle,
-                    // otherwise the board reads as "this tech's row is broken"
-                    // rather than "this tech is free".
                     <div className="flex w-full items-center gap-2 rounded-md border border-dashed border-white/10 px-3 py-2.5 text-[11px] text-slate-500">
                       <Plus className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
-                      {/* Telling a phone user to drag is telling them to do
-                          something the platform cannot do -- HTML5 drag events
-                          never fire from touch. Point them at the Assign button
-                          that does work instead. */}
-                      <span className="hidden lg:inline">Free — drag a {jobLower} here to dispatch</span>
+                      <span className="hidden lg:inline">Free — drag a {jobLower} onto the tile to dispatch</span>
                       <span className="lg:hidden">Free — tap Assign on an unassigned job to dispatch</span>
                     </div>
                   ) : (
@@ -1611,7 +1688,7 @@ export default function SchedulerPage() {
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
       </div>
       )}
