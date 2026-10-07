@@ -5,6 +5,7 @@ import path from "path";
 import runableAnalyticsPlugin from "./vite/plugins/runable-analytics-plugin";
 import honoDevPlugin from "./vite/plugins/hono-dev-plugin";
 import prerenderPlugin from "./vite/plugins/prerender-plugin";
+import blogPlugin from "./vite/plugins/blog-plugin";
 
 const root = path.resolve(__dirname, "../..");
 
@@ -38,7 +39,7 @@ export default defineConfig(({ command, mode }) => {
 	process.env.NODE_ENV = command === "build" && mode !== "development" ? "production" : "development";
 
 	return {
-		plugins: [honoDevPlugin(), react(), runableAnalyticsPlugin(), tailwind(), prerenderPlugin()],
+		plugins: [honoDevPlugin(), react(), runableAnalyticsPlugin(), tailwind(), blogPlugin(), prerenderPlugin()],
 		resolve: {
 			alias: {
 				"@": path.resolve(__dirname, "./src/web"),

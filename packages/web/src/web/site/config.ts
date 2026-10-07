@@ -38,7 +38,7 @@ export const nav = [
   { label: "How it works", href: brand.urls.how },
   { label: "Who it's for", href: brand.urls.who },
   { label: "Pricing", href: brand.urls.pricing },
-  { label: "FAQs", href: brand.urls.faqs },
+  { label: "Blog", href: "/blog" },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -502,6 +502,7 @@ export const footer = {
       heading: "Company",
       links: [
         { label: "About", href: "/about" },
+        { label: "Blog", href: "/blog" },
         { label: "Book a demo", href: brand.urls.demo },
         { label: "Sign in", href: brand.urls.signIn },
         { label: brand.contactEmail, href: `mailto:${brand.contactEmail}` },

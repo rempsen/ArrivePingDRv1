@@ -17,6 +17,10 @@ import { landingByPath, landingPages } from "../site/content/landing";
 import { seoPages } from "../site/seo/pages";
 import { headTags } from "../site/seo/head";
 import { brand, faqs } from "../site/config";
+import { BlogIndexRoute, makeBlogCategory, makeBlogPost } from "../pages/marketing/blog";
+import { posts } from "virtual:blog-index";
+import bodies from "virtual:blog-bodies";
+import { categoryBySlug } from "../site/blog/categories";
 import { absolute, SITE_URL } from "../site/seo/schema";
 
 export { seoPages };
@@ -30,7 +34,12 @@ const fixed: Record<string, ComponentType> = {
 export function render(path: string): { body: string; head: string } {
   const seo = seoPages.find((p) => p.path === path);
   if (!seo) throw new Error(`No SEO entry for ${path}`);
-  const Page = fixed[path];
+  // Blog bodies are compiled HTML; expose them to the post component for this render.
+  (globalThis as { __BLOG_BODIES__?: Record<string, string> }).__BLOG_BODIES__ = bodies;
+  let Page: ComponentType | undefined = fixed[path];
+  if (!Page && path === "/blog") Page = BlogIndexRoute;
+  if (!Page && path.startsWith("/blog/category/")) Page = makeBlogCategory(path.slice("/blog/category/".length));
+  if (!Page && path.startsWith("/blog/")) Page = makeBlogPost(path.slice("/blog/".length));
   const tree = Page ? <Page /> : landingByPath[path] ? <LandingRoute path={path} /> : null;
   if (!tree) throw new Error(`No page component for ${path}`);
   const body = renderToString(<Router ssrPath={path}>{tree}</Router>);
@@ -45,7 +54,7 @@ export function sitemapXml(lastmod: string): string {
   const urls = seoPages
     .map(
       (p) =>
-        `  <url>\n    <loc>${absolute(p.path)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority.toFixed(1)}</priority>\n  </url>`,
+        `  <url>\n    <loc>${absolute(p.path)}</loc>\n    <lastmod>${p.lastmod ?? lastmod}</lastmod>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority.toFixed(1)}</priority>\n  </url>`,
     )
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
@@ -55,7 +64,7 @@ export function sitemapXml(lastmod: string): string {
 export function llmsTxt(): string {
   const groups: Record<string, typeof seoPages> = {};
   for (const p of seoPages) (groups[p.section] ??= []).push(p);
-  const order = ["Product", "Solutions", "Compare", "Company", "Legal"];
+  const order = ["Product", "Solutions", "Compare", "Company", "Blog", "Legal"];
   const sections = order
     .filter((g) => groups[g]?.length)
     .map((g) => `## ${g}\n\n${groups[g]!.map((p) => `- [${p.label}](${absolute(p.path)}): ${p.summary}`).join("\n")}`)
@@ -95,4 +104,41 @@ export function llmsFullTxt(): string {
     parts.push(`## ${p.h1} (${absolute(p.path)})\n\n${p.lede}\n\n### ${p.answer.q}\n\n${p.answer.a}${faq ? `\n\n${faq}` : ""}${src}`);
   }
   return `${parts.join("\n\n---\n\n")}\n`;
+}
+
+const xmlEsc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const rfc822 = (iso: string) => new Date(`${iso}T12:00:00Z`).toUTCString();
+
+/** RSS 2.0 feed of the latest posts (/blog/rss.xml). */
+export function rssXml(): string {
+  const items = posts
+    .slice(0, 50)
+    .map((p) => {
+      const url = absolute(`/blog/${p.slug}`);
+      return [
+        "    <item>",
+        `      <title>${xmlEsc(p.title)}</title>`,
+        `      <link>${url}</link>`,
+        `      <guid isPermaLink="true">${url}</guid>`,
+        `      <pubDate>${rfc822(p.date)}</pubDate>`,
+        `      <dc:creator>${xmlEsc(p.author)}</dc:creator>`,
+        `      <category>${xmlEsc(categoryBySlug[p.category]?.label ?? p.category)}</category>`,
+        `      <description>${xmlEsc(p.description)}</description>`,
+        "    </item>",
+      ].join("\n");
+    })
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>The ArrivePing blog</title>
+    <link>${SITE_URL}/blog</link>
+    <atom:link href="${SITE_URL}/blog/rss.xml" rel="self" type="application/rss+xml" />
+    <description>Field service dispatch, technician tracking and customer communication, from the team at NVC360.</description>
+    <language>en</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+${items}
+  </channel>
+</rss>
+`;
 }

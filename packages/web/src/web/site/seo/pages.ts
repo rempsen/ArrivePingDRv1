@@ -5,9 +5,12 @@
  * Anything not listed here (the product console, tracking links, sign-in) is
  * not indexable.
  */
+import { posts } from "virtual:blog-index";
 import { faqs as homeFaqs } from "../config";
+import { blogCategories, categoryBySlug } from "../blog/categories";
+import { authorFor } from "../blog/meta";
 import { landingPages, type LandingPage } from "../content/landing";
-import { breadcrumbs, faqPage, graph, organization, softwareApplication, webPage, website, type JsonLd } from "./schema";
+import { absolute, breadcrumbs, faqPage, graph, ORG_ID, organization, SITE_ID, SITE_URL, softwareApplication, webPage, website, type JsonLd } from "./schema";
 
 export type SeoPage = {
   path: string;
@@ -16,11 +19,17 @@ export type SeoPage = {
   description: string;
   /** Short summary for llms.txt. */
   summary: string;
-  section: "Product" | "Solutions" | "Compare" | "Company" | "Legal";
+  section: "Product" | "Solutions" | "Compare" | "Company" | "Legal" | "Blog";
   priority: number;
   changefreq: "weekly" | "monthly" | "yearly";
   ogType: "website" | "article";
   jsonLd: JsonLd;
+  /** Absolute or root-relative social image; defaults to the site image. */
+  image?: string;
+  imageAlt?: string;
+  /** Real last-modified date for the sitemap (defaults to the build date). */
+  lastmod?: string;
+  article?: { published: string; modified: string; section: string; tags: string[]; author: string };
 };
 
 const HOME_TITLE = "ArrivePing: Field Service Software with Live Tech Tracking";
@@ -89,9 +98,139 @@ const legal = (path: string, label: string, summary: string): SeoPage => ({
   jsonLd: graph([webPage(path, `${label} | ArrivePing`, summary), breadcrumbs([{ name: "ArrivePing", path: "/" }, { name: label, path }])]),
 });
 
+/* ---------------- Blog ---------------- */
+
+const BLOG_TITLE = "Field Service Blog: Dispatch, Tracking & ETAs | ArrivePing";
+const BLOG_DESCRIPTION =
+  "Practical articles on dispatch, technician tracking, on-my-way texts and running a profitable field service business, from the team that ran 800+ technicians.";
+const latest = posts[0]?.updated ?? undefined;
+
+const blogIndex: SeoPage = {
+  path: "/blog",
+  label: "Blog",
+  title: BLOG_TITLE,
+  description: BLOG_DESCRIPTION,
+  summary: "All ArrivePing blog articles on field service dispatch, technician tracking, customer communication, construction and growth.",
+  section: "Blog",
+  priority: 0.8,
+  changefreq: "weekly",
+  ogType: "website",
+  lastmod: latest,
+  jsonLd: graph([
+    {
+      "@type": "Blog",
+      "@id": `${SITE_URL}/blog#blog`,
+      url: `${SITE_URL}/blog`,
+      name: "The ArrivePing blog",
+      description: BLOG_DESCRIPTION,
+      inLanguage: "en",
+      isPartOf: { "@id": SITE_ID },
+      publisher: { "@id": ORG_ID },
+      blogPost: posts.slice(0, 20).map((p) => ({ "@id": `${absolute(`/blog/${p.slug}`)}#article` })),
+    },
+    breadcrumbs([
+      { name: "ArrivePing", path: "/" },
+      { name: "Blog", path: "/blog" },
+    ]),
+    organization(),
+  ]),
+};
+
+const blogCategoryPages: SeoPage[] = blogCategories
+  .filter((c) => posts.some((p) => p.category === c.slug))
+  .map((c) => {
+    const path = `/blog/category/${c.slug}`;
+    const title = `${c.label}: Field Service Articles | ArrivePing Blog`;
+    const list = posts.filter((p) => p.category === c.slug);
+    return {
+      path,
+      label: c.label,
+      title,
+      description: c.description,
+      summary: c.description,
+      section: "Blog",
+      priority: 0.5,
+      changefreq: "weekly",
+      ogType: "website",
+      lastmod: list[0]?.updated,
+      jsonLd: graph([
+        {
+          "@type": "CollectionPage",
+          "@id": `${absolute(path)}#webpage`,
+          url: absolute(path),
+          name: title,
+          isPartOf: { "@id": SITE_ID },
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: list.map((p, i) => ({ "@type": "ListItem", position: i + 1, url: absolute(`/blog/${p.slug}`), name: p.title })),
+          },
+        },
+        breadcrumbs([
+          { name: "ArrivePing", path: "/" },
+          { name: "Blog", path: "/blog" },
+          { name: c.label, path },
+        ]),
+      ]),
+    };
+  });
+
+const blogPostPages: SeoPage[] = posts.map((p) => {
+  const path = `/blog/${p.slug}`;
+  const cat = categoryBySlug[p.category];
+  const author = authorFor(p.author);
+  const title = p.title.length <= 52 ? `${p.title} | ArrivePing` : p.title;
+  const image = p.image ? absolute(p.image) : `${SITE_URL}/og-image.png`;
+  return {
+    path,
+    label: p.title,
+    title,
+    description: p.description,
+    summary: p.description,
+    section: "Blog",
+    priority: 0.6,
+    changefreq: "monthly",
+    ogType: "article",
+    image,
+    imageAlt: p.imageAlt || p.title,
+    lastmod: p.updated,
+    article: { published: p.date, modified: p.updated, section: cat?.label ?? "Blog", tags: p.tags, author: author.name },
+    jsonLd: graph([
+      {
+        "@type": "BlogPosting",
+        "@id": `${absolute(path)}#article`,
+        mainEntityOfPage: absolute(path),
+        url: absolute(path),
+        headline: p.title.slice(0, 110),
+        description: p.description,
+        image: [image],
+        datePublished: p.date,
+        dateModified: p.updated,
+        inLanguage: "en",
+        articleSection: cat?.label,
+        keywords: p.tags.join(", "),
+        wordCount: p.words,
+        author: { "@type": "Person", name: author.name, jobTitle: author.role, url: author.url, worksFor: { "@id": ORG_ID } },
+        publisher: { "@id": ORG_ID },
+        isPartOf: { "@id": `${SITE_URL}/blog#blog` },
+        about: { "@id": `${SITE_URL}/#software` },
+      },
+      breadcrumbs([
+        { name: "ArrivePing", path: "/" },
+        { name: "Blog", path: "/blog" },
+        ...(cat ? [{ name: cat.label, path: `/blog/category/${cat.slug}` }] : []),
+        { name: p.title, path },
+      ]),
+      organization(),
+    ]),
+  };
+});
+
 export const seoPages: SeoPage[] = [
   home,
   ...landingPages.map(fromLanding),
+  blogIndex,
+  ...blogCategoryPages,
+  ...blogPostPages,
   legal("/privacy", "Privacy Policy", "How ArrivePing and NVC360 collect, use and protect personal information, including technician location data."),
   legal("/terms", "Terms & Conditions", "The terms that govern use of ArrivePing by NVC360."),
 ];

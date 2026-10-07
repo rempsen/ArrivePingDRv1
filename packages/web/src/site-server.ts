@@ -83,10 +83,10 @@ const APP_EXACT = new Set([...PUBLIC_PAGES, "/sign-in", "/sign-up", "/get-starte
 const APP_PREFIX = ["/app", "/rider", "/admin", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/"];
 const PUBLIC_EXACT = new Set(PUBLIC_PAGES);
 function isPrivateRoute(pathname: string): boolean {
-  return !PUBLIC_EXACT.has(pathname);
+  return !PUBLIC_EXACT.has(pathname) && pathname !== "/blog";
 }
 function isAppRoute(pathname: string): boolean {
-  if (APP_EXACT.has(pathname)) return true;
+  if (APP_EXACT.has(pathname) || pathname === "/blog") return true;
   return APP_PREFIX.some((p) => pathname === p || pathname.startsWith(p.endsWith("/") ? p : `${p}/`));
 }
 

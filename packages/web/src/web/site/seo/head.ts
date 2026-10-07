@@ -23,6 +23,16 @@ type Tag = { kind: "meta-name" | "meta-prop" | "link"; key: string; value: strin
 
 function tagsFor(p: SeoPage): Tag[] {
   const url = absolute(p.path);
+  const image = p.image ?? OG_IMAGE;
+  const custom = image !== OG_IMAGE;
+  const article: Tag[] = p.article
+    ? [
+        { kind: "meta-prop", key: "article:published_time", value: p.article.published },
+        { kind: "meta-prop", key: "article:modified_time", value: p.article.modified },
+        { kind: "meta-prop", key: "article:section", value: p.article.section },
+        { kind: "meta-name", key: "author", value: p.article.author },
+      ]
+    : [];
   return [
     { kind: "meta-name", key: "description", value: p.description },
     { kind: "meta-name", key: "robots", value: "index, follow, max-image-preview:large, max-snippet:-1" },
@@ -33,21 +43,25 @@ function tagsFor(p: SeoPage): Tag[] {
     { kind: "meta-prop", key: "og:title", value: p.title },
     { kind: "meta-prop", key: "og:description", value: p.description },
     { kind: "meta-prop", key: "og:url", value: url },
-    { kind: "meta-prop", key: "og:image", value: OG_IMAGE },
-    { kind: "meta-prop", key: "og:image:width", value: "1200" },
-    { kind: "meta-prop", key: "og:image:height", value: "630" },
-    { kind: "meta-prop", key: "og:image:alt", value: "ArrivePing: live technician tracking and customer ETAs" },
+    { kind: "meta-prop", key: "og:image", value: image },
+    { kind: "meta-prop", key: "og:image:width", value: custom ? "1600" : "1200" },
+    { kind: "meta-prop", key: "og:image:height", value: custom ? "900" : "630" },
+    { kind: "meta-prop", key: "og:image:alt", value: p.imageAlt ?? "ArrivePing: live technician tracking and customer ETAs" },
     { kind: "meta-name", key: "twitter:card", value: "summary_large_image" },
     { kind: "meta-name", key: "twitter:title", value: p.title },
     { kind: "meta-name", key: "twitter:description", value: p.description },
-    { kind: "meta-name", key: "twitter:image", value: OG_IMAGE },
+    { kind: "meta-name", key: "twitter:image", value: image },
+    { kind: "link", key: "alternate", value: `${SITE_URL}/blog/rss.xml` },
+    ...article,
   ];
 }
 
 export function headTags(p: SeoPage): string {
   const lines = [`<title>${esc(p.title)}</title>`];
   for (const t of tagsFor(p)) {
-    if (t.kind === "link") lines.push(`<link rel="${t.key}" href="${esc(t.value)}" />`);
+    if (t.kind === "link" && t.key === "alternate")
+      lines.push(`<link rel="alternate" type="application/rss+xml" title="ArrivePing blog" href="${esc(t.value)}" />`);
+    else if (t.kind === "link") lines.push(`<link rel="${t.key}" href="${esc(t.value)}" />`);
     else lines.push(`<meta ${t.kind === "meta-prop" ? "property" : "name"}="${t.key}" content="${esc(t.value)}" />`);
   }
   lines.push(`<script type="application/ld+json" id="ap-jsonld">${scriptJson(p.jsonLd)}</script>`);

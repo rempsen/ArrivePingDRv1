@@ -71,6 +71,7 @@ type Entry = {
   sitemapXml: (lastmod: string) => string;
   llmsTxt: () => string;
   llmsFullTxt: () => string;
+  rssXml: () => string;
 };
 
 const SEO_START = "<!--seo-->";
@@ -135,11 +136,13 @@ export default function prerenderPlugin(): Plugin {
       await fs.writeFile(path.join(outDir, "robots.txt"), robotsTxt());
       await fs.writeFile(path.join(outDir, "llms.txt"), mod.llmsTxt());
       await fs.writeFile(path.join(outDir, "llms-full.txt"), mod.llmsFullTxt());
+      await fs.mkdir(path.join(outDir, "blog"), { recursive: true });
+      await fs.writeFile(path.join(outDir, "blog", "rss.xml"), mod.rssXml());
       await fs.writeFile(
         path.join(pagesDir, "manifest.json"),
         JSON.stringify({ builtAt: new Date().toISOString(), indexNowKey: INDEXNOW_KEY, urls }, null, 2),
       );
-      config.logger.info(`\n[prerender] ${urls.length} pages + sitemap.xml, robots.txt, llms.txt, llms-full.txt`);
+      config.logger.info(`\n[prerender] ${urls.length} pages + sitemap.xml, robots.txt, llms.txt, llms-full.txt, blog/rss.xml`);
     },
   };
 }

@@ -4,6 +4,9 @@ import Index from "./pages/index";
 import AuthPage from "./pages/auth";
 import { makeLanding } from "./pages/marketing/landing";
 import { landingPages } from "./site/content/landing";
+import { BlogIndexRoute, makeBlogCategory, makeBlogPost } from "./pages/marketing/blog";
+import { posts as blogPosts } from "virtual:blog-index";
+import { blogCategories } from "./site/blog/categories";
 import { lazyRoute } from "./lib/lazy-route";
 import { Provider } from "./components/provider";
 import { ProtectedRoute } from "./components/protected-route";
@@ -35,8 +38,10 @@ const CustomerApp = lazyRoute(() => import("./pages/customer"));
 const RiderApp = lazyRoute(() => import("./pages/rider"));
 const AdminApp = lazyRoute(() => import("./pages/admin"));
 
-// One stable component per public landing page (created once, not per render).
+// One stable component per public landing page and blog page (created once, not per render).
 const landingRoutes = Object.fromEntries(landingPages.map((p) => [p.path, makeLanding(p.path)]));
+const blogCategoryRoutes = blogCategories.map((c) => ({ path: `/blog/category/${c.slug}`, component: makeBlogCategory(c.slug) }));
+const blogPostRoutes = blogPosts.map((p) => ({ path: `/blog/${p.slug}`, component: makeBlogPost(p.slug) }));
 
 function NotFound() {
   return (
@@ -114,6 +119,13 @@ function App() {
           {/* Public solution, pricing, about and comparison pages — prerendered to static HTML at build time. */}
           {landingPages.map((p) => (
             <Route key={p.path} path={p.path} component={landingRoutes[p.path]} />
+          ))}
+          <Route path="/blog" component={BlogIndexRoute} />
+          {blogCategoryRoutes.map((r) => (
+            <Route key={r.path} path={r.path} component={r.component} />
+          ))}
+          {blogPostRoutes.map((r) => (
+            <Route key={r.path} path={r.path} component={r.component} />
           ))}
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/terms" component={TermsPage} />
