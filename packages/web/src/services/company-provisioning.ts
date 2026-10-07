@@ -48,6 +48,8 @@ import { getIndustryPreset } from "./industry-presets";
 import { CATALOG_PRESETS, type CatalogPresetItem } from "./catalog-presets";
 import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-catalog-presets";
 import { scoutStarterCatalog, scoutStarterOptionCatalog } from "./catalog-scout";
+import { saveSiteCrawl } from "./site-crawl";
+import { buildExcerpts } from "./brand-scout";
 
 void _jsonBody; // (import kept intentionally unused-safe; see note above)
 
@@ -125,6 +127,29 @@ export const BrandProposal = z
       .max(30)
       .nullable(),
     contactEmails: z.array(z.string().max(200)).max(20).nullable(),
+    // Staff first names customers mention in testimonials (brand-scout
+    // `mentionedStaff`). Soft signal for the concierge only.
+    mentionedStaff: z.array(z.string().max(60)).max(20).nullable(),
+    // Google Business Profile match (brand-scout item F.2) — the write-a-review
+    // link feeds Settings → Reviews; the stats are concierge context only.
+    googleReviewUrl: z.string().max(500).nullable(),
+    googleReviews: z.record(z.string(), z.unknown()).nullable(),
+    // ── Raw crawl (item E) — persisted to site_crawls by provisionCompany().
+    // Kept permissive: the client round-trips this verbatim from /scout and
+    // a malformed page entry must never 400 the signup. Normalised again in
+    // services/site-crawl.ts before it's stored.
+    pages: z
+      .array(
+        z.object({
+          url: z.string().max(1_000),
+          title: z.string().max(400).optional().default(""),
+          text: z.string().max(12_000),
+        }),
+      )
+      .max(15)
+      .nullable(),
+    structured: z.record(z.string(), z.unknown()).nullable(),
+    excerpts: z.string().max(6_000).nullable(),
   })
   .partial()
   // brand-scout returns explicit nulls for anything it couldn't read off the
@@ -417,6 +442,8 @@ export interface ProvisionResult {
     catalogItems: number;
     optionCategories: number;
     notificationCopyBranded: number;
+    /** Whether the raw website crawl was persisted to site_crawls. */
+    crawlSaved: boolean;
   };
 }
 
@@ -438,7 +465,7 @@ export interface ProvisionResult {
  * Sarah (Office Manager) on your Team page — want me to set them up?" instead
  * of asking the admin to type everyone in.
  */
-function scoutedTeamProfile(brand: Record<string, any>): Record<string, unknown> {
+export function scoutedTeamProfile(brand: Record<string, any>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const team = Array.isArray(brand.teamMembers) ? brand.teamMembers : [];
   const cleaned = team
@@ -456,6 +483,10 @@ function scoutedTeamProfile(brand: Record<string, any>): Record<string, unknown>
     ? brand.contactEmails.map((e: any) => String(e).trim().toLowerCase()).filter((e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)).slice(0, 10)
     : [];
   if (emails.length) out.scoutedEmails = emails;
+  const mentioned = Array.isArray(brand.mentionedStaff)
+    ? brand.mentionedStaff.map((n: any) => String(n).trim()).filter((n: string) => n.length >= 2 && n.length <= 40).slice(0, 12)
+    : [];
+  if (mentioned.length) out.mentionedStaff = mentioned;
   return out;
 }
 
@@ -565,8 +596,28 @@ export async function provisionCompany(
     services: jsonStr(brand.services),
     hours: str(brand.hours),
     socials: jsonStr(brand.socials),
+    googleReviewUrl: /^https:\/\/search\.google\.com\/local\/writereview\?placeid=[A-Za-z0-9_%-]+$/.test(str(brand.googleReviewUrl)) ? str(brand.googleReviewUrl) : "",
     qualifyingProfile: JSON.stringify(scoutedTeamProfile(brand)),
   });
+
+  // 2a) persist the raw crawl (item E) so the pages the scout read survive
+  //     signup — the concierge, the AI writers below and "Re-scan website"
+  //     all read from it. Best-effort.
+  let crawlSaved = false;
+  try {
+    crawlSaved = Boolean(await saveSiteCrawl(slug, brand, source === "self_serve" ? "signup" : "superadmin"));
+  } catch (e) {
+    console.error("[provisioning] site-crawl save failed", e);
+  }
+  // What the writers below get as their primary source of truth: the actual
+  // page text when we have it, else the 2-4 sentence description, else the
+  // tagline. (Item D — website first, industry preset as the fallback.)
+  const siteExcerpts: string | null = (() => {
+    const fromBrand = typeof brand.excerpts === "string" && brand.excerpts.trim() ? brand.excerpts.trim() : "";
+    if (fromBrand) return fromBrand;
+    const pages = Array.isArray(brand.pages) ? brand.pages : [];
+    return pages.length ? buildExcerpts(pages) || null : null;
+  })();
 
   // 2b) auto-provision branded notifications/email/SMS identity so every
   //     message this tenant sends carries their logo, color & contact footer.
@@ -606,6 +657,7 @@ export async function provisionCompany(
       customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
       jobNoun: str(brand.jobNoun, preset?.jobNoun ?? "Job"),
       brandColor: str(brand.primaryColor, "#06B6D4"),
+      siteExcerpts,
       knowledge: icpKnowledge,
     });
     notificationCopyBranded = Object.keys(copyMap).length;
@@ -637,6 +689,7 @@ export async function provisionCompany(
       website: str(b.website) || null,
       workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
       customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
+      siteExcerpts,
       knowledge: icpKnowledge,
     });
     const brandColor = str(brand.primaryColor, "#06B6D4");
@@ -696,6 +749,7 @@ export async function provisionCompany(
       workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
       customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
       brandColor: str(brand.primaryColor, "#06B6D4"),
+      siteExcerpts,
       knowledge: icpKnowledge,
     });
     for (const tpl of tpls) {
@@ -732,6 +786,7 @@ export async function provisionCompany(
         services: servicesArr,
         description: str(brand.description) || str(brand.tagline) || null,
         website: str(b.website) || null,
+        siteExcerpts,
         knowledge: icpKnowledge,
       });
       for (const s of tailored) {
@@ -764,6 +819,7 @@ export async function provisionCompany(
     services: servicesArr,
     description: str(brand.description) || null,
     website: str(b.website) || null,
+    siteExcerpts,
     knowledge: icpKnowledge,
   };
   let catalogSeeded = 0;
@@ -851,6 +907,7 @@ export async function provisionCompany(
       catalogItems: catalogSeeded,
       optionCategories: optionCategoriesSeeded,
       notificationCopyBranded,
+      crawlSaved,
     },
   };
 }

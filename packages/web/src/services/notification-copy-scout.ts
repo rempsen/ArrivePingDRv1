@@ -30,6 +30,7 @@ import { log } from "../api/lib/logger";
 import type { NvcEvent, Recipient } from "./dispatch";
 import { TEMPLATE_VARS } from "./dispatch";
 import { getIndustryPreset } from "./industry-presets";
+import { siteBlock } from "./scout-prompt";
 
 export interface IcpKnowledgeForCopy {
   summary?: string | null;
@@ -51,6 +52,9 @@ export interface NotificationCopyInput {
   jobNoun?: string | null;
   brandColor?: string | null;
   knowledge?: IcpKnowledgeForCopy | null;
+  // Verbatim excerpts of the tenant's own website (item D) — the writer
+  // matches THEIR voice and claims first; ICP tone is the fallback.
+  siteExcerpts?: string | null;
 }
 
 export type CopyKey = `${NvcEvent}:${Recipient}`;
@@ -141,6 +145,7 @@ export async function scoutNotificationCopy(input: NotificationCopyInput): Promi
   const toneLine = preset ? `\nBASELINE TONE FOR THIS INDUSTRY: ${preset.aiTone}` : "";
   const servicesLine = input.services?.length ? input.services.join(", ") : "(unknown)";
   const research = knowledgeBlock(input.knowledge);
+  const site = siteBlock(input.siteExcerpts, 2_500);
   const targetsLine = COPY_TARGETS.map((t) => `${t.event}:${t.recipient}`).join(", ");
   const varsLine = TEMPLATE_VARS.map((v) => `{{${v.key}}} = ${v.label}`).join("\n  ");
 
@@ -161,9 +166,9 @@ DESCRIPTION: ${input.description || "(none)"}
 SERVICES: ${servicesLine}
 THIS TENANT CALLS A WORK ORDER: "${jobNoun}" (and its plural naturally)
 THIS TENANT CALLS THE PEOPLE THEY SERVE: "${customerNoun}"
-THIS TENANT CALLS ITS FIELD WORKERS: "${workerNoun}"${toneLine}${research}
+THIS TENANT CALLS ITS FIELD WORKERS: "${workerNoun}"${toneLine}${research}${site}
 
-Every message is sent FROM "${input.name}" TO one of their own ${customerNoun.toLowerCase()}s or ${workerNoun.toLowerCase()}s — write in ${input.name}'s voice, not the dispatch platform's. Use "${jobNoun}"/"${customerNoun}"/"${workerNoun}" instead of generic "job"/"customer"/"technician" wherever it reads naturally — do not force it into every sentence if it gets awkward.
+${site ? "VOICE: write the way the company's OWN WEBSITE above talks — same register, same phrasing habits, and reuse their real differentiators (24/7, free estimates, licensed & insured, family-owned, guarantees, years in business) where a message naturally has room for one. The BASELINE TONE for the industry is the fallback, not the override.\n\n" : ""}Every message is sent FROM "${input.name}" TO one of their own ${customerNoun.toLowerCase()}s or ${workerNoun.toLowerCase()}s — write in ${input.name}'s voice, not the dispatch platform's. Use "${jobNoun}"/"${customerNoun}"/"${workerNoun}" instead of generic "job"/"customer"/"technician" wherever it reads naturally — do not force it into every sentence if it gets awkward.
 
 Available template variables (use {{name}} exactly as spelled, only from this list — anything else will be stripped):
   ${varsLine}

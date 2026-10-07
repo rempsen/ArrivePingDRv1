@@ -32,6 +32,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { CATALOG_PRESETS, type CatalogPresetItem } from "./catalog-presets";
 import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-catalog-presets";
+import { siteBlock } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 export interface CatalogScoutInput {
@@ -44,17 +45,23 @@ export interface CatalogScoutInput {
   description?: string | null;
   website?: string | null;
   knowledge?: IcpKnowledge | null;
+  // Verbatim excerpts of the tenant's own website (item D) — primary
+  // source for what they actually sell / what options they offer.
+  siteExcerpts?: string | null;
 }
 
 /** True when there's enough scrape signal to be worth a model call. */
-export function hasScrapeSignal(input: Pick<CatalogScoutInput, "services" | "description">): boolean {
+export function hasScrapeSignal(input: Pick<CatalogScoutInput, "services" | "description" | "siteExcerpts">): boolean {
   const svc = (input.services ?? []).filter((s) => s && s.trim());
-  return svc.length > 0 || Boolean(input.description && input.description.trim().length >= 40);
+  if (svc.length > 0) return true;
+  if (input.siteExcerpts && input.siteExcerpts.trim().length >= 200) return true;
+  return Boolean(input.description && input.description.trim().length >= 40);
 }
 
 function contextBlock(input: CatalogScoutInput): string {
   const scraped = (input.services ?? []).map((s) => s.trim()).filter(Boolean);
   const k = input.knowledge;
+  const site = siteBlock(input.siteExcerpts);
   const research: string[] = [];
   if (k?.summary) research.push(`Industry context: ${k.summary}`);
   if (k?.terminologyNotes) research.push(`Industry terminology: ${k.terminologyNotes}`);
@@ -63,7 +70,7 @@ function contextBlock(input: CatalogScoutInput): string {
 INDUSTRY: ${input.industry || "(none)"}${input.industryOther ? ` (${input.industryOther})` : ""}
 WEBSITE: ${input.website || "(unknown)"}
 ABOUT THE BUSINESS (from their website): ${input.description?.trim() || "(none)"}
-SERVICES THEY ADVERTISE (from their website — ground truth for what THEY sell): ${scraped.length ? scraped.join("; ") : "(none listed)"}${research.length ? `\n\nDEEP INDUSTRY RESEARCH:\n${research.join("\n")}` : ""}`;
+SERVICES THEY ADVERTISE (from their website — ground truth for what THEY sell): ${scraped.length ? scraped.join("; ") : "(none listed)"}${research.length ? `\n\nDEEP INDUSTRY RESEARCH:\n${research.join("\n")}` : ""}${site}${site ? "\n\nSOURCE PRIORITY: the website excerpts are the primary source for what this company sells and how they name it; the generic preset and industry research are the fallback. Do not add items or options the website gives no reason to believe they offer." : ""}`;
 }
 
 /* -------------------------------------------------------------------------- */

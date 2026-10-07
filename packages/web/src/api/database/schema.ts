@@ -748,6 +748,39 @@ export const companySettings = pgTable("company_settings", {
   companyIdx: index("settings_company_idx").on(t.companyId),
 }));
 
+/**
+ * Raw output of the brand-scout website crawl, one row per scan (the newest
+ * row is the current one). Kept so the scrape can be re-used after signup —
+ * the onboarding concierge quotes it, "Re-scan website" diffs against it,
+ * and the AI writers (forms/templates/notification copy/catalog) read the
+ * actual page text instead of a one-line summary. Logo bytes are NOT stored
+ * here (they're hosted on object storage); `proposal` is the structured
+ * BrandProposal minus warnings.
+ */
+export const siteCrawls = pgTable("site_crawls", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").notNull().default("default"),
+  website: text("website").notNull().default(""),
+  // JSON string: [{url,title,text}] — homepage first, then sub-pages, text
+  // already stripped of markup and capped per page.
+  pages: text("pages").notNull().default("[]"),
+  // JSON string: StructuredHints (schema.org JSON-LD) or null
+  structured: text("structured").notNull().default("null"),
+  // Plain-text digest (~3k chars) of the most useful services/about copy,
+  // ready to drop into a model prompt.
+  excerpts: text("excerpts").notNull().default(""),
+  // JSON string: BrandProposal (what the scout concluded from the pages)
+  proposal: text("proposal").notNull().default("{}"),
+  pageCount: integer("page_count").notNull().default(0),
+  // "signup" | "rescan" | "backfill"
+  source: text("source").notNull().default("signup"),
+  createdAt: now(),
+}, (t) => ({
+  companyIdx: index("site_crawls_company_idx").on(t.companyId),
+}));
+
 /** Reusable colored tags, scoped to clients/techs/both */
 export const tags = pgTable("tags", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

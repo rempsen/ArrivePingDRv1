@@ -368,6 +368,58 @@ function RunningLateCard({
   );
 }
 
+/**
+ * "Re-scan website" (scrape audit item G). Re-reads the tenant's site, stores
+ * the raw crawl, and fills ONLY the brand fields that are still blank —
+ * never what the admin typed. The server returns the fresh settings row so
+ * the open form can pick up the newly-filled fields without a reload.
+ */
+function RescanWebsiteHint({ website, onFilled }: { website: string; onFilled: (settings: Record<string, unknown>) => void }) {
+  const qc = useQueryClient();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const rescan = useMutation({
+    mutationFn: async () => {
+      const res = await api.settings.brand.rescan.$post({ json: { website: website?.trim() || undefined } });
+      return (await res.json()) as { result: { pageCount: number; filled: string[]; kept: string[]; teamFound: number; website: string }; settings: Record<string, unknown> };
+    },
+    onSuccess: ({ result, settings }) => {
+      const filled = result.filled.filter((k) => k !== "qualifyingProfile");
+      // Only merge the fields the scan actually wrote so unsaved edits survive.
+      const patch: Record<string, unknown> = {};
+      for (const k of filled) if (k in settings) patch[k] = settings[k];
+      if (Object.keys(patch).length) onFilled(patch);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["tenant-brand"] });
+      setMsg({
+        ok: true,
+        text: `Read ${result.pageCount} page${result.pageCount === 1 ? "" : "s"}. ${filled.length ? `Filled in: ${filled.join(", ")}.` : "Nothing new to fill — your profile already has values for everything we found."}${result.teamFound ? ` Found ${result.teamFound} team member${result.teamFound === 1 ? "" : "s"} for onboarding.` : ""}`,
+      });
+    },
+    onError: (e: any) => setMsg({ ok: false, text: e?.message || "Scan failed" }),
+  });
+  return (
+    <span className="flex flex-col gap-1">
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="basis-full">Re-read your site to fill any blank brand fields (never overwrites what you typed).</span>
+        <button
+          type="button"
+          disabled={rescan.isPending || !website?.trim()}
+          onClick={(e) => {
+            e.preventDefault();
+            setMsg(null);
+            rescan.mutate();
+          }}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-white/80 hover:bg-white/10 disabled:opacity-40"
+        >
+          <RefreshCw className={cn("h-3 w-3", rescan.isPending && "animate-spin")} />
+          {rescan.isPending ? "Reading site…" : "Re-scan website"}
+        </button>
+      </span>
+      {msg && <span className={cn("normal-case tracking-normal", msg.ok ? "text-emerald-300" : "text-rose-300")}>{msg.text}</span>}
+    </span>
+  );
+}
+
 function CompanySettingsTab() {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
@@ -434,7 +486,7 @@ function CompanySettingsTab() {
               <Field label="Phone">
                 <input aria-label="Phone" className={inputCls} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
               </Field>
-              <Field label="Website">
+              <Field label="Website" hint={<RescanWebsiteHint website={form.website} onFilled={(settings) => setForm((f: any) => ({ ...f, ...settings }))} />}>
                 <input aria-label="Website" className={inputCls} value={form.website} onChange={(e) => set("website", e.target.value)} />
               </Field>
               <Field label="Business address" hint="Autocompletes & geocodes for dispatch & geofencing">

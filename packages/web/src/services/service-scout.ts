@@ -25,6 +25,7 @@ import { z } from "zod";
 import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { getIndustryPreset } from "./industry-presets";
+import { siteBlock } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 export interface ScoutedService {
@@ -41,6 +42,9 @@ export interface ServiceScoutInput {
   description?: string | null;
   website?: string | null;
   knowledge?: IcpKnowledge | null;
+  // Verbatim excerpts of the tenant's own website (item D) — primary
+  // source for which services exist and what they are called.
+  siteExcerpts?: string | null;
 }
 
 const ServiceSchema = z.object({
@@ -87,6 +91,7 @@ export async function scoutStarterServices(
     ? presetServices.map((s) => `${s.name} (${s.category}, ${s.durationMins}min)`).join("; ")
     : "(no preset — infer sensible categories/durations from the trade)";
   const research = knowledgeBlock(input.knowledge);
+  const site = siteBlock(input.siteExcerpts);
 
   try {
     const { object } = await generateObject({
@@ -98,9 +103,9 @@ COMPANY: ${input.name}
 WEBSITE: ${input.website || "(unknown)"}
 DESCRIPTION: ${input.description || "(none)"}
 GENERIC BASELINE for this industry (proven categories/durations — use these as a structural template, not literal names to keep): ${presetLine}
-SERVICES ACTUALLY LISTED ON THIS COMPANY'S OWN WEBSITE (ground truth for what THEY offer — use their real names/wording): ${scraped.join(", ")}${research}
+SERVICES ACTUALLY LISTED ON THIS COMPANY'S OWN WEBSITE (ground truth for what THEY offer — use their real names/wording): ${scraped.join(", ")}${research}${site}
 
-Produce ONE tailored service list for ${input.name} specifically:
+${site ? "SOURCE PRIORITY: the website excerpts above are the primary source — if a service is described in the page text but missing from the scraped list, include it; if the generic baseline has a service the website never mentions, drop it or keep it only when it is an obvious part of this trade. Use their wording for names.\n\n" : ""}Produce ONE tailored service list for ${input.name} specifically:
 - Prefer the company's own service names/wording from their website over generic baseline names, when they describe the same thing.
 - Keep the baseline's category groupings and realistic duration estimates (in minutes) where a scraped service matches a baseline one.
 - Add any distinctly different service from the website that the baseline doesn't cover, with a sensible category and duration estimate for that kind of trade work.

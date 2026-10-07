@@ -28,6 +28,7 @@ import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { ensureDefaultTenantKey } from "../lib/tenant-keys";
 import { scoutBrand } from "../../services/brand-scout";
+import { rescanWebsite, type RescanResult } from "../../services/rescan";
 import { provisionNotificationBranding } from "../../services/dispatch";
 import {
   resendAvailable,
@@ -397,6 +398,69 @@ export const superadminRoutes = new Hono<AppEnv>()
     const b = c.req.valid("json");
     const result = await provisionCompany(b, { id: me?.id, name: me?.name }, { source: "superadmin" });
     return c.json(result, 201);
+  })
+
+  // ---- re-scan ONE tenant's website (item G) -----------------------------
+  // Fill-empty by default; `overwrite: true` replaces non-empty fields too.
+  .post("/companies/:id/rescan", requireSuperadmin, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const id = c.req.param("id");
+    const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, id));
+    if (!co) return c.json({ message: "Not found" }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as { website?: unknown; overwrite?: unknown };
+    const website = typeof body.website === "string" && body.website.trim() ? body.website.trim().slice(0, 300) : undefined;
+    const overwrite = body.overwrite === true;
+    const r = await rescanWebsite(id, { website, overwrite, source: "superadmin" });
+    await audit({
+      actorId: me?.id,
+      actorName: me?.name,
+      action: "update",
+      entityType: "company",
+      entityId: id,
+      summary: r.ok
+        ? `Re-scanned ${r.website} for "${co.name}" — ${r.pageCount} pages, filled ${r.filled.length ? r.filled.join(", ") : "nothing new"}`
+        : `Re-scan failed for "${co.name}": ${r.error ?? "unknown"}`,
+      companyId: id,
+    });
+    return c.json({ result: r }, r.ok ? 200 : 502);
+  })
+
+  // ---- backfill: re-scan EVERY tenant that has a website (item G) --------
+  // Fill-empty only, sequential (each scan is a real crawl + model call), so
+  // this takes ~15-40s per tenant. Pass { onlyMissingCrawl: false } to
+  // include tenants that already have a site_crawls row; default skips
+  // them. Never overwrites admin-typed values.
+  .post("/companies/rescan-all", requireSuperadmin, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const body = (await c.req.json().catch(() => ({}))) as { onlyMissingCrawl?: unknown; ids?: unknown };
+    const onlyMissingCrawl = body.onlyMissingCrawl !== false;
+    const ids = Array.isArray(body.ids) ? body.ids.map((x) => String(x)) : null;
+    const companies = await db.select().from(schema.companies);
+    const crawled = new Set((await sdb.select({ companyId: schema.siteCrawls.companyId }).from(schema.siteCrawls)).map((r) => r.companyId));
+    const results: { companyId: string; skipped?: string; result?: RescanResult }[] = [];
+    for (const company of companies) {
+      if (ids && !ids.includes(company.id)) continue;
+      if (onlyMissingCrawl && crawled.has(company.id)) {
+        results.push({ companyId: company.id, skipped: "already has a crawl" });
+        continue;
+      }
+      try {
+        const r = await rescanWebsite(company.id, { source: "backfill" });
+        results.push({ companyId: company.id, result: r });
+      } catch (e: any) {
+        results.push({ companyId: company.id, skipped: `error: ${e?.message ?? "unknown"}` });
+      }
+    }
+    const scanned = results.filter((r) => r.result?.ok).length;
+    await audit({
+      actorId: me?.id,
+      actorName: me?.name,
+      action: "update",
+      entityType: "company",
+      entityId: "rescan-all",
+      summary: `Website re-scan backfill: ${scanned} scanned, ${results.length - scanned} skipped/failed`,
+    });
+    return c.json({ total: results.length, scanned, results }, 200);
   })
 
   // ---- backfill: ensure EVERY existing tenant has a unique secret key ----

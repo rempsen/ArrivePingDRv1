@@ -42,6 +42,14 @@ import {
   loadIcpKnowledge,
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
+import { loadSiteExcerpts } from "../../services/site-crawl";
+import { rescanWebsite } from "../../services/rescan";
+import {
+  extractRosterFromImage,
+  rosterToPasteText,
+  ROSTER_IMAGE_TYPES,
+  ROSTER_IMAGE_MAX_BYTES,
+} from "../../services/roster-vision";
 import { scoutStarterCatalog, scoutStarterOptionCatalog } from "../../services/catalog-scout";
 import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qualifying-tuning";
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
@@ -191,6 +199,9 @@ async function buildOnboardingSnapshot(cid: string) {
   if (!company || !settings) throw Err.notFound("Company not found");
 
   const knowledge = await loadIcpKnowledge(company.industry).catch(() => null);
+  // Item E/F: the raw page text the scout read (newest site_crawls row) so
+  // the concierge can quote the tenant's own site instead of a one-liner.
+  const siteExcerpts = await loadSiteExcerpts(cid);
 
   let qualifying: QualifyingProfile = {};
   try {
@@ -258,9 +269,14 @@ async function buildOnboardingSnapshot(cid: string) {
           .filter(([, v]) => typeof v === "string" && v)
           .map(([k]) => k)
       : [];
+  const mentionedStaff: string[] = Array.isArray(qualifying.mentionedStaff)
+    ? qualifying.mentionedStaff.map((n) => String(n).trim()).filter(Boolean).slice(0, 12)
+    : [];
   const website = {
     url: settings.website || "",
     description: settings.description || "",
+    excerpts: siteExcerpts.slice(0, 2_500),
+    hasCrawl: siteExcerpts.length > 0,
     services: scrapedServices,
     hours: settings.hours || "",
     address: settings.address || "",
@@ -289,6 +305,7 @@ async function buildOnboardingSnapshot(cid: string) {
     website,
     roster: {
       scouted: scoutedTeam,
+      mentioned: mentionedStaff,
       fieldStaff: riders.length,
       officeStaff: officeCount,
       total: rosterCount,
@@ -326,6 +343,29 @@ export const onboardingRoutes = new Hono<AppEnv>()
       .set({ onboardingCompletedAt: new Date(), updatedAt: new Date() })
       .where(eq(schema.companies.id, cid));
     return c.json({ ok: true }, 200);
+  })
+
+  // POST /onboarding/roster-from-image — multipart field `file`. The owner
+  // snaps their whiteboard / dispatch board / business cards and we read the
+  // people off it (scrape audit item F.3). Nothing is written: the frontend
+  // drops the result into the chat as the "paste your people" message the
+  // concierge already knows how to handle, so the confirm-then-add_team_members
+  // flow (and its role/email follow-up questions) stays the single path.
+  .post("/roster-from-image", requireAdmin, async (c) => {
+    const form = await c.req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) throw Err.badRequest("No file");
+    if (file.size > ROSTER_IMAGE_MAX_BYTES) throw Err.badRequest("Photo too large (max 8MB)");
+    const mime = file.type || "image/jpeg";
+    if (!ROSTER_IMAGE_TYPES.includes(mime)) throw Err.badRequest(`Unsupported image type ${mime}`);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    try {
+      const result = await extractRosterFromImage(bytes, mime);
+      return c.json({ ...result, pasteText: rosterToPasteText(result) }, 200);
+    } catch (e) {
+      console.error("[onboarding] roster-from-image failed", e);
+      return c.json({ message: "Couldn't read that photo — try a sharper one, or paste the list instead." }, 502);
+    }
   })
 
   // POST /onboarding/chat — the agentic finishing-touches conversation.
@@ -456,7 +496,14 @@ without it unless the user explicitly says to skip/finish everything.
         this sentence VERBATIM: "We found all of these people. Would you
         like to add them as a profile in your settings? Yes or no?"
         If the list is empty, instead ask them to paste their people in one
-        message — "name, job, email, mobile" per line — and build from that.
+        message — "name, job, email, mobile" per line — OR snap a photo of
+        wherever the roster already lives (whiteboard, dispatch board,
+        business cards, a printout) with the camera button next to the reply
+        box; we read the names off it and it arrives here as a pasted list.
+        Mention both options in ONE sentence, then build from whatever comes.
+        A message starting "(From a photo of our team list)" IS that pasted
+        list — treat it exactly like a typed one, and if it says a phone or
+        email was unclear, ask about that person before adding them.
     iii. For each person whose role or email is unclear, ask one short
         question using what the site already told you (their title). You
         need: what they are (technician, driver, dispatcher, manager or
@@ -583,11 +630,12 @@ anchor questions:
 - Address: ${snap.website.address || "(not found)"}
 - Contact: ${[snap.website.phone, snap.website.email].filter(Boolean).join(", ") || "(not found)"}
 - Social profiles found: ${snap.website.socials.length ? snap.website.socials.join(", ") : "(none)"}
+${snap.website.excerpts ? `\nTHEIR OWN WORDS (verbatim excerpts from their site — quote or paraphrase these when it helps you sound like you actually read their site; never contradict them):\n<<<\n${snap.website.excerpts}\n>>>` : snap.website.url ? "\n(We have no stored page text for their site yet. If they mention the site changed, or the facts above look thin, offer ONCE to re-read it with rescan_website — it only fills in blanks, never overwrites what they typed.)" : ""}
 
 PEOPLE FOUND ON THEIR WEBSITE (from the Team/About/Contact pages — these are
 staff names the scrape found, NOT customers; offer to set them up in Part
 2b):
-${snap.roster.scouted.length ? snap.roster.scouted.map((m) => `- ${m.name}${m.title ? ` — ${m.title}` : ""}${m.role && m.role !== "other" ? ` (looks like: ${m.role})` : ""}${m.email ? `, ${m.email}` : ""}${m.phone ? `, ${m.phone}` : ""}`).join("\n") : "(none found — ask them to paste their list)"}${Array.isArray(q.scoutedEmails) && q.scoutedEmails.length ? `\nGeneral emails seen on the site (may help guess a login address): ${q.scoutedEmails.join(", ")}` : ""}
+${snap.roster.scouted.length ? snap.roster.scouted.map((m) => `- ${m.name}${m.title ? ` — ${m.title}` : ""}${m.role && m.role !== "other" ? ` (looks like: ${m.role})` : ""}${m.email ? `, ${m.email}` : ""}${m.phone ? `, ${m.phone}` : ""}`).join("\n") : "(none found — ask them to paste their list)"}${Array.isArray(q.scoutedEmails) && q.scoutedEmails.length ? `\nGeneral emails seen on the site (may help guess a login address): ${q.scoutedEmails.join(", ")}` : ""}${snap.roster.mentioned.length ? `\nNames YOUR CUSTOMERS mention in testimonials on the site (first names only, probably staff — NOT confirmed): ${snap.roster.mentioned.join(", ")}. In step 2b, if the Team/About list above is empty or short, say something like "your reviews mention ${snap.roster.mentioned.slice(0, 3).join(", ")} — are they on the team?" and let them confirm before adding anyone.` : ""}
 
 WHAT'S ALREADY BUILT FOR THIS TENANT (the concrete surface your ICP-specific
 questions should tune — see step (a) above):
@@ -643,6 +691,27 @@ correction like that — it reads like you weren't listening.`;
             if (Object.keys(patch).length === 0) return { updated: [] };
             await t.update(schema.companySettings, patch);
             return { updated: Object.keys(patch) };
+          },
+        }),
+        rescan_website: tool({
+          description:
+            "Re-read the tenant's website (the one on file, or a URL they give you) and fill in any brand-profile fields that are still blank — description, hours, services, service area, logo, colors, contact details, staff names. Never overwrites what the user already typed. Use when they say the site changed, when WHAT WE LEARNED FROM THEIR WEBSITE is mostly empty, or when they ask you to look at their site. Slow (10-30s) — tell them you are reading it first.",
+          inputSchema: z.object({
+            website: z.string().max(300).optional(),
+          }),
+          execute: async ({ website }) => {
+            const r = await rescanWebsite(cid, { website: website?.trim() || undefined, source: "rescan" });
+            if (!r.ok) return { ok: false, message: r.error ?? "Scan failed" };
+            return {
+              ok: true,
+              website: r.website,
+              pagesRead: r.pageCount,
+              filled: r.filled,
+              keptExisting: r.kept,
+              teamFound: r.teamFound,
+              customersMention: r.mentionedStaff,
+              note: "Fields in `filled` were blank and are now set from the site; `keptExisting` already had values and were left alone. Summarise what you learned in one or two plain sentences, then continue.",
+            };
           },
         }),
         set_industry: tool({

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../lib/api";
 import { useAuth } from "../hooks/use-auth";
@@ -11,6 +11,7 @@ import {
   Bot,
   X,
   ListChecks,
+  Camera,
 } from "lucide-react";
 
 /**
@@ -462,6 +463,44 @@ export function OnboardingChat() {
     runTurn([...historyRef.current, { role: "user", content: text }]);
   }
 
+  // Roster-from-photo (scrape audit F.3): the owner snaps their whiteboard /
+  // business cards / printout; the server reads the people off it and we send
+  // the result into the chat as the same "paste your people" message the
+  // concierge already handles — so confirm → add_team_members stays one path.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [reading, setReading] = useState(false);
+  async function onPhotoPicked(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || streaming || reading) return;
+    setErr("");
+    setReading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/onboarding/roster-from-image", { method: "POST", headers: apiHeaders(), body: fd });
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        pasteText?: string;
+        sourceKind?: string;
+        uncertain?: string[];
+        people?: unknown[];
+      };
+      if (!res.ok) throw new Error(body.message || "Couldn't read that photo");
+      if (!body.people?.length) {
+        setErr("Couldn't find any names in that photo — try a sharper shot, or paste the list instead.");
+        return;
+      }
+      const notes = body.uncertain?.length ? `\nUnclear in the photo: ${body.uncertain.join("; ")}` : "";
+      const text = `(From a photo of our team list${body.sourceKind ? ` — ${body.sourceKind}` : ""})\n${body.pasteText ?? ""}${notes}`;
+      runTurn([...historyRef.current, { role: "user", content: text }]);
+    } catch (e: any) {
+      setErr(e?.message || "Couldn't read that photo");
+    } finally {
+      setReading(false);
+    }
+  }
+
   async function finishLater() {
     try {
       await (api as any).onboarding.complete.$post();
@@ -605,6 +644,25 @@ export function OnboardingChat() {
               if (e.key === "Enter") send();
             }}
           />
+          <input
+            ref={fileRef}
+            type="file"
+            aria-label="Upload a photo of your team list"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={onPhotoPicked}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={streaming || reading}
+            aria-label="Photo of your team list"
+            title="Snap a photo of your team list — whiteboard, business cards, printout"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-ink-3/60 text-slate-300 transition hover:border-brand hover:text-white disabled:opacity-40"
+          >
+            {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+          </button>
           <button
             type="button"
             onClick={send}

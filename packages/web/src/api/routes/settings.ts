@@ -6,6 +6,8 @@ import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { putObject } from "../lib/storage";
 import type { AppEnv } from "../env";
+import { rescanWebsite } from "../../services/rescan";
+import { loadSiteCrawl } from "../../services/site-crawl";
 
 type SessionUser = { id: string; name?: string };
 
@@ -80,6 +82,43 @@ export const settingsRoutes = new Hono<AppEnv>()
       summary: "Uploaded company logo",
     });
     return c.json({ url: stored.url }, 200);
+  })
+  // ---- website re-scan (item G) ----------------------------------------
+  // Re-runs the brand scout against the tenant's website, stores the raw
+  // crawl (site_crawls) and fills EMPTY brand fields only — never clobbers
+  // what an admin typed. `overwrite: true` is an explicit opt-in.
+  .get("/brand/crawl", requireAdmin, async (c) => {
+    const crawl = await loadSiteCrawl(tenantId(c)).catch(() => null);
+    if (!crawl) return c.json({ crawl: null }, 200);
+    return c.json(
+      {
+        crawl: {
+          id: crawl.id,
+          website: crawl.website,
+          pageCount: crawl.pageCount,
+          source: crawl.source,
+          createdAt: crawl.createdAt,
+          pages: crawl.pages.map((p) => ({ url: p.url, title: p.title, chars: p.text.length })),
+        },
+      },
+      200,
+    );
+  })
+  .post("/brand/rescan", requireAdmin, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const body = (await c.req.json().catch(() => ({}))) as { website?: unknown; overwrite?: unknown };
+    const website = typeof body.website === "string" && body.website.trim() ? body.website.trim().slice(0, 300) : undefined;
+    const overwrite = body.overwrite === true;
+    await getOrInit(c);
+    const r = await rescanWebsite(tenantId(c), { website, overwrite, source: "rescan" });
+    if (!r.ok) return c.json({ message: r.error ?? "Scan failed", result: r }, 502);
+    await audit({
+      actorId: me?.id, actorName: me?.name, action: "update",
+      entityType: "company_settings", entityId: tenantId(c),
+      summary: `Re-scanned website ${r.website} — ${r.pageCount} pages, filled ${r.filled.length ? r.filled.join(", ") : "nothing new"}${overwrite ? " (overwrite)" : ""}`,
+    });
+    const settings = await getOrInit(c);
+    return c.json({ result: r, settings }, 200);
   })
   .put("/", requireAdmin, async (c) => {
     const me = c.get("user") as SessionUser;

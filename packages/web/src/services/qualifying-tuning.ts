@@ -37,6 +37,10 @@ export type QualifyingProfile = {
   }[];
   /** Other email addresses printed on the site (dispatch@, office@…). */
   scoutedEmails?: string[];
+  /** First names customers praise in testimonials quoted on the site — not roster-grade, prompts only. */
+  mentionedStaff?: string[];
+  /** ISO timestamp of the last "Re-scan website" run (services/rescan.ts). */
+  lastRescanAt?: string;
   /** Set once the onboarding chat's add_team_members tool has run at least once. */
   rosterSetupAt?: string;
   /** Set once applyQualifyingTuning() has run, so it never re-runs and compounds the multiplier. */

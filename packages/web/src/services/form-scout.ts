@@ -18,6 +18,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { INTAKE_FIELD_CATALOG } from "../api/routes/forms";
 import { log } from "../api/lib/logger";
 import { getIndustryPreset } from "./industry-presets";
+import { siteBlock, sourcePriority } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 /** Render an IcpKnowledge block for prompt injection, or "" when empty. */
@@ -72,6 +73,9 @@ export interface FormScoutInput {
   // Optional deep research (trade publications, standards bodies) curated
   // per ICP — purely additive, forms degrade gracefully without it.
   knowledge?: IcpKnowledge | null;
+  // Verbatim excerpts of the tenant's own website (item D) — when present
+  // this is the PRIMARY source; the ICP preset becomes the fallback.
+  siteExcerpts?: string | null;
 }
 
 const slugify = (s: string) =>
@@ -178,6 +182,7 @@ export async function scoutStarterForms(
     ? `\nSUGGESTED FORM INTENTS for this industry (adapt names to ${input.name}; pick the 2-3 most useful, do not force all): ${preset.templates.join(", ")}.`
     : "";
   const research = knowledgeBlock(input.knowledge);
+  const site = siteBlock(input.siteExcerpts);
 
   try {
     const { object } = await generateObject({
@@ -191,9 +196,13 @@ WEBSITE: ${input.website || "(unknown)"}
 SERVICES OFFERED: ${servicesLine}
 DESCRIPTION: ${input.description || "(none)"}
 THEY CALL THEIR FIELD WORKERS: ${noun}
-THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedCategories}${research}
+THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedCategories}${research}${site}
 
-The PRIMARY INDUSTRY (ICP) above is the main driver — let it shape form titles, intros, and field choices first; use the services/website only as secondary detail. Match the TONE guidance above in the intro and success message copy.
+${sourcePriority(
+        Boolean(site),
+        "The PRIMARY INDUSTRY (ICP) above is the main driver — let it shape form titles, intros, and field choices first; use the services/website only as secondary detail. Match the TONE guidance above in the intro and success message copy.",
+        "form titles, intros, and field choices",
+      )}
 
 Design 2 or 3 DISTINCT starter intake forms that reflect how this specific industry actually takes in work and follows best practices for lead capture. Examples of good differentiation:
 - A roofing/exterior company: "Request a Free Inspection", "Get a Roof Replacement Quote", "Emergency Leak / Storm Damage".

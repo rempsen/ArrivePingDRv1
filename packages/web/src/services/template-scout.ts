@@ -31,6 +31,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { EMPTY_RATE_MODEL, type RateModel } from "../shared/pricing";
 import { getIndustryPreset } from "./industry-presets";
+import { siteBlock, sourcePriority } from "./scout-prompt";
 
 /** Field types supported by the builder canvas (mirror builder.tsx PALETTE). */
 const FIELD_TYPES = [
@@ -95,6 +96,9 @@ export interface TemplateScoutInput {
   // literature) curated per ICP. Purely additive — templates degrade
   // gracefully to preset-only quality when absent.
   knowledge?: IcpKnowledge | null;
+  // Verbatim excerpts of the tenant's own website (item D) — when present
+  // this is the PRIMARY source; the ICP preset becomes the fallback.
+  siteExcerpts?: string | null;
 }
 
 /** Render an IcpKnowledge block for prompt injection, or "" when empty. */
@@ -315,6 +319,7 @@ export async function scoutStarterTemplates(input: TemplateScoutInput): Promise<
     : "";
   const toneLine = preset ? `\nTONE FOR THIS INDUSTRY: ${preset.aiTone}` : "";
   const research = knowledgeBlock(input.knowledge);
+  const site = siteBlock(input.siteExcerpts);
 
   try {
     const { object } = await generateObject({
@@ -328,9 +333,13 @@ WEBSITE: ${input.website || "(unknown)"}
 SERVICES OFFERED: ${servicesLine}
 DESCRIPTION: ${input.description || "(none)"}
 THEY CALL THEIR FIELD WORKERS: ${noun}
-THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedTemplates}${research}
+THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedTemplates}${research}${site}
 
-The PRIMARY INDUSTRY (ICP) above is the main driver — let it shape the template names, fields, checklists, and rate models first; use the services/website only as secondary detail. Match the TONE guidance above in field labels and checklist phrasing where natural.
+${sourcePriority(
+        Boolean(site),
+        "The PRIMARY INDUSTRY (ICP) above is the main driver — let it shape the template names, fields, checklists, and rate models first; use the services/website only as secondary detail. Match the TONE guidance above in field labels and checklist phrasing where natural.",
+        "template names, fields, checklists, and rate models",
+      )}
 First, reason about what this company actually does and the industry's best-practice job workflows. Then design a MINIMUM OF 4, up to 6, DISTINCT work-order templates. Wherever it applies to this business, cover the three core workflows:
   1. a RESIDENTIAL workflow (work at a customer's home),
   2. a COMMERCIAL workflow (work at a business / contract job site),

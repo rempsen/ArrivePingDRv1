@@ -33,6 +33,7 @@ import { putObject } from "../api/lib/storage";
 import { log } from "../api/lib/logger";
 import { formatPhone } from "../api/lib/validate";
 import { INDUSTRY_LABELS } from "./industry-presets";
+import { fetchGoogleReviewMentions, googlePlacesAvailable } from "./review-mentions";
 
 export interface BrandProposal {
   website: string;
@@ -71,7 +72,33 @@ export interface BrandProposal {
   // Extra addresses found beyond the main contact email (e.g. dispatch@,
   // office@) — handy for matching staff to emails during onboarding.
   contactEmails: string[];
+  // First names of staff that CUSTOMERS mention in testimonials / reviews
+  // quoted on the site ("Mike was on time and explained everything"). Not
+  // roster-grade — just prompts for the concierge ("your customers mention
+  // a Mike and a Sarah — are they on the team?").
+  mentionedStaff: string[];
+  // Google Business Profile match (item F.2) — only when GOOGLE_MAPS_API_KEY
+  // is configured. The review-request feature wants googleReviewUrl; the
+  // rest is context for the concierge ("4.8 stars across 212 reviews").
+  googleReviewUrl: string | null;
+  googleReviews: { placeId: string; rating: number | null; count: number | null; mapsUri: string | null } | null;
+  // ── Raw crawl (item E) ──────────────────────────────────────────────────
+  // Everything the scout read, so it can be persisted (site_crawls) and
+  // re-used after signup instead of re-fetching. Homepage first.
+  pages: CrawledPage[];
+  structured: StructuredHints | null;
+  // ~3k-char plain-text digest of the most useful services/about copy —
+  // handed to every downstream AI writer as the PRIMARY source of truth
+  // about what this business does and how it talks.
+  excerpts: string;
   warnings: string[];
+}
+
+export interface CrawledPage {
+  url: string;
+  title: string;
+  /** Visible text, markup stripped, capped at PAGE_STORE_CHARS. */
+  text: string;
 }
 
 export interface ScoutedTeamMember {
@@ -236,6 +263,10 @@ function textSample(html: string): string {
 
 const MAX_SUBPAGES = 5;
 const SUBPAGE_TEXT_CHARS = 5_000;
+/** Per-page cap for what we persist in site_crawls (the model sees less). */
+const PAGE_STORE_CHARS = 6_000;
+/** Target size of the `excerpts` digest handed to downstream writers. */
+const EXCERPT_CHARS = 3_000;
 /** Hard wall-clock cap on the whole sub-page crawl (runs in parallel). */
 const CRAWL_BUDGET_MS = 22_000;
 
@@ -520,17 +551,120 @@ function hintsBlock(h: StructuredHints | null): string {
  * Fetch the chosen sub-pages in parallel under one wall-clock budget.
  * Failures are logged, never surfaced as warnings — these are bonus signal.
  */
-async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS): Promise<{ url: string; text: string; html: string }[]> {
+type FetchedPage = { url: string; title: string; text: string; html: string };
+
+async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS): Promise<FetchedPage[]> {
   if (!urls.length) return [];
   const budget = new Promise<null>((r) => setTimeout(() => r(null), budgetMs));
   const results = await Promise.all(
     urls.map((u) =>
       Promise.race([fetchHtml(u), budget]).then((r) =>
-        r ? { url: r.finalUrl, html: r.html, text: textSample(r.html).slice(0, SUBPAGE_TEXT_CHARS) } : null,
+        r ? { url: r.finalUrl, title: pageTitle(r.html), html: r.html, text: textSample(r.html).slice(0, SUBPAGE_TEXT_CHARS) } : null,
       ),
     ),
   );
-  return results.filter((r): r is { url: string; text: string; html: string } => Boolean(r && r.text.length > 200));
+  return results.filter((r): r is FetchedPage => Boolean(r && r.text.length > 200));
+}
+
+/** `<title>` of a page, entity-light, or "" when absent. */
+export function pageTitle(html: string): string {
+  const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  return (m?.[1] ?? "")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+}
+
+/** Which kind of page a URL path most likely is — used to rank excerpts. */
+function pageKind(url: string): "home" | "svc" | "about" | "area" | "team" | "contact" | "other" {
+  let p = "";
+  try {
+    p = new URL(url).pathname.toLowerCase().replace(/\/+$/, "");
+  } catch {
+    return "other";
+  }
+  if (!p || p === "/" || /^\/(index|home)(\.\w+)?$/.test(p)) return "home";
+  if (/area|serve|coverage|location|cities|where-we-work/.test(p)) return "area";
+  if (/team|staff|meet|people|crew|technicians|leadership/.test(p)) return "team";
+  if (/contact|get-in-touch|reach-us/.test(p)) return "contact";
+  if (/about|story|who-we-are|company/.test(p)) return "about";
+  if (/service|what-we-do|our-work|solutions|offerings|pricing|rates/.test(p)) return "svc";
+  return "other";
+}
+
+/**
+ * Build the ~3k-char digest downstream writers get. Services copy first
+ * (that's what forms/templates/catalog need), then the about/home story
+ * (tone, differentiators), then whatever else fits. Each page is labelled
+ * so the model knows which claims came from where.
+ */
+export function buildExcerpts(pages: CrawledPage[], max = EXCERPT_CHARS): string {
+  if (!pages.length) return "";
+  const rank: Record<ReturnType<typeof pageKind>, number> = { svc: 0, about: 1, home: 2, area: 3, team: 4, contact: 5, other: 6 };
+  const ordered = [...pages]
+    .filter((p) => p.text.trim().length > 80)
+    .sort((a, b) => rank[pageKind(a.url)] - rank[pageKind(b.url)])
+    .slice(0, 4);
+  if (!ordered.length) return "";
+  // services + about get a bigger share than the rest
+  const weights = ordered.map((p) => (["svc", "about"].includes(pageKind(p.url)) ? 2 : 1));
+  const totalW = weights.reduce((a, b) => a + b, 0);
+  const parts: string[] = [];
+  const boiler = sharedBoilerplate(pages.map((p) => p.text));
+  for (let i = 0; i < ordered.length; i++) {
+    const p = ordered[i]!;
+    const budget = Math.max(350, Math.floor((max * weights[i]!) / totalW) - 60);
+    let t = stripBoilerplate(p.text.replace(/\s+/g, " ").trim(), boiler);
+    if (t.length > budget) {
+      const cut = t.slice(0, budget);
+      t = `${cut.slice(0, Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(" "), budget - 80))}…`;
+    }
+    const label = p.title ? `${p.title} (${p.url})` : p.url;
+    parts.push(`[${label}]\n${t}`);
+  }
+  return parts.join("\n\n").slice(0, max + 400);
+}
+
+/**
+ * Nav menus, phone banners and footers repeat verbatim on every page, and on
+ * a service-heavy site they can eat the whole excerpt budget before a single
+ * sentence of real copy shows up. Any run of N consecutive words that appears
+ * on most pages is boilerplate; `stripBoilerplate` drops the words covered by
+ * those runs. Position-independent, so a page title in front of the menu
+ * doesn't defeat it.
+ */
+const SHINGLE = 6;
+function sharedBoilerplate(texts: string[]): Set<string> {
+  const docs = texts.map((t) => t.replace(/\s+/g, " ").trim().split(" ")).filter((w) => w.length > 40);
+  const out = new Set<string>();
+  if (docs.length < 2) return out;
+  const need = Math.max(2, Math.ceil(docs.length * 0.6));
+  const counts = new Map<string, number>();
+  for (const d of docs) {
+    const seen = new Set<string>();
+    for (let i = 0; i + SHINGLE <= d.length; i++) seen.add(d.slice(i, i + SHINGLE).join(" ").toLowerCase());
+    for (const k of seen) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  for (const [k, n] of counts) if (n >= need) out.add(k);
+  return out;
+}
+
+function stripBoilerplate(text: string, boiler: Set<string>): string {
+  if (!boiler.size) return text;
+  const words = text.split(" ");
+  const drop: boolean[] = Array.from({ length: words.length }, () => false);
+  for (let i = 0; i + SHINGLE <= words.length; i++) {
+    if (boiler.has(words.slice(i, i + SHINGLE).join(" ").toLowerCase())) {
+      for (let j = i; j < i + SHINGLE; j++) drop[j] = true;
+    }
+  }
+  const kept = words.filter((_, i) => !drop[i]);
+  const out = kept.join(" ").trim();
+  return out.length > 80 ? out : text;
 }
 
 /** Download a remote image and host it on our storage. Returns hosted URL. */
@@ -633,6 +767,12 @@ const TextSchema = z.object({
     .array(z.string())
     .describe("Every other email address printed on the pages (dispatch@, office@, a person's address), excluding the main one. Empty if none.")
     .default([]),
+  mentionedStaff: z
+    .array(z.string())
+    .describe(
+      "First names (or 'First L.') of STAFF that customers mention inside testimonials / reviews quoted on the pages — e.g. 'Mike showed up on time', 'Sarah in the office was great'. These are the people doing the work, NOT the reviewers themselves. Only names that clearly refer to an employee. Skip anyone already listed in teamMembers. Empty if none.",
+    )
+    .default([]),
   teamMembers: z
     .array(
       z.object({
@@ -713,6 +853,12 @@ export async function scoutBrand(
     suggestedIndustryRationale: null,
     teamMembers: [],
     contactEmails: [],
+    mentionedStaff: [],
+    googleReviewUrl: null,
+    googleReviews: null,
+    pages: [],
+    structured: null,
+    excerpts: "",
     warnings,
   };
   if (!website) {
@@ -791,12 +937,19 @@ export async function scoutBrand(
     .map((sp) => `\n\nSUB-PAGE (${sp.url}):\n${sp.text}`)
     .join("");
 
+  // Item E: what we persist. Homepage first, then sub-pages in crawl order.
+  const pages: CrawledPage[] = [
+    { url: finalUrl, title: pageTitle(html), text: textSample(html).slice(0, PAGE_STORE_CHARS) },
+    ...subpages.map((sp) => ({ url: sp.url, title: sp.title, text: textSample(sp.html).slice(0, PAGE_STORE_CHARS) })),
+  ].slice(0, 12);
+  const excerpts = buildExcerpts(pages);
+
   const [shot, textResult] = await Promise.allSettled([
     shotPromise,
     generateObject({
       model: gateway(MODELS.text),
       schema: TextSchema,
-      prompt: `You are analysing a field-service / trade / delivery business's website to onboard them into a dispatch & customer-management platform. From the page text below, extract the brand details, classify their Primary Industry (ICP), AND list the named staff (teamMembers) so we can pre-fill their team roster. Be accurate; use null when unknown. Only list people who clearly work at this business — never testimonial authors. Homepage URL: ${finalUrl}
+      prompt: `You are analysing a field-service / trade / delivery business's website to onboard them into a dispatch & customer-management platform. From the page text below, extract the brand details, classify their Primary Industry (ICP), AND list the named staff (teamMembers) so we can pre-fill their team roster. Be accurate; use null when unknown. Only list people who clearly work at this business as teamMembers — never testimonial authors. Separately, under mentionedStaff, list the first names of EMPLOYEES that customers praise inside quoted testimonials/reviews (the worker being described, not the reviewer). Homepage URL: ${finalUrl}
 
 ALLOWED INDUSTRY CATEGORIES (pick the single best fit, or "other" if genuinely none fit):
 ${INDUSTRY_LABELS.map((i) => `- ${i.id}: ${i.label}`).join("\n")}
@@ -883,6 +1036,23 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
   // own JSON-LD states outright.
   const services = text?.services?.length ? text.services : structured?.services.slice(0, 8) ?? [];
 
+  // Item F.2 — Google reviews are where crews actually get named. Optional
+  // (needs GOOGLE_MAPS_API_KEY), best-effort, one request, ~1s.
+  const bizName = structured?.name || text?.tagline?.split(/[|–—-]/)[0]?.trim() || hostOf(finalUrl);
+  const reviews = googlePlacesAvailable()
+    ? await fetchGoogleReviewMentions({
+        name: bizName,
+        address: text?.address ?? structured?.address ?? null,
+        area: text?.serviceArea ?? structured?.areaServed ?? null,
+        website: finalUrl,
+      }).catch(() => null)
+    : null;
+  const teamForMentions = text?.teamMembers ?? [];
+  const mentionedStaff = cleanMentioned(
+    [...(text?.mentionedStaff ?? []), ...(reviews?.mentionedStaff ?? [])],
+    teamForMentions,
+  );
+
   return {
     website: finalUrl,
     primaryColor: normHex(vision?.primaryColor),
@@ -912,8 +1082,42 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     suggestedIndustryRationale: text?.suggestedIndustryRationale ?? null,
     teamMembers: cleanTeam(text?.teamMembers ?? [], text?.email ?? structured?.email ?? null),
     contactEmails: cleanEmails(text?.contactEmails ?? [], text?.email ?? structured?.email ?? null),
+    mentionedStaff,
+    googleReviewUrl: reviews?.writeReviewUrl ?? null,
+    googleReviews: reviews
+      ? { placeId: reviews.placeId, rating: reviews.rating, count: reviews.userRatingCount, mapsUri: reviews.googleMapsUri }
+      : null,
+    pages,
+    structured,
+    excerpts,
     warnings,
   };
+}
+
+function hostOf(u: string): string {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return u;
+  }
+}
+
+/** Tidy the testimonial-name list: real-looking first names, deduped, not already on the roster. */
+function cleanMentioned(list: string[], team: { name: string }[]): string[] {
+  const rosterFirst = new Set(team.map((m) => (m.name || "").trim().split(/\s+/)[0]?.toLowerCase() ?? ""));
+  const out: string[] = [];
+  for (const raw of list) {
+    const n = (raw || "").replace(/[^a-z' .-]/gi, "").replace(/\s+/g, " ").trim();
+    if (n.length < 2 || n.length > 30) continue;
+    if (!/^[A-Z][a-z]/.test(n)) continue; // must look like a name
+    if (/^(our|the|team|staff|crew|guys|tech|technician|owner|office)\b/i.test(n)) continue;
+    const first = n.split(" ")[0]!.toLowerCase();
+    if (rosterFirst.has(first)) continue;
+    if (out.some((o) => o.toLowerCase() === n.toLowerCase())) continue;
+    out.push(n);
+    if (out.length >= 12) break;
+  }
+  return out;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
