@@ -164,6 +164,7 @@ const TOOLS: ToolDef[] = [
         price: num(a.price, 0)!,
         status: a.riderId ? "assigned" : "pending",
       });
+      if (!wo) throw new Error("failed to create work order");
       await audit({
         companyId: t.companyId,
         actorName: "API/MCP",
