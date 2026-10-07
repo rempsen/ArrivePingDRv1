@@ -19,6 +19,7 @@ import { OpsBento } from "../site/live/OpsBento";
 import { DispatchStory } from "../site/live/DispatchStory";
 import { SetupAgent } from "../site/live/SetupAgent";
 import { FirstHour } from "../site/live/FirstHour";
+import { usePageMeta } from "../site/seo/head";
 import "../site/site.css";
 import "../site/live/live.css";
 import "../site/scenes/scenes.css";
@@ -61,19 +62,15 @@ function Page() {
   }, []);
 
   // The marketing page shares the dark ink canvas with the product console (no flash between them).
-  // It is also the only public, indexable route, so it declares its canonical URL.
   useEffect(() => {
     const prev = document.documentElement.style.backgroundColor;
     document.documentElement.style.backgroundColor = "#070b12";
-    const canonical = document.createElement("link");
-    canonical.rel = "canonical";
-    canonical.href = "https://arriveping.com/";
-    document.head.appendChild(canonical);
     return () => {
       document.documentElement.style.backgroundColor = prev;
-      canonical.remove();
     };
   }, []);
+  // Title, description, canonical, Open Graph and JSON-LD (also prerendered into the HTML).
+  usePageMeta("/");
 
   return (
     <div className="site" ref={rootRef} data-reduced={reduced ? "true" : undefined}>

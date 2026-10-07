@@ -1696,8 +1696,16 @@
 }
 .site .footer__grid {
   display: grid;
-  grid-template-columns: 5fr 2fr 2fr 2fr;
+  grid-template-columns: 4fr 3fr 2fr 2fr 2fr;
   gap: var(--gutter);
+}
+@media (max-width: 1023px) and (min-width: 768px) {
+  .site .footer__grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .site .footer__brand {
+    grid-column: 1 / -1;
+  }
 }
 .site .footer__logo {
   display: flex;

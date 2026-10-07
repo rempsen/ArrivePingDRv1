@@ -4,8 +4,8 @@ import { PlaybackProvider, usePlayback } from "../motion/playback";
 import { useHeaderOffset } from "../motion/use-scrollspy";
 import { SiteHeader } from "./SiteHeader";
 import { SiteFooter } from "./SiteFooter";
-import { brand } from "../config";
 import type { LegalBlock, LegalDoc } from "../legal/types";
+import { usePageMeta } from "../seo/head";
 import "../site.css";
 
 /**
@@ -26,6 +26,7 @@ function Body({ doc }: { doc: LegalDoc }) {
   const { isAuthed, role } = useAuth();
   const { reduced } = usePlayback();
   useHeaderOffset(headerRef, rootRef);
+  usePageMeta(doc.path);
 
   const dashboardHref = isAuthed
     ? role === "admin"
@@ -37,13 +38,7 @@ function Body({ doc }: { doc: LegalDoc }) {
 
   useEffect(() => {
     const prevBg = document.documentElement.style.backgroundColor;
-    const prevTitle = document.title;
     document.documentElement.style.backgroundColor = "#070b12";
-    document.title = `${doc.title} · ${brand.product}`;
-    const canonical = document.createElement("link");
-    canonical.rel = "canonical";
-    canonical.href = `https://arriveping.com${doc.path}`;
-    document.head.appendChild(canonical);
     // Deep links (`/privacy#location-data`) land below the sticky header.
     const id = window.location.hash.replace(/^#/, "");
     if (id) {
@@ -53,8 +48,6 @@ function Body({ doc }: { doc: LegalDoc }) {
     }
     return () => {
       document.documentElement.style.backgroundColor = prevBg;
-      document.title = prevTitle;
-      canonical.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.path]);

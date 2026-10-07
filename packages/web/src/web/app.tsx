@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { Route, Switch } from "wouter";
 import Index from "./pages/index";
 import AuthPage from "./pages/auth";
+import { makeLanding } from "./pages/marketing/landing";
+import { landingPages } from "./site/content/landing";
 import { lazyRoute } from "./lib/lazy-route";
 import { Provider } from "./components/provider";
 import { ProtectedRoute } from "./components/protected-route";
@@ -32,6 +34,9 @@ const TermsPage = lazyRoute(() => import("./pages/terms"));
 const CustomerApp = lazyRoute(() => import("./pages/customer"));
 const RiderApp = lazyRoute(() => import("./pages/rider"));
 const AdminApp = lazyRoute(() => import("./pages/admin"));
+
+// One stable component per public landing page (created once, not per render).
+const landingRoutes = Object.fromEntries(landingPages.map((p) => [p.path, makeLanding(p.path)]));
 
 function NotFound() {
   return (
@@ -106,6 +111,10 @@ function App() {
         <RouteErrorBoundary name="public">
         <Switch>
           <Route path="/" component={Index} />
+          {/* Public solution, pricing, about and comparison pages — prerendered to static HTML at build time. */}
+          {landingPages.map((p) => (
+            <Route key={p.path} path={p.path} component={landingRoutes[p.path]} />
+          ))}
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/terms" component={TermsPage} />
           <Route path="/sign-in">{() => <AuthPage mode="sign-in" />}</Route>

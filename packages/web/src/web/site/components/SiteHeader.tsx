@@ -13,11 +13,15 @@ export function useAnchorNav() {
   const { reduced } = usePlayback();
   return useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-      if (!href.startsWith("#")) return;
-      const id = href.slice(1);
+      // Section links are written as "/#pricing" so they also work without
+      // JavaScript (and for crawlers) from any page. "#pricing" still works.
+      const hash = href.startsWith("/#") ? href.slice(1) : href;
+      if (!hash.startsWith("#")) return;
+      const id = hash.slice(1);
       if (!document.getElementById(id)) {
-        // Section anchors only exist on the landing page; from /privacy etc. go home first.
-        if (window.location.pathname !== "/") {
+        // Section anchors only exist on the landing page; from other pages the
+        // browser follows "/#id" on its own. Bare "#id" links need a nudge home.
+        if (window.location.pathname !== "/" && href.startsWith("#")) {
           e.preventDefault();
           window.location.assign(`/${href}`);
         }
@@ -25,7 +29,7 @@ export function useAnchorNav() {
       }
       e.preventDefault();
       scrollToAnchor(id, reduced);
-      history.replaceState(null, "", href);
+      history.replaceState(null, "", hash);
     },
     [reduced],
   );

@@ -22,12 +22,12 @@ export const brand = {
   urls: {
     signIn: "/sign-in",
     getStarted: "/get-started",
-    demo: "#book-a-demo",
-    product: "#product",
-    how: "#how-it-works",
-    who: "#who-its-for",
-    pricing: "#pricing",
-    faqs: "#faqs",
+    demo: "/#book-a-demo",
+    product: "/#product",
+    how: "/#how-it-works",
+    who: "/#who-its-for",
+    pricing: "/#pricing",
+    faqs: "/#faqs",
     privacy: "/privacy",
     terms: "/terms",
   },
@@ -90,7 +90,7 @@ export const footageLabel = "ArrivePing app"; // screen-reader text; the visible
 /* ------------------------------------------------------------------ */
 
 export const hero = {
-  eyebrow: brand.launch,
+  eyebrow: `Field service software · ${brand.launch}`,
   title: "The right tech, at the door, right when you said.",
   body:
     "ArrivePing shows your whole team live, sends each job to the closest qualified technician, and keeps your customer updated with a live ETA. No more calls asking where the technician is.",
@@ -109,20 +109,21 @@ export const hero = {
 };
 
 /** C · hero activity feed — one illustrative job (sample company and people). */
-export const heroFeed = [
-  { icon: "live", title: "Everyone on the map", body: "Technicians, drivers and equipment, live", when: "9:08" },
-  { icon: "order", title: "Work order created", body: "No heat · furnace · needs a gas fitter", when: "9:10" },
-  { icon: "assign", title: "Auto-assigned to Marcus", body: "Closest qualified tech who's free · 0.9 km", when: "9:10" },
-  { icon: "phone", title: "Marcus accepted", body: "Address, gate code and notes on his phone", when: "9:11" },
-  { icon: "customer", title: "Dana is tracking Marcus", body: "Live ETA, with text or call in one tap", eta: "3 min", done: true },
-] as const satisfies readonly {
+export type HeroFeedItem = {
   icon: "live" | "order" | "assign" | "phone" | "customer";
   title: string;
   body: string;
   when?: string;
   eta?: string;
   done?: boolean;
-}[];
+};
+export const heroFeed: readonly HeroFeedItem[] = [
+  { icon: "live", title: "Everyone on the map", body: "Technicians, drivers and equipment, live", when: "9:08" },
+  { icon: "order", title: "Work order created", body: "No heat · furnace · needs a gas fitter", when: "9:10" },
+  { icon: "assign", title: "Auto-assigned to Marcus", body: "Closest qualified tech who's free · 0.9 km", when: "9:10" },
+  { icon: "phone", title: "Marcus accepted", body: "Address, gate code and notes on his phone", when: "9:11" },
+  { icon: "customer", title: "Dana is tracking Marcus", body: "Live ETA, with text or call in one tap", eta: "3 min", done: true },
+];
 
 /** B · live ops bento — the five capabilities at a glance. */
 export const bento = {
@@ -474,20 +475,33 @@ export const closing = {
 
 export const footer = {
   description:
-    "ArrivePing by NVC360 — appointment scheduling, technician arrival tracking and customer updates for field service teams.",
+    "ArrivePing by NVC360 — field service software for dispatch, live technician tracking and customer ETA updates. Made in Winnipeg, Canada.",
   columns: [
     {
       heading: "Product",
       links: [
-        { label: "Product", href: brand.urls.product },
         { label: "How it works", href: brand.urls.how },
-        { label: "Pricing", href: brand.urls.pricing },
-        { label: "FAQs", href: brand.urls.faqs },
+        { label: "Pricing", href: "/pricing" },
+        { label: "Field service software", href: "/field-service-software" },
+        { label: "Dispatch software", href: "/dispatch-software" },
+        { label: "Fleet tracking", href: "/fleet-tracking" },
+        { label: "Customer ETA texts", href: "/customer-notifications" },
+        { label: "Construction & trades", href: "/construction-trades" },
+      ],
+    },
+    {
+      heading: "Compare",
+      links: [
+        { label: "All comparisons", href: "/compare" },
+        { label: "vs Jobber", href: "/compare/jobber" },
+        { label: "vs Housecall Pro", href: "/compare/housecall-pro" },
+        { label: "vs ServiceTitan", href: "/compare/servicetitan" },
       ],
     },
     {
       heading: "Company",
       links: [
+        { label: "About", href: "/about" },
         { label: "Book a demo", href: brand.urls.demo },
         { label: "Sign in", href: brand.urls.signIn },
         { label: brand.contactEmail, href: `mailto:${brand.contactEmail}` },

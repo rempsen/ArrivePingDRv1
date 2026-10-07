@@ -158,7 +158,7 @@ export function Pricing() {
   const [drivers, setDrivers] = useState(10);
   const est = monthlyPrice(drivers);
   const nav = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href.startsWith("#")) go(e, href);
+    if (href.startsWith("#") || href.startsWith("/#")) go(e, href);
   };
   return (
     <section id="pricing" className="section section--divided anchor">
