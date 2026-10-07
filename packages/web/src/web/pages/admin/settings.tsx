@@ -667,7 +667,7 @@ function LogoField({
             {value && (
               <button type="button" onClick={() => onChange("")} className="text-xs font-semibold text-slate-400 hover:text-red-400">Remove</button>
             )}
-            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
+            <input ref={fileRef} type="file" aria-label="Choose a logo image" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} />
           </div>
           <input aria-label="Logo URL" className={`${inputCls} text-xs`} value={value} onChange={(e) => onChange(e.target.value)} placeholder="…or paste a direct image URL (https://…/logo.png)" />
           <p className="text-[11px] text-slate-500">PNG, SVG, JPG or WebP up to 4MB. Shown large at the top of the sidebar with your company name underneath, for everyone on your team. A wide logo with a transparent or white background looks best.</p>

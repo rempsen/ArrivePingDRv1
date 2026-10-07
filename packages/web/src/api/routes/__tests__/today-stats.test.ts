@@ -122,18 +122,20 @@ beforeAll(async () => {
     for (const [id, h, m, status, price] of jobs) {
       await sql.execute({
         sql: `INSERT OR IGNORE INTO bookings
-                (id, company_id, customer_id, service_id, title, status, scheduled_at, address, rider_id, price, public_token)
-              VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                (id, company_id, customer_id, service_id, title, status, scheduled_at, address, rider_id, price, tech_pay, public_token)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        // Tech pay is half the customer price here, so the earnings assertion
+        // below can tell "tech pay" apart from "customer price".
         args: [id, co, "tds-cust", `tds-svc-${co}`, "Job", status,
-          localAt(0, h, m).getTime(), "1 Test St", rider, price, `tok-${id}`],
+          localAt(0, h, m).getTime(), "1 Test St", rider, price, price / 2, `tok-${id}`],
       });
     }
     await sql.execute({
       sql: `INSERT OR IGNORE INTO bookings
-              (id, company_id, customer_id, service_id, title, status, scheduled_at, address, rider_id, price, public_token)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+              (id, company_id, customer_id, service_id, title, status, scheduled_at, address, rider_id, price, tech_pay, public_token)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [`tds-job-tomorrow-${co}`, co, "tds-cust", `tds-svc-${co}`, "Job", "completed",
-        localAt(1, 10, 0).getTime(), "1 Test St", rider, 500, `tok-tomorrow-${co}`],
+        localAt(1, 10, 0).getTime(), "1 Test St", rider, 500, 250, `tok-tomorrow-${co}`],
     });
   }
   clearCompanyTimeZoneCache();
@@ -159,7 +161,7 @@ describe("GET /bookings/today-stats", () => {
     const j = (await (await stats(WPG_CO)).json()) as any;
     expect(j.totalToday).toBe(3); // 08:00, 14:00, 23:30 local — not tomorrow 10:00
     expect(j.jobsDone).toBe(2);
-    expect(j.earnings).toBe(200); // 120 + 80; tomorrow's 500 excluded
+    expect(j.earnings).toBe(100); // tech pay 60 + 40 (not the 200 customer price); tomorrow's 250 excluded
     expect(j.activeJobs).toBe(1); // the 23:30 assigned job
   });
 

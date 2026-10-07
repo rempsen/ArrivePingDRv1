@@ -1078,7 +1078,7 @@ export default function SchedulerPage() {
                             const startMinsOfDay = st.getHours() * 60 + st.getMinutes();
                             const clampedStart = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, startMinsOfDay));
                             const topPx = ((clampedStart - DAY_START_MIN) / 60) * HOUR_PX;
-                            const cols = group[0].cols;
+                            const cols = group[0]!.cols;
                             const widthPct = 100 / cols;
                             const leftPct = (cols - 1) * widthPct;
                             // span the longest hidden job so the lane still

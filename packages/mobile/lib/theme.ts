@@ -78,7 +78,7 @@ export function money(n: number) {
       maximumFractionDigits: 2,
     });
   } catch {
-    const [whole, frac] = Math.abs(v).toFixed(2).split(".");
+    const [whole = "0", frac = "00"] = Math.abs(v).toFixed(2).split(".");
     return `${v < 0 ? "-" : ""}$${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${frac}`;
   }
 }

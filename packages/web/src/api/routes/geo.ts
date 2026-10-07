@@ -127,7 +127,7 @@ export async function computeRoute(
           for (const st of steps) {
             const seg = decodePolyline(st.polyline.points);
             // consecutive steps share their boundary point — drop the duplicate
-            if (path.length && seg.length && samePoint(path[path.length - 1], seg[0])) seg.shift();
+            if (path.length && seg.length && samePoint(path[path.length - 1]!, seg[0]!)) seg.shift();
             path.push(...seg);
           }
         }
