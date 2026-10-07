@@ -151,7 +151,7 @@ export function Audiences() {
 }
 
 /* ---------------- Pricing ---------------- */
-const PRESETS = [1, 5, 10, 20, 30, 31, 50];
+const PRESETS = [1, 5, 10, 11, 30, 31, 50, 100];
 
 export function Pricing() {
   const go = useAnchorNav();
@@ -209,26 +209,35 @@ export function Pricing() {
           })}
         </div>
 
+        <dl className="ladder" data-reveal="" aria-label="Price per driver">
+          {pricing.ladder.map((r) => (
+            <div key={r.label} className="ladder__step">
+              <dt>{r.label}</dt>
+              <dd>{r.price}</dd>
+            </div>
+          ))}
+        </dl>
+
         <div className="estimator" data-reveal="">
           <div className="estimator__input">
             <label htmlFor="estimator-drivers" className="estimator__label">
-              How many drivers or vehicles? <span className="estimator__n tnum">{drivers}</span>
+              How many drivers? <span className="estimator__n tnum">{drivers}</span>
             </label>
             <input
               id="estimator-drivers"
               type="range"
               min={1}
-              max={60}
+              max={100}
               step={1}
               value={drivers}
               onChange={(e) => setDrivers(Number(e.target.value))}
               className="estimator__range"
-              aria-label="Number of drivers or vehicles"
+              aria-label="Number of drivers"
             />
             <div className="estimator__presets">
               {PRESETS.map((v) => (
                 <button key={v} type="button" className="estimator__chip" aria-pressed={drivers === v} onClick={() => setDrivers(v)}>
-                  {v === 1 ? "1 driver" : `${v} ${v > 30 ? "vehicles" : "drivers"}`}
+                  {v === 1 ? "1 driver" : `${v} drivers`}
                 </button>
               ))}
             </div>

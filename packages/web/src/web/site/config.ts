@@ -285,11 +285,33 @@ export const story = {
   },
 } as const;
 
+/**
+ * Graduated pricing (USD, billed monthly). Each rate applies only to the
+ * drivers inside its band, like tax brackets, so the bill rises with every
+ * driver added and never drops when a team crosses a tier.
+ *   driver 1        → Starter, $49
+ *   drivers 2–10    → $30 each
+ *   drivers 11–30   → $27 each
+ *   drivers 31+     → $25 each (Fleet: custom integrations + live onboarding)
+ */
+export const pricingBands = [
+  { from: 2, to: 10, rate: 30 },
+  { from: 11, to: 30, rate: 27 },
+  { from: 31, to: Infinity, rate: 25 },
+] as const;
+export const STARTER_PRICE = 49;
+
 export const pricing = {
   title: "Start for $49.",
-  titleMuted: "Grow one driver at a time.",
-  body: "Every plan includes the dispatch board, the technician app and live customer arrival pages. All prices in US dollars, billed monthly.",
+  titleMuted: "Each driver costs less as you grow.",
+  body: "Every plan includes the dispatch board, the technician app and live customer arrival pages. Each rate applies only to the drivers in its band, so your bill never jumps when you grow into the next tier.",
   note: "All prices in US dollars, billed monthly.",
+  ladder: [
+    { label: "Driver 1", price: "Included in Starter" },
+    { label: "Drivers 2–10", price: "$30 each" },
+    { label: "Drivers 11–30", price: "$27 each" },
+    { label: "Drivers 31+", price: "$25 each" },
+  ],
   tiers: [
     {
       name: "Starter",
@@ -300,33 +322,41 @@ export const pricing = {
       cta: { label: "Get started", href: brand.urls.getStarted },
     },
     {
-      name: "More drivers",
-      range: "Add 1–29 drivers to Starter",
+      name: "Growing team",
+      range: "2–30 drivers",
       price: "$30",
-      unit: "per added driver / month, plus Starter",
-      features: ["Everything in Starter", "Up to 30 drivers in total", "Add or remove drivers month to month"],
+      unit: "per added driver / month, dropping to $27 from driver 11",
+      features: ["Everything in Starter", "Drivers 2–10 at $30, drivers 11–30 at $27", "Add or remove drivers month to month"],
       cta: { label: "Book a demo", href: brand.urls.demo },
       featured: true,
     },
     {
       name: "Fleet",
-      range: "More than 30 vehicles",
+      range: "31+ drivers",
       price: "$25",
-      unit: "per vehicle / month",
-      features: ["Everything in Starter", "Custom integrations with your systems", "Live onboarding with our team"],
+      unit: "per driver / month from driver 31",
+      features: ["Everything in Growing team", "Custom integrations with your systems", "Live onboarding with our team"],
       cta: { label: "Talk to sales", href: brand.urls.demo },
     },
   ],
 } as const;
 
-/** Monthly price in USD for a team of `n` drivers / vehicles (see pricing tiers). */
+const usd = (v: number) => `$${v.toLocaleString("en-US")}`;
+
+/** Monthly price in USD for a team of `n` drivers, using the graduated bands above. */
 export function monthlyPrice(n: number): { plan: string; total: number; breakdown: string } {
-  if (n <= 1) return { plan: "Starter", total: 49, breakdown: "Starter, 1 driver" };
-  if (n <= 30) {
-    const added = n - 1;
-    return { plan: "More drivers", total: 49 + 30 * added, breakdown: `Starter $49 + ${added} added driver${added === 1 ? "" : "s"} × $30` };
+  const drivers = Math.max(1, Math.floor(n));
+  let total = STARTER_PRICE;
+  const parts = [`Starter ${usd(STARTER_PRICE)}`];
+  for (const band of pricingBands) {
+    const count = Math.max(0, Math.min(drivers, band.to) - band.from + 1);
+    if (count > 0) {
+      total += count * band.rate;
+      parts.push(`${count} × ${usd(band.rate)}`);
+    }
   }
-  return { plan: "Fleet", total: 25 * n, breakdown: `${n} vehicles × $25` };
+  const plan = drivers === 1 ? "Starter" : drivers <= 30 ? "Growing team" : "Fleet";
+  return { plan, total, breakdown: drivers === 1 ? "Starter, 1 driver" : parts.join(" + ") };
 }
 
 export const faqs = [
@@ -352,7 +382,7 @@ export const faqs = [
   },
   {
     q: "How is it priced?",
-    a: "In US dollars, billed monthly. Starter is $49 a month for one driver, with your workflow set up and catalog pre-loaded so you can operate the same day. Add 1–29 more drivers at $30 each per month. Fleets of more than 30 vehicles pay $25 per vehicle per month, with custom integrations and live onboarding.",
+    a: "In US dollars, billed monthly, and graduated like tax brackets: Starter is $49 a month for your first driver, with your workflow set up and catalog pre-loaded so you can operate the same day. Drivers 2–10 are $30 each, drivers 11–30 are $27 each, and every driver from 31 on is $25. Each rate applies only to the drivers in its band, so adding a driver never lowers or jumps your bill. Teams of 31 or more also get custom integrations and live onboarding.",
   },
 ] as const;
 
