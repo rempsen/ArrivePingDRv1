@@ -333,6 +333,7 @@ export const superadminRoutes = new Hono<AppEnv>()
       ["jobNoun", "jobNoun"],
       ["jobNounPlural", "jobNounPlural"],
       ["tagline", "tagline"],
+      ["description", "description"],
       ["hours", "hours"],
       ["address", "address"],
       ["email", "email"],

@@ -42,6 +42,7 @@ import {
   loadIcpKnowledge,
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
+import { scoutStarterCatalog, scoutStarterOptionCatalog } from "../../services/catalog-scout";
 import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qualifying-tuning";
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
 import { inviteStaffMember, kindToRole, type StaffInviteResult } from "../lib/staff-invite";
@@ -233,6 +234,41 @@ async function buildOnboardingSnapshot(cid: string) {
   const officeCount = invites.filter((i) => i.role && i.role !== "rider").length;
   const rosterCount = riders.length + officeCount;
 
+  // Everything else the brand scout read off their website. Until now only
+  // the tagline/service area reached the concierge; the description,
+  // services, hours, address and socials were stored and then ignored, so
+  // the chat kept asking for things the site had already answered.
+  const parseJson = (raw: string): unknown => {
+    try {
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+  const rawServices = parseJson(settings.services);
+  const scrapedServices: string[] = Array.isArray(rawServices)
+    ? rawServices.map((x) => (typeof x === "string" ? x : (x as any)?.name ? String((x as any).name) : "")).filter(Boolean).slice(0, 20)
+    : typeof settings.services === "string" && settings.services.trim() && !settings.services.trim().startsWith("[")
+      ? settings.services.split(/[\n,;|]/).map((x) => x.trim()).filter(Boolean).slice(0, 20)
+      : [];
+  const rawSocials = parseJson(settings.socials);
+  const socials: string[] =
+    rawSocials && typeof rawSocials === "object" && !Array.isArray(rawSocials)
+      ? Object.entries(rawSocials as Record<string, unknown>)
+          .filter(([, v]) => typeof v === "string" && v)
+          .map(([k]) => k)
+      : [];
+  const website = {
+    url: settings.website || "",
+    description: settings.description || "",
+    services: scrapedServices,
+    hours: settings.hours || "",
+    address: settings.address || "",
+    phone: settings.phone || "",
+    email: settings.email || "",
+    socials,
+  };
+
   return {
     company,
     settings,
@@ -250,6 +286,7 @@ async function buildOnboardingSnapshot(cid: string) {
     },
     knowledge,
     qualifying,
+    website,
     roster: {
       scouted: scoutedTeam,
       fieldStaff: riders.length,
@@ -487,10 +524,18 @@ ${fitBlock}
 Rules:
 - One question at a time. Never dump a checklist of questions on them.
 - Open with ONE short line that shows you already did your homework (name
-  the industry or tagline you detected, not a generic "Welcome!"), then go
-  straight into whatever's missing in Part 1, then Part 2.
-- If something in CURRENT STATE below already looks right/already answered,
-  don't ask about it again — just move on.
+  the industry, tagline, or a specific service you saw on their site — not a
+  generic "Welcome!"), then go straight into whatever's missing in Part 1,
+  then Part 2.
+- If something in CURRENT STATE or WHAT WE LEARNED FROM THEIR WEBSITE below
+  already looks right/already answered, don't ask about it again — just
+  move on. Confirm, don't re-ask: "Still 24/7 emergency service?" beats
+  "What are your hours?" when the site already said 24/7.
+- Use the website facts to make the ICP-specific questions concrete: refer
+  to THEIR named services ("your sewer camera inspections", "the heat-pump
+  installs on your site"), not the generic trade. If a service on their
+  site is missing from the seeded catalog, add it with add_catalog_item
+  without asking permission — it's their own service list.
 - Call update_brand_profile / set_industry / add_catalog_item /
   save_qualifying_baseline / save_icp_qualifying_answer / add_team_members
   AS SOON AS the user
@@ -529,6 +574,16 @@ CURRENT STATE:
 - ICP-specific qualifying questions answered so far: ${icpAnswered}${icpAnswered ? "\n" + q.icpAnswers!.map((a) => `  - Q: ${a.question}\n    A: ${a.answer}`).join("\n") : ""}
 - Team roster so far: ${snap.roster.total ? `${snap.roster.fieldStaff} field staff + ${snap.roster.officeStaff} office staff already set up${q.rosterSetupAt ? " (team setup done — don't offer it again)" : ""}` : "nobody set up yet"}
 
+WHAT WE LEARNED FROM THEIR WEBSITE${snap.website.url ? ` (${snap.website.url})` : ""} — already saved to their
+profile, do NOT ask for any of it again; use it to sound informed and to
+anchor questions:
+- About the business: ${snap.website.description || "(no description captured)"}
+- Services they advertise: ${snap.website.services.length ? snap.website.services.join("; ") : "(none captured — worth asking what their top 3-5 services are and adding them with add_catalog_item)"}
+- Hours: ${snap.website.hours || "(not found)"}
+- Address: ${snap.website.address || "(not found)"}
+- Contact: ${[snap.website.phone, snap.website.email].filter(Boolean).join(", ") || "(not found)"}
+- Social profiles found: ${snap.website.socials.length ? snap.website.socials.join(", ") : "(none)"}
+
 PEOPLE FOUND ON THEIR WEBSITE (from the Team/About/Contact pages — these are
 staff names the scrape found, NOT customers; offer to set them up in Part
 2b):
@@ -562,9 +617,10 @@ correction like that — it reads like you weren't listening.`;
       const tools = {
         update_brand_profile: tool({
           description:
-            "Update the tenant's brand profile — terminology, tagline, colors, hours, or service area. Only pass the fields the user actually gave you.",
+            "Update the tenant's brand profile — terminology, tagline, business description, colors, hours, or service area. Only pass the fields the user actually gave you.",
           inputSchema: z.object({
             tagline: z.string().max(300).optional(),
+            description: z.string().max(1_000).optional(),
             workerNoun: z.string().max(40).optional(),
             workerNounPlural: z.string().max(40).optional(),
             customerNoun: z.string().max(40).optional(),
@@ -611,8 +667,20 @@ correction like that — it reads like you weren't listening.`;
             let catalogSeeded = 0;
             let optionsSeeded = 0;
             if (preset?.id && snap.counts.catalogItems === 0) {
-              catalogSeeded = await seedCatalogForCompany(cid, preset.id).catch(() => 0);
-              optionsSeeded = await seedOptionCatalogForCompany(cid, preset.id).catch(() => 0);
+              // Same tailoring as signup: the preset edited to match what
+              // their website says they sell, falling back to the preset.
+              const scoutInput = {
+                name: snap.company.name,
+                industry: preset.id,
+                services: snap.website.services,
+                description: snap.website.description || null,
+                website: snap.website.url || null,
+                knowledge: await loadIcpKnowledge(preset.id).catch(() => null),
+              };
+              const tailoredCatalog = await scoutStarterCatalog(scoutInput).catch(() => undefined);
+              catalogSeeded = await seedCatalogForCompany(cid, preset.id, tailoredCatalog).catch(() => 0);
+              const tailoredOptions = await scoutStarterOptionCatalog(scoutInput).catch(() => undefined);
+              optionsSeeded = await seedOptionCatalogForCompany(cid, preset.id, tailoredOptions).catch(() => 0);
             }
             return { ok: true, industry: industryLabel(resolved) || resolved, catalogSeeded, optionsSeeded };
           },

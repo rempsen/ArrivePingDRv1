@@ -71,6 +71,13 @@
       "when": 1791344437056,
       "tag": "0009_legal_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791397725755,
+      "tag": "0010_scrape_description",
+      "breakpoints": true
     }
   ]
 }

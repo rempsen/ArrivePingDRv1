@@ -874,6 +874,17 @@ function BrandReview({
         />
       </Field>
 
+      <Field label="About the business">
+        <textarea
+          aria-label="Business description"
+          className={`${inputCls} min-h-[72px] resize-y`}
+          value={brand.description ?? ""}
+          onChange={(e) => setField("description", e.target.value || null)}
+          placeholder="What they do, who they serve, what they're known for — feeds every AI-written piece of their setup"
+          maxLength={1000}
+        />
+      </Field>
+
       <div className="grid grid-cols-2 gap-3">
         <Field label="Address">
           <AddressAutocomplete

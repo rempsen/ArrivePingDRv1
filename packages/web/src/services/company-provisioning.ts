@@ -45,8 +45,9 @@ import { scoutStarterServices } from "./service-scout";
 import { provisionNotificationBranding, seedNotificationRules } from "./dispatch";
 import { scoutNotificationCopy } from "./notification-copy-scout";
 import { getIndustryPreset } from "./industry-presets";
-import { CATALOG_PRESETS } from "./catalog-presets";
-import { OPTION_CATALOG_PRESETS } from "./option-catalog-presets";
+import { CATALOG_PRESETS, type CatalogPresetItem } from "./catalog-presets";
+import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-catalog-presets";
+import { scoutStarterCatalog, scoutStarterOptionCatalog } from "./catalog-scout";
 
 void _jsonBody; // (import kept intentionally unused-safe; see note above)
 
@@ -85,6 +86,11 @@ export const BrandProposal = z
     jobNoun: shortText("Job noun", 40).nullable(),
     jobNounPlural: shortText("Job noun (plural)", 40).nullable(),
     tagline: longText(300).nullable(),
+    // What the business does, in 2-4 sentences, read off the scraped site.
+    // This is the richest single piece of context the scrape produces and
+    // is handed to every downstream writer (notification copy, forms,
+    // templates, service library, catalog) — it used to be dropped here.
+    description: longText(1_000).nullable(),
     hours: longText(300).nullable(),
     address: longText(300).nullable(),
     // Freeform description of where this tenant actually does work — "Winnipeg
@@ -211,8 +217,11 @@ export async function loadIcpKnowledge(industry: string) {
 export async function seedCatalogForCompany(
   companyId: string,
   industryId: string,
+  // Optional tailored list (catalog-scout.ts) in the same shape as the
+  // preset; omitted → the plain industry preset, exactly as before.
+  tailored?: CatalogPresetItem[],
 ): Promise<number> {
-  const items = CATALOG_PRESETS[industryId];
+  const items = tailored ?? CATALOG_PRESETS[industryId];
   if (!items || items.length === 0) return 0;
 
   const keyToId: Record<string, string> = {};
@@ -287,8 +296,9 @@ export async function seedCatalogForCompany(
 export async function seedOptionCatalogForCompany(
   companyId: string,
   industryId: string,
+  tailored?: OptionCategoryPreset[],
 ): Promise<number> {
-  const categories = OPTION_CATALOG_PRESETS[industryId];
+  const categories = tailored ?? OPTION_CATALOG_PRESETS[industryId];
   if (!categories || categories.length === 0) return 0;
 
   let inserted = 0;
@@ -550,6 +560,7 @@ export async function provisionCompany(
     jobNoun: str(brand.jobNoun, preset?.jobNoun ?? "Job"),
     jobNounPlural: str(brand.jobNounPlural, preset?.jobNounPlural ?? "Jobs"),
     tagline: str(brand.tagline),
+    description: str(brand.description),
     serviceArea: str(brand.serviceArea),
     services: jsonStr(brand.services),
     hours: str(brand.hours),
@@ -740,27 +751,40 @@ export async function provisionCompany(
     }
   }
 
-  // 2f) auto-seed the CATALOG (schema.catalogItems) from the industry preset so
-  //     the tenant opens the Catalog with ≥12 priced products/services/assemblies.
-  //     Best-effort, non-blocking.
+  // 2f) auto-seed the CATALOG (schema.catalogItems) — the industry preset,
+  //     tailored to the tenant's own scraped services/description where we
+  //     have them (catalog-scout.ts keeps the preset's grounded costs and
+  //     only renames/drops/adds rows). For "other" with a real services
+  //     list the scout builds a starter catalog from the website alone.
+  //     Best-effort, non-blocking; any failure = plain preset.
+  const scoutInput = {
+    name,
+    industry: resolvedIndustry || null,
+    industryOther: resolvedIndustry === "other" ? industryOther : null,
+    services: servicesArr,
+    description: str(brand.description) || null,
+    website: str(b.website) || null,
+    knowledge: icpKnowledge,
+  };
   let catalogSeeded = 0;
-  if (preset?.id) {
+  if (preset?.id || servicesArr.length) {
     try {
-      catalogSeeded = await seedCatalogForCompany(slug, preset.id);
+      const tailored = await scoutStarterCatalog(scoutInput);
+      catalogSeeded = await seedCatalogForCompany(slug, preset?.id ?? "", tailored);
       if (catalogSeeded > 0)
-        console.log(`[provisioning] seeded ${catalogSeeded} catalog items (${preset.id}) for "${slug}" (${source})`);
+        console.log(`[provisioning] seeded ${catalogSeeded} catalog items (${preset?.id ?? "scraped, no preset"}) for "${slug}" (${source})`);
     } catch (e) {
       console.error("[provisioning] catalog seeding failed", e);
     }
   }
 
-  // 2g) auto-seed the OPTIONS/TIER CATALOG (schema.optionCategories) from the
-  //     industry preset — the generalized options/tier quote engine wedge.
-  //     Best-effort, non-blocking.
+  // 2g) auto-seed the OPTIONS/TIER CATALOG (schema.optionCategories) — the
+  //     industry preset, tailored the same way. Best-effort, non-blocking.
   let optionCategoriesSeeded = 0;
   if (preset?.id) {
     try {
-      optionCategoriesSeeded = await seedOptionCatalogForCompany(slug, preset.id);
+      const tailored = await scoutStarterOptionCatalog(scoutInput);
+      optionCategoriesSeeded = await seedOptionCatalogForCompany(slug, preset.id, tailored);
       if (optionCategoriesSeeded > 0)
         console.log(`[provisioning] seeded ${optionCategoriesSeeded} option categories (${preset.id}) for "${slug}" (${source})`);
     } catch (e) {

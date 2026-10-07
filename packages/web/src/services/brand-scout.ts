@@ -359,9 +359,22 @@ function flattenLd(node: unknown, out: any[], depth = 0): void {
     if (o[k] && typeof o[k] === "object") flattenLd(o[k], out, depth + 1);
 }
 
+/** Sites often ship JSON-LD text HTML-escaped (`Sewer &amp; Drain`). */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)));
+}
+
 function ldStr(v: unknown): string | null {
   if (v == null) return null;
-  if (typeof v === "string") return v.trim() || null;
+  if (typeof v === "string") return decodeEntities(v).trim() || null;
   if (typeof v === "number") return String(v);
   if (Array.isArray(v)) return v.map(ldStr).filter(Boolean).join(", ") || null;
   if (typeof v === "object") {
@@ -576,7 +589,9 @@ const INDUSTRY_ID_LIST = INDUSTRY_LABELS.map((i) => i.id) as [string, ...string[
 const TextSchema = z.object({
   companyDescription: z
     .string()
-    .describe("One or two sentences on what the business does")
+    .describe(
+      "Two to four sentences, in plain prose, on what this business actually does: the trade(s), who they serve (residential / commercial / both), any specialties or differentiators the site leans on (24/7 emergency, licensed & insured, family-owned since…, same-day, specific brands or systems). Written as the company would describe itself, not marketing fluff. Max ~600 characters.",
+    )
     .nullable(),
   tagline: z.string().describe("Marketing slogan if present").nullable(),
   workerNoun: z

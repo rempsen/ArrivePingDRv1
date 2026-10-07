@@ -680,6 +680,10 @@ export const companySettings = pgTable("company_settings", {
   jobNounPlural: text("job_noun_plural").notNull().default("Jobs"),
   // AI-onboarding enrichment (from "Grab Brand Assets").
   tagline: text("tagline").notNull().default(""),
+  // 2-4 sentence "what this business does" read off the scraped website (or
+  // typed in during onboarding). Fed to the onboarding concierge and every
+  // AI writer that produces tenant copy so it sounds like THIS company.
+  description: text("description").notNull().default(""),
   hours: text("hours").notNull().default(""), // JSON string: [{day,open,close}] or freeform
   services: text("services").notNull().default(""), // JSON string: string[]
   socials: text("socials").notNull().default(""), // JSON string: {facebook,instagram,...}

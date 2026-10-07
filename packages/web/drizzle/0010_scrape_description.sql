@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "description" text DEFAULT '' NOT NULL;
