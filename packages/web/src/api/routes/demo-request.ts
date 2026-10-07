@@ -20,6 +20,10 @@ const DemoRequest = z.object({
   name: z.string({ message: "Name is required" }).trim().min(1, "Name is required").max(200, "Must be 200 characters or fewer"),
   email: emailField("Work email"),
   company: z.string({ message: "Company is required" }).trim().min(1, "Company is required").max(200, "Must be 200 characters or fewer"),
+  /** One of the 18 ICP labels or "Other" (then `industryOther` is the visitor's own words). Optional on the
+   *  server so a page loaded before this field existed still submits; the form itself requires it. */
+  industry: optText(100),
+  industryOther: optText(100),
   teamSize: optText(40),
   message: optText(2_000),
   /** honeypot — hidden from humans; any value means a bot */
@@ -50,6 +54,7 @@ export const demoRequestRoutes = new Hono<AppEnv>().post("/", demoLimiter, async
     ["Name", b.name],
     ["Work email", b.email],
     ["Company", b.company],
+    ["Industry", b.industry === "Other" ? `Other — ${b.industryOther || "not specified"}` : b.industry || "—"],
     ["Field team size", b.teamSize || "—"],
   ];
   if (b.message) rows.push(["Message", b.message]);
@@ -72,7 +77,7 @@ export const demoRequestRoutes = new Hono<AppEnv>().post("/", demoLimiter, async
 
   const result = await sendEmail({
     to: DEMO_INBOX,
-    subject: `Demo request — ${b.company} (${b.name})`,
+    subject: `Demo request — ${b.company} (${b.name})${b.industry ? ` · ${b.industry === "Other" ? b.industryOther || "Other" : b.industry}` : ""}`,
     html,
     text,
     replyTo: b.email,

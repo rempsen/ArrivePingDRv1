@@ -8,7 +8,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export function DemoForm() {
   const uid = useId();
   const f = closing.form;
-  const [values, setValues] = useState({ name: "", email: "", company: "", teamSize: "", website: "" });
+  const [values, setValues] = useState({ name: "", email: "", company: "", industry: "", industryOther: "", teamSize: "", website: "" });
   const [errors, setErrors] = useState<Partial<Record<keyof typeof values, string>>>({});
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const okRef = useRef<HTMLDivElement>(null);
@@ -30,6 +30,8 @@ export function DemoForm() {
     if (!values.name.trim()) er.name = "Please enter your name.";
     if (!EMAIL_RE.test(values.email.trim())) er.email = "Please enter a valid work email.";
     if (!values.company.trim()) er.company = "Please enter your company name.";
+    if (!values.industry) er.industry = "Please choose your industry.";
+    else if (values.industry === f.otherIndustry && !values.industryOther.trim()) er.industryOther = "Please tell us your industry.";
     setErrors(er);
     if (Object.keys(er).length) return;
 
@@ -42,6 +44,8 @@ export function DemoForm() {
           name: values.name.trim(),
           email: values.email.trim(),
           company: values.company.trim(),
+          industry: values.industry,
+          industryOther: values.industry === f.otherIndustry ? values.industryOther.trim() : undefined,
           teamSize: values.teamSize || undefined,
           website: values.website || undefined,
         }),
@@ -92,6 +96,24 @@ export function DemoForm() {
           {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <input id={`${uid}-company`} name="company" autoComplete="organization" value={values.company} onChange={set("company")} required aria-invalid={!!errors.company} />
         </Field>
+        <Field id={`${uid}-industry`} label={f.fields.industry} error={errors.industry}>
+          {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
+          <select id={`${uid}-industry`} name="industry" value={values.industry} onChange={set("industry")} required aria-invalid={!!errors.industry}>
+            <option value="">Select…</option>
+            {f.industries.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+            <option value={f.otherIndustry}>{f.otherIndustry}</option>
+          </select>
+        </Field>
+        {values.industry === f.otherIndustry && (
+          <Field id={`${uid}-industry-other`} label={f.fields.industryOther} error={errors.industryOther}>
+            {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
+            <input id={`${uid}-industry-other`} name="industryOther" value={values.industryOther} onChange={set("industryOther")} maxLength={100} placeholder="e.g. Pool & spa service" required aria-invalid={!!errors.industryOther} />
+          </Field>
+        )}
         <Field id={`${uid}-size`} label={f.fields.teamSize}>
           {/* eslint-disable-next-line jsx-a11y/control-has-associated-label -- labelled by the wrapping <Field> via htmlFor/id */}
           <select id={`${uid}-size`} name="teamSize" value={values.teamSize} onChange={set("teamSize")}>

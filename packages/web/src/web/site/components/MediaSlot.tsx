@@ -3,7 +3,7 @@ import { slot as getSlot, type MediaSlot as Slot } from "../media";
 import { scenes } from "../scenes";
 import { usePlayback } from "../motion/playback";
 import { useInView } from "../motion/use-scene-clock";
-import { footageLabel, illustrativeLabel } from "../config";
+import { brand, footageLabel, illustrativeLabel } from "../config";
 
 /**
  * A replaceable motion slot. Renders supplied video when the manifest says
@@ -63,7 +63,11 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
         onError={onFail}
         aria-hidden="true"
       />
-      <span className="slot__label">{footageLabel}</span>
+      {/* Real-footage mark: a subtle ArrivePing logo (the figcaption carries the text for screen readers) */}
+      <span className="slot__label slot__label--brand" aria-hidden="true">
+        <img className="slot__brand slot__brand--on-dark" src={brand.logoLight} alt="" width={41} height={12} />
+        <img className="slot__brand slot__brand--on-light" src={brand.logoDark} alt="" width={41} height={12} />
+      </span>
     </>
   );
 }

@@ -83,7 +83,7 @@ export const fixture = {
 
 export const illustrativeLabel = "Illustrative demo";
 /** Label on slots that play real app footage (the demo company is fictional). */
-export const footageLabel = "Real app";
+export const footageLabel = "ArrivePing app"; // screen-reader text; the visible chip is the ArrivePing logo
 
 /* ------------------------------------------------------------------ */
 /* Copy                                                                 */
@@ -305,9 +305,33 @@ export const closing = {
       name: "Your name",
       email: "Work email",
       company: "Company",
+      industry: "Industry",
+      industryOther: "Your industry",
       teamSize: "Field team size (optional)",
     },
     teamSizes: ["1–4", "5–14", "15–49", "50+"],
+    // Our 18 ICPs — same names as the signup dropdown (services/industry-presets.ts, core + outlier tiers).
+    industries: [
+      "Childcare & Babysitting",
+      "Commercial Building Maintenance Contractor",
+      "Concrete & Foundation Repair",
+      "Design-Build Renovations & Additions",
+      "Electrical",
+      "Equipment & Tool Rental",
+      "Fire & Flood Restoration",
+      "Flooring",
+      "Garage Doors",
+      "Home Building & Development",
+      "Home Renovation & General Contracting",
+      "HVAC & Plumbing",
+      "Landscaping & Snow Removal",
+      "Painting & Decorating",
+      "Property Manager — Maintenance Operations",
+      "Roofing, Siding & Exteriors",
+      "Sports Clubs & Academies",
+      "Tree Care & Arborist Services",
+    ],
+    otherIndustry: "Other",
     submit: "Request a demo",
   },
 };

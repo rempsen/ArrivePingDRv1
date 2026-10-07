@@ -115,7 +115,8 @@ export function LiveMap({
       zoomAnimation: true,
       fadeAnimation: false,
     }).setView([center.lat, center.lng], 13);
-    attachBasemap(map);
+    // Customer phone view (zoomControl off) stays clean: no Map/Satellite button either.
+    attachBasemap(map, zoomControl ? {} : { toggle: false });
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 200);
     return () => {

@@ -694,6 +694,25 @@
   padding: 3px 8px;
   pointer-events: none;
 }
+.site .slot__label--brand {
+  padding: 5px 9px;
+  line-height: 0;
+  opacity: 0.8;
+}
+.site .slot__brand {
+  display: block;
+  height: 12px;
+  width: auto;
+}
+.site .slot__brand--on-light {
+  display: none;
+}
+.site[data-theme="light"] .slot__brand--on-dark {
+  display: none;
+}
+.site[data-theme="light"] .slot__brand--on-light {
+  display: block;
+}
 .site .slot__controls {
   position: absolute;
   right: 12px;
