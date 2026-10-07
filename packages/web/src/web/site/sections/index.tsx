@@ -1,94 +1,11 @@
-import { useEffect, useRef, type JSX } from "react";
-import { audiences, benefits, brand, chapters, closing, faqs, hero, pricing, stats, stories, story, workflow } from "../config";
+import { useEffect, useRef } from "react";
+import { audiences, brand, chapters, closing, faqs, pricing, stats, stories, story } from "../config";
 import { MediaSlot } from "../components/MediaSlot";
 import { DemoForm } from "../components/DemoForm";
 import { useAnchorNav } from "../components/SiteHeader";
 import { usePlayback } from "../motion/playback";
 import { scrollToAnchor, useScrollspy } from "../motion/use-scrollspy";
-import { Aurora, CountUp, handleSpotlight } from "../motion/effects";
-
-const Arrow = () => (
-  <svg className="arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-/* ---------------- Hero ---------------- */
-export function Hero() {
-  const go = useAnchorNav();
-  return (
-    <section className="hero">
-      <Aurora />
-      <div className="container">
-        <div className="hero__copy">
-          <span className="eyebrow enter">{hero.eyebrow}</span>
-          <h1 className="hero__title enter enter--2">
-            {hero.title.map((line) => (
-              <span key={line}>{line}</span>
-            ))}
-          </h1>
-          <p className="hero__lede enter enter--3">{hero.body}</p>
-          <div className="hero__ctas enter enter--3">
-            <a href={hero.primary.href} className="btn btn--primary beam" onClick={(e) => go(e, hero.primary.href)}>
-              {hero.primary.label}
-            </a>
-            <a href={hero.secondary.href} className="btn btn--secondary" onClick={(e) => go(e, hero.secondary.href)}>
-              {hero.secondary.label} <Arrow />
-            </a>
-          </div>
-          <p className="hero__fine enter enter--3">No app for customers · Technicians use the ArrivePing mobile app · Up and running in hours</p>
-        </div>
-        <div className="hero__stage enter--stage">
-          <MediaSlot id="hero-overview" raised />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Benefits ---------------- */
-const icons: Record<string, JSX.Element> = {
-  customer: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <rect x="4" y="1.5" width="10" height="15" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M7.5 13.5h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  ),
-  board: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <rect x="1.5" y="2.5" width="15" height="13" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M1.5 7h15M6 7v8.5" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-  technician: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <path d="M9 16s5.5-4.1 5.5-8.5a5.5 5.5 0 1 0-11 0C3.5 11.9 9 16 9 16Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx="9" cy="7.5" r="1.8" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  ),
-};
-
-export function BenefitsStrip() {
-  return (
-    <section className="section--tight" aria-labelledby="benefits-title">
-      <div className="container">
-        <h2 id="benefits-title" className="visually-hidden">
-          Why teams use ArrivePing
-        </h2>
-        <div className="benefits">
-          {benefits.map((b, i) => (
-            <div key={b.title} className="benefit" data-reveal="" data-reveal-delay={String(i)}>
-              <div className="benefit__icon">{icons[b.icon]}</div>
-              <h3>{b.title}</h3>
-              <p>{b.body}</p>
-              <span className="benefit__stat">{b.stat}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+import { CountUp, handleSpotlight } from "../motion/effects";
 
 /* ---------------- Showcase (sticky rail) ---------------- */
 export function Showcase() {
@@ -172,34 +89,6 @@ export function Showcase() {
     </section>
   );
 }
-
-/* ---------------- Workflow ---------------- */
-export function WorkflowSteps() {
-  return (
-    <section id="how-it-works" className="section section--divided anchor">
-      <div className="container">
-        <div className="intro intro--center" data-reveal="">
-          <span className="eyebrow">How it works</span>
-          <h2 className="h-section">From booked to arrived, in three steps</h2>
-          <p className="lede">Nothing to learn for the customer. Two taps for the technician. One board for the office.</p>
-        </div>
-        <ol className="steps" style={{ listStyle: "none", padding: 0 }}>
-          {workflow.map((w, i) => (
-            <li key={w.step} className="step" data-reveal="" data-reveal-delay={String(i)}>
-              <span className="step__num">{w.step}</span>
-              <h3>{w.title}</h3>
-              <p>{w.body}</p>
-              <div className="step__art">
-                <img className="step__shot" src={w.image.src} alt={w.image.alt} loading="lazy" decoding="async" width={1200} height={900} />
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
-  );
-}
-
 
 /* ---------------- Outcome stories ---------------- */
 export function OutcomeStories() {

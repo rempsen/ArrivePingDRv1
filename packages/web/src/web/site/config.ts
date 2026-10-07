@@ -91,14 +91,62 @@ export const footageLabel = "ArrivePing app"; // screen-reader text; the visible
 
 export const hero = {
   eyebrow: brand.launch,
-  title: ["A clearer arrival.", "A better customer experience."],
+  title: "The right tech, at the door, right when you said.",
   body:
-    "ArrivePing keeps the office, the technician and the customer looking at the same arrival status — so nobody has to call to ask where the technician is.",
+    "ArrivePing shows your whole team live, sends each job to the closest qualified technician, and keeps your customer updated with a live ETA. No more calls asking where the technician is.",
   primary: { label: "Book a demo", href: brand.urls.demo },
-  secondary: { label: "See how it works", href: brand.urls.product },
+  secondary: { label: "See how it works", href: brand.urls.how },
+  fine: "No app for customers · Technicians use the ArrivePing mobile app · Up and running in hours",
+  feedLabel: "One job, start to finish",
+  film: {
+    large: "/media/site-hero-film-1600.mp4",
+    small: "/media/site-hero-film-960.mp4",
+    poster: "/media/site-hero-film-poster.jpg",
+    posterWebp: "/media/site-hero-film-poster.webp",
+  },
   summary:
     "Illustrative appointment status shared between the business, the technician and the customer.",
 };
+
+/** C · hero activity feed — one illustrative job (sample company and people). */
+export const heroFeed = [
+  { icon: "live", title: "Everyone on the map", body: "Technicians, drivers and equipment, live", when: "9:08" },
+  { icon: "order", title: "Work order created", body: "No heat · furnace · needs a gas fitter", when: "9:10" },
+  { icon: "assign", title: "Auto-assigned to Marcus", body: "Closest qualified tech who's free · 0.9 km", when: "9:10" },
+  { icon: "phone", title: "Marcus accepted", body: "Address, gate code and notes on his phone", when: "9:11" },
+  { icon: "customer", title: "Dana is tracking Marcus", body: "Live ETA, with text or call in one tap", eta: "3 min", done: true },
+] as const satisfies readonly {
+  icon: "live" | "order" | "assign" | "phone" | "customer";
+  title: string;
+  body: string;
+  when?: string;
+  eta?: string;
+  done?: boolean;
+}[];
+
+/** B · live ops bento — the five capabilities at a glance. */
+export const bento = {
+  eyebrow: "One app, every step",
+  title: "Everything your team needs.",
+  titleMuted: "Live, in one place.",
+  body: "The office, the technician and the customer all work from the same job, so everyone sees the same thing at the same time.",
+};
+
+/** A · live dispatch story — "How it works". Timings are % of a 20 s loop. */
+export const dispatchStory = {
+  eyebrow: "How it works",
+  title: "From work order to front door,",
+  titleMuted: "live.",
+  body: "Follow one urgent no-heat call from the moment it's booked to the moment the technician pulls up.",
+  note: "Illustrative example · sample company, people and times",
+  steps: [
+    { title: "See everyone, live", body: "Technicians, drivers and equipment on one map, updated in real time.", at: 0 },
+    { title: "Create the work order", body: "Your own fields: job type, priority, time window, required skills and access notes.", at: 17.5 },
+    { title: "Auto-assign the best technician", body: "ArrivePing picks the closest technician with the right skills who's free to take it.", at: 35 },
+    { title: "Send it to their phone", body: "The job lands in the technician app with the address, notes and gate code. One tap to accept.", at: 55 },
+    { title: "Keep the customer in the loop", body: "A text, then a live tracking page with the ETA and one-tap text or call. No phone tag.", at: 68 },
+  ],
+} as const;
 
 export const benefits = [
   {
@@ -160,27 +208,6 @@ export const chapters = [
       { title: "Plain-language updates", body: "Short messages written by your team, delivered by text or email with the live link." },
       { title: "A record of what was said", body: "Every update stays attached to the appointment for the office to see later." },
     ],
-  },
-] as const;
-
-export const workflow = [
-  {
-    step: "01",
-    title: "Set up the appointment",
-    body: "Add the customer, the job and the time — from your office dispatch, by hand, or straight from an intake form.",
-    image: { src: "/img/site/howit-1-office.webp", alt: "The ArrivePing jobs list: each appointment with its customer, time, assigned technician, status and total." },
-  },
-  {
-    step: "02",
-    title: "Keep the arrival status current",
-    body: "The technician taps 'On my way' in the app. ArrivePing calculates the arrival window and tracks the trip.",
-    image: { src: "/img/site/howit-2-technician.webp", alt: "The technician app on an active job: the customer, address, one-tap navigation, live location sharing and a 9-minutes-away estimate." },
-  },
-  {
-    step: "03",
-    title: "Give the customer a clear update",
-    body: "The customer gets a link to a live arrival page. Delays and arrival are communicated in plain language.",
-    image: { src: "/img/site/howit-3-customer.webp", alt: "The customer's live arrival page: the technician's route to the house on a map, with a 7-minute estimate." },
   },
 ] as const;
 

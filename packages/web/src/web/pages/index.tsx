@@ -6,10 +6,7 @@ import { scrollToAnchor, useHeaderOffset } from "../site/motion/use-scrollspy";
 import { SiteHeader } from "../site/components/SiteHeader";
 import { SiteFooter } from "../site/components/SiteFooter";
 import {
-  Hero,
-  BenefitsStrip,
   Showcase,
-  WorkflowSteps,
   OutcomeStories,
   Audiences,
   Pricing,
@@ -17,7 +14,11 @@ import {
   OurStory,
   ClosingCTA,
 } from "../site/sections";
+import { HeroFilm } from "../site/live/HeroFilm";
+import { OpsBento } from "../site/live/OpsBento";
+import { DispatchStory } from "../site/live/DispatchStory";
 import "../site/site.css";
+import "../site/live/live.css";
 import "../site/scenes/scenes.css";
 
 /** Marketing landing page — Attio-inspired light design language, scoped under `.site`. */
@@ -79,10 +80,10 @@ function Page() {
       </a>
       <SiteHeader ref={headerRef} dashboardHref={dashboardHref} />
       <main id="main" tabIndex={-1}>
-        <Hero />
-        <BenefitsStrip />
+        <HeroFilm />
+        <OpsBento />
+        <DispatchStory />
         <Showcase />
-        <WorkflowSteps />
         <OutcomeStories />
         <Audiences />
         <Pricing />
