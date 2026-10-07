@@ -33,6 +33,12 @@ export type MediaSlot = {
   decorative: boolean;
   fallbackScene: SceneName;
   accessibleSummary: string;
+  /**
+   * Live technician layer (see live-trip-geometry.ts): ids of the measured
+   * map geometry for the desktop / mobile cut. The van drives the route in
+   * real time and the ETA, distance and arrival time update with it.
+   */
+  liveTrip?: { desktop?: string; mobile?: string };
 };
 
 export const mediaSlots: MediaSlot[] = [
@@ -80,6 +86,7 @@ export const mediaSlots: MediaSlot[] = [
     muted: true,
     repeat: true,
     decorative: true,
+    liveTrip: { desktop: "arrival-16x10", mobile: "arrival-3x4" },
     fallbackScene: "RouteAndCustomerETA",
     accessibleSummary:
       "The office's live map of technicians beside the customer's arrival page, which shows the technician's route, a minutes-away estimate and live status.",
@@ -96,6 +103,7 @@ export const mediaSlots: MediaSlot[] = [
     muted: true,
     repeat: true,
     decorative: true,
+    liveTrip: { desktop: "comms-16x10", mobile: "comms-3x4" },
     fallbackScene: "UpdateToCustomer",
     accessibleSummary:
       "Two iPhones: the technician's job screen with the customer conversation, and the customer's live arrival page for the same appointment.",
@@ -124,6 +132,7 @@ export const mediaSlots: MediaSlot[] = [
     muted: true,
     repeat: true,
     decorative: true,
+    liveTrip: { desktop: "tracking-4x3" },
     fallbackScene: "CustomerCardUpdate",
     accessibleSummary:
       "The customer's live arrival page on an iPhone: the technician's route on a map, minutes away and live status.",
@@ -138,6 +147,7 @@ export const mediaSlots: MediaSlot[] = [
     muted: true,
     repeat: false,
     decorative: true,
+    liveTrip: { desktop: "closing-16x10" },
     fallbackScene: "ClosingStatus",
     accessibleSummary:
       "The customer's arrival page changing from on the way to 'Your technician has arrived!'.",

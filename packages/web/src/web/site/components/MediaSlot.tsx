@@ -4,6 +4,8 @@ import { scenes } from "../scenes";
 import { usePlayback } from "../motion/playback";
 import { useInView } from "../motion/use-scene-clock";
 import { brand, footageLabel, illustrativeLabel } from "../config";
+import { liveTrip } from "../live-trip-geometry";
+import { LiveTripOverlay } from "./LiveTripOverlay";
 
 /**
  * A replaceable motion slot. Renders supplied video when the manifest says
@@ -35,17 +37,20 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   const { paused, hidden, reduced } = usePlayback();
   const inView = useInView(ref, 0.35);
-  const src = typeof window !== "undefined" && window.innerWidth < 768 && slot.mobileSrc ? slot.mobileSrc : slot.desktopSrc;
+  const shouldPlay = inView && !paused && !hidden && !reduced;
+  const mobile = typeof window !== "undefined" && window.innerWidth < 768 && !!slot.mobileSrc;
+  const src = mobile ? slot.mobileSrc : slot.desktopSrc;
+  // Live technician layer for recordings that show the customer's arrival map
+  const trip = liveTrip(mobile ? slot.liveTrip?.mobile : slot.liveTrip?.desktop);
   // Each video ships with a same-named poster ("x.mp4" → "x-poster.jpg"), so the mobile cut gets its own poster.
   const poster = slot.posterSrc && src ? src.replace(/\.mp4$/, "-poster.jpg") : slot.posterSrc;
 
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    const shouldPlay = inView && !paused && !hidden && !reduced;
     if (shouldPlay) void v.play().catch(() => {});
     else v.pause();
-  }, [inView, paused, hidden, reduced]);
+  }, [shouldPlay]);
 
   return (
     <>
@@ -63,6 +68,7 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
         onError={onFail}
         aria-hidden="true"
       />
+      {trip ? <LiveTripOverlay geo={trip} videoRef={ref} playing={shouldPlay} /> : null}
       {/* Real-footage mark: a subtle ArrivePing logo (the figcaption carries the text for screen readers) */}
       <span className="slot__label slot__label--brand" aria-hidden="true">
         <img className="slot__brand slot__brand--on-dark" src={brand.logoLight} alt="" width={41} height={12} />
