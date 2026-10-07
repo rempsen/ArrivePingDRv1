@@ -87,15 +87,25 @@ export function TenantLogo({
   const ok = !!src && !broken && /^(https?:)?\//.test(src);
   if (ok && variant === "plate") {
     return (
-      <span className={cn("grid shrink-0 place-items-center overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-white/10", className)}>
-        <img src={src} alt={name} onError={() => setBroken(true)} className={cn("h-full w-full min-w-0 object-contain", imgClassName)} />
+      // Flex (not grid) + min-h-0/min-w-0 on the image: a grid item's implicit
+      // `min-height: auto` let tall-ish logos overflow the plate's padding and
+      // `overflow-hidden` then sliced the bottom row of letters off (BMD's
+      // "MATERIALS" line). Flex with min sizes zeroed forces the image to fit
+      // entirely inside the padded box, centred on both axes, for any shape.
+      <span className={cn("flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-white/10", className)}>
+        <img
+          src={src}
+          alt={name}
+          onError={() => setBroken(true)}
+          className={cn("block h-full max-h-full w-full min-h-0 min-w-0 max-w-full object-contain object-center", imgClassName)}
+        />
       </span>
     );
   }
   if (ok) {
     return (
-      <span className={cn("grid shrink-0 place-items-center overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/10", className)}>
-        <img src={src} alt={name} onError={() => setBroken(true)} className={cn("h-full w-full object-contain p-1", imgClassName)} />
+      <span className={cn("flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/10", className)}>
+        <img src={src} alt={name} onError={() => setBroken(true)} className={cn("block h-full max-h-full w-full min-h-0 min-w-0 max-w-full object-contain object-center p-1", imgClassName)} />
       </span>
     );
   }

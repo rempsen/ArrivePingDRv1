@@ -272,7 +272,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           name={brand.name}
           color={brand.brandColor}
           variant="plate"
-          className="h-20 w-full px-2 py-2"
+          className="h-20 w-full px-3 py-2.5"
           fallbackClassName="h-16 w-16 text-2xl"
         />
         <span className="line-clamp-2 w-full font-display text-[15px] font-bold leading-[1.2] tracking-tight text-white">{brand.name}</span>
