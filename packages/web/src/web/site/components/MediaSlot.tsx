@@ -3,7 +3,7 @@ import { slot as getSlot, type MediaSlot as Slot } from "../media";
 import { scenes } from "../scenes";
 import { usePlayback } from "../motion/playback";
 import { useInView } from "../motion/use-scene-clock";
-import { illustrativeLabel } from "../config";
+import { footageLabel, illustrativeLabel } from "../config";
 
 /**
  * A replaceable motion slot. Renders supplied video when the manifest says
@@ -25,7 +25,7 @@ export function MediaSlot({ id, className = "", raised = false }: { id: string; 
     >
       {useVideo ? <SlotVideo slot={s} onFail={() => setVideoFailed(true)} /> : <Scene />}
       <figcaption className="visually-hidden">
-        {illustrativeLabel}: {s.accessibleSummary}
+        {useVideo ? footageLabel : illustrativeLabel}: {s.accessibleSummary}
       </figcaption>
     </figure>
   );
@@ -36,6 +36,8 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
   const { paused, hidden, reduced } = usePlayback();
   const inView = useInView(ref, 0.35);
   const src = typeof window !== "undefined" && window.innerWidth < 768 && slot.mobileSrc ? slot.mobileSrc : slot.desktopSrc;
+  // Each video ships with a same-named poster ("x.mp4" → "x-poster.jpg"), so the mobile cut gets its own poster.
+  const poster = slot.posterSrc && src ? src.replace(/\.mp4$/, "-poster.jpg") : slot.posterSrc;
 
   useEffect(() => {
     const v = ref.current;
@@ -53,7 +55,7 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
         className="slot__media"
         style={{ objectFit: slot.fit }}
         src={src}
-        poster={slot.posterSrc}
+        poster={poster}
         muted={slot.muted}
         loop={slot.repeat}
         playsInline
@@ -61,7 +63,7 @@ function SlotVideo({ slot, onFail }: { slot: Slot; onFail: () => void }) {
         onError={onFail}
         aria-hidden="true"
       />
-      <span className="slot__label">{illustrativeLabel}</span>
+      <span className="slot__label">{footageLabel}</span>
     </>
   );
 }

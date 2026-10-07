@@ -190,7 +190,7 @@ export function WorkflowSteps() {
               <h3>{w.title}</h3>
               <p>{w.body}</p>
               <div className="step__art">
-                <StepArt index={i} />
+                <img className="step__shot" src={w.image.src} alt={w.image.alt} loading="lazy" decoding="async" width={1200} height={900} />
               </div>
             </li>
           ))}
@@ -200,49 +200,6 @@ export function WorkflowSteps() {
   );
 }
 
-function StepArt({ index }: { index: number }) {
-  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  if (index === 0)
-    return (
-      <svg width="100%" viewBox="0 0 280 72" aria-hidden="true" style={{ color: "var(--ink-muted)", display: "block" }}>
-        <rect x="1" y="1" width="278" height="70" rx="10" {...common} stroke="var(--line)" />
-        <rect x="16" y="16" width="120" height="10" rx="3" fill="var(--line)" />
-        <rect x="16" y="34" width="90" height="8" rx="3" fill="var(--surface-muted)" stroke="var(--line)" />
-        <rect x="16" y="48" width="160" height="8" rx="3" fill="var(--surface-muted)" stroke="var(--line)" />
-        <rect x="196" y="40" width="68" height="18" rx="5" fill="var(--ink)" />
-        <text x="230" y="52.5" textAnchor="middle" fontSize="9" fill="var(--inverse-text)" fontFamily="Inter Variable, Inter, sans-serif" fontWeight="500">
-          Save
-        </text>
-      </svg>
-    );
-  if (index === 1)
-    return (
-      <svg width="100%" viewBox="0 0 280 72" aria-hidden="true" style={{ color: "var(--ink-muted)", display: "block" }}>
-        <rect x="1" y="1" width="278" height="70" rx="10" {...common} stroke="var(--line)" />
-        <path d="M24 50 C 60 50, 90 20, 140 28 S 220 50, 256 22" {...common} stroke="var(--line-strong)" />
-        <path d="M24 50 C 60 50, 90 20, 140 28" {...common} stroke="var(--accent)" strokeWidth={2} />
-        <circle cx="140" cy="28" r="6" fill="var(--accent)" stroke="var(--canvas)" strokeWidth="2" />
-        <circle cx="256" cy="22" r="4" fill="var(--surface)" stroke="var(--ink)" strokeWidth="1.5" />
-        <rect x="150" y="38" width="98" height="20" rx="10" fill="var(--accent-soft)" />
-        <text x="199" y="51.5" textAnchor="middle" fontSize="9.5" fill="var(--accent)" fontFamily="Inter Variable, Inter, sans-serif" fontWeight="500">
-          On the way · 10:40–10:55
-        </text>
-      </svg>
-    );
-  return (
-    <svg width="100%" viewBox="0 0 280 72" aria-hidden="true" style={{ color: "var(--ink-muted)", display: "block" }}>
-      <rect x="1" y="1" width="278" height="70" rx="10" {...common} stroke="var(--line)" />
-      <rect x="16" y="14" width="16" height="16" rx="4" fill="var(--ink)" />
-      <rect x="40" y="16" width="96" height="6" rx="3" fill="var(--ink)" opacity="0.8" />
-      <rect x="40" y="26" width="200" height="6" rx="3" fill="var(--line)" />
-      <rect x="40" y="36" width="160" height="6" rx="3" fill="var(--line)" />
-      <rect x="40" y="50" width="82" height="12" rx="6" fill="var(--surface-muted)" stroke="var(--line)" />
-      <text x="81" y="59" textAnchor="middle" fontSize="7.5" fill="var(--ink-secondary)" fontFamily="Inter Variable, Inter, sans-serif" fontWeight="500">
-        View arrival page
-      </text>
-    </svg>
-  );
-}
 
 /* ---------------- Outcome stories ---------------- */
 export function OutcomeStories() {
