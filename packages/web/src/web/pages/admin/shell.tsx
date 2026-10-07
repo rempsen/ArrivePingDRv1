@@ -20,6 +20,7 @@ import {
   Inbox,
   LayoutTemplate,
   Package,
+  Briefcase,
   Layers,
   Users,
   Wrench,
@@ -79,6 +80,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     heading: "Catalog & Forms",
     items: [
+      // Services feed the "Service" picker on New Job and the customer booking
+      // page; without this entry the page was only reachable by typing the URL.
+      { to: "/admin/services", label: "Services", icon: Briefcase },
       { to: "/admin/catalog", label: "Catalog", icon: Package },
       { to: "/admin/options", label: "Options & Tiers", icon: Layers },
       { to: "/admin/builder", label: "Form Builder Templates", icon: LayoutTemplate },

@@ -17,8 +17,10 @@ type Svc = {
   durationMins: number;
 };
 
-const EMPTY: Svc = { name: "", category: "Cleaning", description: "", image: "", basePrice: 0, durationMins: 60 };
-const CATEGORIES = ["Cleaning", "Plumbing", "Electrical", "Appliance", "Beauty", "Handyman", "Gardening", "Pest Control"];
+const EMPTY: Svc = { name: "", category: "General", description: "", image: "", basePrice: 0, durationMins: 60 };
+// Category is free text (every trade names its work differently); these are
+// only suggestions, merged with whatever categories the tenant already uses.
+const SUGGESTED_CATEGORIES = ["General", "Installation", "Repair", "Maintenance", "Inspection", "Consultation", "Delivery"];
 
 export default function AdminServices() {
   const confirm = useConfirm();
@@ -35,23 +37,32 @@ export default function AdminServices() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
   });
 
-  if (services.isLoading) return <FullLoader label="Loading templates…" />;
+  if (services.isLoading) return <FullLoader label="Loading services…" />;
   const list = services.data?.services ?? [];
+  const categories = Array.from(new Set([...list.map((s) => s.category).filter(Boolean), ...SUGGESTED_CATEGORIES]));
 
   return (
     <div className="w-full min-w-0 space-y-5 px-4 py-6 pb-24 md:px-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-extrabold text-white">Service Templates</h1>
-          <p className="text-sm text-slate-500">{list.length} service templates</p>
+          <h1 className="font-display text-2xl font-extrabold text-white">Services</h1>
+          <p className="text-sm text-slate-500">
+            {list.length} {list.length === 1 ? "service" : "services"} — these are the choices in the "Service" picker when you create a job, and on your customer booking page.
+          </p>
         </div>
         <button
           onClick={() => setEditing(EMPTY)}
           className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-deep"
         >
-          <Plus className="h-4 w-4" /> New template
+          <Plus className="h-4 w-4" /> New service
         </button>
       </div>
+
+      {list.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
+          No services yet. Add your first one — it will show up immediately in the New Job dialog.
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((s) => (
@@ -66,7 +77,7 @@ export default function AdminServices() {
                 <div className="text-right">
                   <div className="font-extrabold text-white">{money(s.basePrice)}</div>
                   <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                    <Clock className="h-3 w-3" /> {s.durationMins}m
+                    <Clock className="h-3 w-3" /> {s.durationMins} min
                   </span>
                 </div>
               </div>
@@ -80,7 +91,7 @@ export default function AdminServices() {
                 </button>
                 <button
                   onClick={async () => {
-                    if (await confirm({ title: `Delete "${s.name}"?`, message: "This service template will no longer be selectable on new work orders." }))
+                    if (await confirm({ title: `Delete "${s.name}"?`, message: "It will no longer be selectable on new jobs or the booking page. Existing jobs keep their service." }))
                       del.mutate(s.id);
                   }}
                   aria-label={`Delete ${s.name}`}
@@ -98,6 +109,7 @@ export default function AdminServices() {
       {editing && (
         <ServiceModal
           svc={editing}
+          categories={categories}
           onClose={() => setEditing(null)}
           onDone={() => {
             qc.invalidateQueries({ queryKey: ["services"] });
@@ -109,7 +121,7 @@ export default function AdminServices() {
   );
 }
 
-function ServiceModal({ svc, onClose, onDone }: { svc: Svc; onClose: () => void; onDone: () => void }) {
+function ServiceModal({ svc, categories, onClose, onDone }: { svc: Svc; categories: string[]; onClose: () => void; onDone: () => void }) {
   const [form, setForm] = useState<Svc>(svc);
   const isEdit = !!svc.id;
 
@@ -117,14 +129,20 @@ function ServiceModal({ svc, onClose, onDone }: { svc: Svc; onClose: () => void;
     mutationFn: async () => {
       const payload = {
         name: form.name,
-        category: form.category,
+        category: form.category.trim() || "General",
         description: form.description,
         image: form.image,
         basePrice: Number(form.basePrice),
         durationMins: Number(form.durationMins),
       };
-      if (isEdit) return api.services[":id"].$patch({ param: { id: svc.id! }, json: payload });
-      return api.services.$post({ json: payload });
+      const r = isEdit
+        ? await api.services[":id"].$patch({ param: { id: svc.id! }, json: payload })
+        : await api.services.$post({ json: payload });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { message?: string };
+        throw new Error(body.message || "Could not save this service");
+      }
+      return r;
     },
     onSuccess: onDone,
   });
@@ -135,43 +153,52 @@ function ServiceModal({ svc, onClose, onDone }: { svc: Svc; onClose: () => void;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" {...dismiss(onClose)}>
-      <DialogPanel onClose={onClose} label={isEdit ? "Edit service" : "New service template"} className="w-full max-w-lg rounded-2xl bg-ink-2 shadow-2xl">
+      <DialogPanel onClose={onClose} label={isEdit ? "Edit service" : "New service"} className="w-full max-w-lg rounded-2xl bg-ink-2 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
-          <h3 className="font-bold text-white">{isEdit ? "Edit service" : "New template"}</h3>
+          <h3 className="font-bold text-white">{isEdit ? "Edit service" : "New service"}</h3>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-white/5">
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="max-h-[70vh] space-y-3 overflow-y-auto p-5">
           <Field label="Name">
-            <input aria-label="Deep Home Cleaning" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} placeholder="Deep Home Cleaning" />
+            <input aria-label="Service name" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} placeholder="e.g. Site Visit & Measurement" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Category">
-              <select value={form.category} onChange={(e) => set("category", e.target.value)} className={inputCls}>
-                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
+              <input
+                aria-label="Category"
+                list="service-categories"
+                value={form.category}
+                onChange={(e) => set("category", e.target.value)}
+                className={inputCls}
+                placeholder="e.g. Installation"
+              />
+              <datalist id="service-categories">
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </datalist>
             </Field>
             <Field label="Base price ($)">
-              <input aria-label="Base Price" type="number" value={form.basePrice} onChange={(e) => set("basePrice", Number(e.target.value))} className={inputCls} />
+              <input aria-label="Base price" type="number" min={0} step="0.01" value={form.basePrice} onChange={(e) => set("basePrice", Number(e.target.value))} className={inputCls} />
             </Field>
           </div>
-          <Field label="Duration (mins)">
-            <input aria-label="Duration Mins" type="number" value={form.durationMins} onChange={(e) => set("durationMins", Number(e.target.value))} className={inputCls} />
+          <Field label="Typical duration (minutes)">
+            <input aria-label="Duration in minutes" type="number" min={5} step={5} value={form.durationMins} onChange={(e) => set("durationMins", Number(e.target.value))} className={inputCls} />
           </Field>
-          <Field label="Image URL">
-            <input aria-label="https://…" value={form.image} onChange={(e) => set("image", e.target.value)} className={inputCls} placeholder="https://…" />
+          <Field label="Image URL (optional)">
+            <input aria-label="Image URL" value={form.image} onChange={(e) => set("image", e.target.value)} className={inputCls} placeholder="https://…" />
           </Field>
           <Field label="Description">
             <textarea aria-label="Description" value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} className={inputCls} />
           </Field>
         </div>
-        <div className="flex justify-end gap-2 border-t border-white/5 px-5 py-4">
-          <button onClick={onClose} className="rounded-full px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white/5">
+        <div className="flex items-center justify-end gap-2 border-t border-white/5 px-5 py-4">
+          {save.isError && <span className="mr-auto text-xs text-red-400">{(save.error as Error).message}</span>}
+          <button onClick={onClose} className="rounded-full px-4 py-2 text-sm font-semibold text-slate-400 hover:bg-white/5">
             Cancel
           </button>
           <button
-            disabled={save.isPending || !form.name}
+            disabled={save.isPending || !form.name.trim()}
             onClick={() => save.mutate()}
             className="rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
           >
@@ -189,7 +216,7 @@ const inputCls =
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold text-slate-600">{label}</span>
+      <span className="mb-1 block text-xs font-semibold text-slate-400">{label}</span>
       {children}
     </label>
   );

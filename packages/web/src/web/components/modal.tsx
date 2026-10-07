@@ -109,7 +109,7 @@ export function Field({
 }: {
   label: string;
   children: React.ReactNode;
-  hint?: string;
+  hint?: React.ReactNode;
 }) {
   return (
     <label className="block">

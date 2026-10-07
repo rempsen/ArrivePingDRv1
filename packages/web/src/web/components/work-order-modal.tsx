@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -1122,7 +1123,14 @@ export function WorkOrderModal({
           )}
         </Field>
 
-        <Field label="Service">
+        <Field
+          label="Service"
+          hint={
+            <>
+              Missing one? <Link to="/admin/services" className="text-brand hover:underline">Manage services</Link>
+            </>
+          }
+        >
           <select value={serviceId} onChange={(e) => {
             setServiceId(e.target.value);
             const s = (services.data?.services ?? []).find((x: any) => x.id === e.target.value);
