@@ -17,6 +17,8 @@ import {
 import { HeroFilm } from "../site/live/HeroFilm";
 import { OpsBento } from "../site/live/OpsBento";
 import { DispatchStory } from "../site/live/DispatchStory";
+import { SetupAgent } from "../site/live/SetupAgent";
+import { FirstHour } from "../site/live/FirstHour";
 import "../site/site.css";
 import "../site/live/live.css";
 import "../site/scenes/scenes.css";
@@ -83,6 +85,8 @@ function Page() {
         <HeroFilm />
         <OpsBento />
         <DispatchStory />
+        <SetupAgent />
+        <FirstHour />
         <Showcase />
         <OutcomeStories />
         <Audiences />

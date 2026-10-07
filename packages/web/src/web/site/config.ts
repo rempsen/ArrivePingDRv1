@@ -132,6 +132,52 @@ export const bento = {
   body: "The office, the technician and the customer all work from the same job, so everyone sees the same thing at the same time.",
 };
 
+/** Getting started (option 1): the setup agent builds a workspace from a website. Sample result. */
+export const setupAgent = {
+  eyebrow: "Getting started",
+  title: "Live in under an hour.",
+  titleMuted: "Our setup agent does the heavy lifting.",
+  body: "Give it your website. The agent reads it, then builds your workspace: your brand, services, priced catalog, job templates, intake forms and customer texts. Most teams dispatch their first job within the hour.",
+  defaultSite: "prairiecomforthvac.com",
+  run: "Run setup agent",
+  cta: { label: "Start your setup", href: brand.urls.getStarted },
+  note: "Sample result for an HVAC company. Your workspace is built from your own website.",
+  steps: [
+    { text: (site: string) => `Reading ${site} · home, services and about pages`, t: "0:06" },
+    { text: () => "Logo and brand colors found", t: "0:14" },
+    { text: () => "Trade detected: HVAC & Plumbing", t: "0:19" },
+    { text: () => "8 services and 4 team members found", t: "0:31" },
+    { text: () => "Priced catalog loaded for your trade", t: "0:48" },
+    { text: () => "Job templates and intake forms written", t: "1:20" },
+    { text: () => "Customer texts and emails drafted in your voice", t: "1:44" },
+  ],
+  done: { text: "Workspace ready. Next: a short setup chat and team invites.", t: "1:52" },
+};
+
+/** Getting started (option 2): the first-hour clock and "keep your tools". Times are typical, not guaranteed. */
+export const firstHour = {
+  title: "Your first hour with ArrivePing.",
+  titleMuted: "An AI agent does most of it.",
+  body: "No consultants, no weeks of setup. Our setup agent builds your workspace from your website, asks a few questions about how you work, and has you dispatching jobs before the hour is up.",
+  milestones: [
+    { at: "0 min", title: "Paste your website", body: "That's the only form you fill in." },
+    { at: "2 min", title: "Workspace built for you", body: "Brand, services, priced catalog, job templates, intake forms and customer texts." },
+    { at: "15 min", title: "Short setup chat", body: "The agent asks 5–10 questions about your crews, jobs and pricing, then tunes everything." },
+    { at: "25 min", title: "Team invited", body: "Technicians and dispatchers get a text and email to join." },
+    { at: "40 min", title: "Bring your data", body: "Import customers and technicians straight from a spreadsheet." },
+    { at: "Under 60", title: "First job dispatched", body: "Your customer gets a text and a live ETA." },
+  ],
+  tools: {
+    title: "Keep the tools you already use",
+    body: "ArrivePing runs scheduling, work order assignment, tracking and customer updates. It doesn't ask you to replace your accounting, payroll or CRM.",
+  },
+  formats: {
+    title: "Your data, in the format you need",
+    items: ["CSV", "Excel", "PDF", "JSON", "Calendar feeds", "Webhooks · Zapier, Make", "MCP for AI agents", "Google Drive backup"],
+  },
+  note: "Typical first hour. Times vary with team size and how much data you bring.",
+};
+
 /** A · live dispatch story — "How it works". Timings are % of a 20 s loop. */
 export const dispatchStory = {
   eyebrow: "How it works",

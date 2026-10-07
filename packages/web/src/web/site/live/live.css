@@ -902,3 +902,424 @@
     display: none;
   }
 }
+
+/* ==========================================================================
+   Getting started · option 1: setup agent ("website in, workspace out")
+   .is-idle  waits for the section to scroll into view (rows hidden)
+   .is-run   plays once; replays when the visitor presses "Run setup agent"
+   .is-done  reduced motion: the finished result, no animation
+   ========================================================================== */
+.site .lv-sa-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px 40px;
+  align-items: end;
+}
+.site .lv-sa-head .lede {
+  margin: 0;
+}
+.site .lv-sa {
+  display: grid;
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: clamp(28px, 4vw, 40px);
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-demo);
+}
+.site .lv-sa-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px;
+  min-width: 0;
+}
+.site .lv-sa-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.site .lv-sa-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.site .lv-sa-form {
+  display: flex;
+  gap: 8px;
+}
+.site .lv-sa-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-strong);
+  background: var(--canvas);
+  color: var(--ink);
+  font: 500 15px var(--font-body);
+}
+.site .lv-sa-input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.site .lv-sa-form .btn {
+  white-space: nowrap;
+}
+.site .lv-sa-log {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.site .lv-sa-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #dbe5ef;
+}
+.site .lv-sa-row--done {
+  margin-top: 6px;
+  background: rgb(16 185 129 / 10%);
+  border: 1px solid rgb(16 185 129 / 35%);
+  color: #a7f3d0;
+  font-weight: 600;
+}
+.site .lv-sa-ico {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.site .lv-sa-spin {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgb(56 189 248 / 25%);
+  border-top-color: var(--accent);
+  opacity: 0;
+}
+.site .lv-sa-check {
+  position: absolute;
+}
+.site .lv-sa-time {
+  font-size: 12px;
+  color: #6f86a0;
+}
+.site .lv-sa-cta {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.site .lv-sa-ws {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #090f1a;
+  border: 1px solid rgb(255 255 255 / 6%);
+  min-width: 0;
+}
+.site .lv-sa-ws__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+  min-width: 0;
+}
+.site .lv-sa-ws__site {
+  font-size: 13px;
+  color: #6f86a0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.site .lv-sa-ws__tag {
+  margin-left: auto;
+  font-size: 12px;
+  color: #6f86a0;
+  white-space: nowrap;
+}
+.site .lv-sa-logo {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0ea5e9, #f59e0b);
+}
+.site .lv-sa-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+}
+.site .lv-sa-card {
+  padding: 14px;
+  border-radius: 12px;
+  background: #0e1626;
+  border: 1px solid rgb(255 255 255 / 7%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.site .lv-sa-card--wide {
+  grid-column: span 2;
+}
+.site .lv-sa-k {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6f86a0;
+}
+.site .lv-sa-brandrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.site .lv-sa-sw {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+.site .lv-sa-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.site .lv-sa-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 600;
+}
+.site .lv-sa-big {
+  font: 700 26px/1.1 var(--font-heading);
+  color: #fff;
+}
+.site .lv-sa-sub {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  line-height: 1.45;
+}
+.site .lv-sa-bubble {
+  align-self: flex-start;
+  max-width: 520px;
+  padding: 10px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: #1b2a3e;
+  font-size: 13.5px;
+  color: #dbe5ef;
+  line-height: 1.45;
+}
+
+/* idle: waiting to play */
+.site .lv-sa.is-idle .lv-sa-row {
+  opacity: 0;
+}
+.site .lv-sa.is-idle .lv-sa-tile {
+  opacity: 0.15;
+  filter: saturate(0);
+}
+/* run: one pass, each element at its own --lv-sa-d */
+.site .lv-sa.is-run .lv-sa-row {
+  animation: lv-sa-row 0.4s ease-out both;
+  animation-delay: var(--lv-sa-d, 0s);
+}
+.site .lv-sa.is-run .lv-sa-spin {
+  animation:
+    lv-sa-out 1.4s linear both,
+    lv-sa-rot 0.8s linear infinite;
+  animation-delay: var(--lv-sa-d, 0s), 0s;
+}
+.site .lv-sa.is-run .lv-sa-check {
+  animation: lv-sa-in 1.4s ease-out both;
+  animation-delay: var(--lv-sa-d, 0s);
+}
+.site .lv-sa.is-run .lv-sa-tile {
+  animation: lv-sa-tile 0.6s ease-out both;
+  animation-delay: var(--lv-sa-d, 0s);
+}
+.site .lv-sa-row .lv-sa-spin,
+.site .lv-sa-row .lv-sa-check {
+  --lv-sa-d: inherit;
+}
+@keyframes lv-sa-row { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes lv-sa-out { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes lv-sa-in { 0%, 80% { opacity: 0; transform: scale(0.6); } 100% { opacity: 1; transform: none; } }
+@keyframes lv-sa-rot { to { transform: rotate(360deg); } }
+@keyframes lv-sa-tile { from { opacity: 0.15; filter: saturate(0); } to { opacity: 1; filter: none; } }
+
+@media (max-width: 1000px) {
+  .site .lv-sa-head,
+  .site .lv-sa {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .site .lv-sa-form {
+    flex-direction: column;
+  }
+  .site .lv-sa-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .lv-sa-card--wide {
+    grid-column: auto;
+  }
+  .site .lv-sa-ws__tag {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Getting started · option 2: the first-hour clock
+   ========================================================================== */
+.site .lv-fh {
+  padding-top: clamp(24px, 4vw, 48px);
+}
+.site .lv-fh-main {
+  display: grid;
+  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 56px);
+  align-items: center;
+  margin-top: clamp(28px, 4vw, 40px);
+}
+.site .lv-fh-dial {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin-inline: auto;
+}
+.site .lv-fh-arc {
+  stroke-dasharray: 1005 1005;
+  stroke-dashoffset: 167.5;
+  animation: lv-fh-arc 16s ease-in-out infinite both;
+}
+.site .lv-fh-hand {
+  transform-origin: 200px 200px;
+  transform: rotate(300deg);
+  animation: lv-fh-hand 16s ease-in-out infinite both;
+}
+.site .lv-fh-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.site .lv-fh-ms {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  animation: lv-fh-ms 16s linear infinite both;
+}
+.site .lv-fh-ms b {
+  font: 700 15px var(--font-heading);
+  color: var(--accent);
+}
+.site .lv-fh-ms strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .lv-fh-ms span {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.site .lv-fh-io {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: clamp(28px, 4vw, 40px);
+}
+.site .lv-fh-col {
+  padding: 22px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.site .lv-fh-col h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .lv-fh-col p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.site .lv-fh-tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.site .lv-fh-tags li {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  color: #dbe5ef;
+  font-size: 13px;
+  font-weight: 600;
+}
+@keyframes lv-fh-ms { 0%, 16% { opacity: 1; background: #0e1626; border-color: rgb(56 189 248 / 40%); } 17.5%, 100% { opacity: 0.5; background: transparent; border-color: transparent; } }
+@keyframes lv-fh-arc { 0%, 16.7% { stroke-dashoffset: 1005; } 21%, 33.3% { stroke-dashoffset: 971.5; } 38%, 50% { stroke-dashoffset: 753.8; } 54.5%, 66.7% { stroke-dashoffset: 586.3; } 71.5%, 83.3% { stroke-dashoffset: 335; } 88%, 100% { stroke-dashoffset: 167.5; } }
+@keyframes lv-fh-hand { 0%, 16.7% { transform: rotate(0deg); } 21%, 33.3% { transform: rotate(12deg); } 38%, 50% { transform: rotate(90deg); } 54.5%, 66.7% { transform: rotate(150deg); } 71.5%, 83.3% { transform: rotate(240deg); } 88%, 100% { transform: rotate(300deg); } }
+@media (max-width: 900px) {
+  .site .lv-fh-main,
+  .site .lv-fh-io {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .lv-fh-dial {
+    max-width: 300px;
+  }
+}
