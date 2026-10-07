@@ -7,14 +7,14 @@ updated: "2026-09-18"
 author: "Dan Rosenblat"
 category: "dispatch-scheduling"
 tags: ["ai dispatch", "dispatch software", "customer loyalty", "field service costs", "preferred provider"]
-image: ""
-imageAlt: ""
+image: "/blog/img/ai-powered-dispatch-software-cover.webp"
+imageAlt: "ArrivePing scheduler with an AI dispatch panel ranking three technicians for a no-heat call by distance, skill match and availability, with Marcus as the best match"
 legacyUrl: "https://nvc360.com/ai-powered-dispatch-software-control-costs-earn-loyalty-become-the-preferred-provider-in-2026/"
 ---
 
 ## In 2026, cost control and customer service are the same strategy
 
-![Dispatcher at a desktop computer viewing a live map of technicians, with En Route, On Site, Available and Break status labels](/blog/img/ai-powered-dispatch-software-1.webp)
+![ArrivePing live map showing six technicians by status, with Marcus en route to a no-heat call 6 minutes away and the job timeline from work order to auto-assignment to live customer tracking](/blog/img/ai-powered-dispatch-software-map.webp)
 
 Every field-service operator knows the familiar 8:15 a.m. scramble. A technician is delayed, an appointment moves, the dispatcher begins calling around, and the customer is left wondering whether anyone is coming. One change can create overtime, wasted windshield time, a frustrated team, and a customer who starts comparing alternatives.
 
