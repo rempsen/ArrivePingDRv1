@@ -194,6 +194,9 @@
 .leaflet-container .maplibregl-canvas { outline: none; }
 
 /* Map / Satellite toggle button */
+/* Full-size maps: the toggle sits on the bottom edge ~35% in from the right so
+   the floating dispatch chat bubble (fixed bottom-right) never covers it. */
+.leaflet-bottom.leaflet-right.ap-corner-shift { right: 35%; }
 .leaflet-bar.ap-basemap-toggle { border: 0; box-shadow: none; }
 .ap-basemap-toggle button {
   display: inline-flex; align-items: center; gap: 6px;

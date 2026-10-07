@@ -87,6 +87,9 @@ function satelliteLayers(): L.Layer[] {
 const ICON_SAT = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>`;
 const ICON_MAP = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>`;
 
+/** Extra Leaflet control corner: bottom edge, ~35% in from the right. */
+const SHIFTED_CORNER = "bottomrightshift";
+
 export interface AttachBasemapOptions {
   /** Show the Map/Satellite toggle. `false` hides it; a position string places it. Default "bottomright". */
   toggle?: boolean | L.ControlPosition;
@@ -134,7 +137,20 @@ export function attachBasemap(map: L.Map, opts: AttachBasemapOptions = {}): Base
 
   let control: L.Control | null = null;
   if (opts.toggle !== false) {
-    const position: L.ControlPosition = typeof opts.toggle === "string" ? opts.toggle : "bottomright";
+    let position: L.ControlPosition = typeof opts.toggle === "string" ? opts.toggle : "bottomright";
+    // Full-size maps: the bottom-right corner is where the floating dispatch
+    // chat bubble lives (fixed, viewport bottom-right), and it sat on top of
+    // the toggle. Dan (2026-10-07): park the toggle ~35% in from the right
+    // edge instead. Leaflet only ships four corners, so register a fifth one
+    // that is otherwise identical to bottom-right and let CSS move it.
+    if (position === "bottomright" && !opts.compact) {
+      const corners = (map as unknown as { _controlCorners: Record<string, HTMLElement>; _controlContainer: HTMLElement })._controlCorners;
+      const container = (map as unknown as { _controlContainer: HTMLElement })._controlContainer;
+      if (corners && container && !corners[SHIFTED_CORNER]) {
+        corners[SHIFTED_CORNER] = L.DomUtil.create("div", "leaflet-bottom leaflet-right ap-corner-shift", container);
+      }
+      if (corners?.[SHIFTED_CORNER]) position = SHIFTED_CORNER as L.ControlPosition;
+    }
     const Toggle = L.Control.extend({
       onAdd() {
         const wrap = L.DomUtil.create("div", "leaflet-bar ap-basemap-toggle" + (opts.compact ? " ap-basemap-toggle--compact" : ""));
