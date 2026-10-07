@@ -222,10 +222,7 @@ export function FleetMap({
       FLEET_DEFAULT_ZOOM,
     );
     L.control.zoom({ position: "bottomleft" }).addTo(map);
-    // Bottom-right, nudged left so it sits beside (not under) the dispatch
-    // messenger bubble, which is fixed to the viewport's bottom-right corner
-    // (56px wide + 20px margin).
-    attachBasemap(map, { toggle: "bottomright", inset: { right: 84 } });
+    attachBasemap(map, { toggle: "bottomright" });
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 200);
     return () => {

@@ -95,12 +95,6 @@ export interface AttachBasemapOptions {
   toggle?: boolean | L.ControlPosition;
   /** Icon-only button for small embedded maps. */
   compact?: boolean;
-  /**
-   * Extra breathing room (px) between the toggle and the map edge, for pages
-   * where something fixed to the viewport (e.g. the dispatch chat bubble)
-   * would otherwise sit on top of it.
-   */
-  inset?: { right?: number; bottom?: number; left?: number; top?: number };
 }
 
 export interface BasemapHandle {
@@ -160,13 +154,6 @@ export function attachBasemap(map: L.Map, opts: AttachBasemapOptions = {}): Base
     const Toggle = L.Control.extend({
       onAdd() {
         const wrap = L.DomUtil.create("div", "leaflet-bar ap-basemap-toggle" + (opts.compact ? " ap-basemap-toggle--compact" : ""));
-        if (opts.inset) {
-          const { top, right, bottom, left } = opts.inset;
-          if (top) wrap.style.marginTop = `${top}px`;
-          if (right) wrap.style.marginRight = `${right}px`;
-          if (bottom) wrap.style.marginBottom = `${bottom}px`;
-          if (left) wrap.style.marginLeft = `${left}px`;
-        }
         button = L.DomUtil.create("button", "", wrap) as HTMLButtonElement;
         button.type = "button";
         renderButton();
