@@ -286,15 +286,48 @@ export const story = {
 } as const;
 
 export const pricing = {
-  title: "Simple per-vehicle pricing",
-  body: "One licence per vehicle, billed monthly. Larger fleets pay a lower rate per vehicle.",
-  note: "Prices in CAD/USD confirmed at demo. Every tier includes the dispatch board, the technician app and customer arrival pages.",
+  title: "Start for $49.",
+  titleMuted: "Grow one driver at a time.",
+  body: "Every plan includes the dispatch board, the technician app and live customer arrival pages. All prices in US dollars, billed monthly.",
+  note: "All prices in US dollars, billed monthly.",
   tiers: [
-    { name: "Starter", range: "1–14 vehicles", price: "$30", unit: "per vehicle / month" },
-    { name: "Growth", range: "15–49 vehicles", price: "$27.50", unit: "per vehicle / month", featured: true },
-    { name: "Fleet", range: "50+ vehicles", price: "$25", unit: "per vehicle / month" },
+    {
+      name: "Starter",
+      range: "1 driver · ready the same day",
+      price: "$49",
+      unit: "per month",
+      features: ["Workflow set up for how your team works", "Catalog pre-loaded with your services and parts", "Operating the same day"],
+      cta: { label: "Get started", href: brand.urls.getStarted },
+    },
+    {
+      name: "More drivers",
+      range: "Add 1–29 drivers to Starter",
+      price: "$30",
+      unit: "per added driver / month, plus Starter",
+      features: ["Everything in Starter", "Up to 30 drivers in total", "Add or remove drivers month to month"],
+      cta: { label: "Book a demo", href: brand.urls.demo },
+      featured: true,
+    },
+    {
+      name: "Fleet",
+      range: "More than 30 vehicles",
+      price: "$25",
+      unit: "per vehicle / month",
+      features: ["Everything in Starter", "Custom integrations with your systems", "Live onboarding with our team"],
+      cta: { label: "Talk to sales", href: brand.urls.demo },
+    },
   ],
 } as const;
+
+/** Monthly price in USD for a team of `n` drivers / vehicles (see pricing tiers). */
+export function monthlyPrice(n: number): { plan: string; total: number; breakdown: string } {
+  if (n <= 1) return { plan: "Starter", total: 49, breakdown: "Starter, 1 driver" };
+  if (n <= 30) {
+    const added = n - 1;
+    return { plan: "More drivers", total: 49 + 30 * added, breakdown: `Starter $49 + ${added} added driver${added === 1 ? "" : "s"} × $30` };
+  }
+  return { plan: "Fleet", total: 25 * n, breakdown: `${n} vehicles × $25` };
+}
 
 export const faqs = [
   {
@@ -319,7 +352,7 @@ export const faqs = [
   },
   {
     q: "How is it priced?",
-    a: "Per vehicle, per month: $30 for 1–14 vehicles, $27.50 for 15–49 and $25 for 50 or more.",
+    a: "In US dollars, billed monthly. Starter is $49 a month for one driver, with your workflow set up and catalog pre-loaded so you can operate the same day. Add 1–29 more drivers at $30 each per month. Fleets of more than 30 vehicles pay $25 per vehicle per month, with custom integrations and live onboarding.",
   },
 ] as const;
 

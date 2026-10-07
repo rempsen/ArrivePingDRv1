@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { audiences, brand, chapters, closing, faqs, pricing, stats, stories, story } from "../config";
+import { useEffect, useRef, useState } from "react";
+import { audiences, brand, chapters, closing, faqs, monthlyPrice, pricing, stats, stories, story } from "../config";
 import { MediaSlot } from "../components/MediaSlot";
 import { DemoForm } from "../components/DemoForm";
 import { useAnchorNav } from "../components/SiteHeader";
@@ -151,23 +151,34 @@ export function Audiences() {
 }
 
 /* ---------------- Pricing ---------------- */
+const PRESETS = [1, 5, 10, 20, 30, 31, 50];
+
 export function Pricing() {
   const go = useAnchorNav();
+  const [drivers, setDrivers] = useState(10);
+  const est = monthlyPrice(drivers);
+  const nav = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (href.startsWith("#")) go(e, href);
+  };
   return (
     <section id="pricing" className="section section--divided anchor">
       <div className="container">
         <div className="intro intro--center" data-reveal="">
           <span className="eyebrow">Pricing</span>
-          <h2 className="h-section">{pricing.title}</h2>
+          <h2 className="h-section">
+            {pricing.title} <span className="h-muted">{pricing.titleMuted}</span>
+          </h2>
           <p className="lede">{pricing.body}</p>
         </div>
         <div className="tiers" onMouseMove={handleSpotlight}>
           {pricing.tiers.map((t, i) => {
             const featured = "featured" in t && t.featured;
+            const active = est.plan === t.name;
             return (
               <div
                 key={t.name}
                 className={`tier spot${featured ? " tier--featured beam" : ""}`}
+                data-active={active ? "true" : undefined}
                 data-reveal=""
                 data-reveal-delay={String(i)}
               >
@@ -176,15 +187,61 @@ export function Pricing() {
                   {featured && <span className="tier__tag">Most common</span>}
                 </div>
                 <div className="tier__range">{t.range}</div>
-                <div className="tier__price">{t.price}</div>
+                <div className="tier__price">
+                  {t.price} <span className="tier__cur">USD</span>
+                </div>
                 <div className="tier__unit">{t.unit}</div>
-                <a href={brand.urls.demo} className={`btn ${featured ? "btn--primary" : "btn--secondary"}`} onClick={(e) => go(e, brand.urls.demo)}>
-                  Book a demo
+                <ul className="tier__features">
+                  {t.features.map((f) => (
+                    <li key={f}>
+                      <svg width="16" height="16" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                        <path d="M4 9.5l3 3 7-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <a href={t.cta.href} className={`btn ${featured ? "btn--primary" : "btn--secondary"}`} onClick={(e) => nav(e, t.cta.href)}>
+                  {t.cta.label}
                 </a>
               </div>
             );
           })}
         </div>
+
+        <div className="estimator" data-reveal="">
+          <div className="estimator__input">
+            <label htmlFor="estimator-drivers" className="estimator__label">
+              How many drivers or vehicles? <span className="estimator__n tnum">{drivers}</span>
+            </label>
+            <input
+              id="estimator-drivers"
+              type="range"
+              min={1}
+              max={60}
+              step={1}
+              value={drivers}
+              onChange={(e) => setDrivers(Number(e.target.value))}
+              className="estimator__range"
+              aria-label="Number of drivers or vehicles"
+            />
+            <div className="estimator__presets">
+              {PRESETS.map((v) => (
+                <button key={v} type="button" className="estimator__chip" aria-pressed={drivers === v} onClick={() => setDrivers(v)}>
+                  {v === 1 ? "1 driver" : `${v} ${v > 30 ? "vehicles" : "drivers"}`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="estimator__result" aria-live="polite">
+            <span className="estimator__plan">Your plan · {est.plan}</span>
+            <span className="estimator__total tnum">
+              ${est.total.toLocaleString("en-US")} <span>USD / month</span>
+            </span>
+            <span className="estimator__breakdown">{est.breakdown}</span>
+          </div>
+        </div>
+
         <p className="pricing__note" data-reveal="">
           {pricing.note}
         </p>
