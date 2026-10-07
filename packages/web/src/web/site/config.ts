@@ -322,7 +322,7 @@ export const story = {
   title: "We didn't build this in a lab.",
   titleMuted: "We built it in the field.",
   body:
-    "ArrivePing comes out of NVC360, a specialty subcontracting operation that ran more than 800 field technicians. We lived the friction firsthand — dispatchers tied to the phone, customers demanding updates, routes that didn't add up, margin lost in every communication gap. We looked for a platform that fixed it. It didn't exist, so we built one — and we're making it available to every field service team facing the same problem.",
+    "ArrivePing began as software built for National Interiors, a specialty subcontracting operation that ran more than 800 field technicians. We lived the friction firsthand — dispatchers tied to the phone, customers demanding updates, routes that didn't add up, margin lost in every communication gap. We looked for a platform that fixed it. It didn't exist, so we built one. After National Interiors was sold in 2021, we founded NVC360 to rebuild that tool as a multi-tenant platform. ArrivePing is the result, and we're making it available to every field service team facing the same problem.",
   quote: "800+ technicians. One lesson learned: your customers' time is your reputation.",
   quoteAttribution: "ArrivePing / NVC360 founding team, Winnipeg, MB",
   guarantee: {

@@ -28,7 +28,7 @@ export function organization(): JsonLd {
     logo: `${SITE_URL}/apple-touch-icon.png`,
     email: brand.contactEmail,
     description:
-      "NVC360 is a field service software company in Winnipeg, Manitoba. It makes ArrivePing, software for dispatching technicians and keeping customers updated with live arrival times.",
+      "NVC360 is a software company in Winnipeg, Manitoba that builds AI software tooling and automations, custom AI solutions and software, and provides consulting. Its first commercial product is ArrivePing, field service software for dispatching technicians and keeping customers updated with live arrival times.",
     address: {
       "@type": "PostalAddress",
       addressLocality: "Winnipeg",
@@ -37,6 +37,7 @@ export function organization(): JsonLd {
     },
     areaServed: ["CA", "US"],
     brand: { "@type": "Brand", name: brand.product },
+    knowsAbout: ["AI software tooling and automation", "Custom AI solutions", "Software development", "Field service management software"],
     sameAs: ["https://nvc360.com"],
   };
 }

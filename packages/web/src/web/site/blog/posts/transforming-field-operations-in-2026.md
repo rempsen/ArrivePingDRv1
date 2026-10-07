@@ -44,13 +44,13 @@ Now picture the future of field operations:
 
 ## Built in the Field
 
-ArrivePing wasn’t built in a boardroom—it was born in the field. Our founder, Dan Rosenblat, developed this software while managing 800+ field technicians for a specialty interior contractor. The results were clear:
+ArrivePing wasn’t built in a boardroom—it was born in the field. Our founder, Dan Rosenblat, developed the original version of this software for National Interiors, a specialty interior contractor running 800+ field technicians. The results were clear:
 
 - **Lower overall labor costs** while maintaining production levels
 - **A customer experience** that became the company’s key differentiator
 - **Real-world coordination** of a large field workforce, day in and day out
 
-After selling that business in 2021, Dan retained the technology and founded NVC360 in 2023 with one mission: turn this proven tool into a scalable software product that transforms how field service businesses operate. That product is ArrivePing.
+National Interiors was sold in 2021. Dan kept the technology, and in late 2023 founded NVC360 to re-engineer it as a robust, multi-tenant platform with expanded features, and to turn a tool into a company. ArrivePing is the result: NVC360's first commercial product.
 
 ## Think Skip The Dishes—But for Trades
 

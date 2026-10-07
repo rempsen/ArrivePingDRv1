@@ -295,7 +295,7 @@ const construction: LandingPage = {
       kind: "prose",
       title: "Built by people who ran crews.",
       paragraphs: [
-        "ArrivePing comes out of NVC360, a specialty subcontracting operation in Winnipeg that ran more than 800 field technicians. Dispatchers tied to the phone, crews at the wrong site and hours that didn't add up were daily problems. ArrivePing is the tool we wanted.",
+        "ArrivePing began as software our founding team built for National Interiors, a Winnipeg specialty subcontracting operation that ran more than 800 field technicians. Dispatchers tied to the phone, crews at the wrong site and hours that didn't add up were daily problems. ArrivePing is the tool we wanted, rebuilt by NVC360 for every trade.",
       ],
     },
     { kind: "trades", title: "Trades we work with." },
@@ -402,15 +402,15 @@ const about: LandingPage = {
   meta: {
     title: "About ArrivePing by NVC360 | Winnipeg, Canada",
     description:
-      "ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba, built from running 800+ field technicians. Launching November 2026.",
+      "ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It began as a tool built for a contractor running 800+ field technicians. Launching November 2026.",
   },
   eyebrow: "About ArrivePing",
   h1: "ArrivePing is field service software built in the field, in Winnipeg.",
   lede:
-    "ArrivePing is made by NVC360, a Winnipeg, Manitoba company that ran a specialty subcontracting operation with more than 800 field technicians before building the software it couldn't find.",
+    "ArrivePing is made by NVC360, a Winnipeg, Manitoba software company. It started as a tool built for National Interiors, a specialty subcontracting operation with more than 800 field technicians.",
   answer: {
     q: "Who makes ArrivePing?",
-    a: "ArrivePing is made by NVC360, a field service software company headquartered in Winnipeg, Manitoba, Canada. ArrivePing is not affiliated with Arrive, Arrive Logistics, Arrive AI or the arrive.gg gaming product.",
+    a: "ArrivePing is made by NVC360, a software company headquartered in Winnipeg, Manitoba, Canada, that builds AI software tooling and automations, custom AI solutions and software, and provides consulting. ArrivePing is NVC360's first commercial product. It is not affiliated with Arrive, Arrive Logistics, Arrive AI or the arrive.gg gaming product.",
   },
   sections: [
     { kind: "story" },
@@ -420,7 +420,8 @@ const about: LandingPage = {
       paragraphs: [],
       bullets: [
         "Product: ArrivePing, field service management software for dispatch, technician tracking and customer communication",
-        "Company: NVC360, Winnipeg, Manitoba, Canada",
+        "Company: NVC360, Winnipeg, Manitoba, Canada: AI software tooling and automations, custom AI solutions, consulting and software development",
+        "History: first built for National Interiors, a specialty subcontractor running 800+ field technicians (sold in 2021); NVC360 was founded in late 2023 to rebuild it as a multi-tenant platform",
         "Launch: November 2026",
         "Pricing: from $49 USD a month, published at arriveping.com/pricing",
         "Platforms: web dispatch console, technician app for iOS and Android, browser-based customer tracking pages",

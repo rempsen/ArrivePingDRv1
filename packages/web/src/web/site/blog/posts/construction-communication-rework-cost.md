@@ -124,7 +124,7 @@ None of this requires replacing existing systems or retooling entire operations.
 
 ## Where ArrivePing Fits Into the Construction Communication Solution
 
-ArrivePing was not designed in a software lab. It was built by NVC360, out of running a specialty subcontracting operation with **more than 800 field technicians** — where the communication failures described above were not hypothetical. They were daily operational realities eating margin, destroying schedules, and frustrating clients.
+ArrivePing was not designed in a software lab. It was built by NVC360 from software its founding team first wrote for National Interiors, a specialty subcontracting operation with **more than 800 field technicians** — where the communication failures described above were not hypothetical. They were daily operational realities eating margin, destroying schedules, and frustrating clients.
 
 Every feature in ArrivePing exists because a real operational problem demanded it. Here is how it maps onto the failure points identified in construction communication research.
 

@@ -75,7 +75,8 @@ export function llmsTxt(): string {
 
 Key facts:
 - Name: ArrivePing (also written "ArrivePing by NVC360"). Not affiliated with Arrive, Arrive Logistics, Arrive AI or arrive.gg.
-- Company: NVC360, Winnipeg, Manitoba, Canada. Contact: ${brand.contactEmail}
+- Company: NVC360, Winnipeg, Manitoba, Canada: a software company building AI software tooling and automations, custom AI solutions and software, and providing consulting. ArrivePing is its first commercial product. Contact: ${brand.contactEmail}
+- History: first built for National Interiors, a specialty subcontractor running 800+ field technicians (sold in 2021); NVC360 was founded in late 2023 to rebuild it as a multi-tenant platform
 - Category: field service management (FSM) software; dispatch software; technician tracking; customer communication
 - Pricing (USD, monthly): Starter $49 including the first driver; drivers 2–10 $30 each; drivers 11–30 $27 each; drivers 31+ $25 each (graduated). Details: ${SITE_URL}/pricing
 - Platforms: web dispatch console; technician app for iOS and Android; customer tracking pages in any browser (no customer app)
