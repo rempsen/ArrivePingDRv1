@@ -109,12 +109,24 @@ export default function Jobs() {
     );
 
   const bookings = data ?? [];
-  const offered = bookings.filter((b) => b.assignStatus === "offered" && b.status !== "completed");
+  // The API returns bookings ordered by creation (createdAt desc) since that's
+  // what the admin console wants. The tech's day view needs the opposite:
+  // whichever job is due soonest on top, then the rest chronologically — not
+  // whichever was dispatched most recently. Sort here rather than touching the
+  // shared endpoint, so admin lists are unaffected.
+  const byScheduledAtAsc = (a: Booking, b: Booking) => {
+    const at = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Infinity;
+    const bt = b.scheduledAt ? new Date(b.scheduledAt).getTime() : Infinity;
+    return at - bt;
+  };
+  const offered = bookings
+    .filter((b) => b.assignStatus === "offered" && b.status !== "completed")
+    .sort(byScheduledAtAsc);
   const active = bookings.filter(
     (b) => b.assignStatus === "accepted" && ACTIVE.has(b.status)
   );
-  const upcoming = active.filter((b) => b.status === "assigned");
-  const inflight = active.filter((b) => b.status !== "assigned");
+  const upcoming = active.filter((b) => b.status === "assigned").sort(byScheduledAtAsc);
+  const inflight = active.filter((b) => b.status !== "assigned").sort(byScheduledAtAsc);
 
   const stats = todayStats ?? { jobsDone: 0, earnings: 0, activeJobs: 0, totalToday: 0 };
 
