@@ -162,6 +162,13 @@ export const automationRules = pgTable("automation_rules", {
   conditions: text("conditions").notNull().default("{}"),
   action: text("action").notNull(), // auto_assign | send_sms | notify_dispatch | reroute | escalate
   actionConfig: text("action_config").notNull().default("{}"),
+  // suggest | assign — only meaningful for assignment actions. "suggest" (the
+  // default) notifies the office with a recommended technician and touches
+  // nothing; "assign" really dispatches the job and stamps it auto-assigned.
+  // Turning "assign" on is an explicit, separately-confirmed step in the UI.
+  mode: text("mode").notNull().default("suggest"),
+  // which gallery template this rule was created from ("" = hand-built)
+  templateKey: text("template_key").notNull().default(""),
   enabled: boolean("enabled").notNull().default(true),
   runsCount: integer("runs_count").notNull().default(0),
   lastRunAt: timestamp("last_run_at", { mode: "date", withTimezone: true }),
@@ -327,6 +334,11 @@ export const bookings = pgTable("bookings", {
   // required skill matching for dispatch
   requiredSkillClass: text("required_skill_class").notNull().default(""), // e.g. "HVAC" — filters techs on scheduler
   requiredSkills: text("required_skills").notNull().default(""),          // csv of individual skill tags required
+  // Set when an automation rule (mode "assign") dispatched this job. Drives the
+  // "A" badge on every job surface so a human can always tell an automated
+  // assignment from a dispatcher's decision. Cleared on manual reassignment.
+  autoAssignedRuleId: text("auto_assigned_rule_id").notNull().default(""),
+  autoAssignedAt: timestamp("auto_assigned_at", { mode: "date", withTimezone: true }),
   // soft-delete: when set, the job is archived (excluded from active lists) but never lost
   deletedAt: timestamp("deleted_at", { mode: "date", withTimezone: true }),
   createdAt: now(),

@@ -12,6 +12,7 @@ import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } f
 import { fireEvent } from "../../services/dispatch";
 import { recomputeBooking } from "../../services/billing";
 import { reconcileRiderStatus } from "../../services/presence";
+import { assignJob } from "../../services/assign";
 import { applyBookingStatus, resumeClock, StatusTransitionError } from "../../services/booking-status";
 import { putObject } from "../lib/storage";
 import { capture } from "../lib/analytics";
@@ -30,7 +31,7 @@ import {
 import { companyTimeZone } from "../../services/company-tz";
 import { findAvailabilityBlock } from "../../services/availability";
 import { zonedDayBounds, fmtInZone } from "../../shared/tz";
-import { assignBlockedReason, isInFlightStatus, isTerminalStatus } from "../../shared/job-status";
+import { isTerminalStatus } from "../../shared/job-status";
 import { z } from "zod";
 import { jsonBody,
   id as idField,
@@ -982,6 +983,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // handle (re)assignment if the rider changed
     const newRider = body.riderId;
     if (newRider !== undefined && newRider !== (prev.riderId ?? "")) {
+      // A human changed the tech, so the job is no longer an automation's call.
+      set.autoAssignedRuleId = "";
+      set.autoAssignedAt = null;
       if (newRider) {
         set.riderId = newRider;
         if (["pending", "confirmed", "unassigned"].includes(prev.status))
@@ -1042,84 +1046,24 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
     const { riderId, force } = c.req.valid("json");
     const id = c.req.param("id");
-    const t = tx(c);
-    // Tenant check: without this an admin could assign a technician belonging to
-    // another company by passing their id — the booking update itself is
-    // tenant-scoped, but riderId was never checked against the same tenant.
-    const assignee = await t.selectOne(schema.riders, eq(schema.riders.id, riderId));
-    if (!assignee) return c.json({ message: "Technician not found" }, 404);
-    // A bad/stale booking id used to fall through to `enrich(undefined)`.
-    const prev = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
-    if (!prev) return c.json({ message: "Work order not found" }, 404);
-
-    // Terminal and in-flight jobs are protected (see assignBlockedReason).
-    const blocked = assignBlockedReason(prev.status, { force });
-    // `forceable` tells the dispatch UI whether this refusal is a "are you sure"
-    // (a tech is mid-job) or a hard no (the job is completed/cancelled), so it can
-    // offer a Reassign confirmation for the first and only explain the second.
-    if (blocked)
+    // Every guard (tenant check on the tech, terminal/in-flight protection,
+    // double-booking + time off, compare-and-set, presence, "assigned" event)
+    // lives in services/assign.ts so automation rules and dispatchers share it.
+    const r = await assignJob(co, id, riderId, { force, by: { kind: "dispatcher", name: u.name } });
+    if (!r.ok) {
+      if (r.code === "tech_not_found" || r.code === "job_not_found")
+        return c.json({ message: r.message }, 404);
       return c.json(
-        { message: blocked, status: prev.status, forceable: isInFlightStatus(prev.status) },
+        {
+          message: r.message,
+          ...(r.status ? { status: r.status } : {}),
+          ...(r.reason ? { reason: r.reason } : {}),
+          forceable: r.forceable,
+        },
         409,
       );
-    // Re-offering the job to the tech who already accepted it looks harmless in
-    // the UI but wipes acceptedAt, drops them back to "offered" and re-sends the
-    // dispatch notification. Refuse unless the office really means it.
-    if (prev.riderId === riderId && prev.assignStatus === "accepted" && !force)
-      return c.json(
-        { message: "This technician has already accepted this job.", status: prev.status, forceable: true },
-        409,
-      );
-
-    // Is this tech actually free then? Nothing used to ask. The board would send
-    // one person to two addresses at 2:00 PM, and `tech_shifts` (time off) was
-    // written by the UI and read by nothing at all. Forceable, because a real
-    // dispatcher overrides both for good reasons — just not by accident.
-    if (!force) {
-      const busy = await findAvailabilityBlock(co, {
-        riderId,
-        scheduledAt: prev.scheduledAt,
-        bookingId: id,
-        serviceId: prev.serviceId,
-      });
-      if (busy)
-        return c.json({ message: busy.message, reason: busy.kind, status: prev.status, forceable: true }, 409);
     }
-
-    const set: Record<string, unknown> = {
-      riderId, status: "assigned", assignStatus: "offered",
-      assignedAt: new Date(), acceptedAt: null, declineReason: "",
-    };
-    // Handing a live job to someone else: the new tech must not inherit the
-    // previous tech's drive time, arrival or running on-site clock (that time is
-    // billable and belongs to the first visit, not to this one).
-    if (prev.status !== "assigned" && prev.riderId !== riderId) {
-      set.enrouteAt = null;
-      set.startedAt = null;
-      set.clockState = "idle";
-      set.lastResumeAt = null;
-      set.insideGeofence = false;
-    }
-    // Compare-and-set on the status we just checked: if a tech accepted, released
-    // or completed the job in the meantime, this write does nothing rather than
-    // clobbering the newer state.
-    const [b] = await t.update(
-      schema.bookings,
-      set,
-      and(eq(schema.bookings.id, id), eq(schema.bookings.status, prev.status)),
-    );
-    if (!b)
-      return c.json(
-        { message: "This job just changed — pull it up again to see where it is now." },
-        409,
-      );
-    await reconcileRiderStatus(co, riderId);
-    // Free the tech who was pulled off, so they don't stay "busy" on a job they
-    // no longer hold.
-    if (prev.riderId && prev.riderId !== riderId) await reconcileRiderStatus(co, prev.riderId);
-
-    await fireEvent("assigned", id);
-    return c.json({ booking: await enrich(b) }, 200);
+    return c.json({ booking: await enrich(r.booking) }, 200);
   })
   // tech accepts an offered job.
   // Compare-and-set: only transitions a job that is STILL "offered". If the
@@ -1157,7 +1101,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     await fireEvent("declined", id);
     const [b] = await t.update(
       schema.bookings,
-      { riderId: null, status: "confirmed", assignStatus: "declined", declineReason: reason || "" },
+      { riderId: null, status: "confirmed", assignStatus: "declined", declineReason: reason || "", autoAssignedRuleId: "", autoAssignedAt: null },
       and(eq(schema.bookings.id, id), eq(schema.bookings.assignStatus, "offered")),
     );
     if (!b) throw Err.conflict("This job is no longer pending your response.");
@@ -1265,6 +1209,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
         status: "confirmed",
         assignStatus: "released",
         declineReason: detail,
+        autoAssignedRuleId: "",
+        autoAssignedAt: null,
         assignedAt: null,
         acceptedAt: null,
         // in-flight progress belongs to the trip that just ended: reset it so

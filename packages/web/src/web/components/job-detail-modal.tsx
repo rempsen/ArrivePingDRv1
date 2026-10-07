@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Modal, BtnPrimary, BtnGhost } from "./modal";
 import { StatusBadge } from "./brand";
+import { AutoBadge } from "./auto-badge";
 import { TechAvatar } from "./tech-avatar";
 import { apiHeaders } from "../lib/api";
 import { fmtDate, money, PRIORITY_META } from "../lib/utils";
@@ -208,6 +209,11 @@ export function JobDetailModal({
       {/* status strip */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <StatusBadge status={status} />
+        {(job.autoAssignedRuleId || (r as any)?.autoAssignedRuleId) && (
+          <span className="flex items-center gap-1.5 rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-bold text-violet-300">
+            <AutoBadge booking={{ autoAssignedRuleId: "1" }} size="xs" /> Auto-assigned
+          </span>
+        )}
         {pm && (
           <span
             className="rounded-full px-2 py-0.5 text-[11px] font-bold"

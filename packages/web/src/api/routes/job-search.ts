@@ -232,6 +232,7 @@ async function enrichRows(rows: (typeof schema.bookings.$inferSelect)[]) {
       lng: b.lng ?? null,
       technician: rider?.name ?? (b.riderId ? "—" : "Unassigned"),
       riderId: b.riderId,
+      autoAssignedRuleId: b.autoAssignedRuleId ?? "",
       scheduledAt: b.scheduledAt,
       completedAt: b.finishedAt,
       startedAt: b.startedAt,
@@ -547,6 +548,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
         notes: b.notes,
         customer: cust ? { id: cust.id, name: cust.name, phone: b.customerPhone || cust.phone, email: cust.email } : null,
         technician: rider,
+        autoAssignedRuleId: b.autoAssignedRuleId ?? "",
         timeline: {
           scheduledAt: b.scheduledAt,
           assignedAt: b.assignedAt,

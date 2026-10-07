@@ -8,6 +8,7 @@ import { assignJob } from "../../lib/assign-job";
 import { runWithForceConfirm } from "../../lib/force-confirm";
 import { FullLoader } from "../../components/loader";
 import { PageWrap, StatusBadge } from "../../components/brand";
+import { AutoBadge, AutoBadgeCorner } from "../../components/auto-badge";
 import { PageHead } from "./shell";
 import { PRIORITY_META, STATUS_META } from "../../lib/utils";
 import { WorkOrderModal } from "../../components/work-order-modal";
@@ -529,8 +530,9 @@ export default function SchedulerPage() {
                         appears at the widths where dragging actually works. */}
                     <GripVertical className="mt-0.5 hidden h-4 w-4 shrink-0 text-slate-600 group-hover:text-slate-400 lg:block" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-white">
-                        {b.title || b.service?.name}
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                        <span className="truncate">{b.title || b.service?.name}</span>
+                        <AutoBadge booking={b} />
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
                         <MapPin className="h-3 w-3 shrink-0" />
@@ -707,6 +709,7 @@ export default function SchedulerPage() {
                             </span>{" "}
                             {b.title || b.service?.name}
                           </span>
+                          <AutoBadge booking={b} size="xs" />
                           <button
                             type="button"
                             aria-label={`Delete ${jobLower}`}
@@ -957,6 +960,7 @@ export default function SchedulerPage() {
                                     tiny ? "3px 3px" : density === "narrow" || oneLine ? "3px 4px" : density === "medium" ? "4px 6px" : "6px 8px",
                                 }}
                               >
+                                <AutoBadgeCorner booking={b} />
                                 {density !== "narrow" && (
                                   <button
                                     type="button"
@@ -1215,6 +1219,7 @@ export default function SchedulerPage() {
                                   })}
                                 </span>
                                 <StatusBadge status={b.status} />
+                                <AutoBadge booking={b} />
                               </div>
                               <p className="mt-0.5 font-semibold leading-snug text-slate-100">
                                 {b.title || b.service?.name}
@@ -1673,6 +1678,7 @@ export default function SchedulerPage() {
                             {b.title || b.service?.name}
                           </span>
                           <StatusBadge status={b.status} />
+                          <AutoBadge booking={b} />
                         </button>
                         <button
                           onClick={() => removeJob(b)}

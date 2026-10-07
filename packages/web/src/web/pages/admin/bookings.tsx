@@ -8,6 +8,7 @@ import { api, apiHeaders } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
 import { assignJob } from "../../lib/assign-job";
 import { StatusBadge, PageWrap } from "../../components/brand";
+import { AutoBadge } from "../../components/auto-badge";
 import { PageHead } from "./shell";
 import { fmtDate, money, PRIORITY_META, dismiss } from "../../lib/utils";
 import {
@@ -448,7 +449,8 @@ export default function AdminWorkOrders() {
                             ARCHIVED
                           </span>
                         )}
-                        <span className="ml-auto">
+                        <span className="ml-auto flex items-center gap-1.5">
+                          <AutoBadge booking={b} />
                           <StatusBadge status={b.status} />
                         </span>
                       </div>
@@ -613,6 +615,7 @@ export default function AdminWorkOrders() {
                             <p className="truncate font-medium text-slate-100">
                               {b.title || b.service}
                             </p>
+                            <AutoBadge booking={b} />
                             {b.priority && PRIORITY_META[b.priority] && (
                               <span
                                 className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
