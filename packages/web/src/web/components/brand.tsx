@@ -23,7 +23,7 @@ export function Logo({
     return (
       <Link to={to} className={cn("inline-flex items-center py-1 lg:py-0", className)}>
         <img
-          src={light ? "/arriveping-icon-light.png?v=2" : "/arriveping-icon-dark.png?v=2"}
+          src={light ? "/arriveping-icon-light.png?v=3" : "/arriveping-icon-dark.png?v=3"}
           alt="ArrivePing"
           className={cn("h-9 w-9 rounded-xl object-contain", imgClassName)}
         />

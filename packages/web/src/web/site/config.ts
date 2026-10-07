@@ -15,8 +15,8 @@ export const brand = {
   tagline: "Appointment arrivals your customers can actually plan around.",
   logoDark: "/arriveping-logo-dark.png?v=2", // navy wordmark for light surfaces
   logoLight: "/arriveping-logo-light.png?v=2", // white wordmark for dark surfaces
-  icon: "/apple-touch-icon.png", // square navy "P" + ripple mark, full-bleed — used as a badge
-  watermark: "/arriveping-icon-dark.png", // white "P" on navy — ghosted behind the closing section
+  icon: "/apple-touch-icon.png?v=3", // square navy "AP" + ping rings mark, full-bleed — used as a badge
+  watermark: "/arriveping-icon-dark.png?v=3", // white "AP" on navy — ghosted behind the closing section
   contactEmail: "contact@nvc360.com",
   launch: "Launching November 2026",
   urls: {
