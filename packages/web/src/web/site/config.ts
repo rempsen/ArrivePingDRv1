@@ -82,6 +82,8 @@ export const fixture = {
 } as const;
 
 export const illustrativeLabel = "Illustrative demo";
+/** Label on slots that play real app footage (the demo company is fictional). */
+export const footageLabel = "Real app";
 
 /* ------------------------------------------------------------------ */
 /* Copy                                                                 */
@@ -166,16 +168,19 @@ export const workflow = [
     step: "01",
     title: "Set up the appointment",
     body: "Add the customer, the job and the time — from your office dispatch, by hand, or straight from an intake form.",
+    image: { src: "/img/site/howit-1-office.webp", alt: "The ArrivePing jobs list: each appointment with its customer, time, assigned technician, status and total." },
   },
   {
     step: "02",
     title: "Keep the arrival status current",
     body: "The technician taps 'On my way' in the app. ArrivePing calculates the arrival window and tracks the trip.",
+    image: { src: "/img/site/howit-2-technician.webp", alt: "The technician app on an active job: the customer, address, one-tap navigation, live location sharing and a 9-minutes-away estimate." },
   },
   {
     step: "03",
     title: "Give the customer a clear update",
     body: "The customer gets a link to a live arrival page. Delays and arrival are communicated in plain language.",
+    image: { src: "/img/site/howit-3-customer.webp", alt: "The customer's live arrival page: the technician's route to the house on a map, with a 7-minute estimate." },
   },
 ] as const;
 

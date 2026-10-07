@@ -21,6 +21,8 @@ interface LiveMapProps {
   /** live ETA in minutes, rendered as a badge on the driver marker */
   etaMins?: number | null;
   riderLabel?: string;
+  /** +/- buttons. Off on the customer's phone view (pinch-zoom works). */
+  zoomControl?: boolean;
   className?: string;
 }
 
@@ -62,6 +64,7 @@ export function LiveMap({
   route,
   routeApprox,
   etaMins,
+  zoomControl = true,
   className,
 }: LiveMapProps) {
   const elRef = useRef<HTMLDivElement>(null);
@@ -106,7 +109,7 @@ export function LiveMap({
     // fire `load` (already `complete` before the listener attaches), leaving
     // the tile stuck at opacity:0 forever (blank map). See zones.tsx for detail.
     const map = L.map(elRef.current, {
-      zoomControl: true,
+      zoomControl,
       attributionControl: false,
       zoomAnimation: true,
       fadeAnimation: false,
@@ -196,15 +199,20 @@ export function LiveMap({
       lineRef.current = null;
     }
 
-    // Frame: route if we have one, else both pins, else follow the van.
+    // Frame: the van, the house and the road between them, centred. Extra room
+    // on top for the ETA pill above the van and the house pin's point.
     if (rider && destination) {
-      const pts: [number, number][] = hasRoute
-        ? route!.map((p) => [p.lat, p.lng])
-        : [
-            [rider.lat, rider.lng],
-            [destination.lat, destination.lng],
-          ];
-      map.fitBounds(L.latLngBounds(pts).pad(0.25), { animate: true });
+      const pts: [number, number][] = [
+        [rider.lat, rider.lng],
+        [destination.lat, destination.lng],
+        ...(hasRoute ? route!.map((p): [number, number] => [p.lat, p.lng]) : []),
+      ];
+      map.fitBounds(L.latLngBounds(pts), {
+        animate: true,
+        paddingTopLeft: [40, 72],
+        paddingBottomRight: [40, 36],
+        maxZoom: 16,
+      });
     } else if (rider) {
       map.panTo([rider.lat, rider.lng], { animate: true });
     }

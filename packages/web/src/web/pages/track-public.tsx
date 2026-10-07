@@ -349,62 +349,37 @@ function DelayBanner({
   );
 }
 
-function StatusStepper({ status }: { status: string }) {
-  // Stage order is shared with the customer portal — see shared/job-status.ts.
+// ─── Compact status row ───────────────────────────────────────────────────────
+// One thin line above the map: the current stage in words, then six small
+// dots. Replaces the tall stepper card on the live view so the map, the ETA and
+// the Call / Text buttons all fit on one phone screen without scrolling.
+function StatusStrip({ status }: { status: string }) {
   const current = statusStepIndex(status);
-  // cancelled gets a special display — skip the stepper
   if (status === "cancelled") return null;
-
+  const label = status === "enroute" ? "On the way" : STEPS[current]?.label;
   return (
-    <div className="nvc-card p-4">
-      {/* Mobile: only the current step is labelled (NN/g status-tracker
-          guidance — the latest update should dominate; six wrapping labels
-          under 36px circles just compete). Desktop shows every label. */}
-      <p className="mb-3 text-center text-xs font-semibold text-cyan-glow sm:hidden">
-        {STEPS[current]?.label}
-        <span className="ml-1.5 font-normal text-slate-500">· step {current + 1} of {STEPS.length}</span>
+    <div className="flex items-center gap-3 px-3.5 py-2.5">
+      <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-cyan-glow">
+        {label}
+        <span className="ml-1.5 font-normal text-slate-500">· {current + 1} of {STEPS.length}</span>
       </p>
-      <div className="relative flex items-start justify-between">
-        {/* connecting line */}
-        <div className="absolute left-0 right-0 top-[18px] mx-[18px] h-0.5 bg-white/10" />
-        <div
-          className="absolute left-0 top-[18px] h-0.5 bg-cyan-glow transition-all duration-700"
-          style={{
-            marginLeft: 18,
-            width: current === 0
-              ? "0%"
-              : `calc(${(current / (STEPS.length - 1)) * 100}% - ${current === STEPS.length - 1 ? 36 : 18}px)`,
-          }}
-        />
+      <div className="flex items-center" aria-hidden>
         {STEPS.map((step, i) => {
           const done = i < current;
           const active = i === current;
           return (
-            <div key={step.key} className="relative flex flex-col items-center gap-1.5" style={{ flex: 1 }}>
+            <div key={step.key} className="flex items-center">
+              {i > 0 && <span className={`h-0.5 w-2.5 ${i <= current ? "bg-cyan-glow" : "bg-white/10"}`} />}
               <span
-                className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all duration-500 ${
+                className={`grid h-[22px] w-[22px] place-items-center rounded-full border-[1.5px] ${
                   done
                     ? "border-cyan-glow bg-cyan-glow text-ink"
                     : active
-                    ? "border-cyan-glow bg-ink text-cyan-glow ring-4 ring-cyan-glow/15"
+                    ? "border-cyan-glow bg-ink text-cyan-glow ring-2 ring-cyan-glow/20"
                     : "border-white/15 bg-ink text-slate-600"
                 }`}
               >
-                {done ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <step.Icon className="h-4 w-4" />
-                )}
-                {active && (
-                  <span className="absolute inset-0 animate-ping rounded-full border-2 border-cyan-glow opacity-40" />
-                )}
-              </span>
-              <span
-                className={`hidden whitespace-nowrap text-center text-[11px] leading-tight sm:block ${
-                  active ? "font-semibold text-cyan-glow" : done ? "font-medium text-slate-400" : "font-medium text-slate-600"
-                }`}
-              >
-                {step.label}
+                {done ? <CheckCircle2 className="h-3 w-3" /> : <step.Icon className="h-3 w-3" />}
               </span>
             </div>
           );
@@ -445,7 +420,8 @@ function useLiveEta(etaMins: number | null | undefined) {
   if (secsLeft == null) return null;
   const mins = Math.floor(secsLeft / 60);
   const secs = secsLeft % 60;
-  if (mins >= 2) return `${mins} min`;
+  // Round UP like the map's "x min" pill does, so the two never disagree (6 min, not 5:59 → "5 min").
+  if (mins >= 2) return `${Math.ceil(secsLeft / 60)} min`;
   if (secsLeft > 0) return `${mins}:${String(secs).padStart(2, "0")}`;
   return "Arriving now";
 }
@@ -699,16 +675,20 @@ export default function TrackPublic() {
 
   return (
     <div className="nvc-grid-bg min-h-screen bg-ink text-slate-200">
-      {/* ── Header ── */}
-      <header className="border-b border-white/5 bg-ink-2/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <Logo light />
-          <span className="flex items-center gap-1.5 text-xs text-slate-500">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-live" /> Secure live
-            tracking
-          </span>
-        </div>
-      </header>
+      {/* ── Header: only on the permanent record of a finished job. The live
+          view is map-first — no logo bar, no job title — so the van, the ETA
+          and the Call / Text buttons sit on one phone screen. ── */}
+      {isDone && (
+        <header className="border-b border-white/5 bg-ink-2/80 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+            <Logo light />
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-live" /> Secure live
+              tracking
+            </span>
+          </div>
+        </header>
+      )}
 
       {/* ── Proximity alert banner ── */}
       {showProximityAlert && (
@@ -728,9 +708,9 @@ export default function TrackPublic() {
         </div>
       )}
 
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        {/* ── Title + status pill ── */}
-        <div className="mb-4">
+      <div className={`mx-auto max-w-5xl ${isDone ? "px-4 py-6" : "px-3 pb-6 pt-[max(env(safe-area-inset-top),12px)] sm:px-4 sm:py-6"}`}>
+        {/* ── Title + status pill (finished jobs only) ── */}
+        {isDone && <div className="mb-4">
           <h1 className="font-display text-xl font-bold text-white">
             {data.title}
           </h1>
@@ -744,14 +724,11 @@ export default function TrackPublic() {
             />
             {meta.label}
           </span>
-        </div>
+        </div>}
 
         {!isDone && (
           <DelayBanner delay={(data as any).delay} tz={data.timezone} workerNoun={workerNoun} />
         )}
-
-        {/* ── Status stepper ── */}
-        {!isDone && <div className="mb-4"><StatusStepper status={data.status} /></div>}
 
         <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           {/* ── Left column ── */}
@@ -899,87 +876,129 @@ export default function TrackPublic() {
                 )}
               </div>
             ) : (
-              /* Live tracking view */
+              /* Live tracking view — map first, then ETA + who's coming + Call / Text */
               <>
-                {/* Map */}
-                <div className="overflow-hidden rounded-2xl border border-white/10">
+                <div className="nvc-card overflow-hidden p-0">
+                  <StatusStrip status={data.status} />
                   <LiveMap
                     rider={data.techLocation}
                     destination={data.destination}
                     route={data.route}
                     routeApprox={data.routeProvider === "estimate"}
                     etaMins={data.etaMins}
-                    className="h-[340px] w-full"
+                    zoomControl={false}
+                    className="h-[44vh] max-h-[420px] min-h-[260px] w-full border-t border-white/5 lg:h-[380px]"
                   />
                 </div>
 
-                {/* ETA card — live countdown while en route, arrived banner once there */}
-                {isArrived ? (
-                  <div className="nvc-card flex items-center gap-3 p-4">
-                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-live/15 text-emerald-live">
-                      <MapPin className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p className="font-display text-lg font-bold text-white">
-                        {data.status === "paused"
-                          ? "Job paused"
-                          : isWorking
-                          ? "Job in progress"
-                          : `Your ${workerNoun.toLowerCase()} has arrived!`}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {data.status === "paused"
-                          ? "Work is on hold — your " + workerNoun.toLowerCase() + " will resume shortly"
-                          : isWorking
-                          ? "Work is underway at your location"
-                          : "They are on-site and ready to begin"}
-                      </p>
+                <div className="nvc-card p-4">
+                  {/* ETA — live countdown while en route, on-site state once there */}
+                  {isArrived ? (
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-live/15 text-emerald-live">
+                        <MapPin className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-display text-lg font-bold text-white">
+                          {data.status === "paused"
+                            ? "Job paused"
+                            : isWorking
+                            ? "Job in progress"
+                            : `Your ${workerNoun.toLowerCase()} has arrived!`}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {data.status === "paused"
+                            ? "Work is on hold — your " + workerNoun.toLowerCase() + " will resume shortly"
+                            : isWorking
+                            ? "Work is underway at your location"
+                            : "They are on-site and ready to begin"}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ) : liveEta != null ? (
-                  <div className="nvc-card flex items-center gap-3 p-4">
-                    <span className="relative grid h-11 w-11 place-items-center rounded-xl bg-emerald-live/15 text-emerald-live">
-                      <Clock className="h-5 w-5" />
-                      {isEnroute && (
-                        <span className="absolute inset-0 animate-ping rounded-xl bg-emerald-live/20" />
-                      )}
-                    </span>
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <p className="font-display text-2xl font-bold tabular-nums text-white">
+                  ) : liveEta != null ? (
+                    <div className="flex items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs text-slate-400">
+                          {liveEta === "Arriving now" ? "Your " + workerNoun.toLowerCase() + " is" : isEnroute ? "Arriving in" : "Estimated arrival"}
+                        </p>
+                        <p className="font-display text-[34px] font-bold leading-none tabular-nums text-white">
                           {liveEta}
                         </p>
-                        {liveEta !== "Arriving now" && (
-                          <span className="text-xs text-slate-400">estimated arrival</span>
+                      </div>
+                      <div className="text-right text-xs text-slate-400">
+                        {data.etaMins != null && liveEta !== "Arriving now" && (
+                          <p className="font-semibold text-slate-200">
+                            ~{fmtTime(Date.now() + data.etaMins * 60_000, data.timezone)}
+                          </p>
+                        )}
+                        {data.etaDistanceKm != null && (
+                          <p>
+                            {data.etaDistanceKm < 1
+                              ? `${Math.round(data.etaDistanceKm * 1000)} m away`
+                              : `${data.etaDistanceKm.toFixed(1)} km away`}
+                          </p>
+                        )}
+                        {sseUp && (
+                          <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-emerald-live">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-live" /> Live
+                          </p>
                         )}
                       </div>
-                      {data.etaDistanceKm != null && (
-                        <p className="text-xs text-slate-500">
-                          {data.etaDistanceKm < 1
-                            ? `${Math.round(data.etaDistanceKm * 1000)} m away`
-                            : `${data.etaDistanceKm.toFixed(1)} km away`}
-                        </p>
-                      )}
                     </div>
-                    {/* live pulse dot */}
-                    {sseUp && (
-                      <span className="flex items-center gap-1 text-[10px] text-emerald-live">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-live" />
-                        Live
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-
-                {/* Destination */}
-                <div className="nvc-card flex items-start gap-3 p-4">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-cyan-glow" />
-                  <div>
-                    <p className="text-xs text-slate-500">Destination</p>
-                    <p className="text-sm text-slate-200">
-                      {data.destination?.address}
+                  ) : (
+                    <p className="text-sm text-slate-400">
+                      {data.destination?.address ? `Service at ${data.destination.address}` : meta.label}
                     </p>
-                  </div>
+                  )}
+
+                  {/* Who's coming + the two buttons customers use most */}
+                  {data.tech && (
+                    <>
+                      <div className="mt-4 flex items-center gap-3 border-t border-white/5 pt-4">
+                        <TechAvatar
+                          name={data.tech.name}
+                          photoUrl={data.tech.photoUrl}
+                          color={data.tech.color}
+                          className="h-12 w-12"
+                          textClassName="text-base"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-bold text-white">{data.tech.name}</p>
+                          <p className="truncate text-xs text-slate-400">
+                            {[data.service?.name || data.title, company?.name].filter(Boolean).join(" · ")}
+                          </p>
+                          {data.tech.vehicle && (
+                            <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
+                              <Truck className="h-3 w-3 shrink-0" /> {data.tech.vehicle}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {data.tech.phone && (
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <a
+                            href={`tel:${data.tech.phone}`}
+                            aria-label={`Call ${data.tech.name}`}
+                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-brand text-[15px] font-semibold text-white hover:bg-brand-deep"
+                          >
+                            <Phone className="h-[18px] w-[18px]" /> Call
+                          </a>
+                          <a
+                            href={`sms:${data.tech.phone}`}
+                            aria-label={`Text ${data.tech.name}`}
+                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-live text-[15px] font-semibold text-ink hover:opacity-90"
+                          >
+                            <MessageCircle className="h-[18px] w-[18px]" /> Text
+                          </a>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {liveEta != null && !isArrived && data.destination?.address && (
+                    <p className="mt-3 flex items-center gap-1.5 truncate text-xs text-slate-500">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-cyan-glow" /> {data.destination.address}
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -1062,51 +1081,6 @@ export default function TrackPublic() {
 
           {/* ── Right column: tech card + messaging ── */}
           <div className="space-y-4">
-              {data.tech && !isDone && (
-                <div className="nvc-card p-4">
-                  <div className="flex items-center gap-3">
-                    <TechAvatar
-                      name={data.tech.name}
-                      photoUrl={data.tech.photoUrl}
-                      color={data.tech.color}
-                      className="h-12 w-12"
-                      textClassName="text-base"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-bold text-white">
-                        {data.tech.name}
-                      </p>
-                      <p className="flex items-center gap-1 text-xs text-slate-400">
-                        <Star className="h-3 w-3 fill-amber-warn text-amber-warn" />
-                        {data.tech.rating?.toFixed(1) ?? "—"} ·{" "}
-                        {data.tech.skillClass}
-                      </p>
-                    </div>
-                  </div>
-                  {data.tech.vehicle && (
-                    <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
-                      <Truck className="h-3.5 w-3.5" /> {data.tech.vehicle}
-                    </p>
-                  )}
-                  {data.tech.phone && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <a
-                        href={`tel:${data.tech.phone}`}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep"
-                      >
-                        <Phone className="h-4 w-4" /> Call
-                      </a>
-                      <a
-                        href={`sms:${data.tech.phone}`}
-                        className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-ink-3 py-2.5 text-sm font-semibold text-slate-200 hover:bg-ink-3/80"
-                      >
-                        <MessageCircle className="h-4 w-4" /> Text
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Messaging */}
               <div className={`nvc-card flex flex-col ${msgs.length === 0 ? "" : "h-[360px]"}`}>
                 <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
