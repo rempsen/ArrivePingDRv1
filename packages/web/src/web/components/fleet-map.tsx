@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { money } from "../lib/utils";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useWorkerNoun } from "../lib/use-brand";
@@ -111,7 +112,7 @@ function jobTooltip(j: FleetJob) {
   if (j.address) rows.push(`<div style="display:flex;gap:6px;align-items:flex-start"><span style="opacity:.6">📍</span><span>${esc(j.address ?? "")}</span></div>`);
   if (j.techName) rows.push(`<div style="display:flex;gap:6px;align-items:center"><span style="opacity:.6">👷</span>${esc(j.techName ?? "")}</div>`);
   else rows.push(`<div style="display:flex;gap:6px;align-items:center;color:#fbbf24"><span style="opacity:.6">👷</span>Unassigned</div>`);
-  if (j.total != null) rows.push(`<div style="display:flex;gap:6px;align-items:center"><span style="opacity:.6">💲</span>${Number(j.total).toFixed(2)}</div>`);
+  if (j.total != null) rows.push(`<div style="display:flex;gap:6px;align-items:center"><span style="opacity:.6">💲</span>${money(Number(j.total)).replace("$", "")}</div>`);
   return `<div style="min-width:200px;max-width:260px;font-family:Inter,sans-serif;line-height:1.45">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
       <span style="width:8px;height:8px;border-radius:9999px;background:${j.color};flex:0 0 auto"></span>

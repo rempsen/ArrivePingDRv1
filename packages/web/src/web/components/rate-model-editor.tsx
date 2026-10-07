@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { money } from "../lib/utils";
 import { EMPTY_RATE_MODEL, type RateModel } from "../../shared/pricing";
 import { Clock, DollarSign, Hash, Plus, Trash2 } from "lucide-react";
 
@@ -242,10 +243,10 @@ export function RateModelEditor({
                 <div>First {rm.freeMinutes} min: <span className="font-semibold text-white">free</span></div>
               )}
               {rm.firstHourRate > 0 && (
-                <div>First hour: <span className="font-semibold text-white">${rm.firstHourRate.toFixed(2)}</span></div>
+                <div>First hour: <span className="font-semibold text-white">{money(rm.firstHourRate)}</span></div>
               )}
               {rm.additionalHourRate > 0 && (
-                <div>Each hour after: <span className="font-semibold text-white">${rm.additionalHourRate.toFixed(2)}</span></div>
+                <div>Each hour after: <span className="font-semibold text-white">{money(rm.additionalHourRate)}</span></div>
               )}
             </div>
           )}
@@ -330,15 +331,15 @@ export function RateModelEditor({
               {unitLines.filter((l) => l.qty > 0 && l.unitPrice > 0).map((l) => (
                 <div key={l.id} className="flex justify-between text-xs text-slate-400 px-1">
                   <span>
-                    {l.qty} {l.unitLabel || "unit"}{l.name ? ` · ${l.name}` : ""} × ${l.unitPrice.toFixed(2)}
+                    {l.qty} {l.unitLabel || "unit"}{l.name ? ` · ${l.name}` : ""} × {money(l.unitPrice)}
                   </span>
-                  <span className="text-cyan-glow font-semibold">${(l.qty * l.unitPrice).toFixed(2)}</span>
+                  <span className="text-cyan-glow font-semibold">{money(l.qty * l.unitPrice)}</span>
                 </div>
               ))}
               {unitLines.filter((l) => l.qty > 0 && l.unitPrice > 0).length > 1 && (
                 <div className="flex justify-between border-t border-white/10 pt-1 text-xs font-bold text-white px-1">
                   <span>Total</span>
-                  <span>${unitTotal.toFixed(2)}</span>
+                  <span>{money(unitTotal)}</span>
                 </div>
               )}
             </div>
@@ -381,7 +382,7 @@ export function RateModelEditor({
           </div>
           {rm.flatRate > 0 && (
             <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-cyan-glow">
-              Fixed charge of <span className="font-semibold text-white">${rm.flatRate.toFixed(2)}</span>
+              Fixed charge of <span className="font-semibold text-white">{money(rm.flatRate)}</span>
               {rm.includedMinutes > 0 && ` · includes ${rm.includedMinutes} min`}
               {rm.includedKm > 0 && ` · ${rm.includedKm} km`}
             </div>

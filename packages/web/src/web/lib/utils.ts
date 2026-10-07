@@ -5,8 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** `$1,234.50` — thousands separators, always two decimals, `-$12.00` for negatives. */
 export function money(n: number) {
-  return `$${n.toFixed(2)}`;
+  return usd.format(Number.isFinite(n) ? n : 0);
 }
 
 export function fmtDate(d: string | number | Date) {

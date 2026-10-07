@@ -122,19 +122,19 @@ function ChargeRow({ charge, onRemove }: { charge: Charge; onRemove: () => void 
 
   if (charge.type === "flat_fee") {
     title = charge.label || "Flat fee";
-    detail = `$${charge.amount.toFixed(2)} fixed`;
+    detail = `${money(charge.amount)} fixed`;
   } else if (charge.type === "hourly") {
     icon = <Clock className="h-3.5 w-3.5 text-cyan-400 shrink-0" />;
     title = charge.label || "Hourly";
     const parts: string[] = [];
     if (charge.freeMinutes) parts.push(`${charge.freeMinutes} min free`);
-    if (charge.firstHourRate) parts.push(`$${charge.firstHourRate.toFixed(2)}/1st hr`);
-    if (charge.additionalHourRate) parts.push(`$${charge.additionalHourRate.toFixed(2)}/hr after`);
+    if (charge.firstHourRate) parts.push(`${money(charge.firstHourRate)}/1st hr`);
+    if (charge.additionalHourRate) parts.push(`${money(charge.additionalHourRate)}/hr after`);
     detail = parts.join(" · ") || "Hourly";
   } else {
     icon = <Hash className="h-3.5 w-3.5 text-cyan-400 shrink-0" />;
     title = charge.name || "Per unit";
-    detail = `${charge.qty} ${charge.unit} × $${charge.unitPrice.toFixed(2)}`;
+    detail = `${charge.qty} ${charge.unit} × ${money(charge.unitPrice)}`;
   }
 
   return (
@@ -202,8 +202,8 @@ function FlatFeeForm({ onAdd }: { onAdd: (c: FlatCharge) => void }) {
       </div>
       {amount > 0 && (
         <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-cyan-400">
-          Fixed charge of <span className="font-semibold text-white">${amount.toFixed(2)}</span>
-          {techPay > 0 && <> · tech pay <span className="font-semibold text-amber-300">${techPay.toFixed(2)}</span></>}
+          Fixed charge of <span className="font-semibold text-white">{money(amount)}</span>
+          {techPay > 0 && <> · tech pay <span className="font-semibold text-amber-300">{money(techPay)}</span></>}
         </div>
       )}
       <AddBtn onClick={submit} disabled={amount <= 0} />
@@ -271,8 +271,8 @@ function HourlyForm({ onAdd }: { onAdd: (c: HourlyCharge) => void }) {
       {ready && (
         <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-cyan-400 space-y-0.5">
           {freeMin > 0 && <div>First {freeMin} min: <span className="font-semibold text-white">free</span></div>}
-          {firstRate > 0 && <div>First hour: <span className="font-semibold text-white">${firstRate.toFixed(2)}</span></div>}
-          {addlRate > 0 && <div>Each hour after: <span className="font-semibold text-white">${addlRate.toFixed(2)}</span></div>}
+          {firstRate > 0 && <div>First hour: <span className="font-semibold text-white">{money(firstRate)}</span></div>}
+          {addlRate > 0 && <div>Each hour after: <span className="font-semibold text-white">{money(addlRate)}</span></div>}
         </div>
       )}
       <AddBtn onClick={submit} disabled={!ready} />
@@ -359,9 +359,9 @@ function PerUnitForm({ onAdd }: { onAdd: (c: PerUnitCharge) => void }) {
       {ready && (
         <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-cyan-400 flex justify-between">
           <span>
-            {qty} {resolvedUnit || "unit"}{name ? ` · ${name}` : ""} × ${unitPrice.toFixed(2)}
+            {qty} {resolvedUnit || "unit"}{name ? ` · ${name}` : ""} × {money(unitPrice)}
           </span>
-          <span className="font-semibold text-white">${lineTotal.toFixed(2)}</span>
+          <span className="font-semibold text-white">{money(lineTotal)}</span>
         </div>
       )}
       <AddBtn onClick={submit} disabled={!ready} />

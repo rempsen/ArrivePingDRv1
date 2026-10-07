@@ -7,6 +7,7 @@ import { eq, isNull, and, inArray, desc, sql, type SQL } from "drizzle-orm";
 import { requireAuth, tenantId, tx } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { Err } from "../lib/errors";
+import { publicFieldData, mergeInternalFieldData } from "../lib/field-data";
 import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } from "../lib/memberships";
 import { fireEvent } from "../../services/dispatch";
 import { recomputeBooking } from "../../services/billing";
@@ -145,7 +146,7 @@ async function enrichMany(
 
   // Fallback used if the batch fails — never let enrichment crash a whole list.
   const bare = (): EnrichedBooking[] =>
-    rows.map((b) => ({ ...b, service: null, rider: null, customer: null }));
+    rows.map((b) => ({ ...b, fieldData: publicFieldData(b.fieldData), service: null, rider: null, customer: null }));
 
   try {
     // Rows can span companies only via system paths; group defensively so the
@@ -206,6 +207,8 @@ async function enrichMany(
       const cust = b.customerId ? userMap.get(b.customerId) : undefined;
       return {
         ...b,
+        // never ship server-internal keys (Live Activity push tokens) to clients
+        fieldData: publicFieldData(b.fieldData),
         service: (b.serviceId ? svcMap.get(b.serviceId) : null) ?? null,
         rider: b.riderId ? (riderMap.get(b.riderId) ?? null) : null,
         customer: cust
@@ -222,7 +225,7 @@ async function enrichMany(
 /** Single-row convenience wrapper. Same contract as before. */
 async function enrich(b: typeof schema.bookings.$inferSelect) {
   const [one] = await enrichMany([b]);
-  return one ?? { ...b, service: null, rider: null, customer: null };
+  return one ?? { ...b, fieldData: publicFieldData(b.fieldData), service: null, rider: null, customer: null };
 }
 
 async function enrichById(companyId: string, id: string) {
@@ -544,9 +547,12 @@ export const bookingsRoutes = new Hono<AppEnv>()
       return d && d >= todayStart && d <= todayEnd;
     });
     const jobsDone = todayJobs.filter(b => b.status === "completed").length;
+    // "Earnings" is what the TECH takes home — the job's tech pay — not the
+    // customer-facing price (Dan, 2026-10-06). Shows $0 until dispatch fills
+    // tech pay in on the job.
     const earnings = todayJobs
       .filter(b => b.status === "completed")
-      .reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+      .reduce((sum, b) => sum + (Number((b as any).techPay) || 0), 0);
     const activeJobs = todayJobs.filter(b => ["assigned","enroute","arrived","in_progress"].includes(b.status)).length;
     return c.json({ jobsDone, earnings, activeJobs, totalToday: todayJobs.length }, 200);
   })
@@ -963,9 +969,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // field edits made in the work-order modal (e.g. filling in/adjusting the
     // dropdown/checkbox/etc. fields carried over from a template) were
     // silently dropped on every save. The modal always sends the full
-    // { _customFields: [...] } shape, so a plain overwrite is correct here —
-    // there's no partial-merge case to worry about.
-    if (body.fieldData !== undefined) set.fieldData = JSON.stringify(body.fieldData);
+    // { _customFields: [...] } shape, so the public keys are a plain overwrite.
+    // Internal `__`-prefixed keys (iOS Live Activity push tokens written by
+    // tracking.ts) are never sent to clients, so they're merged back in here
+    // instead of being wiped by the overwrite.
+    if (body.fieldData !== undefined) set.fieldData = mergeInternalFieldData(prev.fieldData, body.fieldData as any);
 
     // handle (re)assignment if the rider changed
     const newRider = body.riderId;

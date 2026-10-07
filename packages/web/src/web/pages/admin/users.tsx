@@ -8,7 +8,7 @@ import { ok } from "../../lib/api-ok";
 import { FullLoader } from "../../components/loader";
 import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
-import { fmtDateShort, dismiss, activate } from "../../lib/utils";
+import { fmtDateShort, dismiss, activate, money } from "../../lib/utils";
 import {
   Modal,
   Field,
@@ -963,7 +963,7 @@ function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
                         {liCount > 0 && <span className="ml-1 text-cyan-glow">· {liCount} line item{liCount > 1 ? "s" : ""}</span>}
                       </p>
                     </div>
-                    {Number.isFinite(totalNum) && <span className="text-sm font-bold text-emerald-live">${totalNum.toFixed(2)}</span>}
+                    {Number.isFinite(totalNum) && <span className="text-sm font-bold text-emerald-live">{money(totalNum)}</span>}
                   </div>
                   );
                 })}

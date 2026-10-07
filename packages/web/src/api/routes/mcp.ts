@@ -4,6 +4,7 @@ import * as schema from "../database/schema";
 import { eq, and, gte, lte, like } from "drizzle-orm";
 import { resolveApiKey, scopeAllows, type ApiKeyContext } from "../middleware/auth";
 import { audit } from "../lib/audit";
+import { publicFieldData } from "../lib/field-data";
 import { attachMembership } from "../lib/memberships";
 import { user as userTable } from "../database/auth-schema";
 import type { AppEnv } from "../env";
@@ -69,7 +70,7 @@ const TOOLS: ToolDef[] = [
       const rows = all
         .sort((x, y) => (y.scheduledAt?.getTime() ?? 0) - (x.scheduledAt?.getTime() ?? 0))
         .slice(0, limit);
-      return { count: rows.length, workOrders: rows };
+      return { count: rows.length, workOrders: rows.map((r) => ({ ...r, fieldData: publicFieldData(r.fieldData) })) };
     },
   },
   {
@@ -86,7 +87,7 @@ const TOOLS: ToolDef[] = [
       if (!wo) throw new Error("work order not found");
       const photos = await t.select(schema.jobPhotos, eq(schema.jobPhotos.bookingId, wo.id));
       const msgs = await t.select(schema.messages, eq(schema.messages.bookingId, wo.id));
-      return { workOrder: wo, photos, messages: msgs };
+      return { workOrder: { ...wo, fieldData: publicFieldData(wo.fieldData) }, photos, messages: msgs };
     },
   },
   {
@@ -127,7 +128,7 @@ const TOOLS: ToolDef[] = [
         status: a.riderId ? "assigned" : "pending",
       });
       await audit({ companyId: t.companyId, actorName: "API/MCP", action: "create", entityType: "booking", entityId: wo.id, summary: `Created work order via MCP "${wo.title || wo.id}"` });
-      return { workOrder: wo };
+      return { workOrder: { ...wo, fieldData: publicFieldData(wo.fieldData) } };
     },
   },
   {
@@ -156,7 +157,7 @@ const TOOLS: ToolDef[] = [
       const [wo] = await t.update(schema.bookings, patch as any, eq(schema.bookings.id, String(a.id)));
       if (!wo) throw new Error("work order not found");
       await audit({ companyId: t.companyId, actorName: "API/MCP", action: "update", entityType: "booking", entityId: wo.id, summary: `Updated work order via MCP` });
-      return { workOrder: wo };
+      return { workOrder: { ...wo, fieldData: publicFieldData(wo.fieldData) } };
     },
   },
   {
@@ -176,7 +177,7 @@ const TOOLS: ToolDef[] = [
       );
       if (!wo) throw new Error("work order not found");
       await audit({ companyId: t.companyId, actorName: "API/MCP", action: "assign", entityType: "booking", entityId: wo.id, summary: `Assigned work order to ${a.riderId} via MCP` });
-      return { workOrder: wo };
+      return { workOrder: { ...wo, fieldData: publicFieldData(wo.fieldData) } };
     },
   },
 

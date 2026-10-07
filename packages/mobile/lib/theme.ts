@@ -67,8 +67,20 @@ export const STATUS: Record<string, { label: string; color: string; bg: string }
   cancelled: { label: "Cancelled", color: "#f87171", bg: "rgba(248,113,113,0.16)" },
 };
 
+/** `$1,234.50` — thousands separators, always two decimals. Hermes ships Intl. */
 export function money(n: number) {
-  return `$${(n ?? 0).toFixed(2)}`;
+  const v = Number.isFinite(n) ? n : 0;
+  try {
+    return v.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } catch {
+    const [whole, frac] = Math.abs(v).toFixed(2).split(".");
+    return `${v < 0 ? "-" : ""}$${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${frac}`;
+  }
 }
 
 export function fmtDate(d: string | number | Date) {

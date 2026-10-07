@@ -7,7 +7,7 @@ import { ok } from "../../lib/api-ok";
 import { FullLoader } from "../../components/loader";
 import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
-import { TECH_STATUS, activate, dismiss, fmtDateShort } from "../../lib/utils";
+import { TECH_STATUS, activate, dismiss, fmtDateShort, money } from "../../lib/utils";
 import { useWorkerNoun } from "../../lib/use-brand";
 import {
   Modal,
@@ -646,7 +646,7 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
                             {b.createdAt ? fmtDateShort(b.createdAt) : "—"} · {b.status}
                           </p>
                         </div>
-                        {Number.isFinite(Number(b.total)) && <span className="text-sm font-bold text-emerald-live">${Number(b.total).toFixed(2)}</span>}
+                        {Number.isFinite(Number(b.total)) && <span className="text-sm font-bold text-emerald-live">{money(Number(b.total))}</span>}
                       </div>
                     ))}
                   </div>

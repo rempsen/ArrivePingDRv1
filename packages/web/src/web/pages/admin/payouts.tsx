@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { money } from "../../lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { FullLoader } from "../../components/loader";
@@ -8,7 +9,6 @@ import { Modal, Field, inputCls, BtnPrimary, BtnGhost } from "../../components/m
 import { Plus, CheckCircle2, Clock, DollarSign, AlertTriangle, ChevronRight } from "lucide-react";
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 
-const money = (n: number) => `$${(n ?? 0).toFixed(2)}`;
 const fmtMins = (m: number) => {
   const n = Math.max(0, Math.round(Number(m) || 0));
   if (n === 0) return "—";

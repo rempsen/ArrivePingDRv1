@@ -31,7 +31,7 @@ import { ok } from "../lib/api-ok";
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../lib/use-brand";
 import { api } from "../lib/api";
 import { Modal, Field, inputCls, BtnGhost, BtnPrimary, BtnDanger, ConfirmModal } from "./modal";
-import { PRIORITY_META } from "../lib/utils";
+import { PRIORITY_META, money } from "../lib/utils";
 import { ChargesEditor, chargesSummary, type Charge } from "./charges-editor";
 import { CatalogLineItems } from "./catalog-line-items";
 import { UnitLineItems } from "./unit-line-items";
@@ -363,7 +363,7 @@ function CfCard({
             />
           </div>
           <div className="col-span-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-slate-400">
-            {noun} enters a quantity → <span className="text-white font-semibold">${(cf.logicRate ?? 0).toFixed(2)} × qty</span> is added to the invoice.
+            {noun} enters a quantity → <span className="text-white font-semibold">{money(cf.logicRate ?? 0)} × qty</span> is added to the invoice.
           </div>
         </div>
       )}
@@ -623,7 +623,7 @@ export function WorkOrderModal({
       if (c.type === "flat_fee") return { label: c.label || "Flat fee", amount: c.amount };
       if (c.type === "hourly") return { label: c.label || "Hourly", amount: null };
       return {
-        label: `${c.qty} ${c.unit}${c.name ? ` · ${c.name}` : ""} × ${c.unitPrice.toFixed(2)}`,
+        label: `${c.qty} ${c.unit}${c.name ? ` · ${c.name}` : ""} × ${money(c.unitPrice)}`,
         amount: c.qty * c.unitPrice,
       };
     });
@@ -1488,13 +1488,13 @@ export function WorkOrderModal({
                 {quote.chargeItems.map((it: any, i: number) => (
                   <div key={i} className="flex justify-between text-slate-300">
                     <span>{it.label}</span>
-                    <span>{it.amount !== null ? `${it.amount.toFixed(2)}` : <span className="text-slate-500 text-xs">billed at job time</span>}</span>
+                    <span>{it.amount !== null ? money(it.amount) : <span className="text-slate-500 text-xs">billed at job time</span>}</span>
                   </div>
                 ))}
                 {quote.cfExtra > 0 && (
                   <div className="flex justify-between text-slate-300">
                     <span>Custom field add-ons</span>
-                    <span>+${quote.cfExtra.toFixed(2)}</span>
+                    <span>+{money(quote.cfExtra)}</span>
                   </div>
                 )}
                 {quote.lineItemsPrice > 0 && (
@@ -1502,22 +1502,22 @@ export function WorkOrderModal({
                     <span>
                       Catalog items{" "}
                       <span className="text-[11px] text-emerald-400">
-                        (margin ${quote.lineItemsMargin.toFixed(2)})
+                        (margin {money(quote.lineItemsMargin)})
                       </span>
                     </span>
-                    <span>+${quote.lineItemsPrice.toFixed(2)}</span>
+                    <span>+{money(quote.lineItemsPrice)}</span>
                   </div>
                 )}
                 {(quote.chargesKnown > 0 || quote.cfExtra > 0 || quote.lineItemsPrice > 0) && (
                   <>
                     <div className="flex justify-between border-t border-white/10 pt-1 text-slate-400">
-                      <span>Subtotal</span><span>${quote.subtotal.toFixed(2)}</span>
+                      <span>Subtotal</span><span>{money(quote.subtotal)}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
-                      <span>{quote.taxLabel}</span><span>${quote.taxAmount.toFixed(2)}</span>
+                      <span>{quote.taxLabel}</span><span>{money(quote.taxAmount)}</span>
                     </div>
                     <div className="flex justify-between pt-1 text-base font-semibold text-white">
-                      <span>Total</span><span>${quote.total.toFixed(2)}</span>
+                      <span>Total</span><span>{money(quote.total)}</span>
                     </div>
                     {quote.hasHourly && (
                       <p className="text-[11px] text-slate-500 pt-1">* Hourly charges billed at actual job time</p>
@@ -1525,7 +1525,7 @@ export function WorkOrderModal({
                     {quote.chargesTechTotal > 0 && (
                       <div className="mt-1 flex justify-between border-t border-white/10 pt-1.5 text-amber-400">
                         <span>{noun} pay</span>
-                        <span>${quote.chargesTechTotal.toFixed(2)}</span>
+                        <span>{money(quote.chargesTechTotal)}</span>
                       </div>
                     )}
                   </>
