@@ -100,6 +100,25 @@ export const BrandProposal = z
     website: longText(300).nullable(),
     services: z.union([z.string().max(20_000), z.array(z.unknown()).max(200), z.record(z.string(), z.unknown())]).nullable(),
     socials: z.union([z.string().max(5_000), z.record(z.string(), z.unknown())]).nullable(),
+    // People the brand scout found on the About / Team / Contact pages. Stored
+    // on qualifying_profile.scoutedTeam so the onboarding chat can offer to set
+    // them up — nothing is created from this list without the admin saying so.
+    teamMembers: z
+      .array(
+        z.object({
+          name: shortText("Name", 80),
+          title: shortText("Title", 80).nullable().optional(),
+          role: z.enum(["tech", "dispatcher", "manager", "owner", "other"]).optional(),
+          // lenient here — the model occasionally returns junk and a bad
+          // scraped email must never 400 the whole signup. Validated in
+          // scoutedTeamProfile() instead.
+          email: z.string().max(200).nullable().optional(),
+          phone: z.string().max(40).nullable().optional(),
+        }),
+      )
+      .max(30)
+      .nullable(),
+    contactEmails: z.array(z.string().max(200)).max(20).nullable(),
   })
   .partial()
   // brand-scout returns explicit nulls for anything it couldn't read off the
@@ -403,6 +422,33 @@ export interface ProvisionResult {
  * collisions, missing credentials) — safe to let bubble to the global error
  * handler from any route that calls this.
  */
+/**
+ * Seed `qualifying_profile` with the staff the brand scout read off the
+ * tenant's website, so the onboarding chat can say "I found Mike (Owner) and
+ * Sarah (Office Manager) on your Team page — want me to set them up?" instead
+ * of asking the admin to type everyone in.
+ */
+function scoutedTeamProfile(brand: Record<string, any>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const team = Array.isArray(brand.teamMembers) ? brand.teamMembers : [];
+  const cleaned = team
+    .map((m: any) => ({
+      name: String(m?.name ?? "").trim(),
+      title: m?.title ? String(m.title).trim() : null,
+      role: ["tech", "dispatcher", "manager", "owner", "other"].includes(m?.role) ? m.role : "other",
+      email: m?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(m.email).trim()) ? String(m.email).trim().toLowerCase() : null,
+      phone: m?.phone ? String(m.phone).trim().slice(0, 40) : null,
+    }))
+    .filter((m: any) => m.name.length >= 3)
+    .slice(0, 30);
+  if (cleaned.length) out.scoutedTeam = cleaned;
+  const emails = Array.isArray(brand.contactEmails)
+    ? brand.contactEmails.map((e: any) => String(e).trim().toLowerCase()).filter((e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)).slice(0, 10)
+    : [];
+  if (emails.length) out.scoutedEmails = emails;
+  return out;
+}
+
 export async function provisionCompany(
   b: CompanyCreateInput,
   actor: ProvisionActor,
@@ -508,6 +554,7 @@ export async function provisionCompany(
     services: jsonStr(brand.services),
     hours: str(brand.hours),
     socials: jsonStr(brand.socials),
+    qualifyingProfile: JSON.stringify(scoutedTeamProfile(brand)),
   });
 
   // 2b) auto-provision branded notifications/email/SMS identity so every

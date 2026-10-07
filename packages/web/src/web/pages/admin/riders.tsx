@@ -82,6 +82,7 @@ function FieldStaffTab() {
     phone: "",
     skillClass: "General",
     vehicle: "Van",
+    vehicleColor: "",
     licensePlate: "",
     licenseNumber: "",
     address: "",
@@ -109,7 +110,7 @@ function FieldStaffTab() {
       qc.invalidateQueries({ queryKey: ["riders"] });
       qc.invalidateQueries({ queryKey: ["fleet"] });
       setShowAdd(false);
-      setForm({ name: "", email: "", password: "", phone: "", skillClass: "General", vehicle: "Van", licensePlate: "", licenseNumber: "", address: "", notes: "", skills: [], payRatePerHour: 0 });
+      setForm({ name: "", email: "", password: "", phone: "", skillClass: "General", vehicle: "Van", vehicleColor: "", licensePlate: "", licenseNumber: "", address: "", notes: "", skills: [], payRatePerHour: 0 });
       setErr("");
     },
     onError: (e: any) => setErr(e.message),
@@ -312,7 +313,7 @@ function FieldStaffTab() {
                   )}
                   {r.vehicle && (
                     <p className="flex items-center gap-1.5">
-                      <Truck className="h-3.5 w-3.5" /> {r.vehicle}
+                      <Truck className="h-3.5 w-3.5" /> {[r.vehicleColor, r.vehicle].filter(Boolean).join(" ")}
                     </p>
                   )}
                 </div>
@@ -388,10 +389,16 @@ function FieldStaffTab() {
           <Field label="Skills" hint="Pick from the library or type a new skill and press Enter">
             <SkillPicker value={form.skills} onChange={(skills) => setForm({ ...form, skills })} />
           </Field>
-          <Field label="Vehicle">
-            <input aria-label="Ford Transit" className={inputCls} value={form.vehicle}
-              onChange={(e) => setForm({ ...form, vehicle: e.target.value })} placeholder="Ford Transit" />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Vehicle">
+              <input aria-label="Ford Transit" className={inputCls} value={form.vehicle}
+                onChange={(e) => setForm({ ...form, vehicle: e.target.value })} placeholder="Ford Transit" />
+            </Field>
+            <Field label="Vehicle colour">
+              <input aria-label="Vehicle colour" className={inputCls} value={form.vehicleColor}
+                onChange={(e) => setForm({ ...form, vehicleColor: e.target.value })} placeholder="White" />
+            </Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="License plate">
               <input aria-label="ABC 123" className={inputCls} value={form.licensePlate}
@@ -468,6 +475,7 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
       setForm({
         phone: rider.phone ?? "",
         vehicle: rider.vehicle ?? "",
+        vehicleColor: rider.vehicleColor ?? "",
         skillClass: rider.skillClass ?? "General",
         licensePlate: rider.licensePlate ?? "",
         licenseNumber: rider.licenseNumber ?? "",
@@ -554,6 +562,10 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Phone"><input aria-label="Phone" className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
                     <Field label="Vehicle"><input aria-label="Vehicle" className={inputCls} value={form.vehicle} onChange={(e) => setForm({ ...form, vehicle: e.target.value })} /></Field>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Vehicle colour"><input aria-label="Vehicle colour" className={inputCls} value={form.vehicleColor ?? ""} onChange={(e) => setForm({ ...form, vehicleColor: e.target.value })} placeholder="White" /></Field>
+                    <div />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="License plate"><input aria-label="License Plate" className={inputCls} value={form.licensePlate} onChange={(e) => setForm({ ...form, licensePlate: e.target.value })} /></Field>

@@ -26,6 +26,9 @@ export default function JoinTech() {
   const valid = data?.invite;
   const company = data?.company || "ArrivePing";
   const workerNoun = (data?.workerNoun as string) || "Technician";
+  const role: string = valid?.role || "rider";
+  const isField = role === "rider";
+  const roleLabel = isField ? workerNoun : role === "dispatcher" ? "Dispatcher" : role === "manager" ? "Manager" : "Team member";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,7 +44,7 @@ export default function JoinTech() {
       // sign in automatically
       const { error } = await authClient.signIn.email({ email: valid.email, password }, { onSuccess: captureToken });
       if (error) throw new Error(error.message);
-      navigate("/rider");
+      navigate(isField ? "/rider" : "/");
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -70,15 +73,24 @@ export default function JoinTech() {
       <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-brand to-brand-deep p-12 text-white lg:flex">
         <Logo />
         <div className="space-y-6">
-          <h2 className="text-3xl font-extrabold leading-tight">Welcome to the {company} field team.</h2>
-          <ul className="space-y-3 text-white/90">
-            <li className="flex items-center gap-3"><MapPin className="h-5 w-5" /> Get assigned jobs near you</li>
-            <li className="flex items-center gap-3"><Navigation className="h-5 w-5" /> Turn-by-turn navigation to clients</li>
-            <li className="flex items-center gap-3"><Radio className="h-5 w-5" /> Share live location — clients track your ETA</li>
-            <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5" /> Update job status & get paid faster</li>
-          </ul>
+          <h2 className="text-3xl font-extrabold leading-tight">Welcome to the {company} {isField ? "field team" : "team"}.</h2>
+          {isField ? (
+            <ul className="space-y-3 text-white/90">
+              <li className="flex items-center gap-3"><MapPin className="h-5 w-5" /> Get assigned jobs near you</li>
+              <li className="flex items-center gap-3"><Navigation className="h-5 w-5" /> Turn-by-turn navigation to clients</li>
+              <li className="flex items-center gap-3"><Radio className="h-5 w-5" /> Share live location — clients track your ETA</li>
+              <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5" /> Update job status & get paid faster</li>
+            </ul>
+          ) : (
+            <ul className="space-y-3 text-white/90">
+              <li className="flex items-center gap-3"><MapPin className="h-5 w-5" /> See every job and every {workerNoun.toLowerCase()} on one map</li>
+              <li className="flex items-center gap-3"><Navigation className="h-5 w-5" /> Dispatch and reschedule in seconds</li>
+              <li className="flex items-center gap-3"><Radio className="h-5 w-5" /> Customers get live ETAs automatically</li>
+              <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5" /> Track completions and payments</li>
+            </ul>
+          )}
         </div>
-        <p className="text-sm text-white/70">Invited as a {valid.skillClass} {workerNoun.toLowerCase()}.</p>
+        <p className="text-sm text-white/70">{isField ? `Invited as a ${valid.skillClass} ${workerNoun.toLowerCase()}.` : `Invited as a ${roleLabel.toLowerCase()}.`}</p>
       </div>
 
       {/* right: form */}
@@ -86,8 +98,8 @@ export default function JoinTech() {
         <div className="w-full max-w-sm space-y-6">
           <div className="lg:hidden"><Logo /></div>
           <div>
-            <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-brand/15 px-3 py-1 text-xs font-bold text-cyan-glow"><Wrench className="h-3.5 w-3.5" /> {workerNoun} onboarding</div>
-            <h1 className="text-2xl font-extrabold text-white">Set up your account</h1>
+            <div className="mb-1 inline-flex items-center gap-2 rounded-full bg-brand/15 px-3 py-1 text-xs font-bold text-cyan-glow"><Wrench className="h-3.5 w-3.5" /> {roleLabel} onboarding</div>
+            <h1 className="text-2xl font-extrabold text-white">{valid.accountExists ? "Set your password" : "Set up your account"}</h1>
             <p className="mt-1 text-sm text-slate-400">For <span className="font-semibold text-slate-200">{valid.email}</span></p>
           </div>
 
@@ -106,7 +118,7 @@ export default function JoinTech() {
             </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button disabled={loading || !password} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-bold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-60">
-              {loading ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <>Activate my account <ArrowRight className="h-4 w-4" /></>}
+              {loading ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <>{valid.accountExists ? "Set password & sign in" : "Activate my account"} <ArrowRight className="h-4 w-4" /></>}
             </button>
           </form>
           <p className="text-center text-xs text-slate-500">Already set up? <Link to="/sign-in" className="font-semibold text-cyan-glow">Sign in</Link></p>

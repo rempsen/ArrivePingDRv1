@@ -2,10 +2,11 @@ import { Hono } from "hono";
 import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
 import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { INTERNAL_ROLES, isAdminRole } from "../lib/permissions";
 import { auth } from "../auth";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
 import { logoDims, contrastText } from "../../services/email-render";
@@ -155,8 +156,9 @@ export const invitesRoutes = new Hono<AppEnv>()
     if (!inv) return c.json({ message: "Not found" }, 404);
     const link = `${SITE}/join/${inv.token}`;
     const company = await companyName(inv.companyId);
-    sendEmail({ to: inv.email, subject: `Reminder: join ${company} as a technician`, html: `<p>Your invite link: <a href="${link}">${link}</a></p>` }).catch(() => {});
-    if (inv.phone) sendSms(inv.phone, `${company}: Reminder — set up your technician account: ${link}`).catch(() => {});
+    const what = inv.role === "rider" ? "technician" : inv.role;
+    sendEmail({ to: inv.email, subject: `Reminder: join ${company} as a ${what}`, html: `<p>Your invite link: <a href="${link}">${link}</a></p>` }).catch(() => {});
+    if (inv.phone) sendSms(inv.phone, `${company}: Reminder — set up your ${what} account: ${link}`).catch(() => {});
     return c.json({ ok: true, link }, 200);
   })
   // revoke
@@ -172,7 +174,14 @@ export const invitesRoutes = new Hono<AppEnv>()
     const [inv] = await sdb.select().from(schema.techInvites).where(eq(schema.techInvites.token, c.req.param("token")));
     if (!inv || inv.status !== "pending") return c.json({ message: "Invite not found or already used" }, 404);
     const brand = await companyBrand(inv.companyId);
-    return c.json({ invite: { email: inv.email, name: inv.name, skillClass: inv.skillClass }, company: brand.name, workerNoun: brand.workerNoun }, 200);
+    return c.json(
+      {
+        invite: { email: inv.email, name: inv.name, skillClass: inv.skillClass, role: inv.role, staffType: inv.staffType, accountExists: Boolean(inv.userId) },
+        company: brand.name,
+        workerNoun: brand.workerNoun,
+      },
+      200,
+    );
   })
   // ---- PUBLIC: accept an invite -> create user(role=rider) + active rider profile ----
   .post("/accept/:token", jsonBody(InviteAccept), async (c) => {
@@ -182,12 +191,55 @@ export const invitesRoutes = new Hono<AppEnv>()
     const [inv] = await sdb.select().from(schema.techInvites).where(eq(schema.techInvites.token, token));
     if (!inv || inv.status !== "pending") return c.json({ message: "Invite not found or already used" }, 404);
 
+    const t = tdb(inv.companyId);
+
+    // ---- Roster invite (lib/staff-invite.ts): the login already exists with a
+    // throwaway password nobody knows. This link is how the person sets their
+    // real one. Hash with better-auth's own hasher so sign-in matches.
+    if (inv.userId) {
+      const [u] = await sdb.select().from(schema.user).where(eq(schema.user.id, inv.userId));
+      if (!u) return c.json({ message: "Invite not found or already used" }, 404);
+      const ctx = await auth.$context;
+      const hash = await ctx.password.hash(password);
+      const [cred] = await sdb
+        .select()
+        .from(schema.account)
+        .where(and(eq(schema.account.userId, u.id), eq(schema.account.providerId, "credential")));
+      if (cred) await sdb.update(schema.account).set({ password: hash, updatedAt: new Date() }).where(eq(schema.account.id, cred.id));
+      else
+        await sdb.insert(schema.account).values({
+          id: crypto.randomUUID(),
+          accountId: u.id,
+          providerId: "credential",
+          userId: u.id,
+          password: hash,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as any);
+      const userPatch: Record<string, unknown> = {};
+      if (name && name.trim()) userPatch.name = name.trim();
+      if (phone) userPatch.phone = phone;
+      if (Object.keys(userPatch).length) await sdb.update(schema.user).set(userPatch).where(eq(schema.user.id, u.id));
+      // field staff flip from "invited" to active on the roster
+      const rider = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
+      if (rider) {
+        const rp: Record<string, unknown> = { approval: "active" };
+        if (phone) rp.phone = phone;
+        await t.update(schema.riders, rp, eq(schema.riders.id, rider.id));
+      }
+      await t.update(schema.techInvites, { status: "accepted", acceptedAt: new Date() }, eq(schema.techInvites.id, inv.id));
+      return c.json({ ok: true, email: inv.email, role: inv.role }, 200);
+    }
+
+    // ---- Classic tech invite: create the account now.
     const exists = await findUserByEmail(inv.email);
     if (exists) return c.json({ message: "Account already exists — please sign in" }, 409);
 
+    const role = INTERNAL_ROLES.includes(inv.role as any) && !isAdminRole(inv.role) ? inv.role : "rider";
+    const staffType = role === "rider" ? (inv.staffType === "driver" ? "driver" : "technician") : null;
     try {
       await auth.api.signUpEmail({
-        body: { name: name || inv.name || inv.email, email: inv.email, password, role: "rider", phone: phone || inv.phone || "" } as any,
+        body: { name: name || inv.name || inv.email, email: inv.email, password, role, phone: phone || inv.phone || "" } as any,
       });
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
@@ -197,26 +249,27 @@ export const invitesRoutes = new Hono<AppEnv>()
     // The new tech belongs to the inviting company — stamp tenant onto the
     // user row for the first time. Deliberately cross-tenant/pre-membership,
     // same as the equivalent stamp in team.ts's create path.
-    await sdb.update(schema.user).set({ role: "rider", phone: phone || inv.phone || "", companyId: inv.companyId }).where(eq(schema.user.id, u.id));
+    await sdb.update(schema.user).set({ role, phone: phone || inv.phone || "", companyId: inv.companyId }).where(eq(schema.user.id, u.id));
     // The membership is what actually grants them their role at this company.
     await attachMembership({
       userId: u.id,
       companyId: inv.companyId,
-      role: "rider",
-      staffType: "technician",
+      role,
+      staffType,
       status: "active",
     });
 
-    const palette = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
-    const t = tdb(inv.companyId);
-    await t.insert(schema.riders, {
-      userId: u.id,
-      phone: phone || inv.phone || "",
-      skillClass: inv.skillClass || "General",
-      color: palette[Math.floor(Math.random() * palette.length)],
-      status: "available",
-      approval: "active",
-    });
+    if (role === "rider") {
+      const palette = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
+      await t.insert(schema.riders, {
+        userId: u.id,
+        phone: phone || inv.phone || "",
+        skillClass: inv.skillClass || "General",
+        color: palette[Math.floor(Math.random() * palette.length)],
+        status: "available",
+        approval: "active",
+      });
+    }
     await t.update(schema.techInvites, { status: "accepted", acceptedAt: new Date() }, eq(schema.techInvites.id, inv.id));
-    return c.json({ ok: true, email: inv.email }, 200);
+    return c.json({ ok: true, email: inv.email, role }, 200);
   });

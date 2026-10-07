@@ -64,7 +64,24 @@ export interface BrandProposal {
   suggestedIndustry: string | null; // one of INDUSTRY_LABELS ids, or "other"
   suggestedIndustryOther: string | null; // free-text guess when "other"
   suggestedIndustryRationale: string | null; // one short sentence why
+  // People named on the site's about / team / contact pages. Used to
+  // pre-fill the onboarding roster ("I found Mike and Sarah on your Team
+  // page — want me to set them up?"). Never creates accounts by itself.
+  teamMembers: ScoutedTeamMember[];
+  // Extra addresses found beyond the main contact email (e.g. dispatch@,
+  // office@) — handy for matching staff to emails during onboarding.
+  contactEmails: string[];
   warnings: string[];
+}
+
+export interface ScoutedTeamMember {
+  name: string;
+  /** Their title as written on the site, e.g. "Owner", "Lead Technician". */
+  title: string | null;
+  /** Our best bucket for what kind of account they'd need. */
+  role: "tech" | "dispatcher" | "manager" | "owner" | "other";
+  email: string | null;
+  phone: string | null;
 }
 
 const UA =
@@ -196,11 +213,20 @@ function logoCandidates(html: string, base: string): string[] {
 
 /** Strip tags/scripts to give the text model a clean-ish content sample. */
 function textSample(html: string): string {
-  const head = html.slice(0, 60_000);
+  // Strip the noise BEFORE windowing. The old version sliced the first 60k
+  // chars of raw HTML first, which on sites with big inline-SVG navs and
+  // script bundles in <head> left almost no visible text at all — whole
+  // About/Staff pages were coming back as "<200 chars" and being dropped.
+  const head = html.slice(0, 600_000);
   return head
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 12_000);
@@ -208,10 +234,10 @@ function textSample(html: string): string {
 
 // ── Item 3: bounded crawl + schema.org ─────────────────────────────────
 
-const MAX_SUBPAGES = 3;
+const MAX_SUBPAGES = 5;
 const SUBPAGE_TEXT_CHARS = 5_000;
 /** Hard wall-clock cap on the whole sub-page crawl (runs in parallel). */
-const CRAWL_BUDGET_MS = 18_000;
+const CRAWL_BUDGET_MS = 22_000;
 
 /**
  * Score a link by how likely it is to hold services / coverage / about
@@ -220,10 +246,14 @@ const CRAWL_BUDGET_MS = 18_000;
 function subpageScore(path: string, anchorText: string): number {
   const hay = `${path} ${anchorText}`.toLowerCase();
   // pages that match a keyword but never hold the content we want
-  if (/gallery|estimate|quote|schedule|book|contact|careers?|jobs?|blog|news|review|testimonial|privacy|terms|login|cart|faq|coupon|financing/.test(hay)) return 0;
+  if (/gallery|estimate|quote|schedule|book|careers?|jobs?|blog|news|review|testimonial|privacy|terms|login|cart|faq|coupon|financing/.test(hay)) return 0;
   if (/\b(service|services|what-we-do|our-work|solutions|offerings|pricing|rates)\b/.test(hay)) return 3;
   if (/\b(service-?areas?|areas?-(we-)?serve|coverage|locations?|where-we-work|cities)\b/.test(hay)) return 3;
-  if (/\b(about|about-us|our-story|who-we-are|company|team)\b/.test(hay)) return 2;
+  // team / staff pages name the people we want to put on the roster
+  if (/\b(team|our-team|meet-the-team|meet|staff|our-people|people|crew|technicians|leadership)\b/.test(hay)) return 3;
+  if (/\b(about|about-us|our-story|who-we-are|company)\b/.test(hay)) return 2;
+  // contact pages carry the office email/phone and often the owner's name
+  if (/\b(contact|contact-us|get-in-touch|reach-us)\b/.test(hay)) return 2;
   return 0;
 }
 
@@ -268,8 +298,9 @@ export function pickSubpages(html: string, base: string): string[] {
     scored.set(key, Math.max(scored.get(key) ?? 0, score));
   }
   // Prefer variety: at most one services page, one coverage page, one about
-  // page — a site with 12 service sub-pages shouldn't eat the whole budget.
-  const buckets: Record<string, string[]> = { svc: [], area: [], about: [] };
+  // page, one team page, one contact page — a site with 12 service sub-pages
+  // shouldn't eat the whole budget.
+  const buckets: Record<string, string[]> = { svc: [], area: [], about: [], team: [], contact: [] };
   // highest score first; within a score, shortest path first so a section
   // landing page (/services/) beats one of its children (/services/drains).
   const ordered = [...scored.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length);
@@ -277,16 +308,21 @@ export function pickSubpages(html: string, base: string): string[] {
     const p = url.toLowerCase();
     const bucket = /area|serve|coverage|location|cities|where-we-work/.test(p)
       ? "area"
-      : /about|story|who-we-are|company|team/.test(p)
-        ? "about"
-        : "svc";
+      : /team|staff|meet|people|crew|technicians|leadership/.test(p)
+        ? "team"
+        : /contact|get-in-touch|reach-us/.test(p)
+          ? "contact"
+          : /about|story|who-we-are|company/.test(p)
+            ? "about"
+            : "svc";
     buckets[bucket]!.push(url);
     void score;
   }
   const out: string[] = [];
-  for (const b of ["svc", "area", "about"]) if (buckets[b]![0]) out.push(buckets[b]![0]);
-  // top up from leftover services pages if a bucket was empty
-  for (const b of ["svc", "area", "about"])
+  const order = ["svc", "area", "about", "team", "contact"];
+  for (const b of order) if (buckets[b]![0]) out.push(buckets[b]![0]);
+  // top up from leftover pages if a bucket was empty
+  for (const b of order)
     for (const u of buckets[b]!.slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
   return out.slice(0, MAX_SUBPAGES);
 }
@@ -471,9 +507,9 @@ function hintsBlock(h: StructuredHints | null): string {
  * Fetch the chosen sub-pages in parallel under one wall-clock budget.
  * Failures are logged, never surfaced as warnings — these are bonus signal.
  */
-async function crawlSubpages(urls: string[]): Promise<{ url: string; text: string; html: string }[]> {
+async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS): Promise<{ url: string; text: string; html: string }[]> {
   if (!urls.length) return [];
-  const budget = new Promise<null>((r) => setTimeout(() => r(null), CRAWL_BUDGET_MS));
+  const budget = new Promise<null>((r) => setTimeout(() => r(null), budgetMs));
   const results = await Promise.all(
     urls.map((u) =>
       Promise.race([fetchHtml(u), budget]).then((r) =>
@@ -576,8 +612,30 @@ const TextSchema = z.object({
     )
     .nullable(),
   address: z.string().describe("Physical address").nullable(),
-  email: z.string().describe("Contact email").nullable(),
-  phone: z.string().describe("Contact phone").nullable(),
+  email: z.string().describe("Main contact email").nullable(),
+  phone: z.string().describe("Main contact phone").nullable(),
+  contactEmails: z
+    .array(z.string())
+    .describe("Every other email address printed on the pages (dispatch@, office@, a person's address), excluding the main one. Empty if none.")
+    .default([]),
+  teamMembers: z
+    .array(
+      z.object({
+        name: z.string().describe("Person's full name as written"),
+        title: z.string().describe("Their title as written on the site, e.g. 'Owner', 'Lead Technician', 'Office Manager'").nullable(),
+        role: z
+          .enum(["tech", "dispatcher", "manager", "owner", "other"])
+          .describe(
+            "tech = goes out to customers' sites (technician, plumber, installer, driver, cleaner); dispatcher = schedules/answers phones (dispatcher, CSR, receptionist, office admin); manager = runs operations (office manager, operations/service manager, general manager); owner = owner/founder/president; other = anything else (accountant, marketing).",
+          ),
+        email: z.string().describe("Their personal work email if printed next to them").nullable(),
+        phone: z.string().describe("Their direct phone if printed next to them").nullable(),
+      }),
+    )
+    .describe(
+      "Real, named people who work at THIS business, found on About / Team / Meet-the-team / Contact pages or a founder story. Up to 15. Do NOT include customers quoted in testimonials, review authors, blog authors from other companies, or generic 'our team' with no names.",
+    )
+    .default([]),
   socials: z
     .object({
       facebook: z.string().nullable(),
@@ -638,6 +696,8 @@ export async function scoutBrand(
     suggestedIndustry: null,
     suggestedIndustryOther: null,
     suggestedIndustryRationale: null,
+    teamMembers: [],
+    contactEmails: [],
     warnings,
   };
   if (!website) {
@@ -660,6 +720,35 @@ export async function scoutBrand(
   const subpageUrls = pickSubpages(html, finalUrl);
   const shotPromise = screenshot(finalUrl); // runs alongside crawl + text model
   const subpages = await crawlSubpages(subpageUrls);
+
+  // Second hop (2026-10-07): "Meet the Team" / staff pages are very often
+  // linked only from /about, not the homepage nav, so a one-level crawl
+  // misses them. If the first hop didn't land on a team page, scan the
+  // pages we DID fetch for team/staff links and follow up to 3 of them.
+  // Depth is now homepage → section → team page (plus the contact page the
+  // same way), which is where the names live on nearly every trade site.
+  const TEAM_RE = /team|staff|meet|people|crew|technicians|leadership|our-plumbers|our-techs/i;
+  const seen = new Set<string>([finalUrl, ...subpageUrls, ...subpages.map((s) => s.url)]);
+  const haveTeamPage = subpages.some((s) => TEAM_RE.test(new URL(s.url).pathname));
+  if (!haveTeamPage) {
+    const hop2: string[] = [];
+    for (const sp of subpages) {
+      for (const u of pickSubpages(sp.html, sp.url)) {
+        if (seen.has(u) || hop2.includes(u)) continue;
+        let path = "";
+        try {
+          path = new URL(u).pathname;
+        } catch {
+          continue;
+        }
+        if (TEAM_RE.test(path) || (/contact/i.test(path) && !subpages.some((x) => /contact/i.test(x.url)))) hop2.push(u);
+      }
+    }
+    if (hop2.length) {
+      const extra = await crawlSubpages(hop2.slice(0, 3), 8_000);
+      for (const e of extra) if (!seen.has(e.url)) subpages.push(e);
+    }
+  }
   const structured = (() => {
     let h = extractJsonLd(html, finalUrl);
     for (const sp of subpages) {
@@ -692,7 +781,7 @@ export async function scoutBrand(
     generateObject({
       model: gateway(MODELS.text),
       schema: TextSchema,
-      prompt: `You are analysing a field-service / trade / delivery business's website to onboard them into a dispatch & customer-management platform. From the page text below, extract the brand details AND classify their Primary Industry (ICP). Be accurate; use null when unknown. Homepage URL: ${finalUrl}
+      prompt: `You are analysing a field-service / trade / delivery business's website to onboard them into a dispatch & customer-management platform. From the page text below, extract the brand details, classify their Primary Industry (ICP), AND list the named staff (teamMembers) so we can pre-fill their team roster. Be accurate; use null when unknown. Only list people who clearly work at this business — never testimonial authors. Homepage URL: ${finalUrl}
 
 ALLOWED INDUSTRY CATEGORIES (pick the single best fit, or "other" if genuinely none fit):
 ${INDUSTRY_LABELS.map((i) => `- ${i.id}: ${i.label}`).join("\n")}
@@ -806,6 +895,47 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     suggestedIndustry: text?.suggestedIndustry ?? null,
     suggestedIndustryOther: text?.suggestedIndustryOther ?? null,
     suggestedIndustryRationale: text?.suggestedIndustryRationale ?? null,
+    teamMembers: cleanTeam(text?.teamMembers ?? [], text?.email ?? structured?.email ?? null),
+    contactEmails: cleanEmails(text?.contactEmails ?? [], text?.email ?? structured?.email ?? null),
     warnings,
   };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function cleanEmails(list: string[], main: string | null): string[] {
+  const out: string[] = [];
+  for (const raw of list) {
+    const e = (raw || "").trim().toLowerCase();
+    if (!EMAIL_RE.test(e)) continue;
+    if (main && e === main.trim().toLowerCase()) continue;
+    if (!out.includes(e)) out.push(e);
+  }
+  return out.slice(0, 10);
+}
+
+/** Drop junk the model sometimes returns (empty names, "Our Team", dupes). */
+function cleanTeam(list: z.infer<typeof TextSchema>["teamMembers"], mainEmail: string | null): ScoutedTeamMember[] {
+  const out: ScoutedTeamMember[] = [];
+  const seen = new Set<string>();
+  for (const m of list) {
+    const name = (m.name || "").replace(/\s+/g, " ").trim();
+    if (name.length < 3 || name.length > 60) continue;
+    // needs at least one letter and shouldn't be a generic heading
+    if (!/[a-z]/i.test(name) || /^(our|the|meet)\b|team$|staff$/i.test(name)) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const email = m.email && EMAIL_RE.test(m.email.trim()) ? m.email.trim().toLowerCase() : null;
+    out.push({
+      name,
+      title: m.title?.trim() || null,
+      role: m.role,
+      // a shared office address isn't a personal login — leave it blank
+      email: email && mainEmail && email === mainEmail.trim().toLowerCase() ? null : email,
+      phone: formatPhone(m.phone ?? null),
+    });
+    if (out.length >= 15) break;
+  }
+  return out;
 }

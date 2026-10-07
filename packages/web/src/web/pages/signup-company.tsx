@@ -49,6 +49,7 @@ type BrandProposal = {
   email: string | null;
   phone: string | null;
   serviceArea: string | null;
+  teamMembers?: { name: string; title: string | null; role: string }[];
   suggestedIndustry: string | null;
   suggestedIndustryOther: string | null;
   suggestedIndustryRationale: string | null;
@@ -412,6 +413,11 @@ function BrandDetected({ brand }: { brand: BrandProposal }) {
           )}
           {brand.serviceArea && (
             <span className="rounded-full bg-white/5 px-2 py-0.5 text-slate-400">serves {brand.serviceArea}</span>
+          )}
+          {(brand.teamMembers?.length ?? 0) > 0 && (
+            <span className="rounded-full bg-white/5 px-2 py-0.5 text-slate-400">
+              found {brand.teamMembers!.length} team member{brand.teamMembers!.length === 1 ? "" : "s"}
+            </span>
           )}
         </div>
         {brand.warnings.length > 0 && (

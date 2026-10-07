@@ -63,6 +63,7 @@ const RiderProfileFields = {
   phone: phoneField.optional(),
   skillClass: optText(60),
   vehicle: optText(120),
+  vehicleColor: optText(40),
   color: optText(32),
   licensePlate: optText(32),
   licenseNumber: optText(60),
@@ -249,7 +250,7 @@ export const ridersRoutes = new Hono<AppEnv>()
   // create a technician (admin): user(role=rider) + rider profile
   .post("/", requireAdmin, jsonBody(RiderCreate), async (c) => {
     const body = c.req.valid("json");
-    const { name, email, password, phone, skillClass, vehicle, color, licensePlate, licenseNumber, address, notes, skills, payRatePerHour, tags } = body;
+    const { name, email, password, phone, skillClass, vehicle, vehicleColor, color, licensePlate, licenseNumber, address, notes, skills, payRatePerHour, tags } = body;
 
     const cid = tenantId(c);
     const existing = await findUserByEmail(email);
@@ -283,6 +284,7 @@ export const ridersRoutes = new Hono<AppEnv>()
         phone: phone ?? existing.phone ?? "",
         skillClass: skillClass || "General",
         vehicle: vehicle || "Van",
+        vehicleColor: vehicleColor ?? "",
         color: color || palette0[Math.floor(Math.random() * palette0.length)],
         licensePlate: licensePlate ?? "",
         licenseNumber: licenseNumber ?? "",
@@ -334,6 +336,7 @@ export const ridersRoutes = new Hono<AppEnv>()
       phone: phone ?? "",
       skillClass: skillClass || "General",
       vehicle: vehicle || "Van",
+      vehicleColor: vehicleColor ?? "",
       color: color || palette[Math.floor(Math.random() * palette.length)],
       licensePlate: licensePlate ?? "",
       licenseNumber: licenseNumber ?? "",
@@ -358,7 +361,7 @@ export const ridersRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const b = c.req.valid("json");
     const patch: Record<string, unknown> = {};
-    for (const k of ["vehicle", "skillClass", "color", "photoUrl", "phone", "licensePlate", "licenseNumber", "address", "notes", "status", "skills", "payRatePerHour"] as const) {
+    for (const k of ["vehicle", "vehicleColor", "skillClass", "color", "photoUrl", "phone", "licensePlate", "licenseNumber", "address", "notes", "status", "skills", "payRatePerHour"] as const) {
       if (k in b) patch[k] = (b as Record<string, unknown>)[k];
     }
     if (Array.isArray(patch.skills)) patch.skills = (patch.skills as string[]).join(",");

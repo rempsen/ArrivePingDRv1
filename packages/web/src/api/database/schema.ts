@@ -49,7 +49,8 @@ export const riders = pgTable("riders", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   companyId: text("company_id").notNull().default("default"),
-  vehicle: text("vehicle").notNull().default("Van"),
+  vehicle: text("vehicle").notNull().default("Van"), // vehicle type / make & model, e.g. "Ford Transit"
+  vehicleColor: text("vehicle_color").notNull().default(""), // paint colour, e.g. "White" — `color` below is the map pin, not the truck
   skills: text("skills").notNull().default(""), // csv of categories
   skillClass: text("skill_class").notNull().default("General"), // HVAC, Electrical, Plumbing, etc.
   color: text("color").notNull().default("#0ea5e9"), // map color-code
@@ -1024,6 +1025,13 @@ export const techInvites = pgTable("tech_invites", {
   token: text("token").notNull().$defaultFn(() => crypto.randomUUID().replace(/-/g, "")),
   status: text("status").notNull().default("pending"), // pending | accepted | revoked
   invitedBy: text("invited_by").notNull().default(""),
+  // Onboarding-roster invites (lib/staff-invite.ts) pre-create the login so the
+  // person shows on the roster immediately; the invite link then just lets
+  // them SET their password instead of creating the account. Null for the
+  // classic "create your account" tech invite.
+  userId: text("user_id"),
+  role: text("role").notNull().default("rider"), // rider | dispatcher | manager (INTERNAL_ROLES)
+  staffType: text("staff_type").notNull().default("technician"), // technician | driver (field staff only)
   acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({

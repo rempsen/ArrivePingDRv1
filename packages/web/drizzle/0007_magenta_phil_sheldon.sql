@@ -1,0 +1,1 @@
+ALTER TABLE "riders" ADD COLUMN "vehicle_color" text DEFAULT '' NOT NULL;

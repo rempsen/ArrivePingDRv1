@@ -27,6 +27,18 @@ export type QualifyingProfile = {
   offersEmergencyPremium?: boolean;
   emergencyMultiplierPct?: number; // e.g. 150 = 1.5x rate after-hours/rush
   icpAnswers?: { question: string; answer: string }[];
+  /** Staff the brand scout read off the tenant's website at signup (About/Team/Contact pages). */
+  scoutedTeam?: {
+    name: string;
+    title: string | null;
+    role: "tech" | "dispatcher" | "manager" | "owner" | "other";
+    email: string | null;
+    phone: string | null;
+  }[];
+  /** Other email addresses printed on the site (dispatch@, office@…). */
+  scoutedEmails?: string[];
+  /** Set once the onboarding chat's add_team_members tool has run at least once. */
+  rosterSetupAt?: string;
   /** Set once applyQualifyingTuning() has run, so it never re-runs and compounds the multiplier. */
   tuningAppliedAt?: string;
   /** Set once the ICP-answer → provisioning pass (icp-answer-tuning.ts) has run. */

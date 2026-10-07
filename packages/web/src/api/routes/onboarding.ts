@@ -44,6 +44,7 @@ import {
 import { scoutBrand } from "../../services/brand-scout";
 import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qualifying-tuning";
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
+import { inviteStaffMember, kindToRole, type StaffInviteResult } from "../lib/staff-invite";
 import {
   getIndustryPreset,
   industryLabel,
@@ -165,7 +166,7 @@ async function buildOnboardingSnapshot(cid: string) {
   // of six, sequentially. These are small, single-tenant reads — the extra
   // latency of running them one after another instead of in parallel is
   // negligible next to the cost of a dropped connection.
-  const { settings, forms, templates, services, catalog, options } = await t.transaction(
+  const { settings, forms, templates, services, catalog, options, riders, invites } = await t.transaction(
     async (tx) => {
       const settingsWhere = t.scope(schema.companySettings);
       const [settings] = settingsWhere
@@ -181,7 +182,9 @@ async function buildOnboardingSnapshot(cid: string) {
       const services = await selectAll(schema.services);
       const catalog = await selectAll(schema.catalogItems);
       const options = await selectAll(schema.optionCategories);
-      return { settings, forms, templates, services, catalog, options };
+      const riders = await selectAll(schema.riders);
+      const invites = await selectAll(schema.techInvites);
+      return { settings, forms, templates, services, catalog, options, riders, invites };
     },
   );
   if (!company || !settings) throw Err.notFound("Company not found");
@@ -222,6 +225,14 @@ async function buildOnboardingSnapshot(cid: string) {
   const catalogCategories = Array.from(new Set(catalog.map((c) => c.category).filter(Boolean)));
   const optionSummaries = options.map((o) => o.name);
 
+  // Roster: who the scrape found on the website (Team/About/Contact pages)
+  // vs. who has actually been set up. Field staff live in `riders`; office
+  // staff (dispatcher/manager) only show up as tech_invites rows with a
+  // non-rider role, so the roster count is riders + non-rider invites.
+  const scoutedTeam = Array.isArray(qualifying.scoutedTeam) ? qualifying.scoutedTeam : [];
+  const officeCount = invites.filter((i) => i.role && i.role !== "rider").length;
+  const rosterCount = riders.length + officeCount;
+
   return {
     company,
     settings,
@@ -239,6 +250,12 @@ async function buildOnboardingSnapshot(cid: string) {
     },
     knowledge,
     qualifying,
+    roster: {
+      scouted: scoutedTeam,
+      fieldStaff: riders.length,
+      officeStaff: officeCount,
+      total: rosterCount,
+    },
     checklist: {
       hasIndustry: Boolean(company.industry && company.industry !== "other"),
       hasLogo: Boolean(settings.logo),
@@ -248,6 +265,7 @@ async function buildOnboardingSnapshot(cid: string) {
       hasForms: forms.length > 0,
       hasTemplates: templates.length > 0,
       hasQualifyingBaseline: baselineDone,
+      hasRoster: rosterCount > 0 || Boolean(qualifying.rosterSetupAt),
       done: Boolean(company.onboardingCompletedAt),
     },
   };
@@ -303,6 +321,7 @@ export const onboardingRoutes = new Hono<AppEnv>()
       const t = tdb(cid);
       const { messages } = c.req.valid("json");
       const snap = await buildOnboardingSnapshot(cid);
+      const adminUserId = (c.get("user") as { id: string } | null)?.id ?? null;
 
       let finished = false;
 
@@ -385,6 +404,41 @@ without it unless the user explicitly says to skip/finish everything.
        and if yes, roughly what multiplier (e.g. "1.5x", "double") —
        (offersEmergencyPremium + emergencyMultiplierPct, e.g. 150 for 1.5x)
 
+  PART 2b — TEAM SETUP (right after technicianCount and vehicleCount are
+  saved, BEFORE questions 3-5). This is the quick win of the whole
+  conversation — a roster they didn't have to type in. Flow:
+    i.  Ask this VERBATIM — word for word, both sentences, no shortening or
+        rephrasing even though it's longer than your usual question (the
+        owner specified this exact wording): "Would you like us to help you
+        set up your technicians and staff automatically? Let me know, and I
+        can take care of the initial setup." If no / later — move on to
+        question 3, don't push.
+    ii. If yes and PEOPLE FOUND ON THEIR WEBSITE below is non-empty, list
+        every name with the title we found (plain text, one per line — this
+        list is the ONE place a multi-line reply is allowed) and end with
+        this sentence VERBATIM: "We found all of these people. Would you
+        like to add them as a profile in your settings? Yes or no?"
+        If the list is empty, instead ask them to paste their people in one
+        message — "name, job, email, mobile" per line — and build from that.
+    iii. For each person whose role or email is unclear, ask one short
+        question using what the site already told you (their title). You
+        need: what they are (technician, driver, dispatcher, manager or
+        owner) and a login email. Phone is nice-to-have. For technicians
+        and drivers also ask for their vehicle (make/model, colour, plate)
+        when vehicleCount > 0 — one question per person, skip if they
+        don't know, it can be filled in later under Settings.
+        Don't interrogate: if they say "they're all techs" or "skip the
+        vehicles", take it and go.
+    iv. Call add_team_members ONCE with everyone who has at least a name,
+        kind and email. Each person gets a login invite by email (and SMS
+        if a mobile was given) to set their own password — nobody types
+        passwords for anyone else. Then say one line like "Invites are on
+        their way — they'll each set their own password." and continue
+        with question 3.
+    Anyone they're not sure about yet can be added later under Settings →
+    Team; say so once if they seem stuck, then move on. Don't make them
+    finish everything now.
+
   THEN design and ask 1-5 MORE questions SPECIFIC to this ICP. Before you
   write a single one of these, do the following review — silently, in your
   own reasoning, not out loud to the user:
@@ -438,7 +492,8 @@ Rules:
 - If something in CURRENT STATE below already looks right/already answered,
   don't ask about it again — just move on.
 - Call update_brand_profile / set_industry / add_catalog_item /
-  save_qualifying_baseline / save_icp_qualifying_answer AS SOON AS the user
+  save_qualifying_baseline / save_icp_qualifying_answer / add_team_members
+  AS SOON AS the user
   gives you the info — don't wait to batch it at the end. The screen next to
   this chat already shows every fact the moment you capture it, so DON'T
   narrate the save back to the user ("Got it, service area set to...") —
@@ -472,6 +527,12 @@ CURRENT STATE:
 - Starter forms/templates seeded: ${snap.counts.forms} forms, ${snap.counts.templates} work-order templates
 - Qualifying baseline captured so far: technicianCount=${q.technicianCount ?? "?"}, vehicleCount=${q.vehicleCount ?? "?"}, jobsPerDay=${q.jobsPerDay ?? "?"}, offersMaintenancePlans=${q.offersMaintenancePlans ?? "?"}, offersEmergencyPremium=${q.offersEmergencyPremium ?? "?"}${q.offersEmergencyPremium ? `, emergencyMultiplierPct=${q.emergencyMultiplierPct ?? "?"}` : ""}
 - ICP-specific qualifying questions answered so far: ${icpAnswered}${icpAnswered ? "\n" + q.icpAnswers!.map((a) => `  - Q: ${a.question}\n    A: ${a.answer}`).join("\n") : ""}
+- Team roster so far: ${snap.roster.total ? `${snap.roster.fieldStaff} field staff + ${snap.roster.officeStaff} office staff already set up${q.rosterSetupAt ? " (team setup done — don't offer it again)" : ""}` : "nobody set up yet"}
+
+PEOPLE FOUND ON THEIR WEBSITE (from the Team/About/Contact pages — these are
+staff names the scrape found, NOT customers; offer to set them up in Part
+2b):
+${snap.roster.scouted.length ? snap.roster.scouted.map((m) => `- ${m.name}${m.title ? ` — ${m.title}` : ""}${m.role && m.role !== "other" ? ` (looks like: ${m.role})` : ""}${m.email ? `, ${m.email}` : ""}${m.phone ? `, ${m.phone}` : ""}`).join("\n") : "(none found — ask them to paste their list)"}${Array.isArray(q.scoutedEmails) && q.scoutedEmails.length ? `\nGeneral emails seen on the site (may help guess a login address): ${q.scoutedEmails.join(", ")}` : ""}
 
 WHAT'S ALREADY BUILT FOR THIS TENANT (the concrete surface your ICP-specific
 questions should tune — see step (a) above):
@@ -640,6 +701,86 @@ correction like that — it reads like you weren't listening.`;
             const updated: QualifyingProfile = { ...current, icpAnswers };
             await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
             return { ok: true, totalIcpAnswers: icpAnswers.length };
+          },
+        }),
+        add_team_members: tool({
+          description:
+            "Create login invites for the tenant's staff in one go. Field staff (tech/driver) get a technician profile with vehicle details; office staff (dispatcher/manager/owner) get a dispatcher/manager login. Every person receives a branded email (and SMS when a mobile is given) with a link to set their OWN password — never ask the admin for passwords. Only include people with a name, kind and email; skip the rest and tell the user they can add them later under Settings → Team.",
+          inputSchema: z.object({
+            members: z
+              .array(
+                z.object({
+                  name: z.string().min(2).max(120),
+                  kind: z.enum(["tech", "driver", "dispatcher", "manager", "owner"]),
+                  email: z.string().max(200),
+                  phone: z.string().max(40).optional().describe("mobile number if given, any format"),
+                  skillClass: z.string().max(60).optional().describe("trade/skill for field staff, e.g. Plumbing, HVAC, Electrical"),
+                  vehicle: z
+                    .object({
+                      makeModel: z.string().max(80).optional().describe('e.g. "Ford Transit"'),
+                      color: z.string().max(40).optional(),
+                      plate: z.string().max(20).optional(),
+                    })
+                    .optional(),
+                }),
+              )
+              .min(1)
+              .max(40),
+          }),
+          execute: async ({ members }) => {
+            const results: StaffInviteResult[] = [];
+            for (const m of members) {
+              try {
+                results.push(
+                  await inviteStaffMember({
+                    companyId: cid,
+                    invitedBy: adminUserId,
+                    name: m.name,
+                    email: m.email,
+                    phone: m.phone ?? null,
+                    kind: m.kind,
+                    skillClass: m.skillClass ?? null,
+                    vehicle: m.vehicle ?? null,
+                  }),
+                );
+              } catch (e: any) {
+                results.push({
+                  ok: false,
+                  name: m.name,
+                  email: m.email,
+                  kind: m.kind,
+                  role: kindToRole(m.kind).role,
+                  status: "error",
+                  message: e?.message ?? "failed",
+                });
+              }
+            }
+            // Stamp rosterSetupAt so a re-run of the chat doesn't offer the
+            // automatic setup a second time.
+            try {
+              const row = await t.selectOne(schema.companySettings);
+              let current: QualifyingProfile = {};
+              try {
+                current = JSON.parse(row?.qualifyingProfile || "{}");
+              } catch {
+                current = {};
+              }
+              const updated: QualifyingProfile = { ...current, rosterSetupAt: new Date().toISOString() };
+              await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
+            } catch (e) {
+              console.error("[onboarding] rosterSetupAt stamp failed", e);
+            }
+            const invited = results.filter((r) => r.status === "invited" || r.status === "joined");
+            const existing = results.filter((r) => r.status === "exists");
+            const failed = results.filter((r) => r.status === "error");
+            return {
+              ok: failed.length < results.length,
+              invited: invited.map((r) => ({ name: r.name, email: r.email, kind: r.kind })),
+              alreadyOnRoster: existing.map((r) => r.name),
+              failed: failed.map((r) => ({ name: r.name, reason: r.message ?? "failed" })),
+              // Never surface the set-password links to the model/user —
+              // they are the credential. The email/SMS carries them.
+            };
           },
         }),
         finish_onboarding: tool({

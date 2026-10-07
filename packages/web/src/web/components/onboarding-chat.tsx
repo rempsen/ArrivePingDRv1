@@ -39,6 +39,7 @@ type Snapshot = {
     hasCatalog: boolean;
     hasForms: boolean;
     hasTemplates: boolean;
+    hasRoster?: boolean;
     done: boolean;
   };
 };
@@ -135,6 +136,15 @@ function factsFromTool(t: ToolEvent): Fact[] {
           value: String(t.input?.answer ?? "").slice(0, 200),
         },
       ];
+    case "add_team_members": {
+      const invited: Array<{ name: string; kind: string }> = Array.isArray(t.output?.invited) ? t.output.invited : [];
+      const kindLabel: Record<string, string> = { tech: "technician", driver: "driver", dispatcher: "dispatcher", manager: "manager", owner: "owner" };
+      return invited.map((m) => ({
+        id: nextFactId("team"),
+        label: "Team member invited",
+        value: `${m.name} — ${kindLabel[m.kind] ?? m.kind}`,
+      }));
+    }
     default:
       return [];
   }
@@ -165,6 +175,13 @@ function toolLabel(t: ToolEvent): string {
     }
     case "save_icp_qualifying_answer":
       return "Noted — will use this to tune your setup";
+    case "add_team_members": {
+      const n = Array.isArray(t.output?.invited) ? t.output.invited.length : 0;
+      const failed = Array.isArray(t.output?.failed) ? t.output.failed.length : 0;
+      const bits = [n ? `Invited ${n} team member${n === 1 ? "" : "s"} — each sets their own password` : "No one new to invite"];
+      if (failed) bits.push(`${failed} couldn't be added`);
+      return bits.join("; ");
+    }
     case "finish_onboarding": {
       const tuning = t.output?.tuning;
       const bits: string[] = [];
@@ -409,6 +426,7 @@ export function OnboardingChat() {
         setChecklist((c) => {
           if (!c) return c;
           if (t.name === "set_industry" && t.output?.ok) return { ...c, hasIndustry: true, hasCatalog: c.hasCatalog || (t.output.catalogSeeded ?? 0) > 0 };
+          if (t.name === "add_team_members" && Array.isArray(t.output?.invited) && t.output.invited.length) return { ...c, hasRoster: true };
           if (t.name === "update_brand_profile") {
             const upd: string[] = t.output?.updated ?? [];
             return {
@@ -459,6 +477,7 @@ export function OnboardingChat() {
     { key: "hasCatalog", label: "Catalog" },
     { key: "hasForms", label: "Intake forms" },
     { key: "hasTemplates", label: "Work-order templates" },
+    { key: "hasRoster", label: "Team invited" },
   ];
 
   return (
