@@ -20,14 +20,24 @@
  * this suite's DB is Bun's shared single-process ":memory:" store, so table
  * existence can't be relied on to differ between the first and second call.
  */
-import { describe, it, expect, beforeAll, mock } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
 import { eq } from "drizzle-orm";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
 
-mock.module("../../../services/stripe", () => ({
+// Bun's mock.module is process-wide AND rewrites modules other files already
+// imported, and every test file's top level is evaluated before any test runs.
+// A top-level mock therefore leaked stripeEnabled=true into sibling suites
+// (billing-integration's "payments unconfigured -> 503" assertions, whenever
+// money.test.ts had loaded the real module first). So: snapshot the real module
+// (no mock yet, as a plain copy), install the mock only around this file's tests, restore after.
+// Copy the values: mock.module mutates the original namespace object in place.
+const realStripe = { ...(await import("../../../services/stripe")) };
+
+const stripeMock = () => ({
+  ...realStripe,
   stripeEnabled: true,
   STRIPE_WEBHOOK_SECRET: "", // exercises the documented dev fallback (parse-only, no sig check)
   // Called unconditionally by the route before it even checks whether a
@@ -43,7 +53,15 @@ mock.module("../../../services/stripe", () => ({
   }),
   fromMinor: (minor: number) => Math.round(minor) / 100,
   toMinor: (amount: number) => Math.round(amount * 100),
-}));
+});
+
+beforeAll(() => {
+  mock.module("../../../services/stripe", stripeMock);
+});
+
+afterAll(() => {
+  mock.module("../../../services/stripe", () => realStripe);
+});
 
 const { db } = await import("../../database/index");
 const schema = await import("../../database/schema");
