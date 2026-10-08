@@ -217,7 +217,7 @@ const fleet: LandingPage = {
     q: "How does arrival get confirmed?",
     a: "A geofence around the job address marks the technician as arrived and starts the on-site time clock. Technicians can also tap to mark arrival manually.",
   }, PRICE_FAQ],
-  related: ["/dispatch-software", "/customer-notifications", "/field-service-software", "/compare/housecall-pro"],
+  related: ["/dispatch-software", "/customer-notifications", "/delivery-dispatch-software", "/compare/housecall-pro"],
 };
 
 const dispatch: LandingPage = {
@@ -366,7 +366,7 @@ const notifications: LandingPage = {
     q: "Can customers contact the technician?",
     a: "Yes. The tracking page has buttons to text or call the technician, so customers can share access details or coordinate a delay without calling the office.",
   }, PRICE_FAQ],
-  related: ["/fleet-tracking", "/dispatch-software", "/compare/jobber", "/field-service-software"],
+  related: ["/on-my-way-text-software", "/fleet-tracking", "/dispatch-software", "/compare/jobber"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -620,13 +620,362 @@ const serviceTitan: LandingPage = {
   verified: COMPETITORS_VERIFIED,
 };
 
+/* ------------------------------------------------------------------ */
+/* Customer communication pillar: on-my-way texts                       */
+/* ------------------------------------------------------------------ */
+
+const onMyWay: LandingPage = {
+  path: "/on-my-way-text-software",
+  label: "On-my-way text software",
+  meta: {
+    title: "On-My-Way Text Software with Live Tracking Link | ArrivePing",
+    description:
+      "Send customers an on-my-way text with a live tracking link and ETA, no customer app. Templates, timing and how it works for HVAC, plumbing, electrical and delivery teams. From $49/mo.",
+  },
+  eyebrow: "Customer arrival notifications",
+  h1: "On-my-way texts that show the customer exactly where the tech is.",
+  lede:
+    "The on-my-way text is the one message every service customer wants. ArrivePing sends it automatically when the technician taps \"heading out\", with a live map, an ETA that updates in traffic, and buttons to text or call the technician.",
+  answer: {
+    q: "What is on-my-way text software?",
+    a: "On-my-way text software automatically messages a customer when their technician or driver leaves for the appointment. A basic version sends a fixed message; ArrivePing's version includes a link to a live tracking page that shows the technician on a map with a traffic-aware ETA and one-tap text or call, so the customer never has to phone the office to ask where the tech is. It runs from the technician's phone, with no vehicle GPS hardware and no customer app.",
+  },
+  sections: [
+    {
+      kind: "steps",
+      eyebrow: "How it works",
+      title: "Three taps, zero phone tag.",
+      items: [
+        { title: "Technician taps \"on the way\"", body: "In the ArrivePing app, one tap marks the job en route and sends the message." },
+        { title: "Customer gets the text", body: "An SMS (or email) with your business name, the technician's first name and a link to the live tracking page. The template is yours to edit." },
+        { title: "They watch the ETA, not the clock", body: "The tracking page shows the technician moving on a map with a live ETA. Text or call buttons connect to the technician without exposing a personal number." },
+        { title: "Sharing stops at arrival", body: "A geofence marks arrival, the on-site clock starts, and the customer's view of the technician's location ends." },
+      ],
+    },
+    {
+      kind: "prose",
+      eyebrow: "Templates",
+      title: "On-my-way text templates you can use today.",
+      paragraphs: [
+        "Keep it short: who is coming, roughly when, and a link to follow along. Use these with any tool. In ArrivePing, the on-the-way, running-late and arrived messages are drafted in your voice during setup and you can edit them any time.",
+      ],
+      bullets: [
+        "On the way: \"Hi {first name}, this is {company}. {Tech} is on the way to your {service} appointment and should arrive about {ETA}. Track live: {link}\"",
+        "Running late: \"Hi {first name}, {Tech} is running about {delay} behind. New ETA {ETA}. Live map: {link}. Reply if that no longer works for you.\"",
+        "Arrived: \"{Tech} from {company} has arrived for your {service} appointment.\"",
+        "Day-before reminder (any scheduling tool): \"Reminder: your {service} appointment with {company} is tomorrow, {window}. We'll text you a live tracking link when the tech is on the way.\"",
+      ],
+    },
+    {
+      kind: "features",
+      eyebrow: "Why it matters",
+      title: "What a live ETA changes for a service business.",
+      items: [
+        { title: "Fewer \"where's my tech?\" calls", body: "The answer is on the customer's phone, so your office stops relaying ETAs between the truck and the house." },
+        { title: "Shorter windows you can keep", body: "When the customer can see progress, a precise ETA replaces the four-hour window and the no-shows it causes." },
+        { title: "Trust before the doorbell", body: "The customer knows the technician's name and sees them coming. The visit starts on a better footing." },
+        { title: "Privacy by default", body: "The customer sees the technician's progress toward their own appointment, only while en route. Nothing else, ever." },
+      ],
+    },
+    {
+      kind: "prose",
+      eyebrow: "Consent and compliance",
+      title: "Texting customers in Canada and the US.",
+      paragraphs: [
+        "ArrivePing's arrival texts are notifications about a service the customer has already booked, sent to the number they gave you for that job. Capture the mobile number and a clear note that you will text appointment updates at booking, and give customers an easy way to opt out. Canada's anti-spam law (CASL) and the US TCPA treat marketing texts differently from service notifications, so keep promotional messages in a separate, opted-in campaign and get advice for your own situation.",
+      ],
+    },
+    { kind: "trades", title: "Teams that send on-my-way texts with ArrivePing." },
+  ],
+  faqs: [
+    TRACKING_FAQ,
+    PRIVACY_FAQ,
+    {
+      q: "Can I customize the on-my-way message?",
+      a: "Yes. The on-the-way, running-late and arrived messages are drafted in your voice by the setup agent and you can edit them any time, including your business name and how the technician is introduced.",
+    },
+    {
+      q: "Does the on-my-way text work without GPS hardware?",
+      a: "Yes. The live tracking page uses the location from the ArrivePing app on the technician's phone, so there is nothing to install in the vehicle.",
+    },
+    {
+      q: "What does the customer see if they open the link after the technician arrives?",
+      a: "The page shows that the technician has arrived and the job is in progress. Live location sharing ends at arrival.",
+    },
+    PRICE_FAQ,
+  ],
+  related: ["/customer-notifications", "/fleet-tracking", "/dispatch-software", "/compare/workiz"],
+};
+
+/* ------------------------------------------------------------------ */
+/* Last-mile delivery and driver dispatch                               */
+/* ------------------------------------------------------------------ */
+
+const delivery: LandingPage = {
+  path: "/delivery-dispatch-software",
+  label: "Delivery dispatch software",
+  meta: {
+    title: "Last-Mile Delivery Dispatch Software for Small Fleets | ArrivePing",
+    description:
+      "Dispatch drivers for appointment-based deliveries and installs: live driver map, auto-assign the closest driver, customer tracking link with ETA, geofenced arrival. No GPS hardware. From $49/mo.",
+  },
+  eyebrow: "Last-mile delivery dispatch",
+  h1: "Last-mile delivery dispatch for teams that promise an arrival time.",
+  lede:
+    "Furniture and appliance delivery, installers, equipment drop-offs, courier runs with a booked window: when the customer has to be home, the arrival experience is the product. ArrivePing puts your drivers on a live map, assigns the closest one, and gives every customer an Uber-style tracking link.",
+  answer: {
+    q: "What is last-mile delivery dispatch software?",
+    a: "Last-mile delivery dispatch software assigns deliveries to drivers, tracks them on the road and keeps the customer informed until the item is at the door. ArrivePing is built for appointment-based last-mile work: it shows every driver on a live map, auto-assigns each delivery to the closest available driver with the right vehicle or skills, sends the stop to the driver's phone, and texts the customer a live tracking link with an ETA. Arrival is confirmed by geofence. If you need to optimize hundreds of parcel stops per driver per day, a dedicated route optimizer is the better tool.",
+  },
+  sections: [
+    {
+      kind: "features",
+      eyebrow: "What you get",
+      title: "The last mile, from assignment to the doorstep.",
+      items: [
+        { title: "Live driver map", body: "Every driver and vehicle on one map with status: available, en route, arrived, delivering." },
+        { title: "Closest-driver assignment", body: "ArrivePing ranks drivers by distance, availability, workload and any required skills or vehicle type, then assigns the delivery. Dispatchers can override." },
+        { title: "Driver app", body: "Stop details, access notes and contact info on the driver's phone. One tap to accept, one tap to head out, one tap to text or call the customer." },
+        { title: "Customer tracking link", body: "An on-my-way text with a live map, ETA and the driver's first name. No customer app." },
+        { title: "Geofenced arrival", body: "Arrival at the address is recorded automatically and starts the on-site clock for unloads and installs." },
+        { title: "Phone-based GPS", body: "Location comes from the driver app. No telematics boxes, no per-vehicle hardware fees." },
+      ],
+    },
+    {
+      kind: "prose",
+      eyebrow: "Fit",
+      title: "Appointment deliveries, not parcel routing.",
+      paragraphs: [
+        "ArrivePing is at its best when each delivery or install is an appointment the customer is waiting for: a sofa, a water heater, a piece of equipment, a courier run with a promised window. It optimizes who goes and keeps the customer informed about when they will arrive.",
+        "If your drivers run 100-plus parcel stops a day and the main problem is stop sequencing, use a route optimizer such as Onfleet, Routific or OptimoRoute. Those tools are built for that; ArrivePing is built for the arrival experience.",
+      ],
+    },
+    {
+      kind: "steps",
+      eyebrow: "How it works",
+      title: "A delivery in five steps.",
+      items: [
+        { title: "Book the delivery", body: "From your office, an intake form or an integration, with the time window, items and access notes." },
+        { title: "Auto-assign the driver", body: "The closest available driver with the right vehicle or skills gets the stop." },
+        { title: "Send it to their phone", body: "Address, items, gate codes and contact details in the driver app." },
+        { title: "Text the customer", body: "On-my-way message with a live tracking link and ETA when the driver heads out." },
+        { title: "Confirm arrival", body: "Geofence marks the arrival; the on-site clock covers the unload or install." },
+      ],
+    },
+    { kind: "trades", title: "Delivery and install teams we're built for." },
+  ],
+  faqs: [
+    {
+      q: "Does ArrivePing optimize multi-stop routes?",
+      a: "ArrivePing assigns each delivery to the best driver by distance, availability, workload and skills, and shows the drive to each stop. It is not a parcel route optimizer that sequences hundreds of stops per driver; for that, pair it with or choose a dedicated routing tool.",
+    },
+    HARDWARE_FAQ,
+    TRACKING_FAQ,
+    {
+      q: "Can the customer contact the driver?",
+      a: "Yes. The tracking page has text and call buttons that reach the driver without exposing a personal phone number.",
+    },
+    PRICE_FAQ,
+    SETUP_FAQ,
+  ],
+  related: ["/fleet-tracking", "/on-my-way-text-software", "/compare/onfleet", "/compare/routific"],
+};
+
+/* ------------------------------------------------------------------ */
+/* Additional comparisons                                                */
+/* ------------------------------------------------------------------ */
+
+const workizSources = [
+  { label: "Workiz pricing plans", href: "https://www.workiz.com/pricing-plans/" },
+  { label: "Workiz On My Way feature", href: "https://www.workiz.com/features/on-my-way/" },
+  { label: "Workiz help centre: On My Way Pro", href: "https://help.workiz.com/hc/en-us/articles/32686565665937" },
+];
+
+const onfleetSources = [
+  { label: "Onfleet pricing", href: "https://onfleet.com/pricing" },
+  { label: "Onfleet llms.txt (company facts)", href: "https://onfleet.com/llms.txt" },
+];
+
+const routificSources = [
+  { label: "Routific pricing", href: "https://www.routific.com/pricing" },
+  { label: "Routific home", href: "https://www.routific.com/" },
+];
+
+const workiz: LandingPage = {
+  path: "/compare/workiz",
+  label: "ArrivePing vs Workiz",
+  parent: compareParent,
+  meta: {
+    title: "ArrivePing vs Workiz: On-My-Way Texts, Tracking, Price",
+    description:
+      "ArrivePing vs Workiz compared for home service teams: published pricing, on-my-way texts with live tracking, GPS tracking without hardware, and automatic dispatch. Sources linked.",
+  },
+  eyebrow: "Workiz alternative",
+  h1: "ArrivePing vs Workiz",
+  lede:
+    "Workiz is a broad home-service platform with scheduling, invoicing, phone and an On My Way feature. ArrivePing is narrower and cheaper to start: dispatch, live tracking and customer ETAs, with pricing published on the site.",
+  answer: {
+    q: "Is ArrivePing a good Workiz alternative?",
+    a: "ArrivePing fits if you want the arrival experience without a full platform: automatic dispatch by distance and skill, live tracking from the technician's phone and an on-my-way text with a live map and ETA, from a published $49 a month. Workiz is the broader choice if you want scheduling, invoicing, a business phone system and marketing in one product and are comfortable requesting a quote.",
+  },
+  sections: [
+    {
+      kind: "table",
+      title: "Side by side",
+      columns: ["", "ArrivePing", "Workiz"],
+      rows: [
+        { label: "Published pricing", cells: [AP_PRICE_CELL, { text: "Standard, Pro and Ultimate plans; prices on request", href: "https://www.workiz.com/pricing-plans/" }] },
+        { label: "Free trial", cells: ["Book a demo; launching November 2026", { text: "7-day free trial", href: "https://www.workiz.com/pricing-plans/" }] },
+        { label: "On-my-way text", cells: ["Included in every plan, with a live tracking page and ETA", { text: "On My Way feature; an \"On My Way Pro\" tier is documented in the help centre", href: "https://www.workiz.com/features/on-my-way/" }] },
+        { label: "Live map of the team", cells: ["Yes, from the technician app on their phone; no hardware", "Not verified on Workiz's public pages at the time of writing"] },
+        { label: "Automatic assignment by location and skill", cells: ["Yes, in every plan", "Not verified on Workiz's public pages at the time of writing"] },
+        { label: "Scope", cells: ["Dispatch, tracking, customer updates, work orders, invoicing, exports", { text: "Scheduling, invoicing, payments, phone system, marketing and more", href: "https://www.workiz.com/" }] },
+        { label: "Company", cells: ["NVC360, Winnipeg, MB", "Workiz, San Diego, CA"] },
+      ],
+      note: "Rows marked \"not verified\" mean we could not confirm the capability from Workiz's public pages; it may exist. Tell us and we will correct the table.",
+    },
+    {
+      kind: "choose",
+      title: "Which one should you choose?",
+      ours: { title: "Choose ArrivePing if", items: ["You want the price before the sales call", "Live tracking links and ETAs in every plan matter more than breadth", "You want jobs assigned to the closest qualified tech automatically", "You already have accounting and want exports, not a replacement"] },
+      theirs: { title: "Choose Workiz if", items: ["You want phone, marketing, invoicing and scheduling in one platform", "You are happy to request a quote and run a 7-day trial", "You want a large library of trade calculators and templates"] },
+    },
+  ],
+  faqs: [
+    {
+      q: "Does Workiz publish its prices?",
+      a: "Not at the time we checked (October 7, 2026): the pricing page lists Standard, Pro and Ultimate plans with \"request pricing\". ArrivePing publishes its full graduated per-driver pricing.",
+    },
+    {
+      q: "Does Workiz send on-my-way texts?",
+      a: "Yes. Workiz has an On My Way feature, and its help centre documents an On My Way Pro tier. ArrivePing's on-my-way text is included in every plan and opens a live tracking page with the ETA and text or call buttons.",
+    },
+    PRICE_FAQ,
+    SETUP_FAQ,
+  ],
+  related: ["/on-my-way-text-software", "/compare/jobber", "/compare/housecall-pro", "/pricing"],
+  sources: workizSources,
+  verified: COMPETITORS_VERIFIED,
+};
+
+const onfleet: LandingPage = {
+  path: "/compare/onfleet",
+  label: "ArrivePing vs Onfleet",
+  parent: compareParent,
+  meta: {
+    title: "ArrivePing vs Onfleet: Last-Mile Dispatch for Small Fleets",
+    description:
+      "ArrivePing vs Onfleet for last-mile delivery: published pricing from $49 vs $619 per month, appointment-based dispatch vs high-volume route optimization, customer tracking and hardware. Sources linked.",
+  },
+  eyebrow: "Onfleet alternative",
+  h1: "ArrivePing vs Onfleet",
+  lede:
+    "Onfleet is an established last-mile platform for high-volume delivery operations. ArrivePing is for smaller fleets doing appointment-based deliveries and installs, at a fraction of the entry price.",
+  answer: {
+    q: "Is ArrivePing a good Onfleet alternative for a small delivery fleet?",
+    a: "If you run a handful of drivers doing booked deliveries or installs, ArrivePing gives you a live driver map, closest-driver assignment, a driver app and customer tracking links with ETA from $49 a month, with no hardware. Onfleet starts at $619 a month and is built for higher-volume operations that need multi-stop route optimization and a courier toolset; choose Onfleet if stop sequencing at scale is your main problem.",
+  },
+  sections: [
+    {
+      kind: "table",
+      title: "Side by side",
+      columns: ["", "ArrivePing", "Onfleet"],
+      rows: [
+        { label: "Published starting price", cells: [AP_PRICE_CELL, { text: "Launch $619/mo; Scale $1,349/mo; Enterprise $3,099/mo; Courier Suite add-on $299/mo", href: "https://onfleet.com/pricing" }] },
+        { label: "Built for", cells: ["Appointment-based deliveries, installs and service calls for small and mid-size teams", { text: "\"One Platform. All Your Last Mile Delivery.\" High-volume delivery operations", href: "https://onfleet.com/" }] },
+        { label: "Multi-stop route optimization", cells: ["No. Closest-driver assignment per delivery", { text: "Core capability (per Onfleet's site)", href: "https://onfleet.com/llms.txt" }] },
+        { label: "Customer tracking link with ETA", cells: ["Every plan; no customer app", "Customer notifications and tracking are part of the platform (per Onfleet's site)"] },
+        { label: "Vehicle hardware", cells: ["Not needed; location from the driver app", "Not needed; driver app"] },
+        { label: "Company", cells: ["NVC360, Winnipeg, MB", "Onfleet, San Francisco, CA"] },
+      ],
+    },
+    {
+      kind: "choose",
+      title: "Which one should you choose?",
+      ours: { title: "Choose ArrivePing if", items: ["You have 1–30 drivers doing booked deliveries or installs", "The customer's arrival experience is what you are fixing", "$619 a month is more than the problem costs you", "You also dispatch technicians or installers from the same team"] },
+      theirs: { title: "Choose Onfleet if", items: ["Drivers run dozens of stops a day and sequencing matters most", "You need courier-grade tooling, analytics and integrations at scale", "You are an enterprise or marketplace operation"] },
+    },
+  ],
+  faqs: [
+    {
+      q: "How much does Onfleet cost?",
+      a: "Onfleet's pricing page listed Launch at $619 per month, Scale at $1,349 per month and Enterprise at $3,099 per month, plus a Courier Suite add-on at $299 per month, when we checked on October 7, 2026. ArrivePing starts at $49 per month.",
+    },
+    {
+      q: "Does ArrivePing do route optimization like Onfleet?",
+      a: "No. ArrivePing assigns each delivery to the closest available driver with the right skills or vehicle and shows the drive to that stop. It does not sequence hundreds of parcel stops per driver; Onfleet and similar tools are built for that.",
+    },
+    PRICE_FAQ,
+    HARDWARE_FAQ,
+  ],
+  related: ["/delivery-dispatch-software", "/compare/routific", "/fleet-tracking", "/pricing"],
+  sources: onfleetSources,
+  verified: COMPETITORS_VERIFIED,
+};
+
+const routific: LandingPage = {
+  path: "/compare/routific",
+  label: "ArrivePing vs Routific",
+  parent: compareParent,
+  meta: {
+    title: "ArrivePing vs Routific: Appointment Dispatch vs Route Planning",
+    description:
+      "ArrivePing vs Routific compared: published pricing, route planning vs appointment-based dispatch, customer tracking links and ETAs, driver app and hardware. Sources linked.",
+  },
+  eyebrow: "Routific alternative",
+  h1: "ArrivePing vs Routific",
+  lede:
+    "Routific is a route planning and delivery management tool with a free tier for small volumes. ArrivePing is dispatch for teams whose deliveries and service calls are appointments, with the customer's live ETA built in.",
+  answer: {
+    q: "Should I use ArrivePing or Routific?",
+    a: "Use Routific if your day is a list of stops to sequence efficiently: it is a route optimizer with a free plan for up to 100 orders a month and a $150 a month plan for up to 1,000. Use ArrivePing if your deliveries and jobs are appointments where the customer is waiting: it auto-assigns the closest driver or technician, tracks them from their phone and texts the customer a live tracking link with an ETA, from $49 a month including the first driver.",
+  },
+  sections: [
+    {
+      kind: "table",
+      title: "Side by side",
+      columns: ["", "ArrivePing", "Routific"],
+      rows: [
+        { label: "Published pricing", cells: [AP_PRICE_CELL, { text: "Free for up to 100 orders/mo; $150/mo for up to 1,000 orders; per-order fees above that", href: "https://www.routific.com/pricing" }] },
+        { label: "Pricing basis", cells: ["Per driver, graduated", { text: "Per order volume", href: "https://www.routific.com/pricing" }] },
+        { label: "Multi-stop route optimization", cells: ["No. Closest-driver assignment per delivery or job", { text: "Core product (\"Delivery management for growing businesses\")", href: "https://www.routific.com/" }] },
+        { label: "Customer SMS notifications", cells: ["Included in every plan, with live tracking page and ETA", { text: "SMS add-on priced on request", href: "https://www.routific.com/pricing" }] },
+        { label: "Dispatching technicians as well as drivers", cells: ["Yes: skills, availability and workload are part of assignment", "Delivery-focused"] },
+        { label: "Vehicle hardware", cells: ["Not needed", "Not needed"] },
+        { label: "Company", cells: ["NVC360, Winnipeg, MB", "Routific, Vancouver, BC"] },
+      ],
+    },
+    {
+      kind: "choose",
+      title: "Which one should you choose?",
+      ours: { title: "Choose ArrivePing if", items: ["Each delivery or job is an appointment the customer is waiting for", "You want the customer tracking link included, not as an add-on", "You dispatch technicians or installers too", "You want per-driver pricing that gets cheaper as you grow"] },
+      theirs: { title: "Choose Routific if", items: ["Stop sequencing across a full day of deliveries is the main problem", "You are under 100 orders a month and want a free plan", "Deliveries are the whole business"] },
+    },
+  ],
+  faqs: [
+    {
+      q: "Is Routific free?",
+      a: "Routific's pricing page offered a free plan for up to 100 orders a month and a $150 per month plan for up to 1,000 orders, with per-order fees beyond that, when we checked on October 7, 2026. ArrivePing has no free plan; it starts at $49 per month including the first driver.",
+    },
+    {
+      q: "Can I use ArrivePing and Routific together?",
+      a: "Yes. Some teams plan high-volume routes in a route optimizer and run appointment deliveries, installs and service calls through ArrivePing. ArrivePing exports to CSV, JSON, webhooks, Zapier and Make.",
+    },
+    PRICE_FAQ,
+    TRACKING_FAQ,
+  ],
+  related: ["/delivery-dispatch-software", "/compare/onfleet", "/on-my-way-text-software", "/pricing"],
+  sources: routificSources,
+  verified: COMPETITORS_VERIFIED,
+};
+
 const compareHub: LandingPage = {
   path: "/compare",
   label: "Compare",
   meta: {
     title: "Jobber, Housecall Pro & ServiceTitan Alternative | ArrivePing",
     description:
-      "How ArrivePing compares with Jobber, Housecall Pro and ServiceTitan on pricing, live customer tracking links, GPS tracking and automatic dispatch. Sources linked.",
+      "How ArrivePing compares with Jobber, Housecall Pro, ServiceTitan, Workiz, Onfleet and Routific on pricing, live customer tracking links, GPS tracking and automatic dispatch. Sources linked.",
   },
   eyebrow: "Compare",
   h1: "ArrivePing compared with Jobber, Housecall Pro and ServiceTitan.",
@@ -648,10 +997,23 @@ const compareHub: LandingPage = {
         { label: "Vehicle hardware for live map", cells: ["Not needed", { text: "FleetSharp devices", href: "https://www.getjobber.com/features/gps-tracking-app/" }, { text: "OBD-II device", href: "https://www.housecallpro.com/features/vehicle-gps-tracking/" }, { text: "Device GPS; Fleet Pro for vehicles", href: "https://www.servicetitan.com/features/pro/fleet" }] },
       ],
     },
+    {
+      kind: "table",
+      title: "Delivery and customer-communication tools",
+      body: "For teams comparing ArrivePing with last-mile routing or on-my-way messaging products.",
+      columns: ["", "ArrivePing", "Workiz", "Onfleet", "Routific"],
+      rows: [
+        { label: "Published starting price", cells: ["$49/mo", { text: "On request", href: "https://www.workiz.com/pricing-plans/" }, { text: "$619/mo (Launch)", href: "https://onfleet.com/pricing" }, { text: "Free to 100 orders/mo; $150/mo to 1,000", href: "https://www.routific.com/pricing" }] },
+        { label: "Customer tracking link with ETA", cells: ["Every plan", { text: "On My Way feature; Pro tier in help centre", href: "https://www.workiz.com/features/on-my-way/" }, "Part of the platform", { text: "SMS add-on priced on request", href: "https://www.routific.com/pricing" }] },
+        { label: "Multi-stop route optimization", cells: ["No (closest-driver assignment)", "Not verified", "Core capability", "Core product"] },
+        { label: "Dispatches technicians by skill", cells: ["Yes", "Not verified", "Delivery-focused", "Delivery-focused"] },
+      ],
+      note: "\"Not verified\" means we could not confirm the capability from the vendor's public pages on the date shown; it may exist.",
+    },
   ],
   faqs: [],
-  related: ["/compare/jobber", "/compare/housecall-pro", "/compare/servicetitan", "/pricing"],
-  sources: [...jobberSources, ...hcpSources, ...stSources],
+  related: ["/compare/jobber", "/compare/housecall-pro", "/compare/servicetitan", "/compare/workiz", "/compare/onfleet", "/compare/routific"],
+  sources: [...jobberSources, ...hcpSources, ...stSources, ...workizSources, ...onfleetSources, ...routificSources],
   verified: COMPETITORS_VERIFIED,
 };
 
@@ -661,16 +1023,21 @@ export const landingPages: LandingPage[] = [
   dispatch,
   construction,
   notifications,
+  onMyWay,
+  delivery,
   pricingPage,
   compareHub,
   jobber,
   housecallPro,
   serviceTitan,
+  workiz,
+  onfleet,
+  routific,
   about,
 ];
 
 export const landingByPath: Record<string, LandingPage> = Object.fromEntries(landingPages.map((p) => [p.path, p]));
 
 /** Footer navigation for the new pages. */
-export const solutionLinks = [fieldService, fleet, dispatch, construction, notifications].map((p) => ({ label: p.label, href: p.path }));
-export const compareLinks = [jobber, housecallPro, serviceTitan].map((p) => ({ label: p.label.replace("ArrivePing vs ", "vs "), href: p.path }));
+export const solutionLinks = [fieldService, fleet, dispatch, construction, notifications, onMyWay, delivery].map((p) => ({ label: p.label, href: p.path }));
+export const compareLinks = [jobber, housecallPro, serviceTitan, workiz, onfleet, routific].map((p) => ({ label: p.label.replace("ArrivePing vs ", "vs "), href: p.path }));
