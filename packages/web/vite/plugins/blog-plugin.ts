@@ -2,6 +2,7 @@ import type { Plugin, ViteDevServer } from "vite";
 import fs from "node:fs";
 import path from "node:path";
 import { Marked, type Tokens } from "marked";
+import { todayInSiteZone } from "./site-date";
 
 /**
  * The ArrivePing blog: Markdown files in src/web/site/blog/posts, compiled at
@@ -138,7 +139,7 @@ function parse(file: string): Post {
 export function loadPosts(root: string): Post[] {
   const dir = path.resolve(root, POSTS_DIR);
   if (!fs.existsSync(dir)) return [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInSiteZone();
   return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
@@ -147,7 +148,8 @@ export function loadPosts(root: string): Post[] {
       const draft = /\ndraft: true\n/.test(fs.readFileSync(path.join(dir, f), "utf8"));
       return { p, draft };
     })
-    // Drafts and future-dated posts stay unpublished; a scheduled post goes live with the first build on or after its date.
+    // Drafts and future-dated posts stay unpublished; a scheduled post goes live with the first build on or after
+    // its date in America/Winnipeg (the same clock the sitemap uses for its lastmod ceiling).
     .filter(({ p, draft }) => !draft && p.meta.date <= today)
     .map(({ p }) => p)
     .sort((a, b) => (a.meta.date < b.meta.date ? 1 : a.meta.date > b.meta.date ? -1 : a.meta.slug.localeCompare(b.meta.slug)));

@@ -28,6 +28,12 @@ process.env.ALERT_COOLDOWN_MS = "100000";
 let stub: unknown = null;
 mock.module("../redis", () => ({
   getRedis: () => stub,
+  // Bun shares one module cache across test files, so this mock is also what
+  // services/realtime.ts sees when it runs later in the same process. Export
+  // the full surface of ../redis or those imports fail with
+  // "Export named 'getRedisSub' not found".
+  getRedisSub: () => null,
+  closeRedis: async () => {},
   redisEnabled: () => true,
 }));
 

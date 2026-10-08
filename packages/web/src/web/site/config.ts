@@ -487,6 +487,8 @@ export const footer = {
         { label: "Fleet tracking", href: "/fleet-tracking" },
         { label: "Customer ETA texts", href: "/customer-notifications" },
         { label: "Construction & trades", href: "/construction-trades" },
+        { label: "On-my-way texts", href: "/on-my-way-text-software" },
+        { label: "Delivery dispatch", href: "/delivery-dispatch-software" },
       ],
     },
     {
@@ -496,6 +498,9 @@ export const footer = {
         { label: "vs Jobber", href: "/compare/jobber" },
         { label: "vs Housecall Pro", href: "/compare/housecall-pro" },
         { label: "vs ServiceTitan", href: "/compare/servicetitan" },
+        { label: "vs Workiz", href: "/compare/workiz" },
+        { label: "vs Onfleet", href: "/compare/onfleet" },
+        { label: "vs Routific", href: "/compare/routific" },
       ],
     },
     {

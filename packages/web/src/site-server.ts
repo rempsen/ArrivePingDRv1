@@ -200,11 +200,26 @@ async function serveStatic(
       headers: { ETag: etag, "Cache-Control": cacheControl },
     });
   }
-  return new Response(file, {
-    headers: {
-      ...baseHeaders,
-      ETag: etag,
-      Vary: "Accept-Encoding",
-    },
-  });
+  const headers: Record<string, string> = { ...baseHeaders, ETag: etag, Vary: "Accept-Encoding" };
+  // Crawler text files (sitemap.xml, robots.txt, llms.txt, the IndexNow key,
+  // blog/rss.xml) are read by machines, not downloaded by people. Serve them
+  // with an explicit, correct media type and as inline documents, so no layer
+  // in front of us turns them into a "save as" attachment (the live sitemap
+  // used to carry a Content-Disposition filename header).
+  const crawlerType = crawlerTextType(pathname);
+  if (crawlerType) {
+    headers["Content-Type"] = crawlerType;
+    headers["Content-Disposition"] = "inline";
+    headers["X-Content-Type-Options"] = "nosniff";
+    return new Response(await file.bytes(), { headers });
+  }
+  return new Response(file, { headers });
+}
+
+function crawlerTextType(pathname: string): string | null {
+  if (pathname === "/sitemap.xml") return "application/xml; charset=utf-8";
+  if (pathname === "/blog/rss.xml") return "application/rss+xml; charset=utf-8";
+  if (pathname === "/robots.txt" || pathname === "/llms.txt" || pathname === "/llms-full.txt") return "text/plain; charset=utf-8";
+  if (/^\/[0-9a-f]{32}\.txt$/.test(pathname)) return "text/plain; charset=utf-8"; // IndexNow key file
+  return null;
 }
