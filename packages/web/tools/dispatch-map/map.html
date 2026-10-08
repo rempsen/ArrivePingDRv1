@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="maplibre-gl.css">
+<style>html,body{margin:0;background:#070b12}#m{width:var(--w);height:var(--h)}</style></head>
+<body><div id="m"></div><script src="maplibre-gl.js"></script><script>
+const q=new URLSearchParams(location.search);
+const w=+q.get('w'),h=+q.get('h');document.documentElement.style.setProperty('--w',w+'px');document.documentElement.style.setProperty('--h',h+'px');
+window.map=new maplibregl.Map({container:'m',style:'style.json',center:[+q.get('lon'),+q.get('lat')],zoom:+q.get('z'),interactive:false,attributionControl:false,fadeDuration:0,preserveDrawingBuffer:true});
+map.on('load',()=>{ if(q.get('debug')){ fetch('debug.geojson').then(r=>r.json()).then(g=>{map.addSource('d',{type:'geojson',data:g});map.addLayer({id:'dl',type:'line',source:'d',paint:{'line-color':['get','c'],'line-width':4}});map.addLayer({id:'dp',type:'circle',source:'d',filter:['==','$type','Point'],paint:{'circle-color':['get','c'],'circle-radius':7}});});}
+ map.once('idle',()=>{window.ready=true});});
+</script></body></html>
