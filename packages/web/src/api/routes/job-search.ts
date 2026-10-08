@@ -8,6 +8,8 @@ import { requireAuth, tenantId, tx } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { toCsv, toPdf, buildJobPdf, fileResponse, tenantFilePrefix, type JobUnitLine, type JobPhoto } from "./export";
 import { companyTimeZone } from "../../services/company-tz";
+import { ensureSnappedRoute } from "../../services/route-snap";
+import { log } from "../lib/logger";
 import { fmtInZone } from "../../shared/tz";
 import type { AppEnv } from "../env";
 
@@ -527,6 +529,15 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     photoRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
     pingRows.sort((x: any, y: any) => Number(x.createdAt) - Number(y.createdAt));
 
+    // Road-matched trail: raw 8-second fixes joined by straight lines cut
+    // corners and jump across rivers after a signal gap. Computed once the
+    // trip has settled and stored on the booking; null while still live or
+    // if no matcher is reachable (the page then draws the raw trail and says so).
+    const snapped = await ensureSnappedRoute(t, b, pingRows).catch((e) => {
+      log.warn("route-snap: failed", { bookingId: id, err: String(e) });
+      return null;
+    });
+
     let lineItems: any[] = [];
     try {
       const li = JSON.parse(b.lineItems || "[]");
@@ -562,6 +573,9 @@ export const jobSearchRoutes = new Hono<AppEnv>()
         onSiteMinutes: b.onSiteMinutes,
         mileageKm: b.mileageKm,
         route: pingRows.map((p: any) => ({ lat: p.lat, lng: p.lng, phase: p.phase, createdAt: p.createdAt })),
+        routeSnapped: snapped
+          ? { provider: snapped.provider, distanceKm: snapped.distanceKm, points: snapped.points }
+          : null,
         photos: photoRows.map((p: any) => ({ id: p.id, url: p.url, caption: p.caption, createdAt: p.createdAt })),
         pricing: {
           lineItems,

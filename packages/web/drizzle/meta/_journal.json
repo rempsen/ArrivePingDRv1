@@ -85,6 +85,13 @@
       "when": 1791409846115,
       "tag": "0011_site_crawls",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791424477735,
+      "tag": "0012_route_snapped",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,15 @@
 // ─── Driven route replay map ──────────────────────────────────────────────
 // Static (non-live) map for the completed-job report: draws the technician's
-// actual GPS breadcrumb trail as a colored polyline (blue = en route to the
-// job, amber = moving around on site, green = return leg), with start/end
-// pins. Distinct from live-map.tsx, which animates a single live position —
-// this replays history that already happened.
+// driven trail as a colored polyline (blue = en route to the job, amber =
+// moving around on site, green = return leg), with start/end pins. Distinct
+// from live-map.tsx, which animates a single live position — this replays
+// history that already happened.
+//
+// `pings` is whatever should be drawn as the line — normally the road-matched
+// path from services/route-snap.ts, or the raw 8-second GPS fixes when that
+// is not available yet. When the line IS road-matched, pass the raw fixes as
+// `fixes` and they are drawn as small dots underneath, so a dispatcher can
+// see the evidence the line was built from (and spot a signal gap at a glance).
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -13,7 +19,8 @@ export interface RoutePing {
   lat: number;
   lng: number;
   phase: string;
-  createdAt: string | number | Date;
+  /** Present on raw fixes; the road-matched path has no per-point time. */
+  createdAt?: string | number | Date;
 }
 
 const PHASE_COLOR: Record<string, string> = {
@@ -33,10 +40,13 @@ function pinIcon(color: string, label: string) {
 
 export function RouteHistoryMap({
   pings,
+  fixes,
   destination,
   className,
 }: {
   pings: RoutePing[];
+  /** Raw GPS fixes to show as faint dots under a road-matched line. */
+  fixes?: RoutePing[];
   destination?: { lat: number; lng: number } | null;
   className?: string;
 }) {
@@ -87,13 +97,39 @@ export function RouteHistoryMap({
     const allBounds: [number, number][] = [];
     for (const seg of segments) {
       if (seg.pts.length < 2) continue;
+      // dark halo under the coloured line so it reads over busy road layers
+      const halo = L.polyline(seg.pts, { color: "#020617", weight: 7, opacity: 0.6, lineJoin: "round", lineCap: "round" }).addTo(map);
+      layersRef.current.push(halo);
       const line = L.polyline(seg.pts, {
         color: PHASE_COLOR[seg.phase] ?? "#94a3b8",
         weight: 4,
-        opacity: 0.9,
+        opacity: 0.95,
+        lineJoin: "round",
+        lineCap: "round",
       }).addTo(map);
       layersRef.current.push(line);
       allBounds.push(...seg.pts);
+    }
+
+    // Raw fixes as small dots: the evidence under the matched line. Skip
+    // consecutive fixes at the same spot (parked / on site) so a 20-minute
+    // stop doesn't stack 150 identical dots.
+    if (fixes?.length) {
+      let last: RoutePing | null = null;
+      for (const f of fixes) {
+        if (last && Math.abs(last.lat - f.lat) < 0.00005 && Math.abs(last.lng - f.lng) < 0.00005) continue;
+        last = f;
+        const dot = L.circleMarker([f.lat, f.lng], {
+          radius: 2.5,
+          color: "#ffffff",
+          weight: 1,
+          opacity: 0.55,
+          fillColor: PHASE_COLOR[f.phase] ?? "#94a3b8",
+          fillOpacity: 0.9,
+          interactive: false,
+        }).addTo(map);
+        layersRef.current.push(dot);
+      }
     }
 
     const start = pings[0]!;
@@ -114,7 +150,7 @@ export function RouteHistoryMap({
 
     if (allBounds.length > 1) map.fitBounds(L.latLngBounds(allBounds).pad(0.15));
     else map.setView(allBounds[0]!, 15);
-  }, [pings, destination]);
+  }, [pings, fixes, destination]);
 
   return <div ref={elRef} className={className ?? "h-full w-full"} />;
 }

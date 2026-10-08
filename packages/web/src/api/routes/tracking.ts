@@ -11,6 +11,7 @@ import {
   resolveAutoPauseRadiusM,
 } from "../../shared/geo-distance";
 import { applyBookingStatus, pauseClock, resumeClock } from "../../services/booking-status";
+import { ensureSnappedRoute } from "../../services/route-snap";
 import { pingLimiter } from "../lib/rate-limit";
 import { publishTrack } from "../../services/realtime";
 import { isAdminRole } from "../lib/permissions";
@@ -72,6 +73,12 @@ export const trackingRoutes = new Hono<AppEnv>()
     // ping = tech's live location. The booking's lat/lng is the JOB destination
     // and must NOT be overwritten. Live location lives on rider + pings.
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
+    // The booking must be visible in the caller's tenant. Without this check a
+    // device still signed into another company (or the default tenant) would
+    // insert pings stamped with the wrong company_id, and the booking's own
+    // tenant would never see that part of the trail on the report. That is
+    // exactly what happened to 56 pings on one bmd-materials job in Aug 2026.
+    if (!b) return c.json({ message: "Not found" }, 404);
 
     // phase for mileage segmentation: enroute / onsite / return
     const phase = b?.status === "completed" ? "return" : b?.status === "in_progress" || b?.status === "arrived" ? "onsite" : "enroute";
@@ -277,9 +284,13 @@ export const trackingRoutes = new Hono<AppEnv>()
     if (!b) return c.json({ message: "Not found" }, 404);
     const rows = await t.select(schema.trackingPings, eq(schema.trackingPings.bookingId, bookingId));
     rows.sort((a, z) => Number(a.createdAt) - Number(z.createdAt));
+    const snapped = await ensureSnappedRoute(t, b, rows).catch(() => null);
     return c.json(
       {
         pings: rows.map((r) => ({ lat: r.lat, lng: r.lng, phase: r.phase, createdAt: r.createdAt })),
+        routeSnapped: snapped
+          ? { provider: snapped.provider, distanceKm: snapped.distanceKm, points: snapped.points }
+          : null,
         destination: b.lat != null && b.lng != null ? { lat: b.lat, lng: b.lng } : null,
       },
       200,

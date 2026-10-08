@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, doublePrecision, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
 
@@ -289,6 +289,17 @@ export const bookings = pgTable("bookings", {
   lastResumeAt: timestamp("last_resume_at", { mode: "date", withTimezone: true }), // when clock last started running
   insideGeofence: boolean("inside_geofence").notNull().default(false), // current presence at job site
   mileageKm: real("mileage_km").notNull().default(0), // round-trip km accumulated from GPS pings (enroute + on-site + return)
+  /**
+   * Road-matched version of the GPS breadcrumb trail, as JSON (see
+   * services/route-snap.ts `SnappedRoute`). Raw pings arrive every 8 s, so
+   * joining them with straight lines cuts corners and, after a signal gap,
+   * draws a line straight across rivers and city blocks. This is the trail
+   * snapped to the road network once the trip has settled, computed lazily
+   * the first time the job report is opened and reused after that so the
+   * map-matching service is hit once per job, not once per page view.
+   * NULL = not computed yet (job still active, no pings, or matching failed).
+   */
+  routeSnapped: text("route_snapped"),
   techPay: real("tech_pay").notNull().default(0), // computed driver pay for this job (hourly)
   techPayBreakdown: text("tech_pay_breakdown").notNull().default(""), // JSON
   paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid | paid | refunded
@@ -501,8 +512,11 @@ export const trackingPings = pgTable("tracking_pings", {
   bookingId: text("booking_id")
     .notNull()
     .references(() => bookings.id, { onDelete: "cascade" }),
-  lat: real("lat").notNull(),
-  lng: real("lng").notNull(),
+  // double precision, not real: float4 only carries ~7 significant digits,
+  // which at Winnipeg's latitude is ~0.5 m of position error per fix — small,
+  // but it is noise we add on top of the phone's own GPS error for no reason.
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
   phase: text("phase").notNull().default("enroute"), // enroute | onsite | return — for mileage segmentation
   createdAt: now(),
 }, (t) => ({

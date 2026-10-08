@@ -287,16 +287,42 @@ export default function JobReportPage() {
             </div>
           </Card>
 
-          <Card title="Route driven" icon={<RouteIcon className="h-4 w-4 text-brand" />}>
+          <Card
+            title="Route driven"
+            icon={<RouteIcon className="h-4 w-4 text-brand" />}
+            right={
+              j.route?.length ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    j.routeSnapped ? "bg-brand/15 text-brand" : "bg-slate-500/15 text-slate-400"
+                  }`}
+                  title={
+                    j.routeSnapped
+                      ? `GPS fixes matched to the road network (${j.routeSnapped.distanceKm} km by road)`
+                      : "Straight lines between GPS fixes — road matching is applied once the trip has finished"
+                  }
+                >
+                  {j.routeSnapped ? "Road-matched" : "Raw GPS"}
+                </span>
+              ) : undefined
+            }
+          >
             {j.route?.length ? (
               <>
                 <div className="h-72 overflow-hidden rounded-lg">
-                  <RouteHistoryMap pings={j.route} destination={j.lat != null ? { lat: j.lat, lng: j.lng } : null} />
+                  <RouteHistoryMap
+                    pings={j.routeSnapped?.points ?? j.route}
+                    fixes={j.routeSnapped ? j.route : undefined}
+                    destination={j.lat != null ? { lat: j.lat, lng: j.lng } : null}
+                  />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-4 text-[11px] text-slate-400">
                   <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0ea5e9]" /> En route</span>
                   <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#f59e0b]" /> On site</span>
                   <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#22c55e]" /> Return</span>
+                  {j.routeSnapped ? (
+                    <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-white/60" /> GPS fix</span>
+                  ) : null}
                 </div>
               </>
             ) : (
