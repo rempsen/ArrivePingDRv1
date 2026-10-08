@@ -13,6 +13,16 @@
 
 export const COMPETITORS_VERIFIED = "October 7, 2026";
 
+/**
+ * ISO date of the last substantive content change to the solution, pricing,
+ * about and comparison pages. Used as the sitemap <lastmod> for pages that
+ * carry no date of their own, instead of the build date (a build that runs
+ * after midnight UTC used to publish a date that was still "tomorrow" in
+ * Central time, which Google treats as an unreliable lastmod).
+ * Bump it when page copy changes, not when the site is merely rebuilt.
+ */
+export const CONTENT_UPDATED = "2026-10-08";
+
 export type Cell = string | { text: string; href?: string };
 
 export type Section =

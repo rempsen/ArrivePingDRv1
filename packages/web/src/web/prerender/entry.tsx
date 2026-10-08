@@ -13,7 +13,7 @@ import Index from "../pages/index";
 import PrivacyPage from "../pages/privacy";
 import TermsPage from "../pages/terms";
 import { LandingRoute } from "../pages/marketing/landing";
-import { landingByPath, landingPages } from "../site/content/landing";
+import { CONTENT_UPDATED, landingByPath, landingPages } from "../site/content/landing";
 import { seoPages } from "../site/seo/pages";
 import { headTags } from "../site/seo/head";
 import { brand, faqs } from "../site/config";
@@ -50,12 +50,23 @@ export function render(path: string): { body: string; head: string } {
 /* Text files for search engines and AI agents                          */
 /* ------------------------------------------------------------------ */
 
-export function sitemapXml(lastmod: string): string {
+/**
+ * sitemap.xml.
+ *
+ * `today` is the current date in America/Winnipeg (the business's own
+ * calendar), supplied by the build. Every <lastmod> is a real content date
+ * (blog `updated` or CONTENT_UPDATED) and is never allowed to be in the
+ * future: Google ignores lastmod site-wide once it sees unreliable values.
+ * <changefreq> and <priority> are omitted on purpose; Google ignores both.
+ */
+export function sitemapXml(today: string): string {
   const urls = seoPages
-    .map(
-      (p) =>
-        `  <url>\n    <loc>${absolute(p.path)}</loc>\n    <lastmod>${p.lastmod ?? lastmod}</lastmod>\n    <changefreq>${p.changefreq}</changefreq>\n    <priority>${p.priority.toFixed(1)}</priority>\n  </url>`,
-    )
+    .map((p) => {
+      const lastmod = p.lastmod ?? CONTENT_UPDATED;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(lastmod)) throw new Error(`Sitemap lastmod for ${p.path} is not YYYY-MM-DD: ${lastmod}`);
+      if (lastmod > today) throw new Error(`Sitemap lastmod for ${p.path} (${lastmod}) is in the future (today is ${today} in America/Winnipeg)`);
+      return `  <url>\n    <loc>${absolute(p.path)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`;
+    })
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }

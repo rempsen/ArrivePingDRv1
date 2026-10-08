@@ -25,10 +25,12 @@ export const INDEXNOW_KEY = "50946c21ee60e1ddcc694f8e5faaafb9";
 const SITE = "https://arriveping.com";
 
 // Paths crawlers have no business in: the product, private links and the API.
-const PRIVATE = ["/api/", "/admin/", "/admin$", "/app/", "/app$", "/rider/", "/rider$", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/", "/uploads/"];
-// Named explicitly so our intent is unambiguous to every search and AI crawler.
+// "/admin" also covers "/admin/…" (prefix match), so no "$" anchors are needed.
+const PRIVATE = ["/api/", "/admin", "/app", "/rider", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/", "/uploads/"];
+// Search and AI crawlers, named explicitly so our intent is unambiguous. They get
+// the same rules as "*"; the separate group exists because some operators only
+// honour a group that names their agent.
 const AGENTS = [
-  "*",
   "Googlebot",
   "Bingbot",
   "Google-Extended",
@@ -52,13 +54,18 @@ const AGENTS = [
 ];
 
 function robotsTxt(): string {
+  const rules = ["Allow: /", ...PRIVATE.map((p) => `Disallow: ${p}`)];
   return [
     "# ArrivePing by NVC360 — https://arriveping.com",
-    "# Public pages are open to search engines and AI assistants.",
+    "# Public marketing pages are open to search engines and AI assistants.",
+    "# Private app, API and tracking-link paths are excluded.",
     "",
+    "User-agent: *",
+    ...rules,
+    "",
+    "# AI search and assistant crawlers: explicitly allowed (same rules as above).",
     ...AGENTS.map((a) => `User-agent: ${a}`),
-    "Allow: /",
-    ...PRIVATE.map((p) => `Disallow: ${p}`),
+    ...rules,
     "",
     `Sitemap: ${SITE}/sitemap.xml`,
     "",
@@ -131,7 +138,9 @@ export default function prerenderPlugin(): Plugin {
         urls.push(route === "/" ? `${SITE}/` : `${SITE}${route}`);
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      // Today's date on the business's own calendar (America/Winnipeg), not UTC:
+      // a build after 18:00 CT used to stamp pages with tomorrow's date.
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Winnipeg", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       await fs.writeFile(path.join(outDir, "sitemap.xml"), mod.sitemapXml(today));
       await fs.writeFile(path.join(outDir, "robots.txt"), robotsTxt());
       await fs.writeFile(path.join(outDir, "llms.txt"), mod.llmsTxt());
