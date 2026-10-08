@@ -489,6 +489,10 @@ export const footer = {
         { label: "Construction & trades", href: "/construction-trades" },
         { label: "On-my-way texts", href: "/on-my-way-text-software" },
         { label: "Delivery dispatch", href: "/delivery-dispatch-software" },
+        { label: "HVAC dispatch", href: "/hvac-dispatch-software" },
+        { label: "Plumbing dispatch", href: "/plumbing-dispatch-software" },
+        { label: "Electrical dispatch", href: "/electrical-dispatch-software" },
+        { label: "Canada", href: "/canada" },
       ],
     },
     {
