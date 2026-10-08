@@ -12,7 +12,7 @@ imageAlt: ""
 legacyUrl: "https://nvc360.com/real-time-technician-tracking-field-service-benefits/"
 ---
 
-![Hand holding a phone that shows a technician tracking map in an office](/blog/img/real-time-technician-tracking-field-service-benefits-1.webp)
+![A customer's ArrivePing tracking page showing the technician's live route, ETA and Call and Text buttons](/blog/img/real-time-technician-tracking-field-service-benefits-1.webp)
 
 ## Introduction: The Problem
 

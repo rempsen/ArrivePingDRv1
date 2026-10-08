@@ -14,7 +14,7 @@ legacyUrl: "https://nvc360.com/enhancing-customer-satisfaction-through-real-time
 
 Real-time updates on deliveries and service appointments have gone from a luxury to a necessity. Consumers increasingly demand transparency, precision, and control over their interactions with businesses. Implementing automated systems that offer live Estimated Time of Arrival (ETA) updates not only meets these expectations but also significantly enhances customer satisfaction, loyalty, and operational efficiency.
 
-![Two people working at desks, one looking at a monitor that shows a dark dispatch map with routes and a job list](/blog/img/enhancing-customer-satisfaction-through-real-time-eta-updates-1.webp)
+![The ArrivePing live map the office sees, beside the tracking page the customer sees with the technician's route and live ETA](/blog/img/enhancing-customer-satisfaction-through-real-time-eta-updates-1.webp)
 
 ## The Rising Demand for Real-Time Tracking
 

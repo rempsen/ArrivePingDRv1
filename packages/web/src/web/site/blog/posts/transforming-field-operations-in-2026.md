@@ -30,7 +30,7 @@ Picture the reality for too many businesses today:
 
 This isn’t just frustrating—it’s expensive. Poor data and miscommunication are among the leading causes of construction rework, and rework is one of the most avoidable costs in the industry.
 
-![An office dispatcher reviews a colour-coded schedule calendar on a large monitor](/blog/img/transforming-field-operations-in-2026-2.webp)
+![The ArrivePing scheduler: a colour-coded week of jobs assigned to technicians, with a work queue of unassigned jobs](/blog/img/transforming-field-operations-in-2026-2.webp)
 
 ## The ArrivePing Solution: Modern Transformation
 

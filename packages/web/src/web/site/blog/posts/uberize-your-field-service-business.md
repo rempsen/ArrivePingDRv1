@@ -14,7 +14,7 @@ legacyUrl: "https://nvc360.com/uberize-your-field-service-business/"
 
 *In an era where you can track a $15 pizza from the oven to your doorstep, the days of the vague “four-hour service window” are numbered. Here is how to modernize your operations.*
 
-![A hand holds a phone showing a customer tracking page with a live map, the technician's route and a 12-minute ETA](/blog/img/uberize-your-field-service-business-1.webp)
+![Two ArrivePing tracking screens on the customer's phone: the technician on the way with a live route and 6-minute ETA, then the arrival confirmation](/blog/img/uberize-your-field-service-business-1.webp)
 
 ## The Shift to On-Demand Expectations
 

@@ -8,7 +8,7 @@ author: "Dan Rosenblat"
 category: "dispatch-scheduling"
 tags: ["field service costs", "manual dispatching", "four-hour window", "first-time fix rate", "automation"]
 image: "/blog/img/12-hidden-costs-manual-field-service-operations-0.webp"
-imageAlt: "Woman at a home office desk with a laptop, smiling and holding up a phone that shows a map"
+imageAlt: "The ArrivePing jobs list with every work order, status and technician in one place, beside the technician app showing today's new offers and jobs in progress"
 legacyUrl: "https://nvc360.com/12-hidden-costs-manual-field-service-operations/"
 ---
 
@@ -62,7 +62,7 @@ The Data: 82% of contractors plan to stand out in the market with a good brand r
 
 The ArrivePing Solution: Technicians attach photos of the completed work to the job, and geofenced arrival and the on-site time clock record when they got there and how long they stayed.
 
-![Technician in a work truck using a dashboard-mounted touchscreen that shows a map and job list, with a construction site outside](/blog/img/12-hidden-costs-manual-field-service-operations-3.webp)
+![The ArrivePing technician app: today's job offers to accept or decline, and an en-route job with the customer, address, ETA and one-tap Navigate](/blog/img/12-hidden-costs-manual-field-service-operations-3.webp)
 
 ## 6. The Cost of Friction in Payments
 
