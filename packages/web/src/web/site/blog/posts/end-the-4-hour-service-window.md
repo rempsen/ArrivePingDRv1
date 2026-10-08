@@ -7,8 +7,8 @@ updated: "2026-02-27"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["service windows", "real-time tracking", "hvac", "customer experience", "on-my-way texts"]
-image: ""
-imageAlt: ""
+image: "/blog/img/end-the-4-hour-service-window-cover.webp"
+imageAlt: "\"Your pizza has a live ETA. Your $5,000 repair should too.\" headline beside a text message giving a four-hour service window and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/end-the-4-hour-service-window/"
 ---
 

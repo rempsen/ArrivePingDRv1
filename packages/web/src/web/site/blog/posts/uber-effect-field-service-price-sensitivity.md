@@ -7,8 +7,8 @@ updated: "2026-03-14"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["price sensitivity", "customer experience", "on-my-way texts", "live tracking", "psychology of waiting"]
-image: ""
-imageAlt: ""
+image: "/blog/img/uber-effect-field-service-price-sensitivity-cover.webp"
+imageAlt: "\"86% will pay more for a better experience.\" headline beside the customer tracking page showing the technician has arrived"
 legacyUrl: "https://nvc360.com/uber-effect-field-service-price-sensitivity/"
 ---
 

@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["communication costs", "field service", "deskless workers", "construction rework", "customer updates"]
-image: ""
-imageAlt: ""
+image: "/blog/img/ineffective-communication-costs-field-service-businesses-cover.webp"
+imageAlt: "\"The $1.2 trillion problem nobody talks about.\" headline beside the technician app's jobs for today and ArrivePing customer text updates"
 legacyUrl: "https://nvc360.com/ineffective-communication-costs-field-service-businesses/"
 ---
 

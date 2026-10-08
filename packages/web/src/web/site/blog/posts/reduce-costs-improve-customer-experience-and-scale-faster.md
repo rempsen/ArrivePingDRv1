@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "growth"
 tags: ["field service management software", "fsm market", "technician visibility", "customer communication", "small business"]
-image: ""
-imageAlt: ""
+image: "/blog/img/reduce-costs-improve-customer-experience-and-scale-faster-cover.webp"
+imageAlt: "\"80% of customers say experience matters as much as the service.\" headline beside the ArrivePing job list and the customer tracking page showing the technician has arrived"
 legacyUrl: "https://nvc360.com/reduce-costs-improve-customer-experience-and-scale-faster/"
 ---
 

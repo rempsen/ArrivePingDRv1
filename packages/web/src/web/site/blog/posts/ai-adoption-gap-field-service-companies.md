@@ -7,8 +7,8 @@ updated: "2026-04-30"
 author: "Dan Rosenblat"
 category: "ai-operations"
 tags: ["ai adoption", "field service automation", "first-time fix rate", "contractor technology"]
-image: ""
-imageAlt: ""
+image: "/blog/img/ai-adoption-gap-field-service-companies-cover.webp"
+imageAlt: "\"Only 25% of contractors use AI.\" headline beside the ArrivePing dispatch scheduler"
 legacyUrl: "https://nvc360.com/ai-adoption-gap-field-service-companies/"
 ---
 

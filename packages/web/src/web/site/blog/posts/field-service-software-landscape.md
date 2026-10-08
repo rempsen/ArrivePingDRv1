@@ -6,8 +6,8 @@ date: "2026-03-16"
 updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "dispatch-scheduling"
-image: ""
-imageAlt: ""
+image: "/blog/img/field-service-software-landscape-cover.webp"
+imageAlt: "\"47% of appointments don’t go as planned.\" headline beside the ArrivePing dispatch scheduler and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/field-service-management-industry-nvc360-comparison/"
 tags: ["field service software", "servicetitan alternative", "jobber alternative", "dispatch software"]
 ---

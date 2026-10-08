@@ -6,8 +6,8 @@ date: "2026-04-07"
 updated: "2026-04-08"
 author: "Dan Rosenblat"
 category: "construction"
-image: ""
-imageAlt: ""
+image: "/blog/img/construction-communication-rework-cost-cover.webp"
+imageAlt: "\"$31.3B a year in rework.\" headline beside the ArrivePing job list and the technician app's jobs for today"
 legacyUrl: "https://nvc360.com/construction-communication-31-billion-rework-problem-nvc360/"
 tags: ["construction rework", "field communication", "crew dispatch", "construction productivity"]
 ---

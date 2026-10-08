@@ -7,8 +7,8 @@ updated: "2026-02-27"
 author: "Dan Rosenblat"
 category: "construction"
 tags: ["construction", "field operations", "communication breakdowns", "real-time visibility", "dispatch"]
-image: ""
-imageAlt: ""
+image: "/blog/img/transforming-field-operations-in-2026-cover.webp"
+imageAlt: "\"From chaos to clarity.\" headline beside the ArrivePing dispatch scheduler"
 legacyUrl: "https://nvc360.com/transforming-field-operations-in-2026/"
 ---
 

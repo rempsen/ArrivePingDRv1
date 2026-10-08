@@ -7,8 +7,8 @@ updated: "2026-03-03"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["phone tag", "missed calls", "dispatch", "customer updates", "field service productivity"]
-image: ""
-imageAlt: ""
+image: "/blog/img/the-silent-drain-how-phone-tag-is-costing-your-field-service-business-cover.webp"
+imageAlt: "\"Phone tag is a silent drain.\" headline beside a log of missed calls and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/the-silent-drain-how-phone-tag-is-costing-your-field-service-business/"
 ---
 
