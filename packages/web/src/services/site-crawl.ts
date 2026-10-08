@@ -35,8 +35,8 @@ export interface SiteCrawl {
   createdAt: Date;
 }
 
-/** Hard cap on what one row may hold — 12 pages × 6k chars + proposal. */
-const MAX_PAGES = 12;
+/** Hard cap on what one row may hold — 20 pages (home + sections + team + staff profiles) × 6k chars + proposal. */
+const MAX_PAGES = 20;
 const MAX_PAGE_CHARS = 6_000;
 
 function normalizePages(raw: unknown): CrawledPage[] {

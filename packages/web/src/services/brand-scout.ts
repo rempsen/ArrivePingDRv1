@@ -244,13 +244,34 @@ function textSample(html: string): string {
   // chars of raw HTML first, which on sites with big inline-SVG navs and
   // script bundles in <head> left almost no visible text at all — whole
   // About/Staff pages were coming back as "<200 chars" and being dropped.
-  const head = html.slice(0, 600_000);
-  return head
+  //
+  // 2026-10-08: the window moved AFTER the strip. Some franchise sites (Mr
+  // Rooter, Tailwind builds) inline an 800 KB <style> block in <head>; the
+  // old 600k pre-slice cut it in half, so the closing </style> was gone, the
+  // regex never matched, and the "page text" we stored and sent to the model
+  // was 6,000 chars of CSS — the Meet-the-Team page read as nothing but
+  // `--tw-ring-offset-shadow`. Unclosed <style>/<script> openers are now
+  // stripped to end-of-document as well, so a truncated block can never leak.
+  //
+  // Same day, second half of the bug: once the CSS was gone, the first 6,000
+  // chars of a franchise page were the mega-menu (every service link twice),
+  // so the people on a Meet-the-Team page still fell past the per-page cap.
+  // Site chrome (<header>/<nav>/<footer>) is dropped and, when the page has a
+  // <main> with real text in it, only <main> is kept.
+  const head = html.slice(0, 3_000_000);
+  const noCode = head
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style)\b[\s\S]*$/i, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ");
+  const main = /<main\b[\s\S]*?<\/main>/i.exec(noCode)?.[0];
+  const body = main && main.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").length > 600 ? main : noCode;
+  return body
+    .replace(/<header\b[\s\S]*?<\/header>/gi, " ")
+    .replace(/<nav\b[\s\S]*?<\/nav>/gi, " ")
+    .replace(/<footer\b[\s\S]*?<\/footer>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -553,7 +574,7 @@ function hintsBlock(h: StructuredHints | null): string {
  */
 type FetchedPage = { url: string; title: string; text: string; html: string };
 
-async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS): Promise<FetchedPage[]> {
+async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS, minChars = 200): Promise<FetchedPage[]> {
   if (!urls.length) return [];
   const budget = new Promise<null>((r) => setTimeout(() => r(null), budgetMs));
   const results = await Promise.all(
@@ -563,7 +584,7 @@ async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS): Promis
       ),
     ),
   );
-  return results.filter((r): r is FetchedPage => Boolean(r && r.text.length > 200));
+  return results.filter((r): r is FetchedPage => Boolean(r && r.text.length > minChars));
 }
 
 /** `<title>` of a page, entity-light, or "" when absent. */
@@ -580,6 +601,127 @@ export function pageTitle(html: string): string {
 }
 
 /** Which kind of page a URL path most likely is — used to rank excerpts. */
+const TEAM_RE = /team|staff|meet|people|crew|technicians|leadership|our-plumbers|our-techs|our-electricians|who-we-are/i;
+/** Level-3 team/contact pages: how many to follow and how long to wait. */
+const MAX_TEAM_PAGES = 3;
+const TEAM_HOP_MS = 8_000;
+/** Level-4 staff profile pages: small pages, so more of them, less text each. */
+const MAX_PROFILE_PAGES = 8;
+const PROFILE_TEXT_CHARS = 1_500;
+/** A team card or a profile can legitimately be "Jane Doe — Owner, 20 years": keep short pages. */
+const PEOPLE_MIN_CHARS = 40;
+
+/** Same-origin links on a page, deduped, no files / mailto / fragments. */
+function sameOriginLinks(html: string, base: string): string[] {
+  let origin: string;
+  try {
+    origin = new URL(base).origin;
+  } catch {
+    return [];
+  }
+  const out = new Set<string>();
+  const aRe = /<a\b[^>]*href\s*=\s*["']([^"'#]+)[^"']*["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = aRe.exec(html))) {
+    const href = m[1]!.trim();
+    if (!href || /^(mailto:|tel:|javascript:|sms:)/i.test(href)) continue;
+    const abs = absolutize(base, href);
+    if (!abs) continue;
+    let u: URL;
+    try {
+      u = new URL(abs);
+    } catch {
+      continue;
+    }
+    if (u.origin !== origin) continue;
+    if (/\.(pdf|jpe?g|png|gif|svg|webp|zip|docx?|xlsx?|mp4)$/i.test(u.pathname)) continue;
+    u.hash = "";
+    u.search = "";
+    out.add(u.toString());
+  }
+  return [...out];
+}
+
+/**
+ * Does `candidate` look like one person's profile page hanging off `teamUrl`?
+ * Either a direct child of the team page (/team/ -> /team/jane-doe) or a path
+ * that reads like /staff/<slug>, /our-team/<slug>. Section landing pages,
+ * pagination and obvious non-person slugs are rejected.
+ */
+function looksLikeProfile(candidate: string, teamUrl: string): boolean {
+  let c: URL;
+  let t: URL;
+  try {
+    c = new URL(candidate);
+    t = new URL(teamUrl);
+  } catch {
+    return false;
+  }
+  const cp = c.pathname.replace(/\/+$/, "");
+  const tp = t.pathname.replace(/\/+$/, "");
+  if (!cp || cp === tp) return false;
+  const last = cp.split("/").pop() ?? "";
+  if (!/^[a-z][a-z0-9-]{2,60}$/i.test(last)) return false;
+  if (/^(page|p)-?\d+$|^\d+$|join|career|apply|contact|about|service|review|blog|news|gallery|location|faq/i.test(last)) return false;
+  const child = tp !== "" && cp.startsWith(tp + "/") && cp.slice(tp.length + 1).split("/").length === 1;
+  const named = /\/(team|our-team|meet-the-team|meet|staff|our-people|people|crew|technicians|leadership|employees?|members?)\/[^/]+$/i.test(cp);
+  return child || named;
+}
+
+/**
+ * Levels 3 and 4 of the crawl — see the caller for the level map. Returns the
+ * extra team pages (full pages, merged into `subpages` by the caller) and the
+ * individual staff profile pages (short text only). Bounded: at most
+ * MAX_TEAM_PAGES + MAX_PROFILE_PAGES fetches, two parallel hops of
+ * TEAM_HOP_MS each, and it never throws.
+ */
+async function crawlPeoplePages(
+  homeHtml: string,
+  homeUrl: string,
+  level2: FetchedPage[],
+): Promise<{ teamPages: FetchedPage[]; profilePages: FetchedPage[] }> {
+  const seen = new Set<string>([homeUrl, ...level2.map((s) => s.url)]);
+  const norm = (u: string) => u.replace(/\/+$/, "");
+  const seenNorm = new Set([...seen].map(norm));
+  const isSeen = (u: string) => seenNorm.has(norm(u));
+  const mark = (u: string) => {
+    seen.add(u);
+    seenNorm.add(norm(u));
+  };
+
+  // level 3: team / staff / leadership links from the homepage and every
+  // level-2 page. Always runs — /about-us/meet-the-team is a different page
+  // from the /about-us we already have, even when level 2 found a /team.
+  const haveContact = level2.some((x) => /contact/i.test(new URL(x.url).pathname));
+  const hop3: string[] = [];
+  const sources: { html: string; url: string }[] = [{ html: homeHtml, url: homeUrl }, ...level2];
+  for (const src of sources) {
+    for (const u of sameOriginLinks(src.html, src.url)) {
+      if (isSeen(u) || hop3.includes(u)) continue;
+      const path = new URL(u).pathname;
+      if (TEAM_RE.test(path) && !/career|join|hiring|apply/i.test(path)) hop3.push(u);
+      else if (!haveContact && /contact/i.test(path)) hop3.push(u);
+    }
+  }
+  // shortest path first: a section page beats one of its children here
+  hop3.sort((a, b) => a.length - b.length);
+  const teamPages = await crawlSubpages(hop3.slice(0, MAX_TEAM_PAGES), TEAM_HOP_MS, PEOPLE_MIN_CHARS);
+  for (const p of teamPages) mark(p.url);
+
+  // level 4: one page per person, linked from any team-ish page we hold.
+  const teamish = [...level2, ...teamPages].filter((p) => TEAM_RE.test(new URL(p.url).pathname));
+  const hop4: string[] = [];
+  for (const tp of teamish) {
+    for (const u of sameOriginLinks(tp.html, tp.url)) {
+      if (isSeen(u) || hop4.includes(u)) continue;
+      if (looksLikeProfile(u, tp.url)) hop4.push(u);
+    }
+  }
+  const fetched = await crawlSubpages(hop4.slice(0, MAX_PROFILE_PAGES), TEAM_HOP_MS, PEOPLE_MIN_CHARS);
+  const profilePages = fetched.map((p) => ({ ...p, text: p.text.slice(0, PROFILE_TEXT_CHARS) }));
+  return { teamPages, profilePages };
+}
+
 function pageKind(url: string): "home" | "svc" | "about" | "area" | "team" | "contact" | "other" {
   let p = "";
   try {
@@ -878,38 +1020,24 @@ export async function scoutBrand(
   // Item 3: bounded crawl of services / coverage / about pages, in parallel
   // with the screenshot. Sub-page text and any JSON-LD go into ONE text-model
   // call — no extra model round-trips.
+  const t0 = Date.now();
   const subpageUrls = pickSubpages(html, finalUrl);
   const shotPromise = screenshot(finalUrl); // runs alongside crawl + text model
   const subpages = await crawlSubpages(subpageUrls);
+  const tLevel2 = Date.now() - t0;
 
-  // Second hop (2026-10-07): "Meet the Team" / staff pages are very often
-  // linked only from /about, not the homepage nav, so a one-level crawl
-  // misses them. If the first hop didn't land on a team page, scan the
-  // pages we DID fetch for team/staff links and follow up to 3 of them.
-  // Depth is now homepage → section → team page (plus the contact page the
-  // same way), which is where the names live on nearly every trade site.
-  const TEAM_RE = /team|staff|meet|people|crew|technicians|leadership|our-plumbers|our-techs/i;
-  const seen = new Set<string>([finalUrl, ...subpageUrls, ...subpages.map((s) => s.url)]);
-  const haveTeamPage = subpages.some((s) => TEAM_RE.test(new URL(s.url).pathname));
-  if (!haveTeamPage) {
-    const hop2: string[] = [];
-    for (const sp of subpages) {
-      for (const u of pickSubpages(sp.html, sp.url)) {
-        if (seen.has(u) || hop2.includes(u)) continue;
-        let path = "";
-        try {
-          path = new URL(u).pathname;
-        } catch {
-          continue;
-        }
-        if (TEAM_RE.test(path) || (/contact/i.test(path) && !subpages.some((x) => /contact/i.test(x.url)))) hop2.push(u);
-      }
-    }
-    if (hop2.length) {
-      const extra = await crawlSubpages(hop2.slice(0, 3), 8_000);
-      for (const e of extra) if (!seen.has(e.url)) subpages.push(e);
-    }
-  }
+  // People crawl (2026-10-07, deepened 2026-10-08). Staff names live on
+  // pages the homepage nav rarely links directly, so the roster crawl goes
+  // deeper than the brand crawl:
+  //   level 1  homepage
+  //   level 2  the section pages picked above (services/areas/about/team/contact)
+  //   level 3  every team/staff/leadership link found on levels 1-2 (up to 3),
+  //            plus the contact page if level 2 didn't have one
+  //   level 4  individual staff profile pages linked from any team page
+  //            (/team/jane-doe, /our-team/mike/) — up to 8, short text each
+  const { teamPages, profilePages } = await crawlPeoplePages(html, finalUrl, subpages);
+  const tPeople = Date.now() - t0 - tLevel2;
+  for (const p of teamPages) subpages.push(p);
   const structured = (() => {
     let h = extractJsonLd(html, finalUrl);
     for (const sp of subpages) {
@@ -929,21 +1057,25 @@ export async function scoutBrand(
   log.info("brand-scout: crawl", {
     url: finalUrl,
     subpages: subpages.map((s) => s.url),
+    profilePages: profilePages.map((s) => s.url),
     jsonLd: Boolean(structured),
     ldTypes: structured?.types ?? [],
+    ms: { level2: tLevel2, people: tPeople },
   });
 
-  const subpageBlock = subpages
-    .map((sp) => `\n\nSUB-PAGE (${sp.url}):\n${sp.text}`)
-    .join("");
+  const subpageBlock =
+    subpages.map((sp) => `\n\nSUB-PAGE (${sp.url}):\n${sp.text}`).join("") +
+    profilePages.map((sp) => `\n\nSTAFF PROFILE PAGE (${sp.url}):\n${sp.text}`).join("");
 
   // Item E: what we persist. Homepage first, then sub-pages in crawl order.
   const pages: CrawledPage[] = [
     { url: finalUrl, title: pageTitle(html), text: textSample(html).slice(0, PAGE_STORE_CHARS) },
     ...subpages.map((sp) => ({ url: sp.url, title: sp.title, text: textSample(sp.html).slice(0, PAGE_STORE_CHARS) })),
-  ].slice(0, 12);
+    ...profilePages.map((sp) => ({ url: sp.url, title: sp.title, text: sp.text })),
+  ].slice(0, 20);
   const excerpts = buildExcerpts(pages);
 
+  const tModel = Date.now();
   const [shot, textResult] = await Promise.allSettled([
     shotPromise,
     generateObject({
@@ -957,6 +1089,8 @@ ${INDUSTRY_LABELS.map((i) => `- ${i.id}: ${i.label}`).join("\n")}
 ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     }),
   ]);
+
+  log.info("brand-scout: text model + screenshot done", { url: finalUrl, ms: Date.now() - tModel });
 
   // vision pass on the screenshot for colors
   let vision: z.infer<typeof VisionSchema> | null = null;
@@ -1110,7 +1244,7 @@ function cleanMentioned(list: string[], team: { name: string }[]): string[] {
     const n = (raw || "").replace(/[^a-z' .-]/gi, "").replace(/\s+/g, " ").trim();
     if (n.length < 2 || n.length > 30) continue;
     if (!/^[A-Z][a-z]/.test(n)) continue; // must look like a name
-    if (/^(our|the|team|staff|crew|guys|tech|technician|owner|office)\b/i.test(n)) continue;
+    if (/^(our|the|team|staff|crew|guys|tech|technician|owner|office|everything|everyone|anyone|someone|service|customer|great|thanks?|highly|very|they|he|she|we|it)\b/i.test(n)) continue;
     const first = n.split(" ")[0]!.toLowerCase();
     if (rosterFirst.has(first)) continue;
     if (out.some((o) => o.toLowerCase() === n.toLowerCase())) continue;
