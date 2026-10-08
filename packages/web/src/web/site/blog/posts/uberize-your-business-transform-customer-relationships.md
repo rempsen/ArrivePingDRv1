@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["uber-like experience", "real-time eta", "customer notifications", "field service efficiency", "plumbing"]
-image: ""
-imageAlt: ""
+image: "/blog/img/uberize-your-business-transform-customer-relationships-cover.webp"
+imageAlt: "\"93% of customers want regular updates.\" headline beside the ArrivePing live fleet map and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/nvc360-will-uberize-your-business-and-transform-relationships/"
 ---
 

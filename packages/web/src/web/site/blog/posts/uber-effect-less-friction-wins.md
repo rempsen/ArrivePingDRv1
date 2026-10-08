@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "growth"
 tags: ["uber effect", "customer experience", "price sensitivity", "field service", "client communication"]
-image: ""
-imageAlt: ""
+image: "/blog/img/uber-effect-less-friction-wins-cover.webp"
+imageAlt: "\"Less friction beats a lower price.\" headline beside the customer tracking page with a live ETA and the customer tracking page showing the technician has arrived"
 legacyUrl: "https://nvc360.com/the-uber-effect-friction-trust-market-share/"
 ---
 

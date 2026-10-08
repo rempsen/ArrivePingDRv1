@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["uber effect", "real-time service", "live eta", "small business", "field service management"]
-image: ""
-imageAlt: ""
+image: "/blog/img/uber-effect-real-time-service-cover.webp"
+imageAlt: "\"Your customers expect real-time service.\" headline beside the ArrivePing technician app en route and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/the-uber-effect-why-your-customers-demand-real-time-service-and-how-to-deliver-it/"
 ---
 

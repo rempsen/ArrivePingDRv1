@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "technician-tracking"
 tags: ["live tracking", "technician eta", "customer trust", "dispatch visibility"]
-image: ""
-imageAlt: ""
+image: "/blog/img/live-tracking-promise-of-transparency-trust-and-efficiency-cover.webp"
+imageAlt: "\"Transparency. Trust. Efficiency.\" headline beside the ArrivePing live fleet map and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/live-tracking-promise-of-transparency-trust-and-efficiency/"
 ---
 

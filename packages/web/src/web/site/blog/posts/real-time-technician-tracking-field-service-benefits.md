@@ -7,8 +7,8 @@ updated: "2026-04-26"
 author: "Dan Rosenblat"
 category: "technician-tracking"
 tags: ["technician tracking", "first-time fix rate", "dispatch", "customer experience", "productivity"]
-image: ""
-imageAlt: ""
+image: "/blog/img/real-time-technician-tracking-field-service-benefits-cover.webp"
+imageAlt: "\"The ROI of visibility.\" headline beside the ArrivePing live fleet map"
 legacyUrl: "https://nvc360.com/real-time-technician-tracking-field-service-benefits/"
 ---
 

@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["ineffective communication", "rework", "dispatch calls", "field service costs", "construction"]
-image: ""
-imageAlt: ""
+image: "/blog/img/hidden-cost-of-ineffective-communication-cover.webp"
+imageAlt: "\"52% of rework starts with poor communication.\" headline beside ArrivePing customer text updates and the ArrivePing technician app en route"
 legacyUrl: "https://nvc360.com/ineffective-communication-field-service-cost-nvc360/"
 ---
 

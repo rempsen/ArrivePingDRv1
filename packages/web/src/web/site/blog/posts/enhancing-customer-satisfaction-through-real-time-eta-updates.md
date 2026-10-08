@@ -7,8 +7,8 @@ updated: "2026-04-10"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["eta updates", "customer satisfaction", "no-shows", "real-time tracking"]
-image: ""
-imageAlt: ""
+image: "/blog/img/enhancing-customer-satisfaction-through-real-time-eta-updates-cover.webp"
+imageAlt: "\"91% of consumers track their orders.\" headline beside the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/enhancing-customer-satisfaction-through-real-time-eta-updates/"
 ---
 

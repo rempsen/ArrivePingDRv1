@@ -7,8 +7,8 @@ updated: "2026-02-27"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["service windows", "customer experience", "real-time tracking", "customer loyalty", "home services"]
-image: ""
-imageAlt: ""
+image: "/blog/img/why-4-hour-service-windows-are-killing-your-brand-cover.webp"
+imageAlt: "\"“Between 8 and noon” is costing you customers.\" headline beside a text message giving a four-hour service window and the customer tracking page with a live ETA"
 legacyUrl: "https://nvc360.com/becomingpreferred/"
 ---
 
