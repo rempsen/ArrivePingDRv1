@@ -2,6 +2,7 @@ import { build, type Plugin, type ResolvedConfig } from "vite";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { todayInSiteZone } from "./site-date";
 
 /**
  * Build-time prerender of the public marketing pages.
@@ -138,9 +139,10 @@ export default function prerenderPlugin(): Plugin {
         urls.push(route === "/" ? `${SITE}/` : `${SITE}${route}`);
       }
 
-      // Today's date on the business's own calendar (America/Winnipeg), not UTC:
-      // a build after 18:00 CT used to stamp pages with tomorrow's date.
-      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Winnipeg", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      // Today's date on the business's own calendar, not UTC (a build after
+      // 18:00 CT used to stamp pages with tomorrow's date). Shared with the blog
+      // plugin so "published" and "not in the future" agree.
+      const today = todayInSiteZone();
       await fs.writeFile(path.join(outDir, "sitemap.xml"), mod.sitemapXml(today));
       await fs.writeFile(path.join(outDir, "robots.txt"), robotsTxt());
       await fs.writeFile(path.join(outDir, "llms.txt"), mod.llmsTxt());

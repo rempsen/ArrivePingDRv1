@@ -75,10 +75,53 @@ for (const { loc, lastmod } of entries) {
 const robots = await read("/robots.txt");
 if (robots.status !== 200) fail(`robots.txt: HTTP ${robots.status}`);
 if (!robots.text.includes(`Sitemap: ${SITE}/sitemap.xml`)) fail("robots.txt: no Sitemap line");
-const disallows = [...robots.text.matchAll(/^Disallow:\s*(\S+)/gm)].map((m) => m[1]!);
+// Googlebot's view of robots.txt: the most specific group that names it (else "*"),
+// longest matching rule wins, Allow beats Disallow on a tie. A bare "Disallow: /"
+// is the most damaging misconfiguration this check exists to catch, so it is a
+// match like any other rule rather than an exception.
+function robotsGroupFor(agent: string, text: string): { allow: string[]; disallow: string[] } {
+  const groups: { agents: string[]; allow: string[]; disallow: string[] }[] = [];
+  let cur: (typeof groups)[number] | null = null;
+  let lastWasAgent = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1]!.toLowerCase();
+    const val = m[2]!.trim();
+    if (key === "user-agent") {
+      if (!cur || !lastWasAgent) {
+        cur = { agents: [], allow: [], disallow: [] };
+        groups.push(cur);
+      }
+      cur.agents.push(val.toLowerCase());
+      lastWasAgent = true;
+      continue;
+    }
+    lastWasAgent = false;
+    if (!cur) continue;
+    if (key === "allow" && val) cur.allow.push(val);
+    if (key === "disallow" && val) cur.disallow.push(val);
+  }
+  const named = groups.find((g) => g.agents.includes(agent.toLowerCase()));
+  const star = groups.find((g) => g.agents.includes("*"));
+  const g = named ?? star;
+  return g ? { allow: g.allow, disallow: g.disallow } : { allow: [], disallow: [] };
+}
+function robotsAllows(p: string, g: { allow: string[]; disallow: string[] }): boolean {
+  const matches = (rule: string) => (rule.endsWith("$") ? p === rule.slice(0, -1) : p.startsWith(rule));
+  const bestAllow = Math.max(-1, ...g.allow.filter(matches).map((r) => r.length));
+  const bestDisallow = Math.max(-1, ...g.disallow.filter(matches).map((r) => r.length));
+  return bestAllow >= bestDisallow;
+}
+const googleGroup = robotsGroupFor("Googlebot", robots.text);
 for (const { loc } of entries) {
   const p = loc.slice(SITE.length) || "/";
-  for (const d of disallows) if (d !== "/" && p.startsWith(d)) fail(`${loc}: blocked by robots.txt rule "Disallow: ${d}"`);
+  if (!robotsAllows(p, googleGroup)) fail(`${loc}: blocked for Googlebot by robots.txt (group rules: ${googleGroup.disallow.join(", ") || "none"})`);
+}
+for (const must of ["/admin", "/app", "/api/x", "/t/abc"]) {
+  if (robotsAllows(must, googleGroup)) fail(`robots.txt: private path ${must} is NOT disallowed for Googlebot`);
 }
 
 for (const f of ["/llms.txt", "/llms-full.txt"]) {
