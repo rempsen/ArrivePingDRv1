@@ -37,7 +37,23 @@ export function organization(): JsonLd {
     },
     areaServed: ["CA", "US"],
     brand: { "@type": "Brand", name: brand.product },
-    knowsAbout: ["AI software tooling and automation", "Custom AI solutions", "Software development", "Field service management software"],
+    founder: { "@type": "Person", name: "Dan Rosenblat", jobTitle: "Founder & CEO" },
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "sales",
+      email: brand.contactEmail,
+      areaServed: ["CA", "US"],
+      availableLanguage: ["en"],
+    },
+    knowsAbout: [
+      "Field service management software",
+      "Technician dispatch and scheduling",
+      "Last-mile delivery and driver dispatch",
+      "Customer arrival notifications and live ETA tracking",
+      "AI software tooling and automation",
+      "Custom AI solutions",
+      "Software development",
+    ],
     sameAs: ["https://nvc360.com"],
   };
 }
