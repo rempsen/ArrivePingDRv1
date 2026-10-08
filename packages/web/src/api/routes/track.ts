@@ -4,7 +4,7 @@ import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, inArray } from "drizzle-orm";
 import { sendSms, trackingUrl } from "../../services/sms";
-import { computeRoute } from "./geo";
+import { tripEngine, EN_ROUTE_STATUSES } from "../../services/trip-engine";
 import { trackLimiter, trackWriteLimiter } from "../lib/rate-limit";
 import { streamSSE } from "hono/streaming";
 import { subscribeTrack, publishMsg } from "../../services/realtime";
@@ -89,34 +89,6 @@ function readRating(v: unknown): number | null {
   return n;
 }
 
-// road-route cache so the 2.5s public poll never hammers Google Directions.
-// recompute at most once per ~12s per booking (driver hasn't moved far in that).
-const ROUTE_TTL_MS = 12_000;
-const routeCache = new Map<
-  string,
-  { at: number; oLat: number; oLng: number; route: Awaited<ReturnType<typeof computeRoute>> }
->();
-
-async function cachedRoute(
-  bookingId: string,
-  oLat: number,
-  oLng: number,
-  dLat: number,
-  dLng: number,
-) {
-  const now = Date.now();
-  const c = routeCache.get(bookingId);
-  // reuse cache unless it's stale OR the driver moved >120m since last route
-  if (c) {
-    const moved =
-      Math.abs(c.oLat - oLat) > 0.0011 || Math.abs(c.oLng - oLng) > 0.0011;
-    if (now - c.at < ROUTE_TTL_MS && !moved) return c.route;
-  }
-  const route = await computeRoute(oLat, oLng, dLat, dLng);
-  routeCache.set(bookingId, { at: now, oLat, oLng, route });
-  return route;
-}
-
 /** Build the full public tracking snapshot for a booking row. */
 /** Statuses where a running-late banner still helps. Once the tech is on site
  * the customer can see the van, and a delay banner is just noise. */
@@ -128,8 +100,6 @@ const DELAY_VISIBLE_STATUSES = new Set([
   "enroute",
 ]);
 
-/** Tech is dispatched and driving: compute a live road route + ETA. */
-const EN_ROUTE_STATUSES = new Set(["assigned", "accepted", "enroute"]);
 /** Nobody is driving yet; keep whatever scheduled ETA the booking carries. */
 const PRE_DISPATCH_STATUSES = new Set(["pending", "confirmed", "unassigned"]);
 
@@ -197,12 +167,14 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
     b.lat != null &&
     b.lng != null
   ) {
-    const r = await cachedRoute(b.id, techLocation.lat, techLocation.lng, b.lat, b.lng);
-    if (r) {
-      route = r.path.map(([lat, lng]) => ({ lat, lng }));
-      routeProvider = r.provider;
-      etaMins = r.etaMins;
-      etaDistanceKm = r.distanceKm;
+    // Shared trip engine: the 2.5 s public poll only projects the tech onto
+    // the cached route; Google is called a handful of times per trip.
+    const snap = await tripEngine.update(b.id, techLocation, { lat: b.lat, lng: b.lng });
+    if (snap) {
+      route = snap.remainingPath.map(([lat, lng]) => ({ lat, lng }));
+      routeProvider = snap.provider;
+      etaMins = snap.etaMins;
+      etaDistanceKm = snap.distanceKm;
     }
   } else if (!EN_ROUTE_STATUSES.has(b.status) && !PRE_DISPATCH_STATUSES.has(b.status)) {
     // Tech is on site (or the job is done): an ETA is meaningless now, and the

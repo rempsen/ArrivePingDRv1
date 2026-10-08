@@ -74,9 +74,11 @@ Company default: **NVC 360**, 423 Main Street, Winnipeg, Manitoba, Canada (was T
 - [x] Tech app: accept/decline UI on offered jobs; public tech signup removed (invite-only)
 - [x] tsc EXIT0 + build EXIT0 + restart + smoke (invite accept, enroute SMS sent w/ Twilio SID, deliveries logged)
 
-## Live Traffic ETA (Google Distance Matrix)
-- `GET /api/geo/eta?oLat&oLng&dLat&dLng` — server-side proxy to Google Distance Matrix (`mode=driving`, `departure_time=now` for traffic). Returns `{etaMins, distanceKm, durationText, provider}`. Falls back to haversine + AVG_KMH (32) estimate when no `GOOGLE_MAPS_API_KEY`. Shared `computeEta()` exported from `routes/geo.ts`.
-- `POST /api/tracking/:bookingId/ping` now recomputes traffic-aware ETA (tech ping coords → booking destination) and writes `bookings.etaMins`. Throttled to once per 30s per booking (`ETA_THROTTLE_MS`) to limit API calls.
+## Live Traffic ETA (Google Routes API + TripEngine)
+- Replaced in October 2026: Distance Matrix and Directions are Legacy and unavailable to new Google Cloud projects. `GET /api/geo/eta` and `/api/geo/config` were unused and are gone.
+- `services/routing.ts` calls Routes API `computeRoutes` (TRAFFIC_AWARE), falling back to OSRM, then a haversine estimate. Key: `GOOGLE_MAPS_API_KEY_NEW`, else `GOOGLE_MAPS_API_KEY`.
+- `services/trip-engine.ts` keeps one route per booking. The ping handler and both tracking pages project the tech onto it (ETA = traffic duration × remaining share), and only re-call Google on trip start, a new destination, 4 min + moved, or 2 consecutive fixes >150 m off route. About 7 calls per 25-minute drive, down from about 210, and one ETA everywhere.
+- `POST /api/tracking/:bookingId/ping` writes `bookings.etaMins` / `etaDistanceKm` from the engine while the job is assigned/accepted/enroute, and drops the trip otherwise.
 - **Bug fixed:** ping handler previously overwrote `bookings.lat/lng` (the JOB destination) with the tech's live coords, corrupting the destination. Live location now lives only on `riders.lat/lng` + `trackingPings`; booking lat/lng stays the destination.
 - Public track page (`/t/:token`) already polls `/api/track/:token` every 5s and renders `~{etaMins} min away`; now reflects real traffic ETA. Enroute SMS `{{eta}}` var also picks up the updated value.
 - Verified: `provider:"google"` 38min/28.4km direct call; ping→etaMins=36 written + destination preserved.
