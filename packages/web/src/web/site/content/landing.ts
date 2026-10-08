@@ -998,7 +998,7 @@ const hvac: LandingPage = {
         { title: "Certification-aware assignment", body: "Tag technicians with gas, refrigeration, electrical or sheet-metal skills. Auto-assignment only considers techs who hold what the job needs." },
         { title: "Emergency reshuffle", body: "When a no-heat call arrives, dispatch sees who is closest and who can be freed, assigns in one tap, and every affected customer gets an updated ETA." },
         { title: "Maintenance tune-up routes", body: "Book seasonal tune-ups by neighbourhood so technicians drive less between visits; the live map shows the day unfolding." },
-        { title: "On-my-way texts with live ETA", body: "The homeowner sees the van moving and the arrival time updating in traffic. Fewer \"where is he?\" calls to the office." },
+        { title: "On-my-way texts with live ETA", body: "The homeowner sees the van moving and the arrival time updating as the drive progresses. Fewer \"where is he?\" calls to the office." },
         { title: "Geofenced arrival and on-site time", body: "Arrival is recorded automatically when the tech reaches the address; the on-site clock covers diagnosis, repair and commissioning." },
         { title: "Parts and access notes on the phone", body: "Model numbers, filter sizes, furnace-room access and gate codes travel with the work order." },
       ],
