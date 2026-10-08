@@ -28,6 +28,7 @@ import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { ensureDefaultTenantKey } from "../lib/tenant-keys";
 import { scoutBrand } from "../../services/brand-scout";
+import { runGoogleSmoke } from "../../services/google-smoke";
 import { rescanWebsite, type RescanResult } from "../../services/rescan";
 import { provisionNotificationBranding } from "../../services/dispatch";
 import {
@@ -108,6 +109,16 @@ const BrandPatchBody = z.object({ brand: BrandProposal });
 const DeleteCompanyBody = z.object({ confirmName: optText(200) });
 
 export const superadminRoutes = new Hono<AppEnv>()
+  // ---- Google Maps Platform smoke check (modernization phase 0) ----------
+  // One live call per API on the new project's key; returns status and a
+  // short summary, never the key. ?key=current tests GOOGLE_MAPS_API_KEY
+  // instead; ?raw=1 adds response bodies for recording test fixtures.
+  .get("/google-smoke", requireSuperadmin, async (c) => {
+    const choice = c.req.query("key") === "current" ? "current" : "new";
+    const report = await runGoogleSmoke({ choice, includeRaw: c.req.query("raw") === "1" });
+    return c.json(report, 200);
+  })
+
   // ---- list all tenants -------------------------------------------------
   .get("/companies", requireSuperadmin, async (c) => {
     const rows = await db.select().from(schema.companies);
