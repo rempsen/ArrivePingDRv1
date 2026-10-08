@@ -16,6 +16,8 @@
 const KEY = process.env.GOOGLE_MAPS_API_KEY;
 const TIMEOUT_MS = 6_000;
 
+import { log } from "../api/lib/logger";
+
 export interface ReviewMentions {
   placeId: string;
   displayName: string;
@@ -123,7 +125,12 @@ export async function fetchGoogleReviewMentions(input: {
       },
       body: JSON.stringify({ textQuery, maxResultCount: 3, languageCode: "en" }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const msg = body.match(/"message":\s*"([^"]{0,200})/)?.[1] ?? "";
+      log.warn("review-mentions: Places API error", { status: res.status, msg });
+      return null;
+    }
     const data = (await res.json()) as { places?: any[] };
     const places = Array.isArray(data.places) ? data.places : [];
     if (!places.length) return null;
@@ -147,7 +154,8 @@ export async function fetchGoogleReviewMentions(input: {
       reviewCount: reviews.length,
       mentionedStaff: extractMentionedNames(reviews, exclude),
     };
-  } catch {
+  } catch (e) {
+    log.warn("review-mentions: Places lookup failed", { err: String(e) });
     return null;
   } finally {
     clearTimeout(timer);
