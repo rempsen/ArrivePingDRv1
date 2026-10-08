@@ -30,7 +30,7 @@ This transparency directly impacts the bottom line. According to analyses by PYM
 
 These platforms have proven a fundamental business truth: when you remove anxiety from the transaction, customers reward you with loyalty and frequency.
 
-![Woman at a home office desk with a laptop, smiling and holding up a phone that shows a map](/blog/img/customers-deserve-uber-like-service-2.webp)
+![A customer's ArrivePing tracking page: the technician's live route on the map, a 6-minute ETA, his name and van, and Call and Text buttons](/blog/img/customers-deserve-uber-like-service-2.webp)
 
 ## How Proactive Communication Eliminates Customer Frustration
 

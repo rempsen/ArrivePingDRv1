@@ -111,7 +111,7 @@ The math is straightforward. The technology to achieve it is accessible today.
 
 ---
 
-![Dispatcher at a desk watching a monitor that shows a dark live map with technician routes and a job list](/blog/img/how-real-time-technician-tracking-improves-job-completion-rates-3.webp)
+![The ArrivePing live map a dispatcher watches, with technician locations and the unassigned job queue](/blog/img/how-real-time-technician-tracking-improves-job-completion-rates-3.webp)
 
 ## What to Look for in a Tracking Platform
 

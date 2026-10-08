@@ -48,7 +48,7 @@ ArrivePing was built from the inside out by NVC360, out of the real-world challe
 
 Imagine a customer receiving an automatic on-my-way text with a [live tracking](/blog/live-tracking-promise-of-transparency-trust-and-efficiency) link that shows the technician’s progress and ETA, with buttons to text or call. If the job slips, they get a running-late notice instead of having to phone the office. This “Uber-like” experience improves customer satisfaction and reduces inbound calls. For operations managers, automatic assignment ranks technicians by distance, skill match, availability and current workload, and dispatchers can override any pick when the day changes.
 
-![A laptop on a desk showing a dispatch dashboard with a map of technician locations, beside a phone, notebook and coffee mug](/blog/img/field-service-software-landscape-3.webp)
+![The ArrivePing live map showing technicians and unassigned jobs across the city](/blog/img/field-service-software-landscape-3.webp)
 
 Live technician visibility
 
