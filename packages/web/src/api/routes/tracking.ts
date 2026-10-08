@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx, tenantId } from "../middleware/auth";
-import { computeEta, computeRoute } from "./geo";
+import { tripEngine, EN_ROUTE_STATUSES } from "../../services/trip-engine";
 import {
   haversineKm,
   isInsideGeofence,
@@ -19,28 +19,6 @@ import { LA_TOKEN_KEYS } from "../../services/apns";
 import { z } from "zod";
 import { jsonBody, latitude, longitude } from "../lib/validate";
 import type { AppEnv } from "../env";
-
-// throttle ETA recomputation per booking (avoid hammering Distance Matrix)
-const ETA_THROTTLE_MS = 30_000;
-const lastEtaAt = new Map<string, number>();
-
-// road-route cache for the authed customer track view (mirror of public route)
-const AUTH_ROUTE_TTL_MS = 12_000;
-const authRouteCache = new Map<
-  string,
-  { at: number; oLat: number; oLng: number; route: Awaited<ReturnType<typeof computeRoute>> }
->();
-async function cachedAuthRoute(id: string, oLat: number, oLng: number, dLat: number, dLng: number) {
-  const now = Date.now();
-  const c = authRouteCache.get(id);
-  if (c) {
-    const moved = Math.abs(c.oLat - oLat) > 0.0011 || Math.abs(c.oLng - oLng) > 0.0011;
-    if (now - c.at < AUTH_ROUTE_TTL_MS && !moved) return c.route;
-  }
-  const route = await computeRoute(oLat, oLng, dLat, dLng);
-  authRouteCache.set(id, { at: now, oLat, oLng, route });
-  return route;
-}
 
 /**
  * Per-tenant geofence radius, cached briefly.
@@ -125,6 +103,7 @@ export const trackingRoutes = new Hono<AppEnv>()
     // always requires being back inside the tighter arrive radius, per the
     // same reasoning `insideGeofence` already used — see resumeClock/pauseClock
     // in booking-status.ts. Completion stays manual.
+    let statusNow = b.status;
     let geofence: { radiusM: number; pauseRadiusM: number; distanceM: number; inside: boolean } | null = null;
     if (b && b.lat != null && b.lng != null && b.enrouteAt && b.status !== "completed" && b.status !== "cancelled") {
       // Configured radius in metres. Resolved through the shared helper so a
@@ -143,6 +122,7 @@ export const trackingRoutes = new Hono<AppEnv>()
         if (b.status === "enroute") {
           // first arrival → auto-arrive + start the job clock
           await applyBookingStatus(tenantId(c), bookingId, "arrived", { byGeofence: true });
+          statusNow = "arrived";
         } else {
           // came back after stepping away → resume the clock
           await resumeClock(tenantId(c), bookingId);
@@ -154,21 +134,21 @@ export const trackingRoutes = new Hono<AppEnv>()
     }
     // -----------------------------------------------------------------------
 
-    // recompute traffic-aware ETA from tech -> destination, throttled
-    if (b) {
-      const now = Date.now();
-      const last = lastEtaAt.get(bookingId) ?? 0;
-      if (now - last >= ETA_THROTTLE_MS) {
-        lastEtaAt.set(bookingId, now);
-        const eta = await computeEta(lat, lng, b.lat, b.lng);
-        if (eta) {
-          await t.update(
-            schema.bookings,
-            { etaMins: eta.etaMins, etaDistanceKm: eta.distanceKm },
-            eq(schema.bookings.id, bookingId),
-          );
-        }
+    // Live ETA from the shared trip engine: projects this ping onto the
+    // booking's traffic-aware route and only calls Google when the route is
+    // stale or the tech has left it (services/trip-engine.ts). Outside the
+    // driving statuses the trip is dropped and no routing happens at all.
+    if (EN_ROUTE_STATUSES.has(statusNow) && b.lat != null && b.lng != null) {
+      const snap = await tripEngine.update(bookingId, { lat, lng }, { lat: b.lat, lng: b.lng });
+      if (snap && (snap.etaMins !== b.etaMins || snap.distanceKm !== b.etaDistanceKm)) {
+        await t.update(
+          schema.bookings,
+          { etaMins: snap.etaMins, etaDistanceKm: snap.distanceKm },
+          eq(schema.bookings.id, bookingId),
+        );
       }
+    } else {
+      tripEngine.end(bookingId);
     }
 
     // push to live SSE subscribers (public tracking page) — fire and forget
@@ -246,14 +226,15 @@ export const trackingRoutes = new Hono<AppEnv>()
         ? { lat: rider.lat, lng: rider.lng }
         : null;
 
-    // road-following route + live ETA while en route
+    // road-following route + live ETA while en route — same engine and the
+    // same numbers as the ping handler and the public tracking page
     let route: { lat: number; lng: number }[] | null = null;
     let etaMins = b.etaMins;
-    if (riderLocation && ["assigned", "enroute"].includes(b.status) && b.lat != null && b.lng != null) {
-      const r = await cachedAuthRoute(b.id, riderLocation.lat, riderLocation.lng, b.lat, b.lng);
-      if (r) {
-        route = r.path.map(([lat, lng]) => ({ lat, lng }));
-        etaMins = r.etaMins;
+    if (riderLocation && EN_ROUTE_STATUSES.has(b.status) && b.lat != null && b.lng != null) {
+      const snap = await tripEngine.update(b.id, riderLocation, { lat: b.lat, lng: b.lng });
+      if (snap) {
+        route = snap.remainingPath.map(([lat, lng]) => ({ lat, lng }));
+        etaMins = snap.etaMins;
       }
     }
 

@@ -20,6 +20,8 @@
  * only (see routes/superadmin.ts).
  */
 
+import { ROUTES_FIELD_MASK, ROUTES_URL, routesRequestBody } from "./routing";
+
 export type SmokeKeyChoice = "new" | "current";
 
 export interface SmokeCheck {
@@ -146,21 +148,13 @@ export async function runGoogleSmoke(
   {
     const base = { name: "routes", api: "Routes API · computeRoutes (TRAFFIC_AWARE)" } as const;
     const res = await timed(async () => {
-      const r = await doFetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      // Same URL, field mask and body as production routing (services/routing.ts).
+      const r = await doFetch(ROUTES_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": key,
-          "X-Goog-FieldMask": "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline",
-        },
-        body: JSON.stringify({
-          origin: { location: { latLng: ORIGIN } },
-          destination: { location: { latLng: DESTINATION } },
-          travelMode: "DRIVE",
-          routingPreference: "TRAFFIC_AWARE",
-          regionCode: "CA",
-          units: "METRIC",
-        }),
+        headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": ROUTES_FIELD_MASK },
+        body: JSON.stringify(
+          routesRequestBody({ lat: ORIGIN.latitude, lng: ORIGIN.longitude }, { lat: DESTINATION.latitude, lng: DESTINATION.longitude }),
+        ),
         signal: signal(),
       });
       return { r, body: await readJson(r) };

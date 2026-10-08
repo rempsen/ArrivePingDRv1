@@ -28,7 +28,7 @@
 import { eq } from "drizzle-orm";
 import * as schema from "../api/database/schema";
 import type { TenantDb } from "../api/database/tenant";
-import { computeRoute } from "../api/routes/geo";
+import { computeRoute } from "./routing";
 import { haversineKm, pathDistanceKm } from "../shared/geo-distance";
 import { log } from "../api/lib/logger";
 
@@ -274,7 +274,9 @@ async function fillGaps(legs: LatLng[][]): Promise<{ path: LatLng[]; routed: boo
     const last = path[path.length - 1];
     const first = leg[0]!;
     if (last && metersBetween(last, first) > 30) {
-      const r = await computeRoute(last.lat, last.lng, first.lat, first.lng);
+      // A drive that already happened: no live traffic needed, so the
+      // Essentials SKU (TRAFFIC_UNAWARE) rather than the Pro one.
+      const r = await computeRoute(last, first, { traffic: false });
       if (r && r.provider !== "estimate" && r.path.length >= 2) {
         routed = true;
         for (const [lat, lng] of r.path) path.push({ lat, lng });
