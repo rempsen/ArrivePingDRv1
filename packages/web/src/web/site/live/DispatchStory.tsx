@@ -1,25 +1,29 @@
 import { useState, type CSSProperties } from "react";
 import { dispatchStory } from "../config";
-import { Fleet, PauseButton, PeopleAndAssets, StreetMap, useLivePlay, Van } from "./shared";
+import { DEV, DEV_ROUTE, HOME, MAP_H, MAP_IMAGE, MAP_W, MARCUS, MARCUS_ROUTE, PRIYA, PRIYA_ROUTE } from "./dispatch-map";
+import { PauseButton, useLivePlay } from "./shared";
 
 /**
  * A · Live dispatch story — the "How it works" section.
  *
- * One urgent job plays out on a live street map in a 20 s loop:
- *   0–17.5 %   fleet live                         (step 1)
- *   17.5–35 %  work order WO-4821 is created       (step 2)
- *   35–55 %    auto-assign: nearest tech lacks the gas ticket, next is busy,
- *              Marcus (0.9 km, gas fitter, free) is chosen  (step 3)
- *   55–68 %    job lands on Marcus's phone, he accepts       (step 4)
- *   68–100 %   customer text, then live tracking with ETA,
- *              while Marcus pulls away at a realistic 1.6 m/s²  (step 5)
+ * One urgent job plays out on the real ArrivePing map (ArrivePing Ink basemap,
+ * River Heights, Winnipeg). Routes are real road routes projected onto the map
+ * image (see dispatch-map.ts). 20 s loop:
+ *   0–17.5 %   team live on the map                    (step 1)
+ *   17.5–35 %  work order WO-4821 is created            (step 2)
+ *   35–55 %    auto-assign: Dev (0.4 km) is busy, Priya (0.5 km) has no gas
+ *              ticket, Marcus (0.9 km, gas fitter, free) is chosen  (step 3)
+ *   55–68 %    job lands on Marcus's phone, he accepts             (step 4)
+ *   68–100 %   customer text, then live tracking with ETA, while Marcus pulls
+ *              away north on Niagara St at a realistic 1.6 m/s²   (step 5)
  *
- * Route: 888 m → "3 min" at the 26 km/h routing average, ticking to "2 min"
- * once he has covered 24 m. Clicking a step restarts the story at that step.
+ * Clicking a step restarts the story at that step.
  */
 
-const ROUTE = "M740 170 L740 425 L1330 425 L1364 451";
 const LOOP_S = 20;
+/** Technicians on site and equipment, placed on real lots near the streets. */
+const ON_SITE: [number, number][] = [[338, 222], [252, 352], [505, 640], [884, 432]];
+const EQUIPMENT: [number, number][] = [[418, 300], [762, 662], [928, 252]];
 
 export function DispatchStory() {
   const { ref, play } = useLivePlay<HTMLElement>();
@@ -53,20 +57,16 @@ export function DispatchStory() {
             ))}
           </ol>
 
-          <div className="lv-map">
-            <svg viewBox="640 40 960 720" aria-hidden="true" focusable="false">
-              <StreetMap />
-              <PeopleAndAssets
-                people={[[905, 505], [1280, 300], [1505, 820], [1160, 120], [700, 640]]}
-                assets={[[1025, 325], [1395, 685], [815, 275], [1175, 700]]}
-              />
-              <Fleet loops={[1, 2, 3, 5, 6, 8, 9]} />
+          <div className="lv-map lv-map--real">
+            <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} aria-hidden="true" focusable="false">
+              <image href={MAP_IMAGE} x={0} y={0} width={MAP_W} height={MAP_H} preserveAspectRatio="xMidYMid slice" />
+              <OnSite />
               <Story key={`story-${jump.epoch}`} />
             </svg>
             <div className="lv-map__bar">
               <span className="lv-map__note">
                 <span className="lv-livedot" aria-hidden="true" style={{ marginRight: 8 }} />
-                Live · technicians, drivers and equipment
+                ArrivePing live map · River Heights, Winnipeg
               </span>
               <PauseButton />
             </div>
@@ -78,64 +78,110 @@ export function DispatchStory() {
   );
 }
 
-function Story() {
+/** Truck glyph from the app's driver marker (lucide "truck"), centred on 0,0. */
+function Truck({ size = 16, stroke = "#fff" }: { size?: number; stroke?: string }) {
+  const s = size / 24;
+  return (
+    <g transform={`translate(${-size / 2} ${-size / 2}) scale(${s})`} fill="none" stroke={stroke} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+      <path d="M15 18H9" />
+      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" />
+      <circle cx={17} cy={18} r={2} />
+      <circle cx={7} cy={18} r={2} />
+    </g>
+  );
+}
+
+/** The app's driver marker: white-ringed disc with a truck. */
+function DriverPin({ fill = "#0ea5e9", pulse = true }: { fill?: string; pulse?: boolean }) {
   return (
     <g>
-      {/* 3 · candidates: nearest lacks the skill, next is busy */}
+      {pulse ? <circle r={22} fill={fill} opacity={0.22} /> : null}
+      <circle r={15} fill={fill} stroke="#fff" strokeWidth={3} />
+      <Truck size={14} />
+    </g>
+  );
+}
+
+/** Technicians already on site (pulsing green) and tracked equipment (amber). */
+function OnSite() {
+  return (
+    <g>
+      {ON_SITE.map(([x, y], i) => (
+        <g key={`p${i}`} transform={`translate(${x} ${y})`}>
+          <circle className={`lv-pulse lv-pulse--${i % 3}`} r={14} fill="none" stroke="#10b981" strokeWidth={2} />
+          <circle r={6} fill="#10b981" stroke="#04261b" strokeWidth={1.5} />
+        </g>
+      ))}
+      {EQUIPMENT.map(([x, y], i) => (
+        <rect key={`a${i}`} x={x - 6} y={y - 6} width={12} height={12} rx={3} fill="#f59e0b" stroke="#2a1a03" strokeWidth={1.5} />
+      ))}
+    </g>
+  );
+}
+
+function Story() {
+  const [hx, hy] = HOME;
+  const [mx, my] = MARCUS;
+  return (
+    <g>
+      {/* 3 · candidates: Dev is closest but busy, Priya has no gas ticket */}
       <g className="lv-st lv-s-cand">
         <g className="lv-st lv-s-dim">
-          <path d="M1100 650 L1100 565 L1330 565 L1330 425 L1364 451" fill="none" stroke="#64748b" strokeWidth={3} strokeDasharray="7 9" />
-          <path d="M1560 565 L1330 565 L1330 425 L1364 451" fill="none" stroke="#64748b" strokeWidth={3} strokeDasharray="7 9" />
-          <circle cx={1100} cy={650} r={9} fill="#94a3b8" />
-          <circle cx={1560} cy={565} r={9} fill="#94a3b8" />
-          <g className="lv-ov" transform="translate(866 668)">
-            <rect width={226} height={58} rx={12} fill="#0d1b2c" stroke="#2a3f57" />
-            <text x={16} y={24} className="lv-disp" fill="#e2e8f0" fontSize={15} fontWeight={700}>Priya S. · 0.5 km</text>
-            <text x={16} y={44} fill="#fca5a5" fontSize={12.5}>Plumber · no gas ticket</text>
+          <path d={DEV_ROUTE} fill="none" stroke="#94a3b8" strokeWidth={3} strokeDasharray="7 9" strokeLinejoin="round" />
+          <path d={PRIYA_ROUTE} fill="none" stroke="#94a3b8" strokeWidth={3} strokeDasharray="7 9" strokeLinejoin="round" />
+          <g transform={`translate(${DEV[0]} ${DEV[1]})`}>
+            <DriverPin fill="#64748b" pulse={false} />
           </g>
-          <g className="lv-ov" transform="translate(1326 586)">
+          <g transform={`translate(${PRIYA[0]} ${PRIYA[1]})`}>
+            <DriverPin fill="#64748b" pulse={false} />
+          </g>
+          <g className="lv-ov" transform="translate(702 606)">
             <rect width={226} height={58} rx={12} fill="#0d1b2c" stroke="#2a3f57" />
             <text x={16} y={24} className="lv-disp" fill="#e2e8f0" fontSize={15} fontWeight={700}>Dev K. · 0.4 km</text>
             <text x={16} y={44} fill="#fcd34d" fontSize={12.5}>HVAC · busy until 10:30</text>
           </g>
+          <g className="lv-ov" transform="translate(648 194)">
+            <rect width={226} height={58} rx={12} fill="#0d1b2c" stroke="#2a3f57" />
+            <text x={16} y={24} className="lv-disp" fill="#e2e8f0" fontSize={15} fontWeight={700}>Priya S. · 0.5 km</text>
+            <text x={16} y={44} fill="#fca5a5" fontSize={12.5}>Plumber · no gas ticket</text>
+          </g>
         </g>
-        <path d={ROUTE} fill="none" stroke="#38bdf8" strokeWidth={3} strokeDasharray="7 9" />
+        <path d={MARCUS_ROUTE} fill="none" stroke="#38bdf8" strokeWidth={3} strokeDasharray="7 9" strokeLinejoin="round" />
       </g>
 
-      <g transform="translate(1364 451)">
-        <circle className="lv-st lv-s-ring lv-fb" r={170} fill="none" stroke="#10b981" strokeWidth={2} />
-        <circle className="lv-st lv-s-ring lv-s-ring--2 lv-fb" r={170} fill="none" stroke="#10b981" strokeWidth={2} />
-        <circle className="lv-st lv-s-ring lv-s-ring--3 lv-fb" r={170} fill="none" stroke="#10b981" strokeWidth={2} />
+      <g transform={`translate(${hx} ${hy})`}>
+        <circle className="lv-st lv-s-ring lv-fb" r={150} fill="none" stroke="#10b981" strokeWidth={2} />
+        <circle className="lv-st lv-s-ring lv-s-ring--2 lv-fb" r={150} fill="none" stroke="#10b981" strokeWidth={2} />
+        <circle className="lv-st lv-s-ring lv-s-ring--3 lv-fb" r={150} fill="none" stroke="#10b981" strokeWidth={2} />
       </g>
 
-      {/* chosen route; the part already driven disappears as Marcus moves */}
+      {/* chosen route, drawn like the app's live route; the driven part disappears */}
       <g className="lv-st lv-s-chosen">
-        <path d={ROUTE} fill="none" stroke="#0b2c48" strokeWidth={12} strokeLinecap="round" strokeLinejoin="round" />
-        <path className="lv-st lv-s-ahead" d={ROUTE} fill="none" stroke="#38bdf8" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={MARCUS_ROUTE} fill="none" stroke="#04121f" strokeOpacity={0.85} strokeWidth={11} strokeLinecap="round" strokeLinejoin="round" />
+        <path className="lv-st lv-s-ahead" d={MARCUS_ROUTE} fill="none" stroke="#0ea5e9" strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" />
       </g>
 
-      {/* 2 · the customer's home */}
-      <g transform="translate(1364 451)">
+      {/* 2 · the customer's home: the app's destination pin */}
+      <g transform={`translate(${hx} ${hy})`}>
         <g className="lv-st lv-s-pin">
-          <circle r={22} fill="#10b981" opacity={0.22} />
-          <circle r={14} fill="#10b981" />
-          <path d="M-6 1 L0 -5 L6 1 V6 H-6 Z" fill="#fff" />
+          <ellipse cx={0} cy={2} rx={9} ry={3.5} fill="#000" opacity={0.45} />
+          <path d="M0 0 C -4 -8 -15 -14 -15 -26 A15 15 0 1 1 15 -26 C 15 -14 4 -8 0 0 Z" fill="#2563eb" stroke="#fff" strokeWidth={3} strokeLinejoin="round" />
+          <path d="M-6.5 -25 L0 -31 L6.5 -25 V-19 H-6.5 Z" fill="#fff" />
         </g>
       </g>
 
-      {/* Marcus's van */}
+      {/* Marcus's van: the app's driver marker */}
       <g className="lv-st lv-s-vfade">
-        <g transform="translate(740 170)">
+        <g transform={`translate(${mx} ${my})`}>
           <g className="lv-st lv-s-drive">
-            <circle r={30} fill="#38bdf8" opacity={0.16} />
-            <g transform="rotate(90)">
-              <Van fill="#38bdf8" />
-            </g>
+            <circle r={30} fill="#38bdf8" opacity={0.14} />
+            <DriverPin />
           </g>
         </g>
       </g>
 
-      <g className="lv-st lv-s-mchip lv-ov" transform="translate(758 96)">
+      <g className="lv-st lv-s-mchip lv-ov" transform="translate(26 388)">
         <rect width={236} height={60} rx={12} fill="#0d1b2c" stroke="#38bdf8" />
         <text x={16} y={25} className="lv-disp" fill="#fff" fontSize={15.5} fontWeight={700}>Marcus T. · 0.9 km</text>
         <text x={16} y={45} fill="#7dd3fc" fontSize={12.5}>Gas fitter · available now</text>
@@ -146,9 +192,9 @@ function Story() {
       </g>
 
       {/* 2 · work order card */}
-      <g className="lv-ov" transform="translate(1146 150)">
+      <g className="lv-ov" transform="translate(24 24)">
         <g className="lv-st lv-s-card">
-          <path d="M150 204 L214 290" stroke="#2f4a68" strokeWidth={2} strokeDasharray="4 6" />
+          <path d={`M280 204 L${hx - 30} ${hy - 50}`} stroke="#3b5f86" strokeWidth={2} strokeDasharray="4 6" />
           <rect width={304} height={204} rx={16} fill="#0d1b2c" stroke="#2a4664" />
           <text x={20} y={32} fill="#7aa7d1" fontSize={11.5} fontWeight={700} letterSpacing={1.6}>NEW WORK ORDER</text>
           <text x={284} y={32} textAnchor="end" fill="#8aa3bd" fontSize={12}>WO-4821</text>
@@ -166,8 +212,8 @@ function Story() {
       </g>
 
       {/* 4 · technician app */}
-      <path className="lv-st lv-s-link lv-ov" d="M790 165 C 830 210, 860 250, 868 300" fill="none" stroke="#38bdf8" strokeWidth={2} strokeDasharray="4 6" />
-      <g className="lv-ov" transform="translate(780 300) scale(0.82)">
+      <path className="lv-st lv-s-link lv-ov" d={`M${mx + 10} ${my - 24} C ${mx + 40} ${my - 40}, ${mx + 120} ${my - 40}, 318 424`} fill="none" stroke="#38bdf8" strokeWidth={2} strokeDasharray="4 6" />
+      <g className="lv-ov" transform="translate(296 64) scale(0.82)">
         <g className="lv-st lv-s-tphone">
           <rect width={214} height={436} rx={34} fill="#0a1422" stroke="#3a4f68" strokeWidth={2} />
           <rect x={8} y={8} width={198} height={420} rx={27} fill="#0e1b2b" />
@@ -194,8 +240,8 @@ function Story() {
         </g>
       </g>
 
-      {/* 5 · customer's phone: text, then live tracking */}
-      <g className="lv-ov" transform="translate(1395 330) scale(0.82)">
+      {/* 5 · customer's phone: text, then live tracking on the same real map */}
+      <g className="lv-ov" transform="translate(648 132) scale(0.82)">
         <g className="lv-st lv-s-cphone">
           <rect width={222} height={452} rx={34} fill="#0a1422" stroke="#3a4f68" strokeWidth={2} />
           <rect x={8} y={8} width={206} height={436} rx={27} fill="#0d1726" />
@@ -213,16 +259,7 @@ function Story() {
             <text x={24} y={56} fill="#94a3b8" fontSize={11} fontWeight={600}>Prairie Comfort HVAC</text>
             <circle cx={186} cy={52} r={4} fill="#10b981" />
             <text x={178} y={56} textAnchor="end" fill="#6ee7b7" fontSize={10.5} fontWeight={700}>LIVE</text>
-            <rect x={16} y={68} width={190} height={150} rx={14} fill="#0a1320" />
-            <path d="M16 110H206M16 160H206M60 68V218M120 68V218M170 68V218" stroke="#16283d" strokeWidth={5} />
-            <path d="M60 80 V160 H170 L184 172" fill="none" stroke="#38bdf8" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx={184} cy={172} r={7} fill="#10b981" />
-            <g transform="translate(60 84)">
-              <g className="lv-st lv-s-mini">
-                <circle r={9} fill="#38bdf8" opacity={0.25} />
-                <circle r={5} fill="#38bdf8" />
-              </g>
-            </g>
+            <MiniMap />
             <text x={24} y={246} fill="#cbd5e1" fontSize={12.5}>Marcus is on the way</text>
             <text className="lv-st lv-s-eta3 lv-disp" x={24} y={284} fill="#fff" fontSize={36} fontWeight={800}>3 min</text>
             <text className="lv-st lv-s-eta2 lv-disp" x={24} y={284} fill="#fff" fontSize={36} fontWeight={800}>2 min</text>
@@ -238,6 +275,36 @@ function Story() {
             <text x={158} y={387} textAnchor="middle" fill="#04261b" fontSize={14} fontWeight={700}>Call</text>
           </g>
         </g>
+      </g>
+    </g>
+  );
+}
+
+/** The customer's tracking page map: a crop of the same real map, same route, same van. */
+function MiniMap() {
+  const [hx, hy] = HOME;
+  const [mx, my] = MARCUS;
+  return (
+    <g>
+      <defs>
+        <clipPath id="lv-mini-clip">
+          <rect x={16} y={68} width={190} height={150} rx={14} />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#lv-mini-clip)">
+        <rect x={16} y={68} width={190} height={150} fill="#070b12" />
+        <svg x={16} y={68} width={190} height={150} viewBox="40 250 620 490" preserveAspectRatio="xMidYMid slice">
+          <image href={MAP_IMAGE} x={0} y={0} width={MAP_W} height={MAP_H} />
+          <path d={MARCUS_ROUTE} fill="none" stroke="#04121f" strokeOpacity={0.85} strokeWidth={22} strokeLinecap="round" strokeLinejoin="round" />
+          <path className="lv-st lv-s-ahead" d={MARCUS_ROUTE} fill="none" stroke="#0ea5e9" strokeWidth={12} strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={hx} cy={hy} r={20} fill="#2563eb" stroke="#fff" strokeWidth={6} />
+          <g transform={`translate(${mx} ${my})`}>
+            <g className="lv-st lv-s-drive">
+              <circle r={44} fill="#38bdf8" opacity={0.25} />
+              <circle r={24} fill="#0ea5e9" stroke="#fff" strokeWidth={6} />
+            </g>
+          </g>
+        </svg>
       </g>
     </g>
   );

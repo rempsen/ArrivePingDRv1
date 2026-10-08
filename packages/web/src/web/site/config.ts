@@ -185,7 +185,7 @@ export const dispatchStory = {
   title: "From work order to front door,",
   titleMuted: "live.",
   body: "Follow one urgent no-heat call from the moment it's booked to the moment the technician pulls up.",
-  note: "Illustrative example · sample company, people and times",
+  note: "Real ArrivePing map of River Heights, Winnipeg · sample company, people and times",
   steps: [
     { title: "See everyone, live", body: "Technicians, drivers and equipment on one map, updated in real time.", at: 0 },
     { title: "Create the work order", body: "Your own fields: job type, priority, time window, required skills and access notes.", at: 17.5 },

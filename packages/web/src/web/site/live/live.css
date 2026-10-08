@@ -837,7 +837,7 @@
 .site .lv-s-eta2 { animation-name: lv-eta2; }
 .site .lv-s-drive { animation-name: lv-drive; }
 .site .lv-s-vfade { animation-name: lv-vfade; }
-.site .lv-s-ahead { animation-name: lv-ahead; stroke-dasharray: 900 900; }
+.site .lv-s-ahead { animation-name: lv-ahead; stroke-dasharray: 1000 1000; }
 .site .lv-s-mini { animation-name: lv-mini; }
 .site .lv-s-p1 { animation-name: lv-p1; }
 .site .lv-s-p2 { animation-name: lv-p2; }
@@ -869,10 +869,10 @@
 @keyframes lv-track { 0%, 77.5% { opacity: 0; } 79.5%, 100% { opacity: 1; } }
 @keyframes lv-eta3 { 0%, 89.5% { opacity: 1; } 90.5%, 100% { opacity: 0; } }
 @keyframes lv-eta2 { 0%, 89.5% { opacity: 0; } 90.5%, 100% { opacity: 1; } }
-/* Marcus pulls away from rest: d = 0.8 t² (1.6 m/s²) */
-@keyframes lv-drive { 0%, 62.5% { transform: translate(0px, 0px); } 70% { transform: translate(0px, 1.9px); } 77.5% { transform: translate(0px, 7.3px); } 85% { transform: translate(0px, 16.4px); } 92.5% { transform: translate(0px, 29px); } 100% { transform: translate(0px, 45px); } }
+/* Marcus pulls away from rest: d = 0.8 t² (1.6 m/s²), north on Niagara St; px = m / 1.17 (real-map scale) */
+@keyframes lv-drive { 0%, 62.5% { transform: translate(0px, 0px); } 70% { transform: translate(0.09px, -1.62px); } 77.5% { transform: translate(0.34px, -6.23px); } 85% { transform: translate(0.77px, -14.00px); } 92.5% { transform: translate(1.36px, -24.75px); } 100% { transform: translate(2.11px, -38.40px); } }
 @keyframes lv-vfade { 0% { opacity: 0; } 2.5%, 97.5% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes lv-ahead { 0%, 62.5% { stroke-dashoffset: 0; } 70% { stroke-dashoffset: -1.9; } 77.5% { stroke-dashoffset: -7.3; } 85% { stroke-dashoffset: -16.4; } 92.5% { stroke-dashoffset: -29; } 100% { stroke-dashoffset: -45; } }
+@keyframes lv-ahead { 0%, 62.5% { stroke-dashoffset: 0; } 70% { stroke-dashoffset: -1.62; } 77.5% { stroke-dashoffset: -6.24; } 85% { stroke-dashoffset: -14.02; } 92.5% { stroke-dashoffset: -24.79; } 100% { stroke-dashoffset: -38.46; } }
 @keyframes lv-mini { 0%, 79.5% { transform: translate(0px, 0px); } 100% { transform: translate(0px, 6px); } }
 @keyframes lv-p1 { 0% { transform: scaleX(0); } 17.5%, 100% { transform: scaleX(1); } }
 @keyframes lv-p2 { 0%, 17.5% { transform: scaleX(0); } 35%, 100% { transform: scaleX(1); } }
