@@ -1,7 +1,7 @@
 ---
 title: "Become the Preferred Provider: How Loyalty Cuts Customer Acquisition Cost"
 slug: "preferred-provider-lower-customer-acquisition-cost"
-description: "Repeat customers and referrals cost far less than new ones. The data on loyalty, waiting and texting, plus a playbook for becoming the provider customers call first."
+description: "Repeat customers and referrals cost far less than new ones. The data on loyalty, waiting and texting, and a playbook for becoming the provider people call."
 date: "2026-10-09"
 updated: "2026-10-09"
 author: "Dan Rosenblat"
