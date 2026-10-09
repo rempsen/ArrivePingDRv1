@@ -119,3 +119,6 @@ shot.png
 .env.eas
 .env.asc
 .env.asc2
+
+# Rendered by the dockercompose provider; contains the Vercel AI Gateway key
+infra/terraform/envs/local/nvc360-v4/

@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-# Install from the workspace root so root-level deps resolve for packages/web.
-(cd /repo && bun install)
+# Dependencies are installed by the `deps` service, which this service waits on
+# via depends_on (service_completed_successfully) in compose.yaml.tftpl.
 
 # Postgres may still be starting; retry migrations briefly before giving up.
 tries=0

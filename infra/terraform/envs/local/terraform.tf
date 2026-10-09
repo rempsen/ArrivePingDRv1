@@ -9,5 +9,5 @@ terraform {
 
 # Default configuration using local Docker instance
 provider "dockercompose" {
-  project_directory = path.module
+  project_directory = abspath(path.module)
 }
