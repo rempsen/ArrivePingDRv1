@@ -353,11 +353,6 @@ export const pricing = {
   titleMuted: "Each driver costs less as you grow.",
   body: "Every plan includes the dispatch board, the technician app and live customer arrival pages. Each rate applies only to the drivers in its band, so your bill never jumps when you grow into the next tier.",
   note: "All prices in US dollars, billed monthly.",
-  ladder: [
-    { label: "Dispatcher + drivers 1–2", price: "Included in Starter" },
-    { label: "Drivers 3–29", price: "$30 each" },
-    { label: "Drivers 30+", price: "$25 each" },
-  ],
   tiers: [
     {
       name: "Starter",

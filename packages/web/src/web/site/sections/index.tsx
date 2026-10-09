@@ -209,15 +209,6 @@ export function Pricing() {
           })}
         </div>
 
-        <dl className="ladder" data-reveal="" aria-label="Price per driver">
-          {pricing.ladder.map((r) => (
-            <div key={r.label} className="ladder__step">
-              <dt>{r.label}</dt>
-              <dd>{r.price}</dd>
-            </div>
-          ))}
-        </dl>
-
         <div className="estimator" data-reveal="">
           <div className="estimator__input">
             <label htmlFor="estimator-drivers" className="estimator__label">
