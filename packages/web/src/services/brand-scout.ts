@@ -37,6 +37,9 @@ import { fetchGoogleReviewMentions, googlePlacesAvailable } from "./review-menti
 
 export interface BrandProposal {
   website: string;
+  // The business's own name as written on the site (JSON-LD name, else the
+  // model's read of the header/footer). Pre-fills "Company name" on signup.
+  companyName: string | null;
   primaryColor: string | null;
   accentColor: string | null;
   logoUrl: string | null; // hosted on our storage (absolute), ready for emails
@@ -863,6 +866,10 @@ const VisionSchema = z.object({
 const INDUSTRY_ID_LIST = INDUSTRY_LABELS.map((i) => i.id) as [string, ...string[]];
 
 const TextSchema = z.object({
+  companyName: z
+    .string()
+    .describe("The business's official name as it writes it (header, footer, copyright line) — no tagline, no city suffix unless part of the name, no 'Welcome to'.")
+    .nullable(),
   companyDescription: z
     .string()
     .describe(
@@ -971,6 +978,7 @@ export async function scoutBrand(
   const warnings: string[] = [];
   const empty: BrandProposal = {
     website,
+    companyName: null,
     primaryColor: null,
     accentColor: null,
     logoUrl: null,
@@ -1176,7 +1184,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
   const reviews = googlePlacesAvailable()
     ? await fetchGoogleReviewMentions({
         name: bizName,
-        address: text?.address ?? structured?.address ?? null,
+        address: pickAddress(text?.address, structured?.address),
         area: text?.serviceArea ?? structured?.areaServed ?? null,
         website: finalUrl,
       }).catch(() => null)
@@ -1189,6 +1197,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
 
   return {
     website: finalUrl,
+    companyName: cleanCompanyName(text?.companyName ?? structured?.name ?? null),
     primaryColor: normHex(vision?.primaryColor),
     accentColor: normHex(vision?.accentColor),
     logoUrl: hosted?.url ?? null,
@@ -1207,7 +1216,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     serviceArea: clamp(text?.serviceArea ?? structured?.areaServed ?? null, 300),
     services,
     hours: text?.hours ?? structured?.hours ?? null,
-    address: text?.address ?? structured?.address ?? null,
+    address: pickAddress(text?.address, structured?.address),
     email: text?.email ?? structured?.email ?? null,
     phone: formatPhone(text?.phone ?? structured?.phone ?? null),
     socials,
@@ -1226,6 +1235,28 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     excerpts,
     warnings,
   };
+}
+
+/** A JSON-LD PostalAddress with a street number beats the model's read of
+ * the page ("Near Polo Park, Winnipeg"); otherwise whichever one actually
+ * has a street number; otherwise whatever we've got. */
+function pickAddress(fromText: string | null | undefined, fromLd: string | null | undefined): string | null {
+  const t = fromText?.trim() || null;
+  const l = fromLd?.trim() || null;
+  if (l && /\d/.test(l)) return l;
+  if (t && /\d/.test(t)) return t;
+  return t ?? l;
+}
+
+/** "Acme HVAC | Winnipeg's #1 Furnace Repair" → "Acme HVAC"; junk → null. */
+function cleanCompanyName(raw: string | null): string | null {
+  if (!raw) return null;
+  let n = raw.replace(/\s+/g, " ").trim();
+  n = n.split(/\s[|–—]\s|\s-\s(?=[A-Z])/)[0]!.trim();
+  n = n.replace(/^(welcome to|home)\s+/i, "").replace(/[.,;:]+$/, "").trim();
+  if (n.length < 2 || n.length > 120) return null;
+  if (/^(home|welcome|website|untitled)$/i.test(n)) return null;
+  return n;
 }
 
 function hostOf(u: string): string {

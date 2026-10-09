@@ -76,6 +76,9 @@ export const websiteUrlSchema = z.preprocess(
 /** Terminology + footer details the AI scout proposes, all optional. */
 export const BrandProposal = z
   .object({
+    // The business's own name as the scout read it off the site. Pre-fills
+    // the signup form; the admin-reviewed value arrives as the top-level `name`.
+    companyName: shortText("Company name", 200).nullable(),
     primaryColor: hexColor("Primary colour").nullable(),
     accentColor: hexColor("Accent colour").nullable(),
     // Rendered in an <img src> in-app AND in email headers.
@@ -580,7 +583,11 @@ export async function provisionCompany(
     email: str(brand.email, String(b.contactEmail ?? "").trim()),
     phone: formatPhone(str(brand.phone, String(b.phone ?? "").trim())) ?? "",
     website: str(b.website),
-    address: str(brand.address, undefined as any) || undefined,
+    // Explicit "" when unknown — leaving it undefined falls through to the
+    // column's demo default ("423 Main Street, Winnipeg"), which then showed
+    // up on real tenants' customer notifications and made the onboarding
+    // chat think the address was already captured.
+    address: str(brand.address),
     logo: str(brand.logoUrl),
     brandColor: str(brand.primaryColor, "#06B6D4"),
     accentColor: str(brand.accentColor),

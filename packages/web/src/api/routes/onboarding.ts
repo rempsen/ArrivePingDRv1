@@ -460,7 +460,11 @@ single next most important thing, nothing else, then stop typing.
 This ONE conversation has TWO parts, back to back, in this order:
 
 PART 1 — BRAND/PROFILE GAPS. Close whatever the scrape couldn't fill:
-industry confirmation, terminology, tagline, service area.
+industry confirmation, terminology, tagline, service area — plus hours,
+phone, address or contact email if any of those read "(not set …)" below.
+The admin already reviewed name/phone/address/email on the signup form, so
+anything blank there was skipped on purpose or unknown: ask once, briefly,
+save it with update_brand_profile, and move on if they wave it off.
 
 PART 2 — QUALIFYING QUESTIONS. Once Part 1's essentials are settled, ask a
 focused round of 5-10 qualifying questions so ArrivePing understands how this
@@ -626,9 +630,10 @@ profile, do NOT ask for any of it again; use it to sound informed and to
 anchor questions:
 - About the business: ${snap.website.description || "(no description captured)"}
 - Services they advertise: ${snap.website.services.length ? snap.website.services.join("; ") : "(none captured — worth asking what their top 3-5 services are and adding them with add_catalog_item)"}
-- Hours: ${snap.website.hours || "(not found)"}
-- Address: ${snap.website.address || "(not found)"}
-- Contact: ${[snap.website.phone, snap.website.email].filter(Boolean).join(", ") || "(not found)"}
+- Hours: ${snap.website.hours || "(not set — ask once in Part 1, save with update_brand_profile)"}
+- Address: ${snap.website.address || "(not set — ask once in Part 1, save with update_brand_profile)"}
+- Phone: ${snap.website.phone || "(not set — ask once in Part 1, save with update_brand_profile)"}
+- Contact email: ${snap.website.email || "(not set — ask once in Part 1, save with update_brand_profile)"}
 - Social profiles found: ${snap.website.socials.length ? snap.website.socials.join(", ") : "(none)"}
 ${snap.website.excerpts ? `\nTHEIR OWN WORDS (verbatim excerpts from their site — quote or paraphrase these when it helps you sound like you actually read their site; never contradict them):\n<<<\n${snap.website.excerpts}\n>>>` : snap.website.url ? "\n(We have no stored page text for their site yet. If they mention the site changed, or the facts above look thin, offer ONCE to re-read it with rescan_website — it only fills in blanks, never overwrites what they typed.)" : ""}
 
@@ -665,7 +670,7 @@ correction like that — it reads like you weren't listening.`;
       const tools = {
         update_brand_profile: tool({
           description:
-            "Update the tenant's brand profile — terminology, tagline, business description, colors, hours, or service area. Only pass the fields the user actually gave you.",
+            "Update the tenant's brand profile — terminology, tagline, business description, colors, hours, service area, or the business's phone / address / contact email. Only pass the fields the user actually gave you.",
           inputSchema: z.object({
             tagline: z.string().max(300).optional(),
             description: z.string().max(1_000).optional(),
@@ -679,6 +684,9 @@ correction like that — it reads like you weren't listening.`;
             accentColor: z.string().max(9).optional(),
             hours: z.string().max(300).optional(),
             serviceArea: z.string().max(300).optional(),
+            phone: z.string().max(40).optional(),
+            address: z.string().max(300).optional(),
+            email: z.string().max(200).optional(),
           }),
           execute: async (input) => {
             const patch: Record<string, unknown> = {};
@@ -686,6 +694,7 @@ correction like that — it reads like you weren't listening.`;
             for (const [key, val] of Object.entries(input)) {
               if (typeof val !== "string" || !val.trim()) continue;
               if ((key === "primaryColor" || key === "accentColor") && !hex.test(val.trim())) continue;
+              if (key === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim())) continue;
               patch[key] = val.trim();
             }
             if (Object.keys(patch).length === 0) return { updated: [] };
