@@ -24,6 +24,7 @@ import { tdb } from "../api/database/tenant";
 import { usersForCompany } from "../api/lib/memberships";
 import { log } from "../api/lib/logger";
 import { scoutBrand, type BrandProposal } from "./brand-scout";
+import { saveSiteCrawl } from "./site-crawl";
 import { forwardGeocode } from "./geocode";
 import { INDUSTRY_LABELS } from "./industry-presets";
 
@@ -102,6 +103,13 @@ const websiteSource: EnrichmentSource = {
   async run({ website, companyId }) {
     if (!website) return null;
     const p: BrandProposal = await scoutBrand(website, companyId);
+    // Same crawl store as "Re-scan website": the newest site_crawls row feeds
+    // the concierge and AI writers, so a check keeps it fresh too. Best-effort.
+    try {
+      await saveSiteCrawl(companyId, p as unknown as Record<string, any>, "rescan");
+    } catch (e) {
+      console.error("[company-check] site-crawl save failed", e);
+    }
     return {
       source: "Website",
       phone: p.phone,

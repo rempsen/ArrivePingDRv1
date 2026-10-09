@@ -109,6 +109,7 @@ export function CompanyCheckCard() {
           </h3>
           <p className="mt-1 text-xs text-white/50">
             Re-reads your website{result?.sources.length ? ` (${result.sources.join(" + ")})` : ""} and compares it with what's here — phone, address, socials, services. You pick what to apply; nothing changes on its own.
+            Unlike “Re-scan website” above (which only fills blanks), this also shows where the site <em>differs</em> from your profile.
           </p>
         </div>
         <button
