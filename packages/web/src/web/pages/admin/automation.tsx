@@ -389,7 +389,7 @@ export default function AutomationPage() {
           <DialogPanel
             onClose={() => setShowNew(false)}
             label="New custom rule"
-            className="w-full max-w-md rounded-2xl border border-white/10 bg-ink-2 p-5 shadow-2xl"
+            className="w-full max-w-3xl rounded-2xl border border-white/10 bg-ink-2 p-5 shadow-2xl"
           >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-display text-lg font-bold text-white">New custom rule</h3>

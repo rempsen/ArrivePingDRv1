@@ -692,7 +692,7 @@ function ChatDrawer({ tech, onClose }: { tech: any; onClose: () => void }) {
 
   return (
     <div className="absolute inset-0 z-30 flex justify-end bg-black/40 backdrop-blur-sm">
-      <div className="flex h-full w-full max-w-md flex-col border-l border-white/10 bg-ink-2 shadow-2xl">
+      <div className="flex h-full w-full max-w-3xl flex-col border-l border-white/10 bg-ink-2 shadow-2xl">
         <div className="flex items-center gap-3 border-b border-white/5 p-4">
           <TechAvatar
             name={tech.name}

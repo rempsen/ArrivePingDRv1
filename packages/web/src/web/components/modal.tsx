@@ -35,13 +35,21 @@ export function Modal({
   const { panelRef, dialogProps, titleId } = useDialog({ open, onClose });
 
   if (!open) return null;
-  // "xl" is the landscape read-only detail view (job detail): wide enough for
-  // a 3-column grid on a laptop, still a full-width sheet on phones.
+  // Landscape-first (Dan/Joel/Gregor, 2026-10-09): every dialog should use as
+  // much of the screen as it sensibly can so people see the most information
+  // at a glance. On phones every size is still a full-width bottom sheet.
+  //   sm  — confirm / import prompts: stays compact (a yes/no shouldn't sprawl).
+  //   md  — default forms: ~4xl wide.
+  //   lg  — the big editors (work order, permissions, embed): ~7xl.
+  //   xl  — detail / report views: 96rem.
+  // Height follows the content up to 94vh: a long form (work order, catalog
+  // item) fills the screen, a two-field prompt doesn't pad itself with empty
+  // space. Width is where the room is, so that's what every size claims.
   const maxW =
-    size === "sm" ? "max-w-sm"
-    : size === "lg" ? "max-w-2xl"
-    : size === "xl" ? "max-w-5xl"
-    : "max-w-lg";
+    size === "sm" ? "max-w-md"
+    : size === "lg" ? "max-w-7xl"
+    : size === "xl" ? "max-w-[96rem]"
+    : "max-w-4xl";
 
   return createPortal(
     // z-[1050]: must sit above slide-in side drawers (z-[1000] — Directory's
@@ -58,7 +66,7 @@ export function Modal({
       <div
         ref={panelRef}
         {...dialogProps}
-        className={`relative z-10 flex max-h-[92vh] w-full ${maxW} flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-2 shadow-2xl outline-none sm:rounded-2xl`}
+        className={`relative z-10 flex max-h-[94vh] w-full ${maxW} flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-2 shadow-2xl outline-none sm:mx-4 sm:rounded-2xl`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-white/5 px-5 py-4">
           <div className="min-w-0">

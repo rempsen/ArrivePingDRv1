@@ -229,7 +229,7 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" {...dismiss(onClose)}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true" />
-      <DialogPanel onClose={onClose} label={`Notification settings: ${label}`} className="relative h-full w-full max-w-2xl overflow-y-auto border-l border-white/10 bg-ink-2 p-6 shadow-2xl">
+      <DialogPanel onClose={onClose} label={`Notification settings: ${label}`} className="relative h-full w-full max-w-4xl overflow-y-auto border-l border-white/10 bg-ink-2 p-6 shadow-2xl">
         <div className="mb-5 flex items-start justify-between">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-brand">Event</div>
@@ -332,7 +332,7 @@ function MessageComposer({
       <DialogPanel
         onClose={onClose}
         label="Edit message"
-        className="flex w-full max-w-4xl flex-col rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl"
+        className="flex max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl border border-white/10 bg-[#0d1117] shadow-2xl"
         style={{ height: "min(88vh, 680px)" }}
       >
         {/* header */}

@@ -578,7 +578,7 @@ function TemplateLibrary({ onPick, onClose }: { onPick: (design: any[], subject?
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-6" {...dismiss(onClose)}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true" />
-      <DialogPanel onClose={onClose} label="Email template library" className="relative max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-ink-2 p-6 shadow-2xl">
+      <DialogPanel onClose={onClose} label="Email template library" className="relative max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-ink-2 p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-white">Template library</h3>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"><X className="h-5 w-5" /></button>
@@ -611,7 +611,7 @@ function SaveTemplateModal({ onSave, saving, onClose }: { onSave: (name: string,
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-6" {...dismiss(onClose)}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden="true" />
-      <DialogPanel onClose={onClose} label="Save as reusable template" className="relative w-full max-w-md rounded-2xl border border-white/10 bg-ink-2 p-6 shadow-2xl">
+      <DialogPanel onClose={onClose} label="Save as reusable template" className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-ink-2 p-6 shadow-2xl">
         <h3 className="mb-4 text-lg font-bold text-white">Save as reusable template</h3>
         <div className="space-y-3">
           <div>

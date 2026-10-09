@@ -153,44 +153,51 @@ function ServiceModal({ svc, categories, onClose, onDone }: { svc: Svc; categori
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" {...dismiss(onClose)}>
-      <DialogPanel onClose={onClose} label={isEdit ? "Edit service" : "New service"} className="w-full max-w-lg rounded-2xl bg-ink-2 shadow-2xl">
+      <DialogPanel onClose={onClose} label={isEdit ? "Edit service" : "New service"} className="w-full max-w-4xl rounded-2xl bg-ink-2 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
           <h3 className="font-bold text-white">{isEdit ? "Edit service" : "New service"}</h3>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-white/5">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[70vh] space-y-3 overflow-y-auto p-5">
-          <Field label="Name">
-            <input aria-label="Service name" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} placeholder="e.g. Site Visit & Measurement" />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Category">
-              <input
-                aria-label="Category"
-                list="service-categories"
-                value={form.category}
-                onChange={(e) => set("category", e.target.value)}
-                className={inputCls}
-                placeholder="e.g. Installation"
-              />
-              <datalist id="service-categories">
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-              </datalist>
-            </Field>
-            <Field label="Base price ($)">
-              <input aria-label="Base price" type="number" min={0} step="0.01" value={form.basePrice} onChange={(e) => set("basePrice", Number(e.target.value))} className={inputCls} />
+        {/* Landscape layout: name spans two columns next to category/price;
+            duration + image share the next row; description takes the full
+            width. Collapses to a single column on phones. */}
+        <div className="grid max-h-[82vh] gap-3 overflow-y-auto p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="lg:col-span-2">
+            <Field label="Name">
+              <input aria-label="Service name" value={form.name} onChange={(e) => set("name", e.target.value)} className={inputCls} placeholder="e.g. Site Visit & Measurement" />
             </Field>
           </div>
+          <Field label="Category">
+            <input
+              aria-label="Category"
+              list="service-categories"
+              value={form.category}
+              onChange={(e) => set("category", e.target.value)}
+              className={inputCls}
+              placeholder="e.g. Installation"
+            />
+            <datalist id="service-categories">
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </datalist>
+          </Field>
+          <Field label="Base price ($)">
+            <input aria-label="Base price" type="number" min={0} step="0.01" value={form.basePrice} onChange={(e) => set("basePrice", Number(e.target.value))} className={inputCls} />
+          </Field>
           <Field label="Typical duration (minutes)">
             <input aria-label="Duration in minutes" type="number" min={5} step={5} value={form.durationMins} onChange={(e) => set("durationMins", Number(e.target.value))} className={inputCls} />
           </Field>
-          <Field label="Image URL (optional)">
-            <input aria-label="Image URL" value={form.image} onChange={(e) => set("image", e.target.value)} className={inputCls} placeholder="https://…" />
-          </Field>
-          <Field label="Description">
-            <textarea aria-label="Description" value={form.description} onChange={(e) => set("description", e.target.value)} rows={3} className={inputCls} />
-          </Field>
+          <div className="sm:col-span-1 lg:col-span-3">
+            <Field label="Image URL (optional)">
+              <input aria-label="Image URL" value={form.image} onChange={(e) => set("image", e.target.value)} className={inputCls} placeholder="https://…" />
+            </Field>
+          </div>
+          <div className="sm:col-span-full">
+            <Field label="Description">
+              <textarea aria-label="Description" value={form.description} onChange={(e) => set("description", e.target.value)} rows={4} className={inputCls} />
+            </Field>
+          </div>
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-white/5 px-5 py-4">
           {save.isError && <span className="mr-auto text-xs text-red-400">{(save.error as Error).message}</span>}

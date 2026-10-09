@@ -1074,7 +1074,7 @@ export function WorkOrderModal({
         </div>
       }
     >
-      <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
+      <div className="grid gap-x-5 gap-y-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 
         {/* ── Core fields ── */}
         <Field
@@ -1213,7 +1213,7 @@ export function WorkOrderModal({
         </Field>
 
         {/* ── Address autocomplete ── */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full xl:col-span-2">
           <Field label="Address">
             <AddressAutocomplete
               value={address}
@@ -1406,14 +1406,14 @@ export function WorkOrderModal({
             className={inputCls} />
         </Field>
 
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full xl:col-span-2">
           <Field label="Notes (customer-facing)">
             <textarea aria-label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)}
               rows={3} placeholder="Additional details visible to the customer…" className={inputCls} />
           </Field>
         </div>
 
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full xl:col-span-2">
           <Field label="Staff Notes to Driver (access codes, special instructions — not shown to customer)">
             <textarea aria-label="Staff Notes" value={staffNotes} onChange={(e) => setStaffNotes(e.target.value)}
               rows={3} placeholder="E.g. Access code 4521. Ring bell twice. Park on side street…" className={`${inputCls} border-amber-500/40 focus:border-amber-500`} />
@@ -1422,7 +1422,7 @@ export function WorkOrderModal({
 
         {/* Driver Field Notes (read-only — written by tech on-site) */}
         {!!(editBooking as any)?.driverNotes && (
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-full">
             <Field label="Driver Field Notes (written on-site by technician)">
               <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-3 py-3 text-sm text-emerald-300 whitespace-pre-wrap leading-relaxed">
                 {(editBooking as any).driverNotes}
@@ -1433,7 +1433,7 @@ export function WorkOrderModal({
 
         {/* Time & Mileage — auto-tracked from the driver app (Start Driving, geofence arrival/departure) */}
         {isEdit && editBooking?.enrouteAt && (
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-full">
             <TimeMileagePanel booking={editBooking} />
           </div>
         )}
@@ -1442,7 +1442,7 @@ export function WorkOrderModal({
             tier per option category (Good/Better/Best) and e-sign; price deltas
             roll into this job's line items automatically once submitted. */}
         {isEdit && editBooking?.publicToken && (
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-full">
             <button
               type="button"
               onClick={() => {
@@ -1457,7 +1457,7 @@ export function WorkOrderModal({
         )}
 
         {/* ── Catalog line items ── */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full">
           <CatalogLineItems
             items={catalogItems}
             lineItems={lineItems.filter((l) => l.kind !== "unit")}
@@ -1469,7 +1469,7 @@ export function WorkOrderModal({
         </div>
 
         {/* ── Per-unit line items (charge + tech pay by measured unit) ── */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full">
           <UnitLineItems
             lines={lineItems.filter((l) => l.kind === "unit")}
             workerNoun="Technician"
@@ -1481,12 +1481,12 @@ export function WorkOrderModal({
         </div>
 
         {/* ── Charges (flat fee / hourly / per-unit) ── */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full">
           <ChargesEditor charges={charges} onChange={setCharges} />
         </div>
 
         {/* ── Price preview ── */}
-        <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="sm:col-span-full rounded-xl border border-white/10 bg-white/[0.03] p-4">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-cyan-400">
             Price preview
           </div>
@@ -1547,7 +1547,7 @@ export function WorkOrderModal({
         </div>
 
         {/* ── Custom fields section ── */}
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-full">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-white">Custom fields</p>

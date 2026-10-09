@@ -462,7 +462,7 @@ export function TemplateRuleDialog({
       <DialogPanel
         onClose={onClose}
         label={existing ? `Edit ${template.name}` : `Set up ${template.name}`}
-        className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-2xl border border-white/10 bg-ink-2 shadow-2xl"
+        className="flex max-h-[94vh] w-full max-w-4xl flex-col rounded-2xl border border-white/10 bg-ink-2 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/5 p-5 pb-4">
           <div>

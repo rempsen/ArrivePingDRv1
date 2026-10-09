@@ -1311,7 +1311,7 @@ function AssignModal({ booking, onClose, onDone }: any) {
       className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
       {...dismiss(onClose)}
     >
-      <DialogPanel onClose={onClose} label={`Assign ${noun.toLowerCase()}`} className="w-full max-w-md rounded-2xl border border-white/10 bg-ink-2 shadow-2xl">
+      <DialogPanel onClose={onClose} label={`Assign ${noun.toLowerCase()}`} className="flex max-h-[94vh] w-full max-w-3xl flex-col rounded-2xl border border-white/10 bg-ink-2 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
           <div>
             <h3 className="font-bold text-white">Assign {noun.toLowerCase()}</h3>
@@ -1344,7 +1344,7 @@ function AssignModal({ booking, onClose, onDone }: any) {
           </div>
         )}
 
-        <div className="max-h-[55vh] space-y-2 overflow-y-auto p-4">
+        <div className="max-h-[78vh] space-y-2 overflow-y-auto p-4">
           {riders.isLoading ? (
             <p className="py-8 text-center text-sm text-slate-500">Loading…</p>
           ) : list.length === 0 ? (
