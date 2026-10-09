@@ -1,0 +1,100 @@
+x-workspace-volumes: &workspace-volumes
+  - ${repo_root}:/repo
+  - node-modules:/repo/node_modules
+  - web-node-modules:/repo/packages/web/node_modules
+  - desktop-node-modules:/repo/packages/desktop/node_modules
+  - mobile-node-modules:/repo/packages/mobile/node_modules
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    # The app connects with ssl: "require" (built for Supabase), so serve TLS
+    # using the self-signed cert bundled in the Debian image.
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+      - -c
+      - ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_local
+      POSTGRES_DB: nvc360
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ${module_dir}/init-roles.sql:/docker-entrypoint-initdb.d/init-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nvc360"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # One-shot: installs workspace dependencies into the shared volumes and exits,
+  # so web and studio never race each other over node_modules. Installs from the
+  # workspace root so root-level deps (`postgres`, `stripe`, ...) resolve for
+  # packages/web, as in the Dockerfile.
+  deps:
+    image: oven/bun:alpine
+    working_dir: /repo
+    command: ["bun", "install"]
+    volumes: *workspace-volumes
+
+  web:
+    image: oven/bun:alpine
+    working_dir: /repo/packages/web
+    entrypoint: ["/bin/sh", "/repo/dev/docker/entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      deps:
+        condition: service_completed_successfully
+    ports:
+      - "${web_port}:${web_port}"
+    environment:
+      # Migrations run as the owner; the app connects as the RLS-enforced
+      # app_runtime role, with app_system for pre-tenant lookups.
+      SUPABASE_MIGRATION_URL: postgres://postgres:postgres_local@db:5432/nvc360
+      DATABASE_URL: postgres://app_runtime:app_runtime_local@db:5432/nvc360
+      DATABASE_SYSTEM_URL: postgres://app_system:app_system_local@db:5432/nvc360
+      BETTER_AUTH_URL: ${app_url}
+      REDIS_URL: redis://redis:6379
+      # AI Gateway (agent/gateway.ts). Unset AI_GATEWAY_BASE_URL = Vercel's.
+      AI_GATEWAY_API_KEY: ${ai_gateway_api_key}
+    volumes: *workspace-volumes
+
+  # Drizzle Studio (https://local.drizzle.studio, which talks to this port).
+  # Connects as the owner role, so it bypasses RLS and shows every tenant.
+  studio:
+    image: oven/bun:alpine
+    restart: unless-stopped
+    working_dir: /repo/packages/web
+    command: ["bun", "db:studio"]
+    depends_on:
+      db:
+        condition: service_healthy
+      deps:
+        condition: service_completed_successfully
+    ports:
+      - "${studio_port}:${studio_port}"
+    environment:
+      SUPABASE_MIGRATION_URL: postgres://postgres:postgres_local@db:5432/nvc360
+    volumes: *workspace-volumes
+
+volumes:
+  pg-data:
+  node-modules:
+  web-node-modules:
+  desktop-node-modules:
+  mobile-node-modules:
