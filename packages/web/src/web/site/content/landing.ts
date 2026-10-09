@@ -69,7 +69,7 @@ export type LandingPage = {
 /* ------------------------------------------------------------------ */
 
 const PRICE_LINE =
-  "ArrivePing starts at $49 USD a month, which includes one dispatch user and two drivers. Drivers 3–10 are $30 each, drivers 11–29 are $27 each and every driver from 30 on is $25, billed monthly. The dispatcher license is included in every plan.";
+  "ArrivePing starts at $49 USD a month, which includes one dispatch user and two drivers. Drivers 3–29 are $30 each and every driver from 30 on is $25, billed monthly. The dispatcher license is included in every plan.";
 
 const TRACKING_FAQ = {
   q: "Do customers need an app to track the technician?",
@@ -379,7 +379,7 @@ const pricingPage: LandingPage = {
   meta: {
     title: "ArrivePing Pricing: $49/mo, Graduated Per-Driver Rates",
     description:
-      "ArrivePing pricing in USD: Starter $49/mo with 1 dispatcher + 2 drivers; drivers 3–10 $30, 11–29 $27, 30+ $25 each. Live tracking, auto-dispatch and tech app in every plan.",
+      "ArrivePing pricing in USD: Starter $49/mo with 1 dispatcher + 2 drivers; drivers 3–29 $30, 30+ $25 each. Live tracking, auto-dispatch and tech app in every plan.",
   },
   eyebrow: "Pricing",
   h1: "Simple, public pricing that gets cheaper per driver as you grow.",
@@ -469,7 +469,7 @@ const stSources = [
   { label: "ServiceTitan dispatch notifications (help centre)", href: "https://help.servicetitan.com/docs/enable-text-and-email-dispatch-notifications" },
 ];
 
-const AP_PRICE_CELL = { text: "$49/mo incl. 1 dispatcher + 2 drivers; then $30, $27, $25 per driver (graduated)", href: "/pricing" };
+const AP_PRICE_CELL = { text: "$49/mo incl. 1 dispatcher + 2 drivers; then $30 per driver, $25 from driver 30 (graduated)", href: "/pricing" };
 
 const jobber: LandingPage = {
   path: "/compare/jobber",
