@@ -113,7 +113,7 @@ ArrivePing isn’t a generic project management tool or an overcomplicated enter
 
 - **Easy for field teams to use** (iOS and Android technician app with one-tap accept and on-the-way status)
 - **Powerful for managers** (live map, dispatch board, and automatic assignment you can override)
-- **Simple, graduated pricing** (from $49 USD a month for the Starter plan, which includes the first driver; drivers 2–10 are $30 each, 11–30 are $27 each, and 31+ are $25 each—see [pricing](/pricing))
+- **Simple, graduated pricing** (from $49 USD a month for the Starter plan, which includes one dispatch user and two drivers; drivers 3–10 are $30 each, 11–29 are $27 each, and 30+ are $25 each—see [pricing](/pricing))
 - **Works alongside your existing tools** (exports, webhooks, Zapier and Make; no need to rip-and-replace your accounting or CRM)
 - 🇨🇦 **Built in Winnipeg** by NVC360, from running 800+ field technicians
 

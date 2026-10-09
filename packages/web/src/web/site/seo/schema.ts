@@ -103,7 +103,7 @@ export function softwareApplication(): JsonLd {
       url: `${SITE_URL}/pricing`,
       price: String(STARTER_PRICE),
       priceCurrency: "USD",
-      description: `Starter: $${STARTER_PRICE} per month including the first driver. Graduated rates for added drivers: ${bandText} per driver per month.`,
+      description: `Starter: $${STARTER_PRICE} per month including one dispatch user and two drivers. Graduated rates for added drivers: ${bandText} per driver per month.`,
       priceSpecification: {
         "@type": "UnitPriceSpecification",
         price: String(STARTER_PRICE),

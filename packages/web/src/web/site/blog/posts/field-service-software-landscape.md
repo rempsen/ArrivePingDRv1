@@ -52,7 +52,7 @@ Imagine a customer receiving an automatic on-my-way text with a [live tracking](
 
 Live technician visibility
 
-ArrivePing focuses on the job lifecycle, customer communication, and dispatch, and works alongside the accounting and CRM tools you already use through exports, webhooks, Zapier and Make. Pricing is published and graduated: from $49 USD a month for Starter, which includes the first driver; drivers 2–10 are $30 each, 11–30 are $27 each, and 31+ are $25 each. Details are on the [pricing page](/pricing).
+ArrivePing focuses on the job lifecycle, customer communication, and dispatch, and works alongside the accounting and CRM tools you already use through exports, webhooks, Zapier and Make. Pricing is published and graduated: from $49 USD a month for Starter, which includes one dispatch user and two drivers; drivers 3–10 are $30 each, 11–29 are $27 each, and 30+ are $25 each. Details are on the [pricing page](/pricing).
 
 ## Conclusion: The Future of Field Service Is Here
 
