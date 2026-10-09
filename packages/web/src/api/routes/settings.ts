@@ -8,6 +8,9 @@ import { putObject } from "../lib/storage";
 import type { AppEnv } from "../env";
 import { rescanWebsite } from "../../services/rescan";
 import { loadSiteCrawl } from "../../services/site-crawl";
+import { z } from "zod";
+import { jsonBody } from "../lib/validate";
+import { runCompanyCheck, applyCompanyCheck } from "../../services/company-check";
 
 type SessionUser = { id: string; name?: string };
 
@@ -26,6 +29,10 @@ async function getOrInit(c: any) {
   }
   return row!;
 }
+
+const CheckApplyBody = z.object({
+  picks: z.array(z.object({ key: z.string().min(1).max(120), value: z.string().min(1).max(4000) })).max(100),
+});
 
 export const settingsRoutes = new Hono<AppEnv>()
   .get("/", requireAuth, async (c) => {
@@ -184,4 +191,32 @@ export const settingsRoutes = new Hono<AppEnv>()
       summary: "Updated company settings",
     });
     return c.json({ settings: updated }, 200);
+  })
+  // ---- Company data check (standard since 2026-10-09) --------------------
+  // Re-reads the tenant's website (+ Apollo when APOLLO_API_KEY is set) and
+  // returns a line-by-line diff against the current profile, socials and
+  // bookable services. Read-only: nothing changes until /check/apply.
+  .post("/check", requireAdmin, async (c) => {
+    try {
+      const result = await runCompanyCheck(tenantId(c));
+      return c.json(result, 200);
+    } catch (e: any) {
+      return c.json({ message: `Company check failed: ${e?.message ?? "unknown error"}` }, 500);
+    }
+  })
+  // Applies ONLY the rows the admin ticked. Each key maps to exactly one
+  // allowed column (see services/company-check.ts) — never a raw patch.
+  .post("/check/apply", requireAdmin, jsonBody(CheckApplyBody), async (c) => {
+    const me = c.get("user") as SessionUser;
+    const { picks } = c.req.valid("json");
+    const result = await applyCompanyCheck(tenantId(c), picks);
+    if (result.applied.length) {
+      await audit({
+        actorId: me?.id, actorName: me?.name, action: "update",
+        entityType: "company_settings", entityId: tenantId(c),
+        summary: `Applied company data check: ${result.applied.join(", ")}`,
+      });
+    }
+    return c.json(result, 200);
   });
+

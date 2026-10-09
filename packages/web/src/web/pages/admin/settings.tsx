@@ -15,6 +15,7 @@ import IntegrationsPage from "./integrations";
 import ApiAccessPage from "./api-access";
 import AuditPage from "./audit";
 import PaymentsSettingsTab from "./payments-settings";
+import { CompanyCheckCard } from "./company-check";
 import {
   DEFAULT_GEOFENCE_RADIUS_M,
   resolveGeofenceRadiusM,
@@ -511,6 +512,9 @@ function CompanySettingsTab() {
               </Field>
             </div>
           </div>
+
+          {/* Company data check — website (+ second source) vs. what's on file */}
+          <CompanyCheckCard />
 
           {/* Categories — shared by Form Builder templates and the Product Catalog */}
           <CategoriesCard />
