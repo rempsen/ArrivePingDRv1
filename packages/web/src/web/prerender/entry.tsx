@@ -90,7 +90,7 @@ Key facts:
 - History: first built for National Interiors, a specialty subcontractor running 800+ field technicians (sold in 2021); NVC360 was founded in late 2023 to rebuild it as a multi-tenant platform
 - Category: field service management (FSM) software; dispatch software; technician and driver tracking; customer arrival notifications ("on-my-way" texts); last-mile delivery dispatch for appointment-based deliveries and installs
 - Markets: Canada and the United States. Pricing is in US dollars.
-- Pricing (USD, monthly): Starter $49 including 1 dispatch user and 2 drivers; drivers 3–10 $30 each; drivers 11–29 $27 each; drivers 30+ $25 each (graduated). Details: ${SITE_URL}/pricing
+- Pricing (USD, monthly): Starter $49 including 1 dispatch user and 2 drivers; drivers 3–29 $30 each; drivers 30+ $25 each (graduated). Details: ${SITE_URL}/pricing
 - Platforms: web dispatch console; technician/driver app for iOS and Android; customer tracking pages in any browser (no customer app)
 - Setup: an AI setup agent builds the workspace from the company's website; most teams dispatch their first job within an hour
 - Integrations and exports: CSV, Excel, PDF, JSON, calendar feeds, webhooks, Zapier, Make, MCP server for AI agents, Google Drive backup

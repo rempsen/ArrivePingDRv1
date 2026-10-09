@@ -68,7 +68,7 @@ The competitive dynamic has shifted. Five years ago, offering real-time tracking
 
 ## The ROI of Respect
 
-The mathematics of addressing this problem are compelling. ArrivePing starts at $49 USD a month for the Starter plan, which includes one dispatch user and two drivers; drivers 3–10 are $30 each. For the five-technician operation above, that works out to $139 a month, or about $1,700 a year. (See [pricing](/pricing) for the full graduated rates, and the [comparison page](/compare) for how that stacks up against other platforms.)
+The mathematics of addressing this problem are compelling. ArrivePing starts at $49 USD a month for the Starter plan, which includes one dispatch user and two drivers; drivers 3–29 are $30 each. For the five-technician operation above, that works out to $139 a month, or about $1,700 a year. (See [pricing](/pricing) for the full graduated rates, and the [comparison page](/compare) for how that stacks up against other platforms.)
 
 Compare that investment against the illustrative costs:
 

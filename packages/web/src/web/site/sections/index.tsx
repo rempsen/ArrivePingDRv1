@@ -151,7 +151,7 @@ export function Audiences() {
 }
 
 /* ---------------- Pricing ---------------- */
-const PRESETS = [2, 5, 10, 11, 29, 30, 50, 100];
+const PRESETS = [2, 5, 10, 20, 29, 30, 50, 100];
 
 export function Pricing() {
   const go = useAnchorNav();
