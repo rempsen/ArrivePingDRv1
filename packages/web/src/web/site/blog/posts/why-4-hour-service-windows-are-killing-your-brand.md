@@ -68,7 +68,7 @@ The competitive dynamic has shifted. Five years ago, offering real-time tracking
 
 ## The ROI of Respect
 
-The mathematics of addressing this problem are compelling. ArrivePing starts at $49 USD a month for the Starter plan, which includes the first driver; drivers 2–10 are $30 each. For the five-technician operation above, that works out to $169 a month, or about $2,000 a year. (See [pricing](/pricing) for the full graduated rates, and the [comparison page](/compare) for how that stacks up against other platforms.)
+The mathematics of addressing this problem are compelling. ArrivePing starts at $49 USD a month for the Starter plan, which includes one dispatch user and two drivers; drivers 3–10 are $30 each. For the five-technician operation above, that works out to $139 a month, or about $1,700 a year. (See [pricing](/pricing) for the full graduated rates, and the [comparison page](/compare) for how that stacks up against other platforms.)
 
 Compare that investment against the illustrative costs:
 
@@ -77,7 +77,7 @@ Compare that investment against the illustrative costs:
 - Administrative overhead: $6,250
 - **Total annual cost of inaction: $631,250**
 
-Even if real-time tracking recovered just 25 percent of these costs, that would be $157,812 in annual benefit against roughly $2,000 in software.
+Even if real-time tracking recovered just 25 percent of these costs, that would be $157,812 in annual benefit against roughly $1,700 in software.
 
 But the financial argument, while compelling, misses the larger point. This isn’t fundamentally about return on investment. It’s about respect. Every four-hour window communicates a message to your customer: “My time is valuable. Yours is not.”
 

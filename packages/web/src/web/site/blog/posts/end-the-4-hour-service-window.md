@@ -146,7 +146,7 @@ Customer service shapes loyalty. After one poor experience, loyalty begins erodi
 
 The investment required to solve this problem is modest compared to the cost of inaction.
 
-Pricing for real-time tracking platforms varies widely by vendor and by how many users you pay for, so compare carefully ([here is how the options stack up](/compare)). ArrivePing, for example, starts at $49 USD a month for the Starter plan, which includes the first driver, with additional drivers priced on a graduated scale ([full pricing](/pricing)).
+Pricing for real-time tracking platforms varies widely by vendor and by how many users you pay for, so compare carefully ([here is how the options stack up](/compare)). ArrivePing, for example, starts at $49 USD a month for the Starter plan, which includes one dispatch user and two drivers, with additional drivers priced on a graduated scale ([full pricing](/pricing)).
 
 The cost of not implementing real-time tracking shows up in places most contractors don’t track:
 

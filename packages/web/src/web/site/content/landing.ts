@@ -69,7 +69,7 @@ export type LandingPage = {
 /* ------------------------------------------------------------------ */
 
 const PRICE_LINE =
-  "ArrivePing starts at $49 USD a month, which includes your first driver. Drivers 2–10 are $30 each, drivers 11–30 are $27 each and every driver from 31 on is $25, billed monthly.";
+  "ArrivePing starts at $49 USD a month, which includes one dispatch user and two drivers. Drivers 3–10 are $30 each, drivers 11–29 are $27 each and every driver from 30 on is $25, billed monthly. The dispatcher license is included in every plan.";
 
 const TRACKING_FAQ = {
   q: "Do customers need an app to track the technician?",
@@ -165,7 +165,7 @@ const fieldService: LandingPage = {
   ],
   faqs: [SETUP_FAQ, PRICE_FAQ, TRACKING_FAQ, HARDWARE_FAQ, TOOLS_FAQ, {
     q: "Is ArrivePing good for small teams?",
-    a: "Yes. Starter is $49 a month for one driver and you can add drivers month to month. Because the rates are graduated, each added driver costs the same or less than the one before.",
+    a: "Yes. Starter is $49 a month for one dispatch user and two drivers, and you can add drivers month to month. Because the rates are graduated, each added driver costs the same or less than the one before.",
   }],
   related: ["/dispatch-software", "/fleet-tracking", "/customer-notifications", "/pricing", "/compare"],
 };
@@ -379,7 +379,7 @@ const pricingPage: LandingPage = {
   meta: {
     title: "ArrivePing Pricing: $49/mo, Graduated Per-Driver Rates",
     description:
-      "ArrivePing pricing in USD: Starter $49/mo with your first driver; drivers 2–10 $30, 11–30 $27, 31+ $25 each. Live tracking, auto-dispatch and tech app in every plan.",
+      "ArrivePing pricing in USD: Starter $49/mo with 1 dispatcher + 2 drivers; drivers 3–10 $30, 11–29 $27, 30+ $25 each. Live tracking, auto-dispatch and tech app in every plan.",
   },
   eyebrow: "Pricing",
   h1: "Simple, public pricing that gets cheaper per driver as you grow.",
@@ -387,7 +387,7 @@ const pricingPage: LandingPage = {
     "No demo needed to see a price. Every plan includes the dispatch board, the technician app and live customer arrival pages.",
   answer: {
     q: "How much does ArrivePing cost?",
-    a: `${PRICE_LINE} The rates work like tax brackets: each applies only to the drivers in its band. For example, 10 drivers cost $319 a month and 30 drivers cost $859 a month.`,
+    a: `${PRICE_LINE} The rates work like tax brackets: each applies only to the drivers in its band. For example, 10 drivers cost $289 a month and 30 drivers cost $827 a month.`,
   },
   sections: [{ kind: "pricing" }],
   faqs: [PRICE_FAQ, {
@@ -395,7 +395,7 @@ const pricingPage: LandingPage = {
     a: "A driver is a field team member who uses the technician app to receive jobs and share their status, such as a technician, installer or delivery driver.",
   }, {
     q: "Are there setup fees or contracts?",
-    a: "No large upfront cost. Plans are billed monthly and you can add or remove drivers month to month. Teams of 31 or more drivers also get custom integrations and live onboarding.",
+    a: "No large upfront cost. Plans are billed monthly and you can add or remove drivers month to month. Teams of 30 or more drivers also get custom integrations and live onboarding.",
   }, {
     q: "Is there a guarantee?",
     a: "Yes. If ArrivePing doesn't make your dispatch day calmer within the first month, we'll refund it.",
@@ -469,7 +469,7 @@ const stSources = [
   { label: "ServiceTitan dispatch notifications (help centre)", href: "https://help.servicetitan.com/docs/enable-text-and-email-dispatch-notifications" },
 ];
 
-const AP_PRICE_CELL = { text: "$49/mo incl. first driver; then $30, $27, $25 per driver (graduated)", href: "/pricing" };
+const AP_PRICE_CELL = { text: "$49/mo incl. 1 dispatcher + 2 drivers; then $30, $27, $25 per driver (graduated)", href: "/pricing" };
 
 const jobber: LandingPage = {
   path: "/compare/jobber",
@@ -892,7 +892,7 @@ const onfleet: LandingPage = {
     {
       kind: "choose",
       title: "Which one should you choose?",
-      ours: { title: "Choose ArrivePing if", items: ["You have 1–30 drivers doing booked deliveries or installs", "The customer's arrival experience is what you are fixing", "$619 a month is more than the problem costs you", "You also dispatch technicians or installers from the same team"] },
+      ours: { title: "Choose ArrivePing if", items: ["You have 1–29 drivers doing booked deliveries or installs", "The customer's arrival experience is what you are fixing", "$619 a month is more than the problem costs you", "You also dispatch technicians or installers from the same team"] },
       theirs: { title: "Choose Onfleet if", items: ["Drivers run dozens of stops a day and sequencing matters most", "You need courier-grade tooling, analytics and integrations at scale", "You are an enterprise or marketplace operation"] },
     },
   ],
@@ -928,7 +928,7 @@ const routific: LandingPage = {
     "Routific is a route planning and delivery management tool with a free tier for small volumes. ArrivePing is dispatch for teams whose deliveries and service calls are appointments, with the customer's live ETA built in.",
   answer: {
     q: "Should I use ArrivePing or Routific?",
-    a: "Use Routific if your day is a list of stops to sequence efficiently: it is a route optimizer with a free plan for up to 100 orders a month and a $150 a month plan for up to 1,000. Use ArrivePing if your deliveries and jobs are appointments where the customer is waiting: it auto-assigns the closest driver or technician, tracks them from their phone and texts the customer a live tracking link with an ETA, from $49 a month including the first driver.",
+    a: "Use Routific if your day is a list of stops to sequence efficiently: it is a route optimizer with a free plan for up to 100 orders a month and a $150 a month plan for up to 1,000. Use ArrivePing if your deliveries and jobs are appointments where the customer is waiting: it auto-assigns the closest driver or technician, tracks them from their phone and texts the customer a live tracking link with an ETA, from $49 a month including one dispatcher and two drivers.",
   },
   sections: [
     {
@@ -955,7 +955,7 @@ const routific: LandingPage = {
   faqs: [
     {
       q: "Is Routific free?",
-      a: "Routific's pricing page offered a free plan for up to 100 orders a month and a $150 per month plan for up to 1,000 orders, with per-order fees beyond that, when we checked on October 7, 2026. ArrivePing has no free plan; it starts at $49 per month including the first driver.",
+      a: "Routific's pricing page offered a free plan for up to 100 orders a month and a $150 per month plan for up to 1,000 orders, with per-order fees beyond that, when we checked on October 7, 2026. ArrivePing has no free plan; it starts at $49 per month including one dispatcher and two drivers.",
     },
     {
       q: "Can I use ArrivePing and Routific together?",

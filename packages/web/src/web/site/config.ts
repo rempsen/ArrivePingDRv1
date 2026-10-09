@@ -336,17 +336,19 @@ export const story = {
  * Graduated pricing (USD, billed monthly). Each rate applies only to the
  * drivers inside its band, like tax brackets, so the bill rises with every
  * driver added and never drops when a team crosses a tier.
- *   driver 1        → Starter, $49
- *   drivers 2–10    → $30 each
- *   drivers 11–30   → $27 each
- *   drivers 31+     → $25 each (Fleet: custom integrations + live onboarding)
+ *   1 dispatcher + drivers 1–2 → Starter, $49
+ *   drivers 3–10    → $30 each
+ *   drivers 11–29   → $27 each
+ *   drivers 30+     → $25 each (Fleet: custom integrations + live onboarding)
  */
 export const pricingBands = [
-  { from: 2, to: 10, rate: 30 },
-  { from: 11, to: 30, rate: 27 },
-  { from: 31, to: Infinity, rate: 25 },
+  { from: 3, to: 10, rate: 30 },
+  { from: 11, to: 29, rate: 27 },
+  { from: 30, to: Infinity, rate: 25 },
 ] as const;
 export const STARTER_PRICE = 49;
+/** Drivers included in Starter (alongside one dispatch user). */
+export const STARTER_DRIVERS = 2;
 
 export const pricing = {
   title: "Start for $49.",
@@ -354,15 +356,15 @@ export const pricing = {
   body: "Every plan includes the dispatch board, the technician app and live customer arrival pages. Each rate applies only to the drivers in its band, so your bill never jumps when you grow into the next tier.",
   note: "All prices in US dollars, billed monthly.",
   ladder: [
-    { label: "Driver 1", price: "Included in Starter" },
-    { label: "Drivers 2–10", price: "$30 each" },
-    { label: "Drivers 11–30", price: "$27 each" },
-    { label: "Drivers 31+", price: "$25 each" },
+    { label: "Dispatcher + drivers 1–2", price: "Included in Starter" },
+    { label: "Drivers 3–10", price: "$30 each" },
+    { label: "Drivers 11–29", price: "$27 each" },
+    { label: "Drivers 30+", price: "$25 each" },
   ],
   tiers: [
     {
       name: "Starter",
-      range: "1 driver · ready the same day",
+      range: "1 dispatcher + 2 drivers · ready the same day",
       price: "$49",
       unit: "per month",
       features: ["Workflow set up for how your team works", "Catalog pre-loaded with your services and parts", "Operating the same day"],
@@ -370,19 +372,19 @@ export const pricing = {
     },
     {
       name: "Growing team",
-      range: "2–30 drivers",
+      range: "3–29 drivers",
       price: "$30",
       unit: "per added driver / month, dropping to $27 from driver 11",
-      features: ["Everything in Starter", "Drivers 2–10 at $30, drivers 11–30 at $27", "Add or remove drivers month to month"],
+      features: ["Everything in Starter", "Dispatcher license included", "Drivers 3–10 at $30, drivers 11–29 at $27", "Add or remove drivers month to month"],
       cta: { label: "Book a demo", href: brand.urls.demo },
       featured: true,
     },
     {
       name: "Fleet",
-      range: "31+ drivers",
+      range: "30+ drivers",
       price: "$25",
-      unit: "per driver / month from driver 31",
-      features: ["Everything in Growing team", "Custom integrations with your systems", "Live onboarding with our team"],
+      unit: "per driver / month from driver 30",
+      features: ["Everything in Growing team", "Dispatcher license included", "Custom integrations with your systems", "Live onboarding with our team"],
       cta: { label: "Talk to sales", href: brand.urls.demo },
     },
   ],
@@ -402,8 +404,8 @@ export function monthlyPrice(n: number): { plan: string; total: number; breakdow
       parts.push(`${count} × ${usd(band.rate)}`);
     }
   }
-  const plan = drivers === 1 ? "Starter" : drivers <= 30 ? "Growing team" : "Fleet";
-  return { plan, total, breakdown: drivers === 1 ? "Starter, 1 driver" : parts.join(" + ") };
+  const plan = drivers <= STARTER_DRIVERS ? "Starter" : drivers <= 29 ? "Growing team" : "Fleet";
+  return { plan, total, breakdown: drivers <= STARTER_DRIVERS ? "Starter: 1 dispatcher + 2 drivers" : parts.join(" + ") };
 }
 
 export const faqs = [
@@ -429,7 +431,7 @@ export const faqs = [
   },
   {
     q: "How is it priced?",
-    a: "In US dollars, billed monthly, and graduated like tax brackets: Starter is $49 a month for your first driver, with your workflow set up and catalog pre-loaded so you can operate the same day. Drivers 2–10 are $30 each, drivers 11–30 are $27 each, and every driver from 31 on is $25. Each rate applies only to the drivers in its band, so adding a driver never lowers or jumps your bill. Teams of 31 or more also get custom integrations and live onboarding.",
+    a: "In US dollars, billed monthly, and graduated like tax brackets: Starter is $49 a month for one dispatch user and two drivers, with your workflow set up and catalog pre-loaded so you can operate the same day. Drivers 3–10 are $30 each, drivers 11–29 are $27 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never lowers or jumps your bill. The dispatcher license is included in every plan at no extra fee. Teams of 30 or more also get custom integrations and live onboarding.",
   },
 ] as const;
 
