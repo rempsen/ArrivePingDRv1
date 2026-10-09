@@ -19,7 +19,6 @@ import {
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 import { WorkOrderModal } from "../../components/work-order-modal";
-import { JobDetailModal } from "../../components/job-detail-modal";
 import { EmptyState } from "../../components/empty-state";
 
 const QUICK = [
@@ -89,14 +88,13 @@ export default function AdminWorkOrders() {
   const [assignFor, setAssignFor] = useState<any>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [editJob, setEditJob] = useState<any>(null);
-  const [viewJob, setViewJob] = useState<any>(null);
   const [, navigate] = useLocation();
-  // Tapping a row opens the wide read-only detail view first (every status,
-  // completed included — it carries a "Report" button). The row's own
-  // Edit / Report button still jumps straight to the editor / report page:
-  // completed jobs are historical records, so their shortcut is the report,
-  // not the form.
-  const openJob = (b: any) => setViewJob(b);
+  // Tapping a row goes straight to the full job report page (every status).
+  // The old intermediate "job details" modal duplicated the report with less
+  // information, so it was removed (Dan, 2026-10-09). The row's own Edit
+  // button still opens the editor for open jobs; for completed jobs it is a
+  // "Report" shortcut to the same page.
+  const openJob = (b: any) => navigate(`/admin/jobs/${b.id}/report`);
   // The list row is a display shape — it has no raw lineItems JSON, template,
   // custom fields, staff notes, or skill requirements. Handing it straight to
   // WorkOrderModal used to open the editor with those blank, so "Save" could
@@ -116,7 +114,6 @@ export default function AdminWorkOrders() {
         },
         staleTime: 0,
       });
-      setViewJob(null);
       setEditJob(data.booking ?? b);
     } catch (e: any) {
       toast({ kind: "error", key: "job-edit-load", message: `Couldn't load this ${jobNoun.toLowerCase()} for editing.`, detail: e?.message });
@@ -297,19 +294,6 @@ export default function AdminWorkOrders() {
         open={editJob !== null}
         editBooking={editJob ?? undefined}
         onClose={() => setEditJob(null)}
-      />
-      <JobDetailModal
-        job={viewJob}
-        open={viewJob !== null}
-        onClose={() => setViewJob(null)}
-        onEdit={() => viewJob && openEditor(viewJob)}
-        editLoading={editLoadingId !== null}
-        onAssign={() => {
-          const b = viewJob;
-          setViewJob(null);
-          setAssignFor(b);
-        }}
-        onReport={() => viewJob && navigate(`/admin/jobs/${viewJob.id}/report`)}
       />
 
       {/* quick pills + search + filter toggle */}
@@ -503,6 +487,7 @@ export default function AdminWorkOrders() {
                       {!archived && (
                         <button
                           onClick={() => openEditor(b)}
+                          disabled={editLoadingId === b.id}
                           className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-white/10 px-3.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white"
                         >
                           {b.status === "completed" ? (
@@ -677,6 +662,7 @@ export default function AdminWorkOrders() {
                           {!archived && (
                             <button
                               onClick={() => openEditor(b)}
+                          disabled={editLoadingId === b.id}
                               title={b.status === "completed" ? "View job report" : `Edit ${jobNoun.toLowerCase()}`}
                               aria-label={b.status === "completed" ? "View job report" : `Edit ${jobNoun.toLowerCase()}`}
                               className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/10 px-2.5 text-xs font-semibold text-slate-300 hover:border-brand/50 hover:text-white lg:px-3"

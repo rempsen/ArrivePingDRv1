@@ -1,9 +1,11 @@
-// ─── Completed-job report ─────────────────────────────────────────────────
-// Read-only "what actually happened" view for a finished job — times,
-// mileage, the technician's actual driven route, photos, notes, and the
-// pricing/tech-pay breakdown. Completed jobs are treated as historical
-// records now, not editable work orders; the one intentional escape hatch
-// is the admin/superadmin-only "Edit anyway" button for genuine corrections.
+// ─── Job report ───────────────────────────────────────────────────────────
+// Read-only "what actually happened" view for a job — times, mileage, the
+// technician's actual driven route, photos, notes, and the pricing/tech-pay
+// breakdown. Since 2026-10-09 this is the page every row on the Jobs list
+// opens, for every status (the smaller "job details" modal was removed as a
+// duplicate). Open jobs get a plain "Edit job" button; completed jobs are
+// historical records, so the only escape hatch is the admin/superadmin-only
+// "Edit anyway" button for genuine corrections.
 import { useState } from "react";
 import { toast } from "../../components/toast";
 import { useParams, useLocation } from "wouter";
@@ -12,7 +14,7 @@ import {
   ArrowLeft, Clock, Route as RouteIcon, Camera, FileText, Receipt,
   DollarSign, Phone, Mail, MapPin, Pencil, Download, X, Archive, Loader2, ClipboardList,
 } from "lucide-react";
-import { PageWrap } from "../../components/brand";
+import { PageWrap, StatusBadge } from "../../components/brand";
 import { FullLoader } from "../../components/loader";
 import { apiHeaders } from "../../lib/api";
 import { money, fmtDate } from "../../lib/utils";
@@ -135,6 +137,7 @@ export default function JobReportPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { role } = useAuth();
+  const isOffice = role === "admin" || role === "superadmin" || role === "dispatcher";
   const canEditAnyway = role === "admin" || role === "superadmin";
   // Archiving is the same soft-delete already offered on the Jobs list for
   // every staff role that can see it there (admin/superadmin/dispatcher) — a
@@ -143,7 +146,7 @@ export default function JobReportPage() {
   // touch status. This gives the office an actual way to get it out of the
   // active list from wherever they're looking at it, without hard-deleting
   // the record — it can still be restored from the archive.
-  const canArchive = role === "admin" || role === "superadmin" || role === "dispatcher";
+  const canArchive = isOffice;
   const [editOpen, setEditOpen] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -204,6 +207,7 @@ export default function JobReportPage() {
   }
   const j = q.data;
   const t = j.timeline || {};
+  const isCompleted = j.status === "completed";
   const transitLabel = fmtMins(j.transitMinutes ? Math.round(j.transitMinutes) : mins(t.enrouteAt, t.startedAt));
   const onSiteLabel = fmtMins(j.onSiteMinutes ? Math.round(j.onSiteMinutes) : mins(t.startedAt, t.finishedAt));
   const lineItems = j.pricing?.lineItems ?? [];
@@ -220,7 +224,7 @@ export default function JobReportPage() {
           </button>
           <h1 className="font-display text-2xl font-bold text-white">{j.title || j.service || "Job"} <span className="ml-2 text-sm font-normal text-slate-500">#{j.jobNumber}</span></h1>
           <p className="mt-1 flex items-center gap-2 text-sm text-slate-400">
-            <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-400">{j.status}</span>
+            <StatusBadge status={j.status} />
             {fmtDate(t.finishedAt || t.scheduledAt)}
           </p>
         </div>
@@ -231,7 +235,16 @@ export default function JobReportPage() {
           >
             <Download className="h-3.5 w-3.5" /> Download PDF
           </button>
-          {canEditAnyway && (
+          {!isCompleted && isOffice && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-deep"
+              title="Edit this job — schedule, customer, technician, pricing"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit job
+            </button>
+          )}
+          {isCompleted && canEditAnyway && (
             <button
               onClick={() => setEditOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20"
@@ -327,8 +340,9 @@ export default function JobReportPage() {
               </>
             ) : (
               <p className="py-8 text-center text-sm text-slate-500">
-                No GPS route recorded for this job — either it predates route tracking, or the job's location
-                history has since been purged.
+                {isCompleted
+                  ? "No GPS route recorded for this job — either it predates route tracking, or the job's location history has since been purged."
+                  : "The route appears here once the technician starts driving to this job."}
               </p>
             )}
           </Card>
@@ -344,7 +358,7 @@ export default function JobReportPage() {
                 ))}
               </div>
             ) : (
-              <p className="py-4 text-center text-sm text-slate-500">No photos attached to this job.</p>
+              <p className="py-4 text-center text-sm text-slate-500">{isCompleted ? "No photos attached to this job." : "Photos the technician takes on site appear here."}</p>
             )}
           </Card>
 
