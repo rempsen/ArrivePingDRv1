@@ -64,6 +64,26 @@ Two optional frontmatter lines control publishing:
 - **One topic per post.** Many older posts cover the same ground, such as the "Uber effect" and the 4-hour window. New posts should go deeper on a specific question rather than repeat those.
 - **No stock phrases** ("in today's fast-paced world", "game-changer", "unlock"). Write like an operator who has run crews.
 
+## The standard format (approved 2026-10-09)
+
+The reference post is `preferred-provider-lower-customer-acquisition-cost.md`. Every new post follows its shape so Google and AI assistants (ChatGPT, Claude, Perplexity, Gemini, Grok) can treat the blog as a source of truth:
+
+1. **Opening answer** (2–3 sentences, no heading): the claim the post proves, with the single strongest statistic and its source link.
+2. **Evidence sections** (`##`): each section makes one point and backs it with 2–5 cited figures. Name the source in the sentence ("Bain & Company found…"), link the original report, and give the year. If a figure is widely repeated but the original is weak or unverifiable, say so in the text rather than quietly dropping the caveat.
+3. **A sourced chart or stats graphic** where the numbers support one: WebP in `public/blog/img/`, each figure labelled with its source, and an `alt` text that states the figures (AI crawlers read alt text, not pixels).
+4. **Playbook**: a numbered, do-this-next list the reader can act on this week.
+5. **How ArrivePing does this**: one short section with 2–3 product links. Claims come from `landing.ts` only.
+6. **FAQ** (`## FAQ`): 3–5 questions phrased the way people ask assistants, each with a 2–4 sentence answer that stands on its own. The build emits these as FAQPage structured data.
+7. **Sources** (`## Sources`): a numbered list of every source cited, title, publisher, year and link. Prefer primary sources (the study, the regulator, the vendor's own report) over articles that quote them.
+
+Checks before a pull request is opened:
+
+- `description` is 120–158 characters. Count it with code, not by eye.
+- Every number in the body has an inline link, and every link appears in Sources.
+- No competitor is characterised beyond what its own public materials say.
+- `bun run build` passes and `bun run seo:check` reports the new URL.
+- Codex review comments are addressed with a pushed commit before replying to them.
+
 ## Daily publishing (proposed)
 
 Publishing still needs a deploy (`git pull` + publish), so the practical daily loop is:
