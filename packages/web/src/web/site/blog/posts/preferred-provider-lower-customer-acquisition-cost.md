@@ -1,7 +1,7 @@
 ---
 title: "Become the Preferred Provider: How Loyalty Cuts Customer Acquisition Cost"
 slug: "preferred-provider-lower-customer-acquisition-cost"
-description: "Repeat customers and referrals cost far less than new ones. The data on loyalty, waiting and texting, and a low-friction playbook for becoming the provider customers call first."
+description: "Repeat customers and referrals cost far less than new ones. The data on loyalty, waiting and texting, plus a playbook for becoming the provider customers call first."
 date: "2026-10-09"
 updated: "2026-10-09"
 author: "Dan Rosenblat"
@@ -41,7 +41,7 @@ If loyalty is the asset, a bad experience is how it gets spent. The research is 
 - **The day rarely goes to plan.** Salesforce's technician research found 47% of field appointments do not go as planned, and 38% of technicians say their schedules are often disrupted by issues such as customer miscommunication ([Salesforce, 2025](https://www.salesforce.com/blog/field-service-scheduling/)).
 - **Experience is now judged alongside the work itself.** Salesforce's *State of the Connected Customer* found 80% of customers say the experience a company provides is as important as its products and services, and 77% expect to interact with someone immediately when they contact a company ([Salesforce, 2023](https://www.salesforce.com/news/stories/customer-engagement-research-2023/)).
 
-Notice what these have in common. The furnace got fixed. The technician was competent. The customer still left, because of the two hours spent staring out the window and the three calls to an office that could only say "he's on his way."
+Notice what these have in common (we wrote about the window itself in [End the 4-hour service window](/blog/end-the-4-hour-service-window)). The furnace got fixed. The technician was competent. The customer still left, because of the two hours spent staring out the window and the three calls to an office that could only say "he's on his way."
 
 ## Nonverbal communication: the text, the map and the ETA
 
@@ -79,7 +79,7 @@ You do not need a new brand to become the preferred provider. You need to remove
 
 ArrivePing is dispatch software built around the arrival experience. It shows technicians and drivers on a live map, auto-assigns each work order to the closest qualified technician by distance, skills, availability and workload, and sends the job to the technician's phone. When the technician taps "on the way", the customer gets a text with a live tracking page: the technician's progress on a map, a live ETA, and buttons to text or call them. Running-late notices go out automatically when the day moves, a geofence records arrival, and location sharing with the customer stops the moment the technician reaches the door.
 
-Location comes from the technician's phone, so there is no vehicle hardware to buy. Pricing is published: $49 USD a month including the first driver, with graduated per-driver rates that get cheaper as you grow. See [how the on-my-way text works](/on-my-way-text-software), [customer notifications](/customer-notifications) and [pricing](/pricing).
+Location comes from the technician's phone, so there is no vehicle hardware to buy. For how the dispatch side fits together, see [AI-powered dispatch software](/blog/ai-powered-dispatch-software). Pricing is published: $49 USD a month including the first driver, with graduated per-driver rates that get cheaper as you grow. See [how the on-my-way text works](/on-my-way-text-software), [customer notifications](/customer-notifications) and [pricing](/pricing).
 
 ## Frequently asked questions
 
