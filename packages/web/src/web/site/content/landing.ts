@@ -69,7 +69,7 @@ export type LandingPage = {
 /* ------------------------------------------------------------------ */
 
 const PRICE_LINE =
-  "ArrivePing starts at $49 USD a month, which includes one dispatch user and two drivers. Drivers 3–10 are $30 each, drivers 11–29 are $27 each and every driver from 30 on is $25, billed monthly.";
+  "ArrivePing starts at $49 USD a month, which includes one dispatch user and two drivers. Drivers 3–10 are $30 each, drivers 11–29 are $27 each and every driver from 30 on is $25, billed monthly. The dispatcher license is included in every plan.";
 
 const TRACKING_FAQ = {
   q: "Do customers need an app to track the technician?",

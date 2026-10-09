@@ -375,7 +375,7 @@ export const pricing = {
       range: "3–29 drivers",
       price: "$30",
       unit: "per added driver / month, dropping to $27 from driver 11",
-      features: ["Everything in Starter", "Drivers 3–10 at $30, drivers 11–29 at $27", "Add or remove drivers month to month"],
+      features: ["Everything in Starter", "Dispatcher license included", "Drivers 3–10 at $30, drivers 11–29 at $27", "Add or remove drivers month to month"],
       cta: { label: "Book a demo", href: brand.urls.demo },
       featured: true,
     },
@@ -384,7 +384,7 @@ export const pricing = {
       range: "30+ drivers",
       price: "$25",
       unit: "per driver / month from driver 30",
-      features: ["Everything in Growing team", "Custom integrations with your systems", "Live onboarding with our team"],
+      features: ["Everything in Growing team", "Dispatcher license included", "Custom integrations with your systems", "Live onboarding with our team"],
       cta: { label: "Talk to sales", href: brand.urls.demo },
     },
   ],
@@ -431,7 +431,7 @@ export const faqs = [
   },
   {
     q: "How is it priced?",
-    a: "In US dollars, billed monthly, and graduated like tax brackets: Starter is $49 a month for one dispatch user and two drivers, with your workflow set up and catalog pre-loaded so you can operate the same day. Drivers 3–10 are $30 each, drivers 11–29 are $27 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never lowers or jumps your bill. Teams of 30 or more also get custom integrations and live onboarding.",
+    a: "In US dollars, billed monthly, and graduated like tax brackets: Starter is $49 a month for one dispatch user and two drivers, with your workflow set up and catalog pre-loaded so you can operate the same day. Drivers 3–10 are $30 each, drivers 11–29 are $27 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never lowers or jumps your bill. The dispatcher license is included in every plan at no extra fee. Teams of 30 or more also get custom integrations and live onboarding.",
   },
 ] as const;
 
