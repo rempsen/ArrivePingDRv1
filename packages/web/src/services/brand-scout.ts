@@ -23,6 +23,7 @@
  * can finish by hand on the review screen.
  */
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -155,13 +156,49 @@ async function fetchHtml(
   }
 }
 
+/**
+ * Find a Chrome/Chromium binary we can drive headless. Production boxes
+ * frequently have none (the oven/bun base image certainly doesn't), in which
+ * case the screenshot is skipped and brand colors come from the stylesheet
+ * instead (see `cssBrandColors`). `CHROME_BIN` wins when set.
+ */
+let chromeBinCache: string | null | undefined;
+function findChrome(): string | null {
+  if (chromeBinCache !== undefined) return chromeBinCache;
+  const names = [
+    process.env.CHROME_BIN,
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "/usr/bin/chromium",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ].filter((n): n is string => !!n);
+  const pathDirs = (process.env.PATH ?? "").split(":").filter(Boolean);
+  for (const n of names) {
+    const candidates = n.includes("/") ? [n] : pathDirs.map((d) => join(d, n));
+    for (const c of candidates) {
+      if (existsSync(c)) {
+        chromeBinCache = c;
+        return c;
+      }
+    }
+  }
+  chromeBinCache = null;
+  return null;
+}
+
 /** Capture a homepage screenshot with headless Chrome. Returns PNG bytes. */
 async function screenshot(url: string): Promise<Buffer | null> {
+  const bin = findChrome();
+  if (!bin) {
+    log.warn("brand-scout: no Chrome binary on this host — skipping screenshot", { url });
+    return null;
+  }
   let dir = "";
   try {
     dir = await mkdtemp(join(tmpdir(), "bscout-"));
     const out = join(dir, "shot.png");
-    const bin = process.env.CHROME_BIN || "google-chrome";
     const args = [
       "--headless=new",
       "--disable-gpu",
@@ -195,6 +232,176 @@ async function screenshot(url: string): Promise<Buffer | null> {
   } finally {
     if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// ── Stylesheet-based brand colors (no browser needed) ─────────────────────
+//
+// When there's no screenshot (no Chrome on the box, site blocks headless
+// browsers, timeout) we still owe the tenant a sensible primary/accent. The
+// site's own CSS is a good proxy: the brand color is almost always the most
+// repeated saturated color across the stylesheet (buttons, links, headings),
+// and <meta name="theme-color"> is an explicit declaration when present.
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const h = hex.replace("#", "");
+  const full =
+    h.length === 3 || h.length === 4
+      ? h.slice(0, 3).split("").map((c) => c + c).join("")
+      : h.slice(0, 6);
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  return "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+}
+
+/** Hue (0-360), saturation and lightness (0-1) — enough to tell brand from grey. */
+function hsl([r, g, b]: [number, number, number]): { h: number; s: number; l: number } {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d) % 6;
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  return { h, s, l };
+}
+
+/** Pull every color literal out of a CSS/HTML blob as #rrggbb. */
+export function extractCssColors(css: string): string[] {
+  const out: string[] = [];
+  const hexRe = /#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = hexRe.exec(css))) {
+    const raw = m[1];
+    // 8-digit = #rrggbbaa; 4-digit = #rgba. Drop the mostly-transparent ones.
+    if (raw.length === 8 && parseInt(raw.slice(6), 16) < 128) continue;
+    if (raw.length === 4 && parseInt(raw[3] + raw[3], 16) < 128) continue;
+    const rgb = hexToRgb("#" + raw);
+    if (rgb) out.push(rgbToHex(rgb));
+  }
+  const rgbRe = /rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*(?:[,/]\s*([\d.]+%?))?\s*\)/gi;
+  while ((m = rgbRe.exec(css))) {
+    if (m[4] !== undefined) {
+      const a = m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+      if (a < 0.5) continue;
+    }
+    out.push(rgbToHex([Number(m[1]), Number(m[2]), Number(m[3])]));
+  }
+  return out;
+}
+
+/**
+ * Rank the colors in a stylesheet and pick a primary + accent. Greys, near-
+ * white and near-black are ignored; near-identical shades are merged so a
+ * button hover state counts toward its base color. `themeColor` (from
+ * <meta name="theme-color">) is the site's own declaration and wins the
+ * primary slot when it's a real color.
+ */
+export function pickBrandColorsFromCss(
+  colors: string[],
+  themeColor?: string | null,
+): { primary: string | null; accent: string | null } {
+  type Bucket = { hex: string; rgb: [number, number, number]; count: number };
+  const buckets: Bucket[] = [];
+  for (const hex of colors) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) continue;
+    const { s, l } = hsl(rgb);
+    if (s < 0.25 || l < 0.12 || l > 0.9) continue; // grey / black / white
+    const near = buckets.find(
+      (b) => Math.abs(b.rgb[0] - rgb[0]) + Math.abs(b.rgb[1] - rgb[1]) + Math.abs(b.rgb[2] - rgb[2]) < 60,
+    );
+    if (near) near.count += 1;
+    else buckets.push({ hex: rgbToHex(rgb), rgb, count: 1 });
+  }
+  buckets.sort((a, b) => b.count - a.count);
+
+  let primary: string | null = null;
+  const theme = themeColor ? hexToRgb(themeColor.trim()) : null;
+  if (theme) {
+    const { s, l } = hsl(theme);
+    if (s >= 0.25 && l >= 0.12 && l <= 0.9) primary = rgbToHex(theme);
+  }
+  if (!primary) primary = buckets[0]?.hex ?? null;
+  if (!primary) return { primary: null, accent: null };
+
+  const pRgb = hexToRgb(primary)!;
+  const pHue = hsl(pRgb).h;
+  const accent =
+    buckets.find((b) => {
+      if (b.hex === primary) return false;
+      const dist = Math.abs(b.rgb[0] - pRgb[0]) + Math.abs(b.rgb[1] - pRgb[1]) + Math.abs(b.rgb[2] - pRgb[2]);
+      if (dist < 90) return false; // a shade of the primary, not an accent
+      const dh = Math.abs(hsl(b.rgb).h - pHue);
+      return Math.min(dh, 360 - dh) >= 25;
+    })?.hex ?? null;
+  return { primary, accent };
+}
+
+function themeColorMeta(html: string): string | null {
+  const m = /<meta\b[^>]*name=["']theme-color["'][^>]*>/i.exec(html);
+  if (!m) return null;
+  const c = /content=["']([^"']+)["']/i.exec(m[0]);
+  return c?.[1] ?? null;
+}
+
+/** Same-origin-ish stylesheet hrefs from <link rel="stylesheet">, best-first. */
+function stylesheetUrls(html: string, base: string, max = 4): string[] {
+  const out: string[] = [];
+  const re = /<link\b[^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < max) {
+    const tag = m[0];
+    if (!/rel=["'][^"']*stylesheet/i.test(tag)) continue;
+    const href = /href=["']([^"']+)["']/i.exec(tag)?.[1];
+    const abs = href ? absolutize(base, href) : null;
+    if (abs && !out.includes(abs)) out.push(abs);
+  }
+  return out;
+}
+
+const CSS_FETCH_LIMIT = 400_000; // chars per stylesheet — enough for a theme bundle
+
+/**
+ * Brand colors from the page's CSS: inline <style> blocks, inline style=""
+ * attributes, and up to four linked stylesheets. Network failures are
+ * tolerated per-sheet; whatever we did get is ranked.
+ */
+async function cssBrandColors(
+  html: string,
+  base: string,
+): Promise<{ primary: string | null; accent: string | null }> {
+  const blobs: string[] = [];
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = styleRe.exec(html))) blobs.push(m[1]);
+  const attrRe = /style=["']([^"']+)["']/gi;
+  while ((m = attrRe.exec(html))) blobs.push(m[1]);
+
+  const sheets = stylesheetUrls(html, base);
+  const fetched = await Promise.allSettled(
+    sheets.map(async (u) => {
+      const res = await fetch(u, {
+        headers: { "user-agent": UA, accept: "text/css,*/*;q=0.1" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) return "";
+      return (await res.text()).slice(0, CSS_FETCH_LIMIT);
+    }),
+  );
+  for (const f of fetched) if (f.status === "fulfilled" && f.value) blobs.push(f.value);
+
+  const colors = extractCssColors(blobs.join("\n"));
+  return pickBrandColorsFromCss(colors, themeColorMeta(html));
 }
 
 /**
@@ -1128,10 +1335,23 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
       warnings.push("Couldn't analyse brand colors from the screenshot.");
       log.warn("brand-scout: vision failed", { err: String(e) });
     }
-  } else {
-    warnings.push(
-      "Couldn't screenshot the site — brand colors may be incomplete.",
-    );
+  }
+  // No screenshot (no Chrome on this host, site blocked the headless browser,
+  // timeout) or the vision pass failed: fall back to the stylesheet. Only warn
+  // when even that comes back empty — a warning the user can't act on is noise.
+  if (!vision?.primaryColor) {
+    const css = await cssBrandColors(html, finalUrl).catch((e) => {
+      log.warn("brand-scout: css color fallback failed", { err: String(e) });
+      return { primary: null, accent: null };
+    });
+    if (css.primary) {
+      vision = { primaryColor: css.primary, accentColor: css.accent ?? vision?.accentColor ?? null };
+      log.info("brand-scout: brand colors from stylesheet", { url: finalUrl, ...css, hadScreenshot: shot.status === "fulfilled" && !!shot.value });
+    } else if (shot.status !== "fulfilled" || !shot.value) {
+      warnings.push(
+        "Couldn't screenshot the site or find brand colors in its stylesheet — set the colors by hand if the ones here look off.",
+      );
+    }
   }
 
   let text: z.infer<typeof TextSchema> | null = null;
