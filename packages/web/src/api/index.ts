@@ -54,6 +54,7 @@ import { mcpRoutes } from "./routes/mcp";
 import { meRoutes } from "./routes/me";
 import { teamRoutes } from "./routes/team";
 import { superadminRoutes } from "./routes/superadmin";
+import { mobileReleaseRoutes } from "./routes/mobile-release";
 import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
 import { demoRequestRoutes } from "./routes/demo-request";
@@ -367,6 +368,7 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/me", meRoutes)
   .route("/team", teamRoutes)
   .route("/superadmin", superadminRoutes)
+  .route("/mobile-release", mobileReleaseRoutes)
   .route("/punchlist", punchlistRoutes)
   .route("/onboarding", onboardingRoutes);
 

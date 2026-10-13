@@ -16,6 +16,7 @@ coverage
 # logs
 logs
 _.log
+packages/mobile/.release-logs
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # local databases
@@ -93,6 +94,7 @@ packages/web/scripts/
 packages/mobile/scripts/*
 !packages/mobile/scripts/generate-ios-certs.py
 !packages/mobile/scripts/ship-ios.sh
+!packages/mobile/scripts/ship-ios-ci.sh
 
 # local upload fallback (runtime artifacts, not source)
 packages/web/uploads

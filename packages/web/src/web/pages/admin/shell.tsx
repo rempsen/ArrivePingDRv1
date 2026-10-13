@@ -34,6 +34,7 @@ import {
   BellRing,
   Building2,
   FileText,
+  Rocket,
   Menu,
   X,
 } from "lucide-react";
@@ -142,6 +143,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     to: "/admin/companies",
                     label: "Companies",
                     icon: Building2,
+                  },
+                  {
+                    to: "/admin/mobile-release",
+                    label: "Push to TestFlight",
+                    icon: Rocket,
                   },
                 ],
               }
