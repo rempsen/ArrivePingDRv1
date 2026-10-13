@@ -33,7 +33,7 @@ export function Logo({
   return (
     <Link to={to} className={cn("inline-flex items-center py-1 lg:py-0", className)}>
       <img
-        src={light ? "/arriveping-logo-light.png?v=2" : "/arriveping-logo-dark.png?v=2"}
+        src={light ? "/arriveping-logo-light.png?v=3" : "/arriveping-logo-dark.png?v=3"}
         alt="ArrivePing"
         className={cn("h-8 w-auto object-contain", imgClassName)}
       />

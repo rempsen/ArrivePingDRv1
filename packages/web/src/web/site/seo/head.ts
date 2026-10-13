@@ -11,7 +11,7 @@ import { brand } from "../config";
 import { absolute, SITE_URL } from "./schema";
 import { seoByPath, type SeoPage } from "./pages";
 
-const OG_IMAGE = `${SITE_URL}/og-image.png`;
+const OG_IMAGE = `${SITE_URL}/og-image.png?v=2`;
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

@@ -179,7 +179,7 @@ const blogPostPages: SeoPage[] = posts.map((p) => {
   const cat = categoryBySlug[p.category];
   const author = authorFor(p.author);
   const title = p.title.length <= 52 ? `${p.title} | ArrivePing` : p.title;
-  const image = p.image ? absolute(p.image) : `${SITE_URL}/og-image.png`;
+  const image = p.image ? absolute(p.image) : `${SITE_URL}/og-image.png?v=2`;
   return {
     path,
     label: p.title,

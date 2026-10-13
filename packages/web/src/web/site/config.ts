@@ -13,8 +13,8 @@ export const brand = {
   lockup: "ArrivePing by NVC360",
   parent: "NVC360",
   tagline: "Appointment arrivals your customers can actually plan around.",
-  logoDark: "/arriveping-logo-dark.png?v=2", // navy wordmark for light surfaces
-  logoLight: "/arriveping-logo-light.png?v=2", // white wordmark for dark surfaces
+  logoDark: "/arriveping-logo-dark.png?v=3", // navy wordmark for light surfaces
+  logoLight: "/arriveping-logo-light.png?v=3", // white wordmark for dark surfaces
   icon: "/apple-touch-icon.png?v=3", // square navy "AP" + ping rings mark, full-bleed — used as a badge
   watermark: "/arriveping-icon-dark.png?v=3", // white "AP" on navy — ghosted behind the closing section
   contactEmail: "contact@nvc360.com",
