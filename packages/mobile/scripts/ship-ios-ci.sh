@@ -2,10 +2,12 @@
 # ────────────────────────────────────────────────────────────────────────────
 #  ArrivePing — headless iOS → TestFlight release.
 #
-#  This is the non-interactive twin of ship-ios.sh. It is used by:
-#   - the "Push to TestFlight" button in the admin dashboard
-#     (packages/web/src/api/routes/mobile-release.ts), and
-#   - the Runable chat/sandbox trigger.
+#  This is the non-interactive twin of ship-ios.sh. The admin dashboard's
+#  "Push to TestFlight" button does NOT call this file directly — it
+#  triggers .github/workflows/ship-ios.yml, which runs the same steps on
+#  GitHub's own runner. This script is kept as a manually-runnable headless
+#  fallback (e.g. from any other CI, or by hand on a machine that already
+#  has EXPO_TOKEN and the key decoded).
 #
 #  It never prompts. It expects:
 #   - EXPO_TOKEN set in the environment (non-interactive Expo auth), and

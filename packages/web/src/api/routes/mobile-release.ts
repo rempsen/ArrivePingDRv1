@@ -1,105 +1,128 @@
 /**
  * MOBILE RELEASE — one-click iOS → TestFlight for NVC360 staff.
  *
- * Superadmin-only. Runs `packages/mobile/scripts/ship-ios-ci.sh` in the
- * background (EAS build on Expo's servers, then submit to App Store
- * Connect) and lets the admin dashboard poll its progress.
+ * Superadmin-only. Triggers the "Ship iOS to TestFlight" GitHub Actions
+ * workflow (.github/workflows/ship-ios.yml) and lets the admin dashboard
+ * poll its progress.
  *
- * This process is NOT clustered — state lives in module scope. If the web
- * server restarts mid-release, the in-process EAS CLI invocation dies, but
- * the actual build on Expo's infra is unaffected; the admin can just open
- * expo.dev to check that build and re-run submit manually if needed.
- *
- * Secrets:
- *  - EXPO_TOKEN: a non-interactive Expo access token (expo.dev → account →
- *    settings → Access Tokens). Required.
- *  - IOS_ASC_KEY_P8_BASE64: the App Store Connect API key (AuthKey.p8),
- *    base64-encoded. Decoded to packages/mobile/keys/AuthKey.p8 on first use
- *    if that file isn't already on disk. Required unless the key file is
- *    already present some other way.
+ * Why GitHub Actions and not this server: production here is a trimmed
+ * deployment that doesn't carry packages/mobile's source at all, and this
+ * host is internet-facing — not where an Apple signing key should live.
+ * GitHub Actions checks out the full repo on every run and keeps the real
+ * secrets (EXPO_TOKEN, IOS_ASC_KEY_P8_BASE64) in GitHub's own secret store,
+ * never on this server. This server only needs one narrow token
+ * (GITHUB_ACTIONS_TOKEN, scoped to Actions: read+write on this repo only)
+ * to press the button and read status back.
  */
 import { Hono } from "hono";
-import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync, existsSync, readFileSync, openSync, closeSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { requireSuperadmin } from "../middleware/auth";
 import type { AppEnv } from "../env";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// packages/web/src/api/routes -> repo root -> packages/mobile
-const MOBILE_DIR = join(__dirname, "../../../../mobile");
-const KEY_PATH = join(MOBILE_DIR, "keys", "AuthKey.p8");
-const LOG_DIR = join(MOBILE_DIR, ".release-logs");
-const LOG_PATH = join(LOG_DIR, "latest.log");
+const OWNER = "rempsen";
+const REPO = "ArrivePingDRv1";
+const WORKFLOW_FILE = "ship-ios.yml";
+const GH_API = "https://api.github.com";
 
-type Status = "idle" | "running" | "success" | "failed";
+type Step = { name: string; status: string; conclusion: string | null };
 
-const state: {
-  status: Status;
-  startedAt: number | null;
-  finishedAt: number | null;
-  startedBy: string | null;
-  exitCode: number | null;
-} = { status: "idle", startedAt: null, finishedAt: null, startedBy: null, exitCode: null };
+// Not clustered — fine for a single-admin, occasional-use button. Tracks the
+// most recent dispatch so /status can tell which workflow run is "ours" even
+// though the dispatch API itself doesn't hand back a run id.
+let lastDispatchAt: number | null = null;
+let lastDispatchBy: string | null = null;
 
-/** Writes keys/AuthKey.p8 from the base64 secret if the file isn't already there. */
-function ensureKeyFile(): string | null {
-  if (existsSync(KEY_PATH)) return null;
-  const b64 = process.env.IOS_ASC_KEY_P8_BASE64;
-  if (!b64) return "Missing keys/AuthKey.p8 and IOS_ASC_KEY_P8_BASE64 is not set.";
-  mkdirSync(dirname(KEY_PATH), { recursive: true });
-  writeFileSync(KEY_PATH, Buffer.from(b64, "base64"), { mode: 0o600 });
-  return null;
+function ghHeaders(): Record<string, string> {
+  const token = process.env.GITHUB_ACTIONS_TOKEN;
+  if (!token) throw new Error("GITHUB_ACTIONS_TOKEN is not set on the server.");
+  return {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
 }
 
-function tailLog(maxBytes = 20_000): string {
-  if (!existsSync(LOG_PATH)) return "";
-  const buf = readFileSync(LOG_PATH);
-  return buf.length > maxBytes ? "…\n" + buf.subarray(buf.length - maxBytes).toString("utf8") : buf.toString("utf8");
+async function gh(path: string, headers: Record<string, string>) {
+  const res = await fetch(`${GH_API}${path}`, { headers });
+  if (!res.ok) throw new Error(`GitHub API ${path} failed (${res.status}): ${await res.text()}`);
+  return res.json() as Promise<any>;
 }
 
 export const mobileReleaseRoutes = new Hono<AppEnv>()
-  .get("/status", requireSuperadmin, (c) => {
-    return c.json({ ...state, log: tailLog() }, 200);
-  })
-
   .post("/start", requireSuperadmin, async (c) => {
-    if (state.status === "running") {
-      return c.json({ message: "A release is already running." }, 409);
+    let headers: Record<string, string>;
+    try {
+      headers = ghHeaders();
+    } catch (e) {
+      return c.json({ message: (e as Error).message }, 400);
     }
-
-    const keyError = ensureKeyFile();
-    if (keyError) return c.json({ message: keyError }, 400);
-    if (!process.env.EXPO_TOKEN) {
-      return c.json({ message: "EXPO_TOKEN is not set on the server." }, 400);
-    }
-
-    mkdirSync(LOG_DIR, { recursive: true });
-    writeFileSync(LOG_PATH, `== started ${new Date().toISOString()} ==\n`);
 
     const user = c.get("user");
-    state.status = "running";
-    state.startedAt = Date.now();
-    state.finishedAt = null;
-    state.startedBy = user?.email ?? null;
-    state.exitCode = null;
-
-    const outFd = openSync(LOG_PATH, "a");
-    const child = spawn("bash", ["scripts/ship-ios-ci.sh"], {
-      cwd: MOBILE_DIR,
-      env: process.env,
-      stdio: ["ignore", outFd, outFd],
-      detached: true,
+    const res = await fetch(`${GH_API}/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: "main", inputs: { requestedBy: user?.email ?? "unknown" } }),
     });
-    child.unref();
-    closeSync(outFd);
+    if (!res.ok) {
+      return c.json({ message: `GitHub rejected the trigger (${res.status}): ${await res.text()}` }, 502);
+    }
 
-    child.on("exit", (code) => {
-      state.status = code === 0 ? "success" : "failed";
-      state.finishedAt = Date.now();
-      state.exitCode = code;
-    });
-
+    lastDispatchAt = Date.now();
+    lastDispatchBy = user?.email ?? null;
     return c.json({ ok: true }, 200);
+  })
+
+  .get("/status", requireSuperadmin, async (c) => {
+    let headers: Record<string, string>;
+    try {
+      headers = ghHeaders();
+    } catch (e) {
+      return c.json({ message: (e as Error).message }, 400);
+    }
+
+    if (!lastDispatchAt) {
+      return c.json(
+        { status: "idle", steps: [] as Step[], startedAt: null, finishedAt: null, startedBy: null, htmlUrl: null },
+        200,
+      );
+    }
+
+    try {
+      const runsData = await gh(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=5`, headers);
+      const runs: any[] = runsData.workflow_runs ?? [];
+      // GitHub's dispatch API doesn't return a run id, so match by timing:
+      // the newest run created at/after our dispatch (with slack for queueing).
+      const run = runs.find((r) => new Date(r.created_at).getTime() >= lastDispatchAt! - 15_000) ?? runs[0] ?? null;
+
+      if (!run) {
+        return c.json(
+          { status: "running", steps: [] as Step[], startedAt: lastDispatchAt, finishedAt: null, startedBy: lastDispatchBy, htmlUrl: null },
+          200,
+        );
+      }
+
+      let steps: Step[] = [];
+      try {
+        const jobsData = await gh(`/repos/${OWNER}/${REPO}/actions/runs/${run.id}/jobs`, headers);
+        const job = jobsData.jobs?.[0];
+        if (job) steps = job.steps.map((s: any) => ({ name: s.name, status: s.status, conclusion: s.conclusion }));
+      } catch {
+        // Steps are a nice-to-have; a run with no step detail yet is still reportable.
+      }
+
+      const status = run.status !== "completed" ? "running" : run.conclusion === "success" ? "success" : "failed";
+
+      return c.json(
+        {
+          status,
+          steps,
+          startedAt: new Date(run.run_started_at ?? run.created_at).getTime(),
+          finishedAt: run.status === "completed" ? new Date(run.updated_at).getTime() : null,
+          startedBy: lastDispatchBy,
+          htmlUrl: run.html_url as string,
+        },
+        200,
+      );
+    } catch (e) {
+      return c.json({ message: (e as Error).message }, 502);
+    }
   });

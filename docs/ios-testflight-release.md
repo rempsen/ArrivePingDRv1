@@ -56,26 +56,35 @@ shipping.
 
 Superadmins (NVC360 staff) also get a one-click version of this inside the
 app itself: **Admin → Push to TestFlight** (sidebar, superadmin-only, next
-to Companies). Click the button, watch the log stream in the page, done —
-no laptop, no terminal.
+to Companies). Click the button, watch it go, done — no laptop, no terminal.
 
-This runs the headless twin of the script above,
-`packages/mobile/scripts/ship-ios-ci.sh`, as a background process on the
-production web server (`packages/web/src/api/routes/mobile-release.ts`,
-`GET /api/mobile-release/status`, `POST /api/mobile-release/start`). It
-needs two production secrets that **do not exist yet** and must be added
-through the "NVCV4 August 2026" chat's secrets form, then published:
+The button doesn't build anything on the production web server itself —
+that server is a trimmed deployment that doesn't even carry
+`packages/mobile`'s source, and it's internet-facing, which is the wrong
+place for an Apple signing key to live. Instead it triggers a **GitHub
+Actions workflow**, `.github/workflows/ship-ios.yml`, which checks out the
+full repo fresh on GitHub's own runner and does the actual build/submit
+there. The admin page just dispatches the workflow and polls its status
+(`packages/web/src/api/routes/mobile-release.ts` →
+`POST /api/mobile-release/start`, `GET /api/mobile-release/status`), via the
+GitHub REST API.
 
-- `EXPO_TOKEN` — a non-interactive Expo access token. Create one at
-  expo.dev → account → Settings → Access Tokens (role: can create builds
-  for this project).
-- `IOS_ASC_KEY_P8_BASE64` — the same `AuthKey.p8` App Store Connect key,
-  base64-encoded (`base64 -i AuthKey.p8 | pbcopy` on a Mac). The server
-  decodes it to `packages/mobile/keys/AuthKey.p8` the first time the button
-  is used; the raw `.p8` itself is still never committed.
+Two different places need secrets for this:
 
-Trade-off vs. Option A: the signing key now also lives on the production
-server (bigger attack surface — that server is internet-facing) instead of
-staying only on Dan's own machine. Both paths exist on purpose: use whichever
-is more convenient at the time; neither is Runable's own generic one-click
-iOS publish, which this project does not use.
+- **GitHub itself** (`github.com/rempsen/ArrivePingDRv1` → Settings →
+  Secrets and variables → Actions) needs the real build credentials, same
+  values as Option A:
+  - `EXPO_TOKEN` — a non-interactive Expo access token (expo.dev → account →
+    Settings → Access Tokens).
+  - `IOS_ASC_KEY_P8_BASE64` — `AuthKey.p8`, base64-encoded
+    (`base64 -i AuthKey.p8 | pbcopy` on a Mac).
+- **Production's own `.env`** (via the "NVCV4 August 2026" chat's secrets
+  form, then published) needs only one narrow token:
+  - `GITHUB_ACTIONS_TOKEN` — a fine-grained GitHub personal access token,
+    scoped to this one repo only, permission "Actions: Read and write" and
+    nothing else. This is all the production server uses to press the
+    button and read status back; it never sees the Apple key.
+
+Both paths exist on purpose: use whichever is more convenient at the time;
+neither is Runable's own generic one-click iOS publish, which this project
+does not use.

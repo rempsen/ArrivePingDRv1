@@ -1,0 +1,47 @@
+name: Ship iOS to TestFlight
+
+# Manually triggered only — either from GitHub's own "Run workflow" button,
+# or by the admin dashboard's "Push to TestFlight" button
+# (packages/web/src/api/routes/mobile-release.ts), which calls the
+# workflow_dispatch API. Never runs automatically on push/PR.
+on:
+  workflow_dispatch:
+    inputs:
+      requestedBy:
+        description: "Who/what triggered this run"
+        required: false
+        default: "manual"
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Write App Store Connect key
+        run: |
+          mkdir -p keys
+          echo "${{ secrets.IOS_ASC_KEY_P8_BASE64 }}" | base64 -d > keys/AuthKey.p8
+
+      - name: Build iOS app on Expo's servers
+        run: bunx --yes eas-cli build --platform ios --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Submit to TestFlight
+        run: bunx --yes eas-cli submit --platform ios --latest --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
