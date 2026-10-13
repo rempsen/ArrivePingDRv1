@@ -15,6 +15,7 @@ declare module "virtual:blog-index" {
     words: number;
     readingMinutes: number;
     headings: { id: string; text: string }[];
+    faqs: { q: string; a: string }[];
   };
   export const posts: PostMeta[];
   export const bodyLoaders: Record<string, () => Promise<string>>;
