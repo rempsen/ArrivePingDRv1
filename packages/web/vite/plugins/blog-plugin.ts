@@ -38,6 +38,8 @@ export type PostMeta = {
   words: number;
   readingMinutes: number;
   headings: { id: string; text: string }[];
+  /** Q&A pairs from a trailing "## FAQ" section (### question, then answer paragraphs), for FAQPage structured data. */
+  faqs: { q: string; a: string }[];
 };
 
 type Post = { meta: PostMeta; html: string };
@@ -97,6 +99,31 @@ function render(markdown: string) {
   return { html, headings };
 }
 
+/**
+ * Pull the FAQ out of the markdown so the page can emit FAQPage JSON-LD that
+ * matches what the reader sees. Only a "## FAQ" (or "## Frequently asked questions") section counts; each "###"
+ * heading is a question and the plain text until the next heading is the
+ * answer. Links and emphasis are flattened to text.
+ */
+export function extractFaqs(markdown: string): { q: string; a: string }[] {
+  const m = markdown.match(/\n## (?:FAQ|Frequently asked questions)\s*\n([\s\S]*?)(?=\n## |$)/i);
+  if (!m) return [];
+  const out: { q: string; a: string }[] = [];
+  for (const block of `\n${m[1]}`.split(/\n### /).slice(1)) {
+    const nl = block.indexOf("\n");
+    const q = (nl < 0 ? block : block.slice(0, nl)).trim();
+    const a = (nl < 0 ? "" : block.slice(nl + 1))
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/[*_`]/g, "")
+      .split(/\n\s*\n/)
+      .map((para) => para.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join(" ");
+    if (q && a) out.push({ q, a });
+  }
+  return out;
+}
+
 function parse(file: string): Post {
   const raw = fs.readFileSync(file, "utf8");
   const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
@@ -132,6 +159,7 @@ function parse(file: string): Post {
     words,
     readingMinutes: Math.max(1, Math.round(words / 230)),
     headings,
+    faqs: extractFaqs(body),
   };
   return { meta, html };
 }

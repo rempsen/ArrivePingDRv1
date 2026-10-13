@@ -220,6 +220,7 @@ const blogPostPages: SeoPage[] = posts.map((p) => {
         ...(cat ? [{ name: cat.label, path: `/blog/category/${cat.slug}` }] : []),
         { name: p.title, path },
       ]),
+      ...(p.faqs.length ? [faqPage(path, p.faqs)] : []),
       organization(),
     ]),
   };
