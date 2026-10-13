@@ -75,7 +75,7 @@ ArrivePing was built around the arrival, because that is where field service com
 - Every job sends an [on-my-way text](/on-my-way-text-software) with a live tracking link. The customer sees the technician on a map with an ETA that updates as the van moves, and can text or call them from the page. No app to install.
 - Dispatchers see every technician on one live map, so "where is he?" is answered by looking, not guessing. Jobs are auto-assigned to the closest qualified technician, which keeps ETAs short and windows narrow. Details on the [customer notifications page](/customer-notifications).
 - Arrival is confirmed by geofence, so the office knows the moment the technician is on site and the on-site clock starts without a phone call.
-- Pricing starts at $49 USD a month including the first driver, with per-driver rates that fall as the team grows ([pricing](/pricing)).
+- Pricing starts at $49 USD a month for one dispatch user and two drivers; drivers 3–29 are $30 each and every driver from 30 on is $25 ([pricing](/pricing)).
 
 ## FAQ
 
