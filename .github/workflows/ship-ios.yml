@@ -32,9 +32,32 @@ jobs:
         run: bun install
 
       - name: Write App Store Connect key
+        # IOS_ASC_KEY_P8_BASE64 has been stored two different ways across
+        # sessions: proper base64 of the *whole* AuthKey.p8 file (headers
+        # included), or just the PEM body with its line-wraps flattened to
+        # spaces. Decoding the second case with `base64 -d` alone writes
+        # mangled binary instead of a valid key — eas-cli still "schedules"
+        # the submission fine (it doesn't read the file for that), then
+        # Apple-side signing fails with a generic "something went wrong".
+        # Handle both without caring which one is actually stored.
         run: |
           mkdir -p keys
-          echo "${{ secrets.IOS_ASC_KEY_P8_BASE64 }}" | base64 -d > keys/AuthKey.p8
+          secret="${{ secrets.IOS_ASC_KEY_P8_BASE64 }}"
+          decoded="$(printf '%s' "$secret" | base64 -d 2>/dev/null || true)"
+          if printf '%s' "$decoded" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$decoded" > keys/AuthKey.p8
+          else
+            body="$(printf '%s' "$secret" | tr -d '"' | tr ' ' '\n')"
+            {
+              echo "-----BEGIN PRIVATE KEY-----"
+              echo "$body"
+              echo "-----END PRIVATE KEY-----"
+            } > keys/AuthKey.p8
+          fi
+          openssl pkey -in keys/AuthKey.p8 -noout -text > /dev/null || {
+            echo "::error::keys/AuthKey.p8 is not a valid private key after reconstruction."
+            exit 1
+          }
 
       - name: Build iOS app on Expo's servers
         run: bunx --yes eas-cli build --platform ios --profile production --non-interactive
