@@ -9,7 +9,6 @@ export function SiteFooter() {
         <div className="footer__grid">
           <div className="footer__brand">
             <div className="footer__logo">
-              <img src={brand.icon} alt="" width={36} height={36} className="header__mark" aria-hidden="true" />
               <img src={brand.logoLight} alt={brand.lockup} width={220} height={40} />
             </div>
             <p>{footer.description}</p>
