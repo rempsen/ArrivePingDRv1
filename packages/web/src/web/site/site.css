@@ -1639,12 +1639,13 @@
 }
 .site .footer__grid {
   display: grid;
-  grid-template-columns: 4fr 3fr 2fr 2fr 2fr;
+  /* brand | Product | Industries | Compare | Company | Legal */
+  grid-template-columns: 3fr 2fr 2fr 2fr 2fr 1.5fr;
   gap: var(--gutter);
 }
 @media (max-width: 1023px) and (min-width: 768px) {
   .site .footer__grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
   .site .footer__brand {
     grid-column: 1 / -1;
@@ -1672,6 +1673,21 @@
   color: var(--ink);
   letter-spacing: 0.01em;
   margin-bottom: 12px;
+}
+/* Column heading is a <button> so phones can collapse the list; on desktop it
+   is inert and looks like plain text (the chevron is hidden). */
+.site .footer__toggle {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: default;
+}
+.site .footer__chev {
+  display: none;
 }
 .site .footer ul {
   list-style: none;
@@ -1708,11 +1724,46 @@
   flex-shrink: 0;
 }
 @media (max-width: 767px) {
+  /* Phones: one column of accordions, closed by default. The <ul> stays in
+     the DOM (display:none only), so every link is still crawlable. */
   .site .footer__grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+    gap: 0;
   }
   .site .footer__brand {
-    grid-column: span 2;
+    margin-bottom: 20px;
+  }
+  .site .footer__col {
+    border-top: 1px solid var(--line);
+  }
+  .site .footer__col:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+  .site .footer h4 {
+    margin: 0;
+  }
+  .site .footer__toggle {
+    padding: 14px 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .site .footer__chev {
+    display: block;
+    color: var(--ink-muted);
+    transition: transform 0.2s ease;
+  }
+  .site .footer__col.is-open .footer__chev {
+    transform: rotate(180deg);
+  }
+  .site .footer__col ul {
+    display: none;
+    padding: 0 0 16px;
+  }
+  .site .footer__col.is-open ul {
+    display: grid;
+  }
+  .site .footer__bottom {
+    margin-top: 28px;
   }
 }
 

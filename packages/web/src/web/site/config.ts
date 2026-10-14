@@ -480,12 +480,19 @@ export const footer = {
         { label: "Dispatch software", href: "/dispatch-software" },
         { label: "Fleet tracking", href: "/fleet-tracking" },
         { label: "Customer ETA texts", href: "/customer-notifications" },
-        { label: "Construction & trades", href: "/construction-trades" },
         { label: "On-my-way texts", href: "/on-my-way-text-software" },
-        { label: "Delivery dispatch", href: "/delivery-dispatch-software" },
+      ],
+    },
+    {
+      // Industry landing pages used to sit under Product, which made that
+      // column 13 links tall. Same links, same SEO value, two tidy columns.
+      heading: "Industries",
+      links: [
+        { label: "Construction & trades", href: "/construction-trades" },
         { label: "HVAC dispatch", href: "/hvac-dispatch-software" },
         { label: "Plumbing dispatch", href: "/plumbing-dispatch-software" },
         { label: "Electrical dispatch", href: "/electrical-dispatch-software" },
+        { label: "Delivery dispatch", href: "/delivery-dispatch-software" },
         { label: "Canada", href: "/canada" },
       ],
     },
