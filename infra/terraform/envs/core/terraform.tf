@@ -4,17 +4,14 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 6.0"
+      version = "~> 6.69"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.6"
+      version = "~> 3.9"
     }
   }
 
-  # State lives in S3 in the project account, versioned and encrypted, with
-  # native S3 locking (use_lockfile) so no DynamoDB table is needed.
-  # Bucket was bootstrapped by hand — a state backend cannot create itself.
   backend "s3" {
     bucket       = "nvc360-tfstate-293174400261"
     key          = "core/terraform.tfstate"
@@ -29,7 +26,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "nvc360"
+      Project     = "ArrivePing"
       Environment = "core"
       ManagedBy   = "terraform"
     }
