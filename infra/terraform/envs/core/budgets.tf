@@ -1,8 +1,3 @@
-import {
-  to = aws_budgets_budget.monthly_cost_guard
-  id = "${data.aws_caller_identity.current.account_id}:nvc360-monthly-cost-guard"
-}
-
 resource "aws_budgets_budget" "monthly_cost_guard" {
   name         = "nvc360-monthly-cost-guard"
   budget_type  = "COST"

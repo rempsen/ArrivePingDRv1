@@ -64,8 +64,3 @@ resource "aws_s3_bucket_lifecycle_configuration" "tfstate" {
     }
   }
 }
-
-import {
-  to = aws_s3_bucket.tfstate
-  id = "nvc360-tfstate-293174400261"
-}
