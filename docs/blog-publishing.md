@@ -76,12 +76,30 @@ The reference post is `preferred-provider-lower-customer-acquisition-cost.md`. E
 6. **FAQ** (`## FAQ`): 3–5 questions phrased the way people ask assistants, each with a 2–4 sentence answer that stands on its own. The build emits these as FAQPage structured data.
 7. **Sources** (`## Sources`): a numbered list of every source cited, title, publisher, year and link. Prefer primary sources (the study, the regulator, the vendor's own report) over articles that quote them.
 
+### Cover images
+
+The first three covers in this format were too alike: same angle, same warm golden-hour palette, same person-holding-a-phone-on-the-left composition, and a visibly AI-generated look. Rules from 2026-10-15:
+
+- **Photorealistic model.** Use a model chosen for photorealism (in the ElevenLabs image tools: `bytedance-seedream-5-pro`, or `flux-2-pro`), not the general default. Prompt for an editorial photograph: named camera and lens, natural grain, imperfect framing, no rendered text on screens, no logos.
+- **Vary every cover against the log below.** Before generating, read the log and change at least four of: subject (person vs. no person; gender; age; role: technician, driver, dispatcher, homeowner), which hand holds the phone (or no phone), setting (kitchen, porch, construction site, warehouse dock, truck cab, dispatch office, driveway, apartment lobby), time and light (dawn, overcast, noon, rain, night under streetlights, fluorescent office), palette and grade (cool, neutral, desaturated, high-contrast black and white, film-stock looks), camera angle (over-shoulder, wide, from the van, from the doorway, overhead), and composition direction (subject on the right, centred, in the background).
+- **Not every cover has a phone.** A van at a loading dock, a dispatcher's screen, a technician's hands on a furnace, a row of trucks at dawn all say "arrival" without repeating the phone shot.
+- **Log each cover here** when the post merges, so the next one is forced to differ.
+
+| Post | Subject | Phone hand | Setting | Light / grade | Angle |
+|---|---|---|---|---|---|
+| preferred-provider | woman, homeowner | right (device in bg) | front door, van arriving | dusk, warm | wide |
+| no-call-no-show | man 40s, homeowner | right | kitchen table, driveway through window | golden hour, warm | over-shoulder from left |
+| last-mile | woman 30s, homeowner | right | front porch, van on street | golden hour, warm | over-shoulder from left |
+
+Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left.
+
 Checks before a pull request is opened:
 
 - `description` is 120–158 characters. Count it with code, not by eye.
 - Every number in the body has an inline link, and every link appears in Sources.
 - No competitor is characterised beyond what its own public materials say.
 - `bun run build` passes and `bun run seo:check` reports the new URL.
+- The cover differs from the log above on at least four variables, and the log row for the new post is added.
 - Codex review comments are addressed with a pushed commit before replying to them.
 
 ## Daily publishing (proposed)
