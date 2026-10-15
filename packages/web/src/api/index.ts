@@ -60,6 +60,7 @@ import { publicFormsRoutes } from "./routes/public-forms";
 import { demoRequestRoutes } from "./routes/demo-request";
 import { punchlistRoutes } from "./routes/punchlist";
 import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
+import { demoHealth } from "../services/demo-refresh";
 
 
 // CORS allowlist: comma-separated origins in CORS_ORIGINS. "*" allows all
@@ -246,6 +247,13 @@ const app = new Hono<{ Variables: Variables }>()
   // general API limiter (per-user / per-IP). Public track + ping have their own.
   .use("*", apiLimiter)
   .get("/health", (c) => c.json({ status: "ok" }, 200))
+  // Is the sales demo current? Counts only — no names, addresses or ids — so a
+  // daily scheduled check can watch it without a login.
+  .get("/health/demo", async (c) => {
+    const h = await demoHealth().catch(() => null);
+    if (!h) return c.json({ enabled: false, error: "unavailable" }, 503);
+    return c.json(h, 200);
+  })
   // deep readiness probe — checks the DB is actually reachable
   .get("/ready", async (c) => {
     const checks: Record<string, string> = {};
