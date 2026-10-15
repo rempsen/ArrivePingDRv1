@@ -30,8 +30,8 @@
  * here may text or email anyone. It only ever touches the one demo tenant.
  */
 import { createHash } from "node:crypto";
-import { and, eq, gte, inArray, isNotNull, isNull, like, lt, not, or } from "drizzle-orm";
-import { db } from "../api/database";
+import { and, eq, gte, ilike, inArray, isNotNull, isNull, like, lt, not, or } from "drizzle-orm";
+import { db, sdb } from "../api/database";
 import { tdb, type Executor } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import {
@@ -89,8 +89,17 @@ export async function resolveDemoTenant(force = false): Promise<string | null> {
     const rows = await db
       .select({ id: schema.companies.id })
       .from(schema.companies)
-      .where(eq(schema.companies.name, DEMO_COMPANY_NAME));
+      .where(ilike(schema.companies.name, `${DEMO_COMPANY_NAME}%`));
     // Exactly one match or nothing: never guess between two companies.
+    id = rows.length === 1 ? rows[0]!.id : null;
+  }
+  if (!id) {
+    // Fallback: the company the demo admin login (a "prairiedemo" address) administers.
+    const rows = await sdb
+      .selectDistinct({ id: schema.memberships.companyId })
+      .from(schema.memberships)
+      .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
+      .where(and(ilike(schema.user.email, "%prairiedemo%"), eq(schema.memberships.role, "admin")));
     id = rows.length === 1 ? rows[0]!.id : null;
   }
   tenantCache = { id, at: Date.now() };
