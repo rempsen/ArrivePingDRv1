@@ -8,8 +8,20 @@ interface Prediction {
   description: string;
   main: string;
   secondary: string;
-  lat?: number;
-  lng?: number;
+}
+
+/**
+ * One Places session per address entry: every suggestion request and the
+ * closing details request share a token, so Google bills the entry as one
+ * session instead of per keystroke. Omitted where randomUUID is unavailable
+ * (non-secure contexts); the server then bills per request, nothing breaks.
+ */
+function newSessionToken(): string | null {
+  try {
+    return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
+  } catch {
+    return null;
+  }
 }
 
 export function AddressAutocomplete({
@@ -17,6 +29,7 @@ export function AddressAutocomplete({
   onResolve,
   placeholder = "Start typing an address…",
   source = "auth",
+  form,
   inputClassName,
   inputStyle,
   theme = "dark",
@@ -27,10 +40,12 @@ export function AddressAutocomplete({
   placeholder?: string;
   /**
    * "auth" (default) uses the authenticated /geo proxy. "public" uses the
-   * unauthenticated, rate-limited /api/public/forms/geo proxy so address fields
-   * on public intake pages (no app session) still auto-populate.
+   * unauthenticated, capped /api/public/forms/:companyId/:slug/geo proxy so
+   * address fields on public intake pages (no app session) still auto-populate.
    */
   source?: "auth" | "public";
+  /** Required with source="public": the form this field belongs to. */
+  form?: { companyId: string; slug: string };
   /** Override the input class (e.g. to match a public form's theme). */
   inputClassName?: string;
   /** Inline style for the input (e.g. brand focus ring on public forms). */
@@ -44,6 +59,10 @@ export function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const tRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRef = useRef<string | null>(null);
+  const publicBase = form
+    ? `/api/public/forms/${encodeURIComponent(form.companyId)}/${encodeURIComponent(form.slug)}/geo`
+    : null;
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setQ(value), [value]);
@@ -64,17 +83,22 @@ export function AddressAutocomplete({
       setPreds([]);
       return;
     }
+    if (source === "public" && !publicBase) return; // no form context: free text only
+    if (!sessionRef.current) sessionRef.current = newSessionToken();
+    const sessionToken = sessionRef.current ?? undefined;
     setLoading(true);
     tRef.current = setTimeout(async () => {
       try {
         let data: any;
         if (source === "public") {
-          const r = await fetch(
-            `/api/public/forms/geo/autocomplete?q=${encodeURIComponent(text)}`,
-          );
+          const qs = new URLSearchParams({ q: text });
+          if (sessionToken) qs.set("sessionToken", sessionToken);
+          const r = await fetch(`${publicBase}/autocomplete?${qs}`);
           data = await r.json();
         } else {
-          const res = await api.geo.autocomplete.$get({ query: { q: text } });
+          const res = await api.geo.autocomplete.$get({
+            query: sessionToken ? { q: text, sessionToken } : { q: text },
+          });
           data = await res.json();
         }
         setPreds(data.predictions ?? []);
@@ -90,24 +114,29 @@ export function AddressAutocomplete({
   async function pick(p: Prediction) {
     setQ(p.description);
     setOpen(false);
-    if (p.lat != null && p.lng != null) {
-      setCoords({ lat: p.lat, lng: p.lng });
-      onResolve({ address: p.description, lat: p.lat, lng: p.lng });
-      return;
-    }
-    let d: any;
-    if (source === "public") {
-      const r = await fetch(
-        `/api/public/forms/geo/details?placeId=${encodeURIComponent(p.placeId)}&description=${encodeURIComponent(p.description)}`,
-      );
-      d = await r.json();
-    } else {
-      const res = await api.geo.details.$get({
-        query: { placeId: p.placeId, description: p.description },
-      });
-      d = await res.json();
+    // The details call closes this Places session; the next edit starts a new one.
+    const sessionToken = sessionRef.current ?? undefined;
+    sessionRef.current = null;
+    let d: any = {};
+    try {
+      if (source === "public") {
+        const qs = new URLSearchParams({ placeId: p.placeId, description: p.description });
+        if (sessionToken) qs.set("sessionToken", sessionToken);
+        const r = await fetch(`${publicBase}/details?${qs}`);
+        d = await r.json();
+      } else {
+        const res = await api.geo.details.$get({
+          query: sessionToken
+            ? { placeId: p.placeId, description: p.description, sessionToken }
+            : { placeId: p.placeId, description: p.description },
+        });
+        d = await res.json();
+      }
+    } catch {
+      // keep the picked text; coordinates get resolved server-side on save
     }
     if (d.lat != null) setCoords({ lat: d.lat, lng: d.lng });
+    else setCoords(null);
     onResolve({ address: d.address || p.description, lat: d.lat ?? null, lng: d.lng ?? null });
   }
 

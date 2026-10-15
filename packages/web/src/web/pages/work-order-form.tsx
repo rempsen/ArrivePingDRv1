@@ -442,7 +442,7 @@ function WorkOrderBuilder({ companyId, slug, cfg, services, brand, publicKey }: 
                 <Field label="Phone"><input aria-label="Client phone" className={inputCls} style={ring(brand)} value={newClient.phone} onChange={(e) => setNewClient((v) => ({ ...v, phone: e.target.value }))} /></Field>
                 <Field label="Email"><input aria-label="Client email" type="email" className={inputCls} style={ring(brand)} value={newClient.email} onChange={(e) => setNewClient((v) => ({ ...v, email: e.target.value }))} /></Field>
                 <Field label="Address">
-                  <AddressAutocomplete source="public" theme="light" value={newClient.address} inputClassName={inputCls} inputStyle={ring(brand)}
+                  <AddressAutocomplete source="public" form={{ companyId, slug }} theme="light" value={newClient.address} inputClassName={inputCls} inputStyle={ring(brand)}
                     onResolve={({ address: a, lat, lng }) => { setNewClient((v) => ({ ...v, address: a })); setAddrCoords({ lat, lng }); }} />
                 </Field>
               </div>
@@ -468,7 +468,7 @@ function WorkOrderBuilder({ companyId, slug, cfg, services, brand, publicKey }: 
                 </select>
               </Field>
               <Field label="Job address" hint={clientMode === "new" ? "Leave blank to use the client's address above." : undefined}>
-                <AddressAutocomplete source="public" theme="light" value={address} inputClassName={inputCls} inputStyle={ring(brand)}
+                <AddressAutocomplete source="public" form={{ companyId, slug }} theme="light" value={address} inputClassName={inputCls} inputStyle={ring(brand)}
                   onResolve={({ address: a, lat, lng }) => { setAddress(a); setAddrCoords({ lat, lng }); }} />
               </Field>
               <Field label="Your name" hint="So the office knows who submitted this.">

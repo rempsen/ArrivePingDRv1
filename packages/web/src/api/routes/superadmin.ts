@@ -119,6 +119,28 @@ export const superadminRoutes = new Hono<AppEnv>()
     return c.json(report, 200);
   })
 
+  // ---- client-IP diagnostic -----------------------------------------------
+  // Shows exactly which address headers reach the app through the hosting
+  // edge (Cloudflare and the platform's proxies), so the rate limiter can key
+  // on a header a client can't forge. Only the caller's own request is shown.
+  .get("/client-ip", requireSuperadmin, (c) => {
+    const names = [
+      "cf-connecting-ip",
+      "true-client-ip",
+      "fly-client-ip",
+      "x-forwarded-for",
+      "x-real-ip",
+      "x-envoy-external-address",
+      "forwarded",
+      "via",
+      "cf-ray",
+      "fly-region",
+    ];
+    const headers: Record<string, string | null> = {};
+    for (const n of names) headers[n] = c.req.header(n) ?? null;
+    return c.json({ headers, note: "Compare these with your own public IP (search 'what is my IP')." }, 200);
+  })
+
   // ---- list all tenants -------------------------------------------------
   .get("/companies", requireSuperadmin, async (c) => {
     const rows = await db.select().from(schema.companies);

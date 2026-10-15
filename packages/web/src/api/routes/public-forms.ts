@@ -6,7 +6,9 @@ import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { resolvePublicKey, hashApiKey } from "../middleware/auth";
 import { putObject } from "../lib/storage";
-import { rateLimit, keyByIp } from "../lib/rate-limit";
+import { rateLimit, keyByIp, consumeBudget, envLimit } from "../lib/rate-limit";
+import { autocompleteAddress, placeDetails } from "../../services/places";
+import { companyOfficeBias } from "../../services/company-office";
 import { fireEvent } from "../../services/dispatch";
 import { checkServiceZone } from "../../services/zones";
 import { forwardGeocode } from "../../services/geocode";
@@ -177,15 +179,50 @@ const submitLimiter = rateLimit({
   keyFn: keyByIp,
 });
 
-// Public address lookups are cheap but proxy a paid API, so cap them per-IP.
+// Public address lookups proxy a paid API (Places API New) with no login, so
+// they're capped three ways. Only the per-IP cap depends on headers a client
+// could forge; the per-form and global caps don't, so they bound the cost of
+// abuse whatever the edge forwards. Over a cap, the field quietly stops
+// suggesting and works as free text (submit geocodes server-side).
 const geoLimiter = rateLimit({
   name: "public-geo",
-  limit: Number(process.env.RL_PUBLIC_GEO_LIMIT ?? 60),
+  limit: () => envLimit("RL_PUBLIC_GEO_LIMIT", 60),
   windowMs: 60_000,
   keyFn: keyByIp,
 });
+/** Google requests per form per hour (~8 per typed address, so ~75 addresses). */
+const GEO_FORM_HOURLY = () => envLimit("RL_PUBLIC_GEO_FORM_HOURLY", 600);
+/** Google requests per day across every public form. Worst case ~$8.50/day at list price. */
+const GEO_GLOBAL_DAILY = () => envLimit("RL_PUBLIC_GEO_GLOBAL_DAILY", 3000);
 
-const GMAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
+async function withinGeoBudget(companyId: string, slug: string): Promise<boolean> {
+  const form = await consumeBudget("public-geo-form", `${companyId}/${slug}`, GEO_FORM_HOURLY(), 3_600_000);
+  if (!form) {
+    incr("public_geo_form_budget_exceeded");
+    return false;
+  }
+  const global = await consumeBudget("public-geo-global", "all", GEO_GLOBAL_DAILY(), 86_400_000);
+  if (!global) incr("public_geo_global_budget_exceeded");
+  return global;
+}
+
+/** Is there an active form here? Cached: every keystroke asks. */
+const activeFormCache = new Map<string, { at: number; ok: boolean }>();
+async function isActiveForm(companyId: string, slug: string): Promise<boolean> {
+  const k = `${companyId}/${slug}`;
+  const hit = activeFormCache.get(k);
+  if (hit && Date.now() - hit.at < 60_000) return hit.ok;
+  let ok = false;
+  try {
+    const form = await loadForm(companyId, slug);
+    ok = !!form?.active;
+  } catch {
+    ok = false;
+  }
+  if (activeFormCache.size >= 1000) activeFormCache.delete(activeFormCache.keys().next().value!);
+  activeFormCache.set(k, { at: Date.now(), ok });
+  return ok;
+}
 
 function clientIp(c: any): string {
   return (
@@ -201,75 +238,32 @@ async function loadForm(companyId: string, slug: string) {
 }
 
 export const publicFormsRoutes = new Hono<AppEnv>()
-  // ---- address autocomplete (no auth, rate-limited) ----
-  // Mirrors /geo/autocomplete but available to unauthenticated public forms so
-  // every address field on a public intake page can still auto-populate.
-  .get("/geo/autocomplete", geoLimiter, async (c) => {
-    const q = c.req.query("q")?.trim();
-    if (!q || q.length < 3) return c.json({ predictions: [] }, 200);
-
-    if (GMAPS_KEY) {
-      const url = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
-      url.searchParams.set("input", q);
-      url.searchParams.set("key", GMAPS_KEY);
-      url.searchParams.set("components", "country:ca|country:us");
-      const r = await fetch(url);
-      const data = (await r.json()) as any;
-      const predictions = (data.predictions || []).map((p: any) => ({
-        placeId: p.place_id,
-        description: p.description,
-        main: p.structured_formatting?.main_text ?? p.description,
-        secondary: p.structured_formatting?.secondary_text ?? "",
-      }));
-      return c.json({ predictions, provider: "google" }, 200);
+  // ---- address search for a public form (no auth, capped) ----
+  // Scoped to a real, active form so abuse is bounded per form as well as per
+  // IP and globally. Same Places (New) helper as the signed-in /geo proxy.
+  .get("/:companyId/:slug/geo/autocomplete", geoLimiter, async (c) => {
+    const { companyId, slug } = c.req.param();
+    const q = c.req.query("q")?.trim() ?? "";
+    if (q.length < 3) return c.json({ predictions: [], provider: "google" }, 200);
+    if (!(await isActiveForm(companyId, slug))) return c.json({ message: "Form not found" }, 404);
+    if (!(await withinGeoBudget(companyId, slug))) {
+      return c.json({ predictions: [], provider: "google", limited: true }, 200);
     }
-
-    const url = new URL("https://nominatim.openstreetmap.org/search");
-    url.searchParams.set("q", q);
-    url.searchParams.set("format", "json");
-    url.searchParams.set("addressdetails", "1");
-    url.searchParams.set("limit", "6");
-    const r = await fetch(url, { headers: { "User-Agent": "ArrivePing/1.0" } });
-    const data = (await r.json()) as any;
-    const predictions = (data || []).map((p: any) => ({
-      placeId: `osm:${p.lat},${p.lon}`,
-      description: p.display_name,
-      main: p.display_name.split(",")[0],
-      secondary: p.display_name.split(",").slice(1).join(",").trim(),
-      lat: parseFloat(p.lat),
-      lng: parseFloat(p.lon),
-    }));
-    return c.json({ predictions, provider: "osm" }, 200);
+    const bias = await companyOfficeBias(companyId);
+    return c.json(await autocompleteAddress(q, { sessionToken: c.req.query("sessionToken"), bias }), 200);
   })
-  // ---- resolve a placeId to coords + formatted address (no auth, rate-limited) ----
-  .get("/geo/details", geoLimiter, async (c) => {
+  // ---- resolve a picked suggestion to coords; closes the Places session ----
+  .get("/:companyId/:slug/geo/details", geoLimiter, async (c) => {
+    const { companyId, slug } = c.req.param();
     const placeId = c.req.query("placeId");
     if (!placeId) return c.json({ message: "placeId required" }, 400);
-
-    if (placeId.startsWith("osm:")) {
-      const [lat, lng] = placeId.slice(4).split(",").map(Number);
-      return c.json({ lat, lng, address: c.req.query("description") || "" }, 200);
+    const description = c.req.query("description") || "";
+    if (!(await isActiveForm(companyId, slug))) return c.json({ message: "Form not found" }, 404);
+    if (!(await withinGeoBudget(companyId, slug))) {
+      return c.json({ lat: null, lng: null, address: description, provider: "google", limited: true }, 200);
     }
-
-    if (GMAPS_KEY) {
-      const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-      url.searchParams.set("place_id", placeId);
-      url.searchParams.set("key", GMAPS_KEY);
-      url.searchParams.set("fields", "geometry,formatted_address");
-      const r = await fetch(url);
-      const data = (await r.json()) as any;
-      const loc = data.result?.geometry?.location;
-      return c.json(
-        {
-          lat: loc?.lat ?? null,
-          lng: loc?.lng ?? null,
-          address: data.result?.formatted_address ?? "",
-          provider: "google",
-        },
-        200,
-      );
-    }
-    return c.json({ message: "No geocoder configured" }, 500);
+    const res = await placeDetails(placeId, { sessionToken: c.req.query("sessionToken") });
+    return c.json({ ...res, address: res.address || description }, 200);
   })
   // ---- form schema (no auth) ----
   .get("/:companyId/:slug", async (c) => {

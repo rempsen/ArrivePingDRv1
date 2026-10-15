@@ -209,6 +209,17 @@ export function rateLimit(opts: {
   });
 }
 
+/**
+ * Count one unit against a named budget and say whether it is still within
+ * `limit` for the window. Same store as the middleware (shared via Redis when
+ * configured), but returns instead of throwing, so a caller can degrade
+ * gracefully (e.g. stop offering address suggestions) rather than fail.
+ */
+export async function consumeBudget(name: string, key: string, limit: number, windowMs: number): Promise<boolean> {
+  const { count } = await store.hit(`${name}:${key}`, windowMs);
+  return count <= limit;
+}
+
 // ---- common key strategies ------------------------------------------------
 export const keyByUser: KeyFn = (c) => {
   const u = c.get("user") as { id?: string } | null;
@@ -265,7 +276,7 @@ function hashCred(v: string): string {
  * Anything that isn't a positive finite number falls back to the documented
  * default instead.
  */
-function envLimit(name: string, dflt: number): number {
+export function envLimit(name: string, dflt: number): number {
   const n = Number(process.env[name]);
   return Number.isFinite(n) && n > 0 ? n : dflt;
 }
