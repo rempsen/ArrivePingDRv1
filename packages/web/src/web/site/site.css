@@ -2079,3 +2079,41 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Closing section: the free-trial card that replaced the demo form */
+.site .trial-card__points {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.site .trial-card__points li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.site .trial-card__points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6 9 17l-5-5'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6 9 17l-5-5'/></svg>") center / contain no-repeat;
+}
+.site .trial-card__cta {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 22px;
+}
+.site .trial-card__fine {
+  text-align: center;
+  margin-top: 12px;
+  color: var(--ink-muted);
+}

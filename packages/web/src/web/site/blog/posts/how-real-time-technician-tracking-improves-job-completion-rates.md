@@ -137,4 +137,4 @@ Most businesses find that a handful of consistent patterns account for the major
 
 The technology isn’t magic. But paired with good operational discipline, it’s one of the most reliable ways to get measurably better performance out of the team you already have.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

@@ -86,4 +86,4 @@ The labor shortage is real, but it doesn’t have to break your business. You ca
 
 **Stop searching for unicorns in a labor drought. Start equipping your workhorses with the tools they need to win.**
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

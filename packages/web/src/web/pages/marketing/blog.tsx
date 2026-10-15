@@ -288,8 +288,8 @@ function BlogPost({ slug }: { slug: string }) {
                 </p>
               </div>
               <div className="post__cta-actions">
-                <a href="#book-a-demo" className="btn btn--primary">
-                  Book a demo
+                <a href={brand.urls.signUp} className="btn btn--primary">
+                  Sign up free
                 </a>
                 {cat && (
                   <a href={cat.productPath} className="btn btn--secondary">

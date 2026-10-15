@@ -171,4 +171,4 @@ A [live map of your technicians](/fleet-tracking). [On-my-way texts with a live 
 
 ArrivePing launches in November 2026. The Uber Effect is coming to field service; the only question is whether you’re delivering it or watching a competitor do it first.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

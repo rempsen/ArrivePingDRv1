@@ -51,7 +51,7 @@ The “[Uber Effect](/blog/uber-effect-field-service-price-sensitivity)” has f
 
 It’s no longer a question of if your customers demand real-time service, but when you will deliver it. ArrivePing launches in November 2026.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ### References
 

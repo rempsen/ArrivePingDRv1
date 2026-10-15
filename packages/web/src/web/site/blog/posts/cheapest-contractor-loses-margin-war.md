@@ -89,4 +89,4 @@ The race to the bottom has no winners. If your only value proposition is being t
 
 Sustained growth requires a commitment to becoming the preferred provider in your market. A transparent, communicative customer experience is what lets you command premium pricing and improve retention.
 
-It is time to stop competing on price and start competing on preference. See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+It is time to stop competing on price and start competing on preference. See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

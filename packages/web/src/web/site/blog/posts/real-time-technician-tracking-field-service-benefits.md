@@ -48,7 +48,7 @@ The field service industry is evolving rapidly, and the businesses that thrive w
 
 ArrivePing by NVC360 brings this to your team: a live map of technicians from the app on their phones, automatic on-my-way texts with a live tracking page, and geofenced arrival times. It launches in November 2026.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ---
 

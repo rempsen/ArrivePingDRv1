@@ -202,7 +202,7 @@ ArrivePing launches in November 2026. It needs no vehicle hardware, works alongs
 
 **Preferred vendor status is not given. It is built — one frictionless experience at a time.**
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ---
 

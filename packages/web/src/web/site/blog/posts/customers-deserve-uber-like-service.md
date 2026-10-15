@@ -78,4 +78,4 @@ Customer expectations have evolved, and they are not going back. Your clients ex
 
 The data is clear: companies that provide proactive communication and transparency command higher prices, suffer fewer complaints, and generate significantly more repeat business and referrals.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

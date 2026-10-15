@@ -142,7 +142,7 @@ The strategic shift is already visible across the industry. Messaging that once 
 
 For field service companies, specialty trades, and mobile workforce businesses, the opportunity is clear. Build an operating model that gives customers real-time confidence, gives technicians more productive time, and gives managers better visibility into what is actually happening. That is how companies protect margin. That is how they improve service. That is how they become preferred.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ## References
 

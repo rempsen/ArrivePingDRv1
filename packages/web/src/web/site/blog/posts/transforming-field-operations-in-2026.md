@@ -71,4 +71,4 @@ If your business relies on a mobile workforce, you can’t afford to operate the
 
 *NVC360 is proudly building ArrivePing in Winnipeg, Manitoba, creating jobs and driving tech innovation across Canada.*
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

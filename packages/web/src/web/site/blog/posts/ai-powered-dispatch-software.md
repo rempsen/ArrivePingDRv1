@@ -86,7 +86,7 @@ AI-powered dispatch, real-time technician tracking, and client communication aut
 
 Control the cost of operational friction. Deliver the service experience customers remember. Become the provider they prefer before price becomes the only conversation.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ## References
 
