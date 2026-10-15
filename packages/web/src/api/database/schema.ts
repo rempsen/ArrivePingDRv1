@@ -1260,6 +1260,16 @@ export const companies = pgTable("companies", {
   // a connected account. Meant for the ArrivePing tenant (the company that
   // owns the platform) — its money belongs in the platform bank anyway.
   stripeUsePlatform: boolean("stripe_use_platform").notNull().default(false),
+  // ArrivePing's OWN subscription billing (platform Stripe account), for
+  // self-serve tenants: one Customer + one Subscription per company, started
+  // at signup with a 30-day trial and the card on file. Seats = active
+  // drivers, re-counted before each invoice (services/billing-subscription.ts).
+  // NULL customer/subscription = not self-serve billed (invoiced by hand).
+  billingCustomerId: text("billing_customer_id"),
+  billingSubscriptionId: text("billing_subscription_id"),
+  billingStatus: text("billing_status").notNull().default("none"), // none | trialing | active | past_due | canceled | unpaid
+  billingTrialEndsAt: timestamp("billing_trial_ends_at", { mode: "date", withTimezone: true }),
+  billingSeats: integer("billing_seats").notNull().default(0),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });

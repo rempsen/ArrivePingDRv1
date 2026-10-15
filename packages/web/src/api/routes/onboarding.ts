@@ -37,11 +37,21 @@ import {
   provisionCompany,
   websiteUrlSchema,
   CompanyCreateBody,
+  slugify,
   seedCatalogForCompany,
   seedOptionCatalogForCompany,
   loadIcpKnowledge,
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
+import { getStripe, stripeEnabled, STRIPE_PUBLISHABLE_KEY } from "../../services/stripe";
+import {
+  createSignupSetup,
+  startTrialSubscription,
+  cancelSubscriptionQuietly,
+  TRIAL_DAYS,
+} from "../../services/billing-subscription";
+import { notifySelfServeSignup } from "../../services/signup-notify";
+import { email as emailField, shortText } from "../lib/validate";
 import { loadSiteExcerpts } from "../../services/site-crawl";
 import { rescanWebsite } from "../../services/rescan";
 import {
@@ -98,6 +108,24 @@ const SelfServeSignupBody = CompanyCreateBody.omit({
   managerName: true,
   managerEmail: true,
   managerPassword: true,
+}).extend({
+  // From POST /billing/setup, once Payment Element has saved the card.
+  // Required whenever Stripe is configured: no card, no trial.
+  billingCustomerId: optText(80),
+  billingSetupIntentId: optText(80),
+});
+
+const BillingSetupBody = z.object({
+  email: emailField("Email"),
+  name: shortText("Your name", 200),
+  companyName: optText(200),
+  phone: optText(40),
+});
+const onboardingBillingLimiter = rateLimit({
+  name: "onboarding-billing",
+  limit: 10,
+  windowMs: 60 * 60_000,
+  keyFn: keyByIp,
 });
 
 export const onboardingPublicRoutes = new Hono<AppEnv>()
@@ -117,23 +145,121 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     }
   })
 
-  // POST /api/public/onboarding/signup — provisions a brand-new tenant end to
-  // end (same pipeline the superadmin panel uses) and returns just enough for
-  // the client to immediately sign the admin in with the credentials THEY
-  // typed. Deliberately does NOT return the raw API key secret here — unlike
-  // the superadmin flow (a trusted internal operator acting on someone else's
+  // GET /api/public/onboarding/billing/config — is the card step on, and
+  // what the browser needs to render it.
+  .get("/billing/config", (c) =>
+    c.json({ enabled: stripeEnabled, publishableKey: STRIPE_PUBLISHABLE_KEY, trialDays: TRIAL_DAYS }, 200),
+  )
+
+  // POST /api/public/onboarding/billing/setup — a Stripe customer + a
+  // SetupIntent so Payment Element can SAVE the card (nothing is charged).
+  // The subscription itself is created at /signup, with the trial.
+  .post("/billing/setup", onboardingBillingLimiter, jsonBody(BillingSetupBody), async (c) => {
+    if (!stripeEnabled) return c.json({ message: "Billing is not configured" }, 503);
+    const b = c.req.valid("json");
+    try {
+      const setup = await createSignupSetup({
+        email: b.email,
+        name: b.name,
+        companyName: b.companyName ?? "",
+        phone: b.phone || undefined,
+      });
+      return c.json({ ...setup, publishableKey: STRIPE_PUBLISHABLE_KEY }, 200);
+    } catch (e) {
+      console.error("[onboarding] billing setup failed", e);
+      return c.json({ message: "We couldn't start the payment step. Please try again in a moment." }, 502);
+    }
+  })
+
+  // POST /api/public/onboarding/signup — starts the 30-day trial subscription
+  // on the saved card, then provisions a brand-new tenant end to end (same
+  // pipeline the superadmin panel uses) and returns just enough for the
+  // client to immediately sign the admin in with the credentials THEY typed.
+  // Deliberately does NOT return the raw API key secret here — unlike the
+  // superadmin flow (a trusted internal operator acting on someone else's
   // behalf), this response body is sitting in a stranger's browser before
   // they've even authenticated; the admin can view/rotate their key from
   // Settings once signed in.
   .post("/signup", onboardingSignupLimiter, jsonBody(SelfServeSignupBody), async (c) => {
-    const b = c.req.valid("json");
-    const result = await provisionCompany({ ...b, plan: "starter" }, {}, { source: "self_serve" });
+    const { billingCustomerId, billingSetupIntentId, ...b } = c.req.valid("json");
+    // Self-serve can't be asked to pick another slug on a collision, so take
+    // the next free one ("acme-hvac-2") before anything is created.
+    const base = slugify(b.slug || b.name);
+    if (!base) return c.json({ message: "We need your company name to set up your account." }, 400);
+    let slug = base;
+    for (let i = 2; i < 50; i++) {
+      const [dupe] = await db.select({ id: schema.companies.id }).from(schema.companies).where(eq(schema.companies.id, slug));
+      if (!dupe) break;
+      slug = `${base.slice(0, 44)}-${i}`;
+    }
+
+    // 1) the trial subscription, so a tenant never exists without billing
+    let billing: Awaited<ReturnType<typeof startTrialSubscription>> | null = null;
+    if (stripeEnabled) {
+      if (!billingCustomerId || !billingSetupIntentId) {
+        return c.json({ message: "Add a payment method to start your free trial." }, 400);
+      }
+      try {
+        billing = await startTrialSubscription({
+          customerId: billingCustomerId,
+          setupIntentId: billingSetupIntentId,
+          companyId: slug,
+          companyName: b.name,
+        });
+      } catch (e) {
+        console.error("[onboarding] trial subscription failed", e);
+        return c.json({ message: "We couldn't start your free trial with that card. Please try again." }, 502);
+      }
+      if (!billing.ok) return c.json({ message: billing.message }, 400);
+    }
+
+    // 2) the tenant
+    let result: Awaited<ReturnType<typeof provisionCompany>>;
+    try {
+      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve" });
+    } catch (e) {
+      if (billing?.ok) await cancelSubscriptionQuietly(billing.subscriptionId);
+      throw e;
+    }
+    const companyId = result.company.id;
+    if (billing?.ok) {
+      await db
+        .update(schema.companies)
+        .set({
+          billingCustomerId: billing.customerId,
+          billingSubscriptionId: billing.subscriptionId,
+          billingStatus: billing.status,
+          billingTrialEndsAt: billing.trialEndsAt,
+          billingSeats: 1,
+        })
+        .where(eq(schema.companies.id, companyId));
+      // Belt and braces: keep Stripe's metadata pointing at the real tenant id.
+      if (companyId !== slug) {
+        await getStripe()
+          .subscriptions.update(billing.subscriptionId, { metadata: { companyId, source: "arriveping-self-serve" } })
+          .catch(() => {});
+      }
+    }
+
+    // 3) tell the team (never blocks the signup)
+    void notifySelfServeSignup({
+      companyId,
+      companyName: result.company.name,
+      website: b.website ?? "",
+      industry: b.industry ?? "",
+      adminName: String(b.adminName ?? ""),
+      adminEmail: b.adminEmail,
+      adminPhone: String(b.adminPhone ?? ""),
+      trialEndsAt: billing?.ok ? billing.trialEndsAt : null,
+    }).catch((e) => console.error("[onboarding] signup notification failed", e));
+
     return c.json(
       {
-        companySlug: result.company.id,
+        companySlug: companyId,
         companyName: result.company.name,
         admin: result.admin,
         seeded: result.seeded,
+        trialEndsAt: billing?.ok ? billing.trialEndsAt.toISOString() : null,
       },
       201,
     );

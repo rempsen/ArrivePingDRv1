@@ -3,10 +3,10 @@ import { Link } from "wouter";
 import { api } from "../lib/api";
 import { authClient, captureToken } from "../lib/auth";
 import { Logo } from "../components/brand";
-import { Loader } from "../components/loader";
 import { Field, inputCls } from "../components/modal";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../components/provisioning-progress";
 import { SignupReveal } from "../components/signup-reveal";
+import { SignupPayment, type BillingIds } from "../components/signup-payment";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../services/industry-presets";
 import {
   Building2,
@@ -72,7 +72,7 @@ type BrandProposal = {
   warnings: string[];
 };
 
-type Step = "site" | "reveal" | "details" | "person";
+type Step = "site" | "reveal" | "details" | "person" | "payment";
 
 /** Loose "is this at least a domain" check — gates the auto-scout so it
  * doesn't fire on every keystroke of "a", "ac", "acm…". The real validation
@@ -226,8 +226,13 @@ export default function SignupCompanyPage() {
     setStep("person");
   }
 
-  async function submit(e: React.FormEvent) {
+  function continueToPayment(e: React.FormEvent) {
     e.preventDefault();
+    setErr("");
+    setStep("payment");
+  }
+
+  async function submit(billing: BillingIds) {
     setErr("");
     setSubmitting(true);
     try {
@@ -257,6 +262,8 @@ export default function SignupCompanyPage() {
           adminEmail,
           adminPassword,
           brand: reviewedBrand,
+          billingCustomerId: billing?.customerId,
+          billingSetupIntentId: billing?.setupIntentId,
         },
       });
       const d = await res.json();
@@ -633,7 +640,7 @@ export default function SignupCompanyPage() {
                     This is the login that runs {name.trim() || "your company"} on ArrivePing.
                   </p>
 
-                  <form onSubmit={submit} className="mt-5 space-y-4">
+                  <form onSubmit={continueToPayment} className="mt-5 space-y-4">
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div className="relative">
@@ -667,37 +674,42 @@ export default function SignupCompanyPage() {
 
                     <p className="rounded-lg bg-white/[0.03] px-3.5 py-2.5 text-xs leading-relaxed text-slate-400">
                       <Sparkles className="mr-1 inline h-3 w-3 text-cyan-glow" />
-                      After this, a short AI conversation picks up anything we still don't know — hours, service area, your team — and finishes the setup with you.
+                      Next: a card for after your free trial. Nothing is charged for 30 days, and you can cancel any time before then.
                     </p>
-
-                    <div className="min-h-[44px]" role="alert" aria-live="polite">
-                      {err && (
-                        <div className="flex min-h-[44px] items-center rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400">
-                          {err}
-                        </div>
-                      )}
-                    </div>
 
                     <button
                       type="submit"
-                      disabled={submitting}
-                      className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+                      className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep"
                     >
-                      {submitting ? (
-                        <Loader className="h-5 w-5 border-white/40 border-t-white" />
-                      ) : (
-                        <>Create my account <ArrowRight className="h-4 w-4" /></>
-                      )}
+                      Continue <ArrowRight className="h-4 w-4" />
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setStep("details")}
+                      onClick={() => setStep(brand ? "reveal" : "details")}
                       className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"
                     >
-                      <ArrowLeft className="h-3 w-3" /> Back to company details
+                      <ArrowLeft className="h-3 w-3" /> Back
                     </button>
                   </form>
+                </>
+              )}
+
+              {/* ── Step 5: card for after the trial ───────────────────── */}
+              {step === "payment" && (
+                <>
+                  <h2 className="font-display text-3xl font-bold tracking-tight text-white">Start your free trial</h2>
+                  <p className="mt-1 text-slate-400">A card on file for after your 30 days. We won't charge it today.</p>
+                  <div className="mt-5">
+                    <SignupPayment
+                      person={{ email: adminEmail, name: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: adminPhone }}
+                      companyName={name.trim()}
+                      onSaved={submit}
+                      onBack={() => setStep("person")}
+                      submitting={submitting}
+                      submitError={err}
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -720,6 +732,7 @@ function StepDots({ step }: { step: Step }) {
     { id: "site", label: "Website" },
     { id: "details", label: "Your company" },
     { id: "person", label: "You" },
+    { id: "payment", label: "Trial" },
   ];
   // The reveal is part of the website step as far as progress goes.
   const idx = steps.findIndex((s) => s.id === (step === "reveal" ? "site" : step));
