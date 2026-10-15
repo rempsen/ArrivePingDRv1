@@ -177,6 +177,9 @@ export const CompanyCreateBody = z.object({
   // stricter `websiteUrlSchema` above.
   website: longText(300).optional(),
   adminName: optText(200),
+  adminFirstName: optText(100),
+  adminLastName: optText(100),
+  adminPhone: phone.optional(),
   adminEmail: emailField("Admin email"),
   // better-auth's own minimum. Enforced here so provisioning fails loudly at
   // the edge instead of half-way through creating a tenant.
@@ -371,7 +374,16 @@ export async function ensureUser(opts: {
   password: string;
   role: string;
   companyId: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
 }): Promise<{ id: string; reused: boolean }> {
+  // Only stamp the structured fields when given, so a reused user keeps theirs.
+  const person = {
+    ...(opts.firstName ? { firstName: opts.firstName } : {}),
+    ...(opts.lastName ? { lastName: opts.lastName } : {}),
+    ...(opts.phone ? { phone: opts.phone } : {}),
+  };
   // Cross-tenant by-email lookup (the whole point is to find/reuse a user who
   // may already belong to a DIFFERENT company) and — when found — a deliberate
   // reassignment of their home companyId. Both are genuinely cross-tenant
@@ -384,7 +396,7 @@ export async function ensureUser(opts: {
   if (existing) {
     await sdb
       .update(schema.user)
-      .set({ role: opts.role, companyId: opts.companyId, name: opts.name })
+      .set({ role: opts.role, companyId: opts.companyId, name: opts.name, ...person })
       .where(eq(schema.user.id, existing.id));
     await attachMembership({
       userId: existing.id,
@@ -409,7 +421,7 @@ export async function ensureUser(opts: {
   if (!u) throw new Error(`could not find user after signup: ${opts.email}`);
   await sdb
     .update(schema.user)
-    .set({ role: opts.role, companyId: opts.companyId })
+    .set({ role: opts.role, companyId: opts.companyId, ...person })
     .where(eq(schema.user.id, u.id));
   await attachMembership({
     userId: u.id,
@@ -862,6 +874,9 @@ export async function provisionCompany(
     password: adminPassword,
     role: "admin",
     companyId: slug,
+    firstName: String(b.adminFirstName ?? "").trim() || undefined,
+    lastName: String(b.adminLastName ?? "").trim() || undefined,
+    phone: formatPhone(String(b.adminPhone ?? "")) || undefined,
   });
   let manager: { id: string } | null = null;
   if (wantManager) {
