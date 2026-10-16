@@ -184,12 +184,24 @@ export function mapStatus(s: Stripe.Subscription.Status): BillingStatus {
   }
 }
 
-/** Drivers that count as seats: riders whose approval is active (not invited, pending or suspended). */
+/**
+ * Users that count as seats: FIELD staff (membership role "rider", membership
+ * active) whose rider approval is active. Office staff may carry a rider
+ * profile so they can be assigned jobs, but they are never billed.
+ */
 export async function driverSeatCount(companyId: string): Promise<number> {
   const [row] = await sdb
     .select({ n: count() })
     .from(schema.riders)
-    .where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.approval, "active")));
+    .innerJoin(schema.memberships, and(eq(schema.memberships.userId, schema.riders.userId), eq(schema.memberships.companyId, schema.riders.companyId)))
+    .where(
+      and(
+        eq(schema.riders.companyId, companyId),
+        eq(schema.riders.approval, "active"),
+        eq(schema.memberships.role, "rider"),
+        eq(schema.memberships.status, "active"),
+      ),
+    );
   return Number(row?.n ?? 0);
 }
 
@@ -249,6 +261,8 @@ export interface BillingSummary {
   status: BillingStatus;
   seats: number;
   activeDrivers: number;
+  /** Active drivers above the paid seat count; > 0 means the tenant must choose who to deactivate to lower seats. */
+  excessActive: number;
   monthlyTotal: number;
   breakdown: string;
   plan: string;
@@ -277,6 +291,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
     status: (co?.billingStatus as BillingStatus) ?? "none",
     seats,
     activeDrivers,
+    excessActive: Math.max(0, activeDrivers - seats),
     monthlyTotal: price.total,
     breakdown: price.breakdown,
     plan: price.plan,
@@ -318,6 +333,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
       ...base,
       status: mapStatus(sub.status),
       seats: Math.max(1, item?.quantity ?? seats),
+      excessActive: Math.max(0, activeDrivers - Math.max(1, item?.quantity ?? seats)),
       ...(item?.quantity ? { ...monthlyPrice(item.quantity), monthlyTotal: monthlyPrice(item.quantity).total } : {}),
       trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : base.trialEndsAt,
       trialDaysLeft: sub.trial_end ? Math.max(0, Math.ceil((sub.trial_end * 1000 - Date.now()) / 86_400_000)) : base.trialDaysLeft,

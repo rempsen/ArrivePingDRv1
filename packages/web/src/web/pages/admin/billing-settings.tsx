@@ -12,6 +12,7 @@ import {
   Minus,
   Plus,
   ShieldCheck,
+  UserMinus,
   Users,
   XCircle,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { apiHeaders } from "../../lib/api";
 import { authClient } from "../../lib/auth";
 import { inputCls } from "../../components/modal";
 import { DialogPanel } from "../../components/dialog-panel";
+import { DownsizePicker } from "../../components/downsize-picker";
 import { useWorkerNoun } from "../../lib/use-brand";
 import { cn, dismiss } from "../../lib/utils";
 
@@ -33,6 +35,7 @@ type Summary = {
   status: "none" | "trialing" | "active" | "past_due" | "canceled" | "unpaid";
   seats: number;
   activeDrivers: number;
+  excessActive: number;
   monthlyTotal: number;
   breakdown: string;
   plan: string;
@@ -62,11 +65,12 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 
 export default function BillingSettingsTab() {
   const qc = useQueryClient();
-  const { nounPlural } = useWorkerNoun();
+  const { noun, nounPlural } = useWorkerNoun();
   const [err, setErr] = useState("");
   const [changeCard, setChangeCard] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [picker, setPicker] = useState(false);
 
   const summary = useQuery({
     queryKey: ["billing", "summary"],
@@ -97,6 +101,8 @@ export default function BillingSettingsTab() {
   const shownSeats = pendingSeats ?? s?.seats ?? 1;
   const preview = useMemo(() => priceFor(shownSeats), [shownSeats]);
   const seatsDirty = s ? shownSeats !== s.seats : false;
+  // Paying for fewer users than are active means choosing who comes off.
+  const needed = s ? Math.max(0, s.activeDrivers - shownSeats) : 0;
 
   const inTrial = s?.status === "trialing";
   const ended = s?.status === "canceled";
@@ -222,7 +228,7 @@ export default function BillingSettingsTab() {
                     = <span className="font-semibold text-white">{money(preview.total)} / month</span>
                     <span className="text-white/50"> · {preview.breakdown}</span>
                   </span>
-                  {seatsDirty && (
+                  {seatsDirty && needed === 0 && (
                     <button
                       type="button"
                       onClick={() => seats.mutate(shownSeats, { onSuccess: () => setPendingSeats(null) })}
@@ -232,11 +238,20 @@ export default function BillingSettingsTab() {
                       {seats.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Save
                     </button>
                   )}
+                  {needed > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPicker(true)}
+                      className="nvc-btn-primary flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white"
+                    >
+                      <UserMinus className="h-4 w-4" /> Choose {needed} {needed === 1 ? noun.toLowerCase() : nounPlural.toLowerCase()} to deactivate
+                    </button>
+                  )}
                 </div>
-                {shownSeats < s.activeDrivers && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-300">
-                    <AlertTriangle className="h-3.5 w-3.5" /> You have {s.activeDrivers} active {nounPlural.toLowerCase()}; your bill will use that number
-                    until you deactivate some.
+                {needed > 0 && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-300" /> You have {s.activeDrivers} active {nounPlural.toLowerCase()}. To pay for {shownSeats}, choose
+                    which {needed} to deactivate; they keep their history and can be reactivated later.
                   </p>
                 )}
               </div>
@@ -318,6 +333,22 @@ export default function BillingSettingsTab() {
         </>
       )}
 
+      {picker && s && (
+        <DownsizePicker
+          targetSeats={shownSeats}
+          activeDrivers={s.activeDrivers}
+          nextInvoiceAt={s.cancelAtPeriodEnd ? null : inTrial ? s.trialEndsAt : s.nextInvoiceAt}
+          monthlyTotal={money(preview.total)}
+          noun={noun}
+          nounPlural={nounPlural}
+          onClose={() => setPicker(false)}
+          onDone={() => {
+            setPicker(false);
+            setPendingSeats(null);
+            refresh();
+          }}
+        />
+      )}
       {changeCard && (
         <ChangeCardModal
           onClose={() => setChangeCard(false)}

@@ -188,6 +188,8 @@ export async function usersForCompany(companyId: string) {
         staffType: m.staffType ?? u.staffType,
         managerId: m.managerId ?? u.managerId,
         membershipStatus: m.status,
+        /** When an admin deactivated them here (status "disabled"); null otherwise. */
+        deactivatedAt: m.deactivatedAt ?? null,
         /** True when this company is not the person's home company. */
         isShared: u.companyId !== companyId,
       };

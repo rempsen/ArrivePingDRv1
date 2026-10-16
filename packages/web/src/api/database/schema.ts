@@ -1330,6 +1330,8 @@ export const memberships = pgTable(
     // HubSpot contact mirroring this person at this company (hubspot-sync.ts).
     hubspotContactId: text("hubspot_contact_id"),
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
+    // Set while status === "disabled" by an admin's Deactivate; cleared on Reactivate.
+    deactivatedAt: timestamp("deactivated_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   },
