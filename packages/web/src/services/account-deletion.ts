@@ -162,6 +162,11 @@ export async function deleteOwnAccount(userId: string): Promise<{ companies: str
     }
 
     const riderByCompany = new Map(riders.map((r) => [r.companyId, r]));
+
+    // Text scrub FIRST: it finds "their jobs" through bookings.rider_id, and
+    // releasing open jobs below clears that link.
+    for (const companyId of companyIds) await scrubTenantText(tx, companyId, user, riderByCompany.get(companyId) ?? null);
+
     let releasedJobs = 0;
     const perCompanyJobs = new Map<string, number>();
     for (const m of mine) {
@@ -195,7 +200,6 @@ export async function deleteOwnAccount(userId: string): Promise<{ companies: str
         .set({ approval: "suspended", status: "offline", phone: "", photoUrl: "", photoKey: "", licensePlate: "", licenseNumber: "", address: "", notes: "", lat: null, lng: null, locationUpdatedAt: null })
         .where(eq(schema.riders.id, r.id));
     }
-    for (const companyId of companyIds) await scrubTenantText(tx, companyId, user, riderByCompany.get(companyId) ?? null);
 
     // Identity: keep the id (bookings, audit rows and payouts point at it),
     // drop everything that identifies the person, and remove every way back in.

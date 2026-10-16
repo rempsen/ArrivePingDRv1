@@ -94,6 +94,10 @@ async function reseed() {
   await sql.execute({ sql: "INSERT INTO notifications (id, company_id, user_id, title, body) VALUES (?,?,?,?,?)", args: ["n-1", A, "ad-tech", "Hi", "x"] });
   await sql.execute({ sql: "INSERT INTO tech_invites (id, company_id, email, name, phone, token, status, user_id) VALUES (?,?,?,?,?,?,?,?)", args: ["ti-1", A, "ad-tech@t.test", "Tess Tech", "204-555-0100", "tok-ti", "pending", "ad-tech"] });
   await sql.execute({ sql: "INSERT INTO messages (id, company_id, rider_id, sender_role, sender_name, body) VALUES (?,?,?,?,?,?)", args: ["msg-1", A, "rd-tech", "tech", "Tess Tech", "on my way"] });
+  // Thread message on an OPEN job (booking id only, no rider id): the job is
+  // released during deletion, so the scrub must run before that link is cut.
+  await sql.execute({ sql: "INSERT INTO messages (id, company_id, booking_id, sender_role, sender_name, body) VALUES (?,?,?,?,?,?)", args: ["msg-open", A, "bk-open", "tech", "Tess Tech", "running late"] });
+  await sql.execute({ sql: "INSERT INTO job_events (id, company_id, booking_id, kind, actor_role, actor_name) VALUES (?,?,?,?,?,?)", args: ["je-open", A, "bk-open", "note_added", "tech", "Tess Tech"] });
   await sql.execute({ sql: "INSERT INTO job_events (id, company_id, booking_id, kind, actor_role, actor_name) VALUES (?,?,?,?,?,?)", args: ["je-1", A, "bk-done", "note_added", "tech", "Tess Tech"] });
   // A namesake on the same roster, on a job that was never Tess's — must keep her attribution.
   await sql.execute({ sql: "INSERT INTO bookings (id, company_id, customer_id, service_id, title, status, address, scheduled_at, rider_id, assign_status, clock_state) VALUES (?,?,?,?,?,?,?,?,?,?,?)", args: ["bk-other", A, "cust", "svc", "bk-other", "completed", "", new Date().toISOString(), "rd-other", "", "idle"] });
@@ -238,6 +242,8 @@ describe("deleteOwnAccount", () => {
     expect((await one<typeof schema.messages.$inferSelect>(schema.messages, "msg-1")).senderName).toBe("Deleted user");
     expect((await one<typeof schema.jobEvents.$inferSelect>(schema.jobEvents, "je-1")).actorName).toBe("Deleted user");
     expect((await one<typeof schema.jobEvents.$inferSelect>(schema.jobEvents, "je-namesake")).actorName).toBe("Tess Tech");
+    expect((await one<typeof schema.messages.$inferSelect>(schema.messages, "msg-open")).senderName).toBe("Deleted user");
+    expect((await one<typeof schema.jobEvents.$inferSelect>(schema.jobEvents, "je-open")).actorName).toBe("Deleted user");
     expect((await one<typeof schema.bookings.$inferSelect>(schema.bookings, "bk-done")).driverNotes).toBe("[Voice note — Deleted user, 9:00] Filter replaced");
     // Text at the company they had already left is scrubbed too.
     expect((await one<typeof schema.messages.$inferSelect>(schema.messages, "msg-left")).senderName).toBe("Deleted user");
