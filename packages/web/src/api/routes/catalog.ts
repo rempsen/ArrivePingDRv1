@@ -1,12 +1,12 @@
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
+import { ensureFormCategories, seedFormCategories } from "../../services/form-categories";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { db } from "../database";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { putObject } from "../lib/storage";
-import { getIndustryPreset } from "../../services/industry-presets";
 import { z } from "zod";
 import { jsonBody, money, shortText, longText, optText, id as idField } from "../lib/validate";
 
@@ -144,12 +144,7 @@ export const catalogRoutes = new Hono<AppEnv>()
         .select({ industry: schema.companies.industry })
         .from(schema.companies)
         .where(eq(schema.companies.id, tenantId(c)));
-      const preset = getIndustryPreset(co?.industry);
-      const seed = preset?.categories?.length ? preset.categories : ["General", "Residential", "Commercial", "Service"];
-      await t.insert(
-        schema.formCategories,
-        seed.map((name, i) => ({ name, sortOrder: i })),
-      );
+      await seedFormCategories(tenantId(c), co?.industry);
       rows = await t.select(schema.formCategories);
     }
     rows.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
@@ -216,6 +211,7 @@ export const catalogRoutes = new Hono<AppEnv>()
   // create
   .post("/", requireAdmin, jsonBody(CatalogCreate), async (c) => {
     const b = c.req.valid("json");
+    if (b.category) await ensureFormCategories(tenantId(c), [b.category]);
     const [row] = await tx(c).insert(schema.catalogItems, {
       kind: b.kind ?? "product",
       name: b.name,

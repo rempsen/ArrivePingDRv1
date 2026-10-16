@@ -43,6 +43,7 @@ import {
   loadIcpKnowledge,
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
+import { ensureFormCategories } from "../../services/form-categories";
 import { getStripe, stripeEnabled, STRIPE_PUBLISHABLE_KEY } from "../../services/stripe";
 import {
   createSignupSetup,
@@ -911,6 +912,7 @@ correction like that — it reads like you weren't listening.`;
             kind: z.enum(["service", "product"]).optional(),
           }),
           execute: async (input) => {
+            if (input.category) await ensureFormCategories(cid, [input.category]);
             const [row] = await t.insert(schema.catalogItems, {
               kind: input.kind ?? "service",
               name: input.name.slice(0, 200),

@@ -17,6 +17,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
+import { seedFormCategories } from "./form-categories";
 import * as schema from "../api/database/schema";
 import { auth } from "../api/auth";
 import { invalidateCompanyCache } from "../api/middleware/auth";
@@ -865,6 +866,16 @@ export async function provisionCompany(
     } catch (e) {
       console.error("[provisioning] option-catalog seeding failed", e);
     }
+  }
+
+  // 2c) the shared category list (Settings → Categories), built from the
+  //     preset plus whatever the seeded catalog and templates actually use —
+  //     so an "Other" industry tenant gets ITS categories, not the generic four.
+  try {
+    const n = await seedFormCategories(slug, b.industry);
+    console.log(`[provisioning] seeded ${n} categories for "${slug}" (${source})`);
+  } catch (e) {
+    console.error("[provisioning] category seeding failed", e);
   }
 
   // 3) provision the admin + (optional) manager accounts
