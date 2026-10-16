@@ -44,6 +44,7 @@ import {
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
 import { ensureFormCategories } from "../../services/form-categories";
+import { applyTerminology } from "../../services/terminology";
 import { getStripe, stripeEnabled, STRIPE_PUBLISHABLE_KEY } from "../../services/stripe";
 import {
   createSignupSetup,
@@ -835,8 +836,17 @@ correction like that — it reads like you weren't listening.`;
               patch[key] = val.trim();
             }
             if (Object.keys(patch).length === 0) return { updated: [] };
+            const before = await t.selectOne(schema.companySettings);
             await t.update(schema.companySettings, patch);
-            return { updated: Object.keys(patch) };
+            // Terminology changed? Re-term every seeded notification so the
+            // customer and the team read the tenant's own words, not ours.
+            let retermed = 0;
+            const nounKeys = ["workerNoun", "workerNounPlural", "customerNoun", "customerNounPlural", "jobNoun", "jobNounPlural"] as const;
+            if (before && nounKeys.some((k) => k in patch)) {
+              const after = { ...before, ...patch } as typeof before;
+              retermed = await applyTerminology(cid, before, after).catch(() => 0);
+            }
+            return { updated: Object.keys(patch), ...(retermed ? { notificationsUpdated: retermed } : {}) };
           },
         }),
         rescan_website: tool({
