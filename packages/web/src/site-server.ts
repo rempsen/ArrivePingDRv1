@@ -9,9 +9,21 @@ import { landingPages } from "./web/site/content/landing";
 const distDir = process.env.WEB_DIST_DIR ?? `${import.meta.dir}/../dist`;
 const indexPath = `${distDir}/index.html`;
 
+/** Old and alternative addresses for the legal pages (the Terms text cites /terms-conditions). */
+const LEGAL_ALIASES: Record<string, string> = {
+  "/terms-conditions": "/terms",
+  "/terms-and-conditions": "/terms",
+  "/terms-of-service": "/terms",
+  "/privacy-policy": "/privacy",
+};
+
 export async function serveSite(request: Request, url: URL): Promise<Response> {
   if (url.pathname === "/index.html") {
     return new Response(null, { status: 301, headers: { Location: `/${url.search}` } });
+  }
+  const alias = LEGAL_ALIASES[url.pathname.replace(/\/+$/, "").toLowerCase()];
+  if (alias) {
+    return new Response(null, { status: 301, headers: { Location: alias + url.search } });
   }
 
     // Public marketing pages are prerendered to static HTML at build time

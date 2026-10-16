@@ -1,20 +1,22 @@
 import type { LegalDoc } from "./types";
 
 /**
- * ArrivePing Privacy Policy.
+ * ArrivePing Privacy Policy — 10161758 Manitoba Ltd. dba NVC360.
  *
- * Adapted from the NVC360 Inc. privacy policy (nvc360.com/privacy-policy,
- * March 13, 2026) for the ArrivePing product and arriveping.com. NVC360 Inc.
- * remains the legal entity and data controller; "ArrivePing" is the platform.
+ * Source: "ArrivePing_Privacy_Policy_Draft_2.docx" (supplied by Dan Rosenblat,
+ * published October 16, 2026).
+ *
+ * Text is reproduced exactly from the approved draft; only links were added
+ * (email addresses, priv.gc.ca, cross-links between the two documents).
+ * `**bold**` marks the lead-in labels the draft sets in bold.
  */
 export const privacy: LegalDoc = {
   eyebrow: "Legal",
   title: "Privacy Policy",
-  updated: "October 2, 2026",
+  updated: "October 16, 2026",
   path: "/privacy",
   intro: [
-    "NVC360 Inc. (\"NVC360\", \"we\", \"us\" or \"our\") operates ArrivePing, the appointment scheduling, technician arrival tracking and customer update platform available at arriveping.com and through the ArrivePing mobile app. We are committed to protecting the privacy of our clients, their technicians, their customers and visitors to our website.",
-    "This Privacy Policy explains how we collect, use, disclose and safeguard personal information when you use ArrivePing or visit arriveping.com.",
+    "10161758 Manitoba Ltd. dba NVC360 (\"arriveping.com by NVC360\", \"we\", \"us\", or \"our\") is committed to protecting the privacy of our clients, users, and website visitors (collectively, \"you\", \"yours\", or \"user(s)\"). This Privacy Policy explains how we collect, use, disclose, and safeguard your organization's data (your \"Data\") and any information you provide us about an identifiable individual (your \"Personal Information\") when you use the arriveping.com by NVC360 platform, mobile app, website (arriveping.com), and any associated services (collectively, the \"Services\")."
   ],
   sections: [
     {
@@ -23,13 +25,9 @@ export const privacy: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "NVC360 Inc. is a field operations and customer communication software company based in Winnipeg, Manitoba, Canada. ArrivePing is our platform for businesses that send technicians to customers' homes and job sites. It helps them schedule appointments, dispatch technicians, see where technicians are while they travel, and keep customers informed about arrival times.",
-        },
-        {
-          type: "p",
-          text: "Data controller: NVC360 Inc., Winnipeg, Manitoba, Canada. Email: [privacy@nvc360.com](mailto:privacy@nvc360.com).",
-        },
-      ],
+          text: "arriveping.com by NVC360 is a field operations and client communication platform headquartered in Winnipeg, Manitoba, Canada. We provide software solutions to businesses that deploy field technicians, helping them manage dispatch, scheduling, real-time tracking, and automated client communications."
+        }
+      ]
     },
     {
       id: "permissions",
@@ -37,208 +35,251 @@ export const privacy: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "The ArrivePing mobile app, used by technicians, may request access to certain device permissions. These permissions are used solely to provide the core functionality of the platform.",
+          text: "arriveping.com by NVC360 may request access to certain device permissions including location services, camera, and notifications. These permissions are used to provide the Services that you request from us."
         },
         {
           type: "ul",
           items: [
-            "Location services: used to share a technician's position with their dispatch team while they are travelling to a job, to calculate estimated arrival times and to detect arrival at the job site. See Section 3 for full details.",
-            "Camera and photo library: used to attach job-site photos and proof-of-completion images to a job.",
-            "Notifications: used for job assignments, schedule changes and dispatch messages.",
-          ],
+            "**Location Services:** Used for technician tracking, dispatch routing, and estimated arrival times. See Section 3 for full details.",
+            "**Camera:** Used for capturing job-site photos, and proof-of-completion images.",
+            "**Notifications:** Used for real-time job alerts, dispatch updates, and customer communication notifications.",
+            "**Microphone:** Used to create voice notes or memos, if microphone permissions are enabled in device settings."
+          ]
         },
         {
           type: "note",
-          title: "Your control",
-          text: "All permissions are optional and can be managed through your device settings at any time. Disabling a permission may limit certain features of the app.",
-        },
-        {
-          type: "p",
-          text: "Customers of ArrivePing clients do not need to install an app or create an account. They receive appointment confirmations and arrival updates by text message or email, with a link to a web page showing the technician's estimated arrival time.",
-        },
-      ],
+          title: "Your Control",
+          text: "All permissions are optional and can be managed through your device settings at any time. Disabling permissions may limit certain features of the application."
+        }
+      ]
     },
     {
       id: "location-data",
-      title: "Location Data",
+      title: "Location Information",
       blocks: [
         {
           type: "p",
-          text: "The ArrivePing mobile app collects and processes device location information from technicians to enable core features of the platform.",
+          text: "arriveping.com by NVC360 may collect and process device location information to enable core features of the Services."
         },
-        { type: "h3", text: "3.1 What location data we collect" },
+        {
+          type: "h3",
+          text: "3.1 What Location Information We Collect"
+        },
+        {
+          type: "p",
+          text: "arriveping.com by NVC360 may collect the following types of location information from a user's mobile device:"
+        },
         {
           type: "ul",
           items: [
             "Precise location data (GPS coordinates).",
             "Approximate location data derived from network sources such as Wi-Fi or cellular networks.",
-            "Background location data when the app is running in the background during an active shift or job, if background location permission is granted.",
-          ],
+            "Background location data when the application is running in the background."
+          ]
         },
         {
           type: "note",
-          title: "Consent required",
-          text: "Location data is only collected when the technician grants permission through the device operating system.",
+          title: "Consent Required",
+          text: "Location information is only collected when the user grants permission through the device operating system."
         },
-        { type: "h3", text: "3.2 How location data is used" },
+        {
+          type: "h3",
+          text: "3.2 How Location Information Is Used"
+        },
         {
           type: "p",
-          text: "Location information is used solely to support the operational functionality of ArrivePing, including:",
+          text: "Location information may be used to support the operational functionality of the Services, including:"
         },
         {
           type: "ul",
           items: [
-            "Showing the dispatch team where a technician is while travelling to a job.",
-            "Calculating and updating the estimated arrival time shown to the customer.",
-            "Detecting arrival at the job site so the customer can be notified automatically (with a manual confirmation available to the technician).",
-            "Real-time job dispatching and routing decisions.",
-            "Location-based notifications and job updates.",
-          ],
+            "Tracking the location of field technicians and vehicles.",
+            "Providing real-time job dispatching and routing.",
+            "Displaying technician estimated arrival times.",
+            "Improving operational visibility for businesses managing mobile workforces.",
+            "Enabling location-based notifications and job updates."
+          ]
         },
-        { type: "h3", text: "3.3 When location data is collected" },
+        {
+          type: "h3",
+          text: "3.3 When Location Information Is Collected"
+        },
+        {
+          type: "p",
+          text: "Location information may be collected:"
+        },
         {
           type: "ul",
           items: [
             "When the app is actively being used.",
-            "When the app is running in the background during an active shift or job, if background location permission is granted.",
-            "While a technician is travelling to a job. Sharing with the customer stops once the technician has arrived.",
-          ],
+            "When the app is running in the background (if background location permission is granted).",
+            "When a work session or job tracking feature is active."
+          ]
         },
         {
           type: "p",
-          text: "Technicians may disable location access at any time through their device settings.",
+          text: "Users may disable location access at any time through their device settings."
         },
-        { type: "h3", text: "3.4 How location data is shared" },
+        {
+          type: "h3",
+          text: "3.4 How Location Information Is Shared"
+        },
         {
           type: "p",
-          text: "Location data is not sold or shared with third parties for advertising purposes. Location data may be shared only with:",
+          text: "Location information may be shared with:"
         },
         {
           type: "ul",
           items: [
-            "The technician's employer or organization using ArrivePing, and its authorized administrators and dispatchers.",
-            "The customer for the active job, who sees the technician's position and estimated arrival time on their arrival page only while the technician is travelling to them.",
-            "Service providers necessary to operate the platform, such as our cloud hosting, database and mapping providers.",
-          ],
+            "The user's employer, organization, or authorized administrators.",
+            "Third-party service providers necessary to provide the Services that you request from us (such as secure cloud hosting providers)."
+          ]
+        },
+        {
+          type: "h3",
+          text: "3.5 User Control Over Location Information"
         },
         {
           type: "p",
-          text: "All data is processed in accordance with applicable privacy and data protection laws.",
+          text: "Users have the ability to manage location permissions and may:"
         },
-        { type: "h3", text: "3.5 Technician control over location data" },
         {
           type: "ul",
           items: [
-            "Enable or disable location services through device settings.",
-            "Restrict location access to \"While Using the App\" only.",
-            "Revoke location permission at any time.",
-          ],
+            "Enable or disable location services through their device settings.",
+            "Restrict location access to \"While Using the App\" only."
+          ]
         },
         {
           type: "note",
           title: "Important",
-          text: "Disabling location services limits functionality within the ArrivePing app, including live arrival estimates and automatic arrival detection.",
+          text: "Disabling location permissions may limit certain functionality within the arriveping.com by NVC360 application. It may be the case that when certain features are enabled, such as real-time tracking and automated dispatch routing, location information is required and cannot be disabled until those features are stopped."
         },
-        { type: "h3", text: "3.6 Location data security" },
+        {
+          type: "h3",
+          text: "3.6 Location Information Security"
+        },
         {
           type: "p",
-          text: "We implement reasonable technical and organizational safeguards to protect location information from unauthorized access, alteration, disclosure or destruction.",
-        },
-      ],
+          text: "arriveping.com by NVC360 implements reasonable technical and organizational safeguards to protect location information from unauthorized access, alteration, disclosure, or destruction."
+        }
+      ]
     },
     {
-      id: "data-we-collect",
-      title: "Data We Collect",
+      id: "data-and-personal-information-we-collect",
+      title: "Data and Personal Information We Collect",
       blocks: [
-        { type: "p", text: "We collect the following categories of information:" },
-        { type: "h3", text: "4.1 Information you provide" },
-        {
-          type: "ul",
-          items: [
-            "Demo and contact requests: name, company name, email address, phone number, team size and anything you write in your message.",
-            "Account registration: name, email address, password (stored hashed) and company details.",
-            "Support requests: communications, attachments and issue descriptions.",
-            "Payment information: processed by our payment processor (Stripe). We do not store full card numbers.",
-          ],
-        },
-        { type: "h3", text: "4.2 Information our clients enter about their customers" },
         {
           type: "p",
-          text: "Businesses using ArrivePing enter information about their own customers so that appointments can be scheduled and arrival updates delivered: customer name, service address, phone number, email address, appointment details and job notes. We process this information on behalf of the business, which remains responsible for it. See Section 7 of our [Terms](/terms).",
+          text: "In addition to the other methods of collection described in this Privacy Policy, we may collect the following categories of Data and Personal Information from users, through the following means:"
         },
-        { type: "h3", text: "4.3 Information collected automatically" },
+        {
+          type: "h3",
+          text: "4.1 Information You Provide"
+        },
         {
           type: "ul",
           items: [
-            "Log data: IP address, browser type, pages visited, time and date of visits, referring URL.",
-            "Device data: device type, operating system, app version.",
-            "Usage data: features used, frequency of use and error reports within the platform.",
-            "Delivery data: whether notifications, text messages and emails were delivered and whether arrival links were opened.",
-          ],
+            "**Beta / Contact Forms:** First name, last name, company name, email address, phone number, team size, and industry.",
+            "**Account Registration:** Name, email, password (hashed), company details.",
+            "**Information from your website:** We may collect public business information (logo, services, terminology, service area) and contact details published on the website of the user's organization.",
+            "**Support Requests:** Communications, attachments, and issue descriptions from the user.",
+            "**Payment Information:** Processed by third-party processors (e.g., Stripe). We do not store full card numbers."
+          ]
         },
-      ],
+        {
+          type: "h3",
+          text: "4.2 Information Collected Automatically"
+        },
+        {
+          type: "ul",
+          items: [
+            "**Log Data:** IP address, browser type, pages visited, time and date of visits, referring URL.",
+            "**Device Data:** Device type, operating system, screen resolution.",
+            "**Cookies & Tracking:** Session cookies, preference cookies, and analytics cookies. See Section 9.",
+            "**Usage Data:** Features used, frequency of use, error reports within the platform."
+          ]
+        },
+        {
+          type: "h3",
+          text: "4.3 Information from Third Parties"
+        },
+        {
+          type: "ul",
+          items: [
+            "Analytics providers.",
+            "Optional integrations, where available."
+          ]
+        },
+        {
+          type: "p",
+          text: "You acknowledge and agree that you are solely responsible for providing all necessary notices and collecting all necessary consents for your collection, use, and disclosure through the Services of any Personal Information or other data from your sub-contractors or end-customers, including, but not limited to, location information."
+        }
+      ]
     },
     {
-      id: "how-we-use",
+      id: "how-we-use-your-information",
       title: "How We Use Your Information",
       blocks: [
-        { type: "p", text: "We use your information to:" },
+        {
+          type: "p",
+          text: "We may use the Personal Information collected from you for the following purposes:"
+        },
         {
           type: "ul",
           items: [
-            "Provide, operate and improve ArrivePing and arriveping.com.",
-            "Respond to demo requests and inquiries.",
-            "Deliver appointment confirmations, arrival updates and other messages on behalf of our clients.",
-            "Send transactional emails (confirmations, account notices, support replies).",
-            "Send marketing communications, only with your consent, which you can withdraw at any time.",
-            "Analyze usage to improve features, fix bugs and enhance security.",
-            "Comply with legal obligations under Canadian and other applicable law.",
-            "Enforce our Terms and protect against fraud or abuse.",
-          ],
+            "To provide, operate, and improve the Services.",
+            "To process beta access requests and respond to inquiries.",
+            "Transactional emails (confirmations, account notices, support replies).",
+            "Opt-in marketing communications.",
+            "To analyze usage to improve features, fix bugs, and enhance security.",
+            "Where permitted or required under applicable law.",
+            "To enforce our [Terms of Service](/terms) and protect against fraud or abuse.",
+            "For any other purpose that you may consent to, from time to time."
+          ]
         },
         {
-          type: "note",
-          title: "Legal basis (PIPEDA / Canadian law)",
-          text: "We process personal information based on consent, contractual necessity or legitimate business interests. You may withdraw consent at any time.",
-        },
-      ],
+          type: "p",
+          text: "We process Personal Information based on consent, contractual necessity, or legitimate business interests. You may withdraw consent at any time."
+        }
+      ]
     },
     {
-      id: "sharing",
-      title: "Data Sharing & Disclosure",
-      blocks: [
-        { type: "p", text: "We do not sell your personal information. We may share data with:" },
-        {
-          type: "ul",
-          items: [
-            "Service providers: cloud hosting and database infrastructure, file storage, email delivery (Resend), text message delivery (Twilio), payment processing (Stripe), map rendering (Google Maps Platform) and error monitoring (Sentry). Each is bound by data processing terms and may only use the data to provide its service to us.",
-            "Our clients: information about a technician's location and job activity is shared with the business that employs or contracts them, as described in Section 3.",
-            "Legal requirements: if required by law, court order or to protect the safety of our users or the public.",
-            "Business transfers: in the event of a merger or acquisition, with the same privacy protections applied.",
-          ],
-        },
-      ],
-    },
-    {
-      id: "retention",
-      title: "Data Retention",
+      id: "data-sharing-and-disclosure-of-personal-information",
+      title: "Data Sharing & Disclosure of Personal Information",
       blocks: [
         {
           type: "p",
-          text: "We retain personal information only as long as necessary for the purposes outlined in this policy:",
+          text: "We may disclose your Data or Personal information to third parties for the following purposes:"
         },
         {
           type: "ul",
           items: [
-            "Demo and contact form submissions: up to 3 years from the submission date.",
-            "Account data: for the duration of the account plus 2 years after closure.",
-            "Technician location history: kept for the client's operational records and deleted with the client's account data.",
-            "Log data: up to 12 months.",
-            "Financial records: 7 years, as required by Canadian tax law.",
-          ],
+            "**Third-Party Service Providers:** Hosting, email delivery, payment processing, analytics.",
+            "**Integration Partners:** Only Data and Personal Information you explicitly authorize when connecting third-party tools.",
+            "**Legal Requirements:** If required by law, court order, or to protect the safety of our users or the public.",
+            "**Business Transfers:** In the event of a merger or acquisition, with the same privacy protections applied."
+          ]
         },
-        { type: "p", text: "You may request deletion of your data at any time. See Section 8." },
-      ],
+        {
+          type: "p",
+          text: "If we disclose your Data or Personal Information, we will not disclose more information than is required for the purpose for which the information is being disclosed. We will also, whenever it is reasonable and practicable to do so, enter into privacy agreements with third parties to whom we disclose Data or Personal Information."
+        }
+      ]
+    },
+    {
+      id: "retention-of-personal-information",
+      title: "Retention of Personal Information",
+      blocks: [
+        {
+          type: "p",
+          text: "We retain Data and Personal Information only as long as necessary for the purposes outlined in this Privacy Policy, or as otherwise required by law. Data and Personal Information that is no longer necessary or required to be retained is destroyed, erased or made anonymous, as appropriate in the circumstances."
+        },
+        {
+          type: "p",
+          text: "You may request deletion of your Personal Information at any time, subject to legal and contractual restrictions. See Section 8."
+        }
+      ]
     },
     {
       id: "your-rights",
@@ -246,39 +287,48 @@ export const privacy: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "Under PIPEDA and applicable Canadian privacy law, you have the right to:",
+          text: "Under applicable privacy laws, you have the following rights with respect to our collection, use, and disclosure of your Personal Information:"
         },
         {
           type: "ul",
           items: [
-            "Access: request a copy of the personal information we hold about you.",
-            "Correction: request correction of inaccurate or incomplete information.",
-            "Deletion: request deletion of your personal information, subject to legal obligations.",
-            "Withdrawal of consent: withdraw consent for marketing communications at any time.",
-            "Portability: request your data in a portable, machine-readable format.",
-            "Complaint: file a complaint with the Office of the Privacy Commissioner of Canada at priv.gc.ca.",
-          ],
+            "**Access:** Request a copy of the Personal Information we hold about you.",
+            "**Correction:** Request correction of inaccurate or incomplete information.",
+            "**Deletion:** Request deletion of your Personal Information, subject to legal obligations.",
+            "**Withdrawal of Consent:** Withdraw consent for marketing communications at any time.",
+            "**Portability:** Request your Personal Information in a portable, machine-readable format.",
+            "**Complaint:** File a complaint with the Office of the Privacy Commissioner of Canada (OPC) at [priv.gc.ca](https://www.priv.gc.ca)."
+          ]
         },
         {
           type: "note",
-          title: "Submit a data request",
-          text: "Email [privacy@nvc360.com](mailto:privacy@nvc360.com). We will respond within 30 days. If you are a customer of a business that uses ArrivePing, we may refer your request to that business, since it controls the information it entered about you.",
-        },
-      ],
+          title: "Submit a Personal Information Request",
+          text: "You may request your Personal Information at any time. To request your Personal Information, email [privacy@nvc360.com](mailto:privacy@nvc360.com). We will respond within 30 days."
+        }
+      ]
     },
     {
-      id: "cookies",
+      id: "cookies-and-tracking-technologies",
       title: "Cookies & Tracking Technologies",
       blocks: [
         {
           type: "p",
-          text: "ArrivePing uses essential cookies only. These are required for signing in and keeping your session secure and cannot be disabled without breaking the platform.",
+          text: "We may use the following types of cookies, for the following purposes:"
+        },
+        {
+          type: "ul",
+          items: [
+            "**Essential Cookies:** Required for the Services to function. Cannot be disabled.",
+            "**Preference Cookies:** Used to remember your settings and preferences.",
+            "**Analytics Cookies:** Used to help us understand how visitors use the site (Google Analytics, anonymized IP). Requires your consent.",
+            "**Marketing Cookies:** Only used if you have provided consent."
+          ]
         },
         {
           type: "p",
-          text: "We do not currently use advertising or marketing cookies on arriveping.com. If we introduce analytics or marketing cookies in the future, we will update this policy and ask for your consent where required.",
-        },
-      ],
+          text: "You can manage cookie preferences via our Cookie Consent banner or by adjusting your browser settings. Note that disabling essential cookies may affect platform functionality."
+        }
+      ]
     },
     {
       id: "security",
@@ -286,81 +336,93 @@ export const privacy: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "We implement industry-standard security measures to protect your information, including:",
+          text: "We implement industry-standard security measures to protect your Data and Personal Information, including:"
         },
         {
           type: "ul",
           items: [
-            "TLS encryption for all data in transit.",
+            "SSL/TLS encryption for all data in transit.",
             "Encrypted storage for sensitive account data.",
-            "Access controls so that each business can only see its own data.",
-            "Regular security review and dependency updates.",
-          ],
+            "Access controls limiting who can access Personal Information.",
+            "Regular security assessments and vulnerability testing."
+          ]
         },
         {
           type: "p",
-          text: "No method of transmission over the Internet is 100% secure. If you believe your data has been compromised, contact us immediately at [privacy@nvc360.com](mailto:privacy@nvc360.com).",
+          text: "No method of transmission over the Internet is 100% secure. If you believe your Data or Personal Information has been compromised, contact us immediately at [privacy@nvc360.com](mailto:privacy@nvc360.com)."
         },
-      ],
+        {
+          type: "p",
+          text: "Only our employees who require access for legitimate reasons or whose duties reasonably so require, are granted access to Personal Information."
+        }
+      ]
     },
     {
-      id: "children",
+      id: "childrens-privacy",
       title: "Children's Privacy",
       blocks: [
         {
           type: "p",
-          text: "ArrivePing and arriveping.com are not directed to individuals under 16 years of age. We do not knowingly collect personal information from children. If you become aware that a child has provided us with personal information, contact us and we will take steps to delete it.",
-        },
-      ],
+          text: "The Services are not directed to individuals under 18 years of age. We do not knowingly collect Personal Information from children. If you become aware that a child has provided us with Personal Information, contact us and we will take steps to delete it."
+        }
+      ]
     },
     {
-      id: "pipeda",
+      id: "pipeda-compliance-canada",
       title: "PIPEDA Compliance (Canada)",
       blocks: [
         {
           type: "p",
-          text: "NVC360 Inc. is subject to the Personal Information Protection and Electronic Documents Act (PIPEDA) and applicable provincial privacy legislation. We are committed to the ten fair information principles:",
+          text: "arriveping.com by NVC360 is subject to the Personal Information Protection and Electronic Documents Act (PIPEDA) and other applicable privacy laws. We are committed to the ten fair information principles surrounding the collection, use or disclosure of your personal information:"
         },
         {
           type: "ul",
           items: [
-            "Accountability: a designated Privacy Officer oversees compliance.",
-            "Identifying purposes: we identify why information is collected before or at the time of collection.",
-            "Consent: we obtain meaningful consent before collecting, using or disclosing information.",
-            "Limiting collection: we collect only what is necessary.",
-            "Limiting use, disclosure and retention: information is used only for stated purposes.",
-            "Accuracy: we keep information accurate and up to date.",
-            "Safeguards: appropriate security measures are in place.",
-            "Openness: our privacy practices are publicly available.",
-            "Individual access: individuals can access and correct their information.",
-            "Challenging compliance: individuals can challenge our compliance with PIPEDA.",
-          ],
-        },
-      ],
+            "**Accountability —** A designated Privacy Officer oversees compliance.",
+            "**Identifying Purposes —** We identify why Personal Information is collected before or at time of collection.",
+            "**Consent —** We obtain meaningful consent before collecting, using, or disclosing Personal Information.",
+            "**Limiting Collection —** We collect only what is necessary to fulfil the business purposes for which it was collected.",
+            "**Limiting Use, Disclosure, and Retention —** Personal Information is used only for the purposes stated at collection or in this Privacy Policy.",
+            "**Accuracy —** We keep Personal Information accurate and up to date.",
+            "**Safeguards —** Appropriate security measures are in place.",
+            "**Openness —** Our privacy practices are publicly available.",
+            "**Individual Access —** Individuals can access and correct their Personal Information.",
+            "**Challenging Compliance —** Individuals can challenge our compliance with PIPEDA."
+          ]
+        }
+      ]
     },
     {
-      id: "changes",
+      id: "changes-to-this-policy",
       title: "Changes to This Policy",
       blocks: [
         {
           type: "p",
-          text: "We may update this Privacy Policy from time to time. When we make material changes, we will update the \"Last updated\" date at the top of this page and, where appropriate, notify you by email or a prominent notice on our website. Your continued use of the platform after changes are posted constitutes your acceptance of the revised policy.",
-        },
-      ],
+          text: "We may update this Privacy Policy from time to time. When we make material changes, we will update the \"Last Updated\" date at the top of this page and, where appropriate, notify you by email or a prominent notice on our website. Your continued use of the Services after changes are posted constitutes your acceptance of the revised policy."
+        }
+      ]
     },
     {
-      id: "contact",
+      id: "contact-us",
       title: "Contact Us",
       blocks: [
         {
           type: "p",
-          text: "For privacy inquiries, data requests or to exercise your rights, contact our Privacy Officer at [privacy@nvc360.com](mailto:privacy@nvc360.com). We respond within 30 days.",
+          text: "For privacy inquiries, data requests, or to exercise your rights, contact our Privacy Officer:"
         },
         {
           type: "p",
-          text: "Mailing address: NVC360 Inc., Privacy Officer, Winnipeg, Manitoba, Canada.",
+          text: "**Email:** [privacy@nvc360.com](mailto:privacy@nvc360.com)"
         },
-      ],
-    },
-  ],
+        {
+          type: "p",
+          text: "**Response Time:** Within 30 days"
+        },
+        {
+          type: "p",
+          text: "**Mailing Address:** 10161758 Manitoba Ltd. dba NVC360, Privacy Officer, 423 Main St., 8th Floor, Winnipeg, Manitoba R3B 1B3, Canada"
+        }
+      ]
+    }
+  ]
 };
