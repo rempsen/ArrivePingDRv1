@@ -147,6 +147,10 @@ async function activeFieldStaffCount(companyId: string): Promise<number> {
 async function guardDeactivate(companyId: string, actor: Actor, target: Member) {
   if (target.membership.status === "disabled") throw new AccessError(409, "already_deactivated", "This user is already deactivated.");
   if (target.user.id === actor.id) throw new AccessError(400, "self", "You cannot deactivate your own account.");
+  // A platform superadmin's access does not come from a membership (auth
+  // exempts the base role), so disabling the row would report success while
+  // changing nothing. Refuse rather than pretend.
+  if (isSuperadmin(target.user.role)) throw new AccessError(400, "superadmin_exempt", "Platform superadmin accounts cannot be deactivated here.");
   const role = target.membership.role ?? target.user.role ?? "";
   if (isAdminRole(role)) {
     if (!isSuperadmin(actor.role)) throw new AccessError(403, "superadmin_required", "Only a superadmin can deactivate admin-level accounts.");
@@ -281,9 +285,14 @@ export async function reactivateUser(companyId: string, actor: Actor, userId: st
   const member = await loadMember(companyId, userId);
   if (!member) throw new AccessError(404, "not_found", "User not found.");
   if (member.membership.status !== "disabled") throw new AccessError(409, "not_deactivated", "This user is not deactivated.");
+  // Same rule as deactivate and PATCH /team: admin-level accounts are a superadmin's to change.
+  if (isAdminRole(member.membership.role ?? member.user.role) && !isSuperadmin(actor.role)) {
+    throw new AccessError(403, "superadmin_required", "Only a superadmin can reactivate admin-level accounts.");
+  }
   const t = tdb(companyId);
   const [co] = await t.raw.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   let seats = Math.max(1, co?.billingSeats ?? 1);
+  let seatAdded = false;
   const isField = (member.membership.role ?? member.user.role) === FIELD_ROLE;
   if (isField) {
     const active = await activeFieldStaffCount(companyId);
@@ -293,18 +302,25 @@ export async function reactivateUser(companyId: string, actor: Actor, userId: st
         throw new AccessError(409, "seat_required", `Reactivating ${member.user.name} needs 1 more user on your plan.`, { seatsNeeded: 1, monthlyDelta });
       }
       seats = (await deps.setSeats(companyId, seats + 1)).seats;
+      seatAdded = true;
     }
   }
   const when = new Date();
-  await t.transaction(async (tx) => {
-    await tx
-      .update(schema.memberships)
-      .set({ status: "active", deactivatedAt: null, updatedAt: when, acceptedAt: member.membership.acceptedAt ?? when })
-      .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, member.membership.id)));
-    if (member.rider) {
-      await tx.update(schema.riders).set({ approval: "active" }).where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.id, member.rider.id)));
-    }
-  });
+  try {
+    await t.transaction(async (tx) => {
+      await tx
+        .update(schema.memberships)
+        .set({ status: "active", deactivatedAt: null, updatedAt: when, acceptedAt: member.membership.acceptedAt ?? when })
+        .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, member.membership.id)));
+      if (member.rider) {
+        await tx.update(schema.riders).set({ approval: "active" }).where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.id, member.rider.id)));
+      }
+    });
+  } catch (e) {
+    // The seat was added for this person; if they stay deactivated, give it back.
+    if (seatAdded) await deps.setSeats(companyId, seats - 1).catch((err) => log.warn("user-access: seat revert failed", { companyId, err: (err as Error).message }));
+    throw e;
+  }
   await afterCommit(companyId, () =>
     audit({ companyId, actorId: actor.id, actorName: actor.name, action: "team.reactivate", entityType: "user", entityId: userId, summary: `Reactivated ${member.user.name}`, meta: { seats } }),
   );

@@ -199,6 +199,12 @@ describe("deactivateUser", () => {
     await expectAccessError(deactivateUser(CO, ADMIN, "ua-admin2", {}), 403, "superadmin_required");
   });
 
+  it("refuses a platform superadmin (their base role bypasses the membership check)", async () => {
+    await (db as any).$client.execute(`UPDATE "user" SET role = 'superadmin' WHERE id = 'ua-admin2'`);
+    await expectAccessError(deactivateUser(CO, { id: "ua-super", role: "superadmin" }, "ua-admin2", {}), 400, "superadmin_exempt");
+    expect((await membership("ua-admin2")).status).toBe("active");
+  });
+
   it("office staff with open jobs is blocked", async () => {
     await expectAccessError(deactivateUser(CO, ADMIN, "ua-disp", {}), 409, "has_open_jobs");
   });
@@ -223,6 +229,14 @@ describe("reactivateUser", () => {
     const r = await reactivateUser(CO, ADMIN, "ua-r2", { addSeat: true });
     expect(r.seats).toBe(3);
     expect(await seats()).toBe(3);
+  });
+
+  it("admin-tier target needs a superadmin actor", async () => {
+    await deactivateUser(CO, { id: "ua-super", role: "superadmin" }, "ua-admin2", {});
+    await expectAccessError(reactivateUser(CO, ADMIN, "ua-admin2", {}), 403, "superadmin_required");
+    expect((await membership("ua-admin2")).status).toBe("disabled");
+    await reactivateUser(CO, { id: "ua-super", role: "superadmin" }, "ua-admin2", {});
+    expect((await membership("ua-admin2")).status).toBe("active");
   });
 
   it("404 for unknown membership", async () => {
