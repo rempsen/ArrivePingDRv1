@@ -75,5 +75,10 @@ you invite must be the one signed in to the TestFlight app on the phone.
   content stays readable on a 13" screen — keep using them on new screens.
 - **Android** mirrors iOS (`com.nvc360.uberize`): `eas build --platform android
   --profile production` when a Play Store track is wanted.
-- The icon source is `assets/icon-source.png` (2048², with alpha) if the
-  1024² store icon ever needs regenerating.
+- **Brand icon (approved Oct 14, 2026).** `assets/icon-source.png` is the
+  approved 2048² "AP" master (navy, white letters, blue signal). `icon.png`
+  (App Store + default Home Screen, opaque), `icon-dark.png` / `icon-tinted.png`
+  (iOS 18+ appearances), `adaptive-icon.png` (Android, mark inside the safe
+  zone), `splash-icon.png`, the Live Activity images in `assets/liveActivity/`
+  and the sign-in wordmark all come from the approved package in Google Drive
+  (ArrivePing › Digital Assets). Regenerate from there, never from old art.
