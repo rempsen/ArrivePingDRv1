@@ -50,6 +50,7 @@ import {
   createSignupSetup,
   startTrialSubscription,
   cancelSubscriptionQuietly,
+  setSeats,
   TRIAL_DAYS,
 } from "../../services/billing-subscription";
 import { notifySelfServeSignup } from "../../services/signup-notify";
@@ -604,7 +605,10 @@ without it unless the user explicitly says to skip/finish everything.
 
   Ask AT MINIMUM (call save_qualifying_baseline as soon as each is answered,
   don't wait to batch them):
-    1. How many ${snap.settings.workerNoun.toLowerCase()}s/techs do they have? (technicianCount)
+    1. How many ${snap.settings.workerNoun.toLowerCase()}s will use ArrivePing? (technicianCount)
+       Say it plainly: this is the number of users on their plan — the
+       first month is free whatever the number, and they can change it any
+       time in Settings → Billing.
     2. How many vehicles in the fleet? (vehicleCount)
     3. Roughly how many ${snap.settings.jobNoun.toLowerCase()}s/calls per day? (jobsPerDay)
     4. Do they sell/offer routine maintenance plans (recurring service
@@ -972,7 +976,12 @@ correction like that — it reads like you weren't listening.`;
             }
             if (!saved.length) return { saved: [] };
             await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
-            return { saved };
+            // The user count IS the plan: put it on the subscription right away.
+            let seats: number | undefined;
+            if (typeof input.technicianCount === "number" && input.technicianCount > 0) {
+              seats = (await setSeats(cid, input.technicianCount).catch(() => ({ seats: undefined }))).seats;
+            }
+            return { saved, ...(seats ? { planSeats: seats, note: `Plan set to ${seats} user${seats === 1 ? "" : "s"}; first month free.` } : {}) };
           },
         }),
         save_icp_qualifying_answer: tool({

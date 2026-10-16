@@ -14,6 +14,7 @@ import { bookingsRoutes } from "./routes/bookings";
 import { trackingRoutes } from "./routes/tracking";
 import { ridersRoutes } from "./routes/riders";
 import { paymentsRoutes } from "./routes/payments";
+import { billingRoutes } from "./routes/billing";
 import { paymentsWebhookRoutes } from "./routes/payments-webhook";
 import { notificationsRoutes } from "./routes/notifications";
 import { adminRoutes } from "./routes/admin";
@@ -326,6 +327,7 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/tracking", trackingRoutes)
   .route("/riders", ridersRoutes)
   .route("/payments", paymentsRoutes)
+  .route("/billing", billingRoutes)
   .route("/notifications", notificationsRoutes)
   .route("/admin", adminRoutes)
   .route("/track", trackRoutes)

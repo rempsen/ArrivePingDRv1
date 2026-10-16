@@ -27,7 +27,16 @@ const stripeStub = {
     create: async (...args: unknown[]) => (calls.push({ method: "setupIntents.create", args }), { id: "seti_1", client_secret: "seti_1_secret" }),
     retrieve: async (...args: unknown[]) => (calls.push({ method: "setupIntents.retrieve", args }), { id: "seti_1", ...setupState }),
   },
+  subscriptionItems: { update: async (...args: unknown[]) => (calls.push({ method: "subscriptionItems.update", args }), {}) },
   subscriptions: {
+    retrieve: async (...args: unknown[]) => (
+      calls.push({ method: "subscriptions.retrieve", args }),
+      { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 10 * 86400, cancel_at_period_end: false, items: { data: [{ id: "si_1", quantity: 3 }] }, metadata: { companyId: CO } }
+    ),
+    update: async (...args: unknown[]) => (
+      calls.push({ method: "subscriptions.update", args }),
+      { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 10 * 86400, cancel_at_period_end: (args[1] as any)?.cancel_at_period_end ?? false, items: { data: [{ id: "si_1", quantity: 3 }] }, metadata: { companyId: CO } }
+    ),
     create: async (...args: unknown[]) => (
       calls.push({ method: "subscriptions.create", args }),
       { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 30 * 86400, items: { data: [{ id: "si_1", quantity: 1 }] } }
@@ -47,8 +56,35 @@ afterAll(() => {
   mock.module("../stripe", () => realStripe);
 });
 
-const { ensureSubscriptionPrice, createSignupSetup, startTrialSubscription, mapStatus, _resetBillingCache, PRICE_LOOKUP_KEY } =
+const { ensureSubscriptionPrice, createSignupSetup, startTrialSubscription, mapStatus, _resetBillingCache, PRICE_LOOKUP_KEY, setSeats, syncSeats, closeAccount, cancelAtPeriodEnd } =
   await import("../billing-subscription");
+const { db } = await import("../../api/database/index");
+const schema = await import("../../api/database/schema");
+const { getTableConfig } = await import("drizzle-orm/pg-core");
+const { eq } = await import("drizzle-orm");
+
+function ddlFor(table: any): string {
+  const cfg = getTableConfig(table);
+  const cols = cfg.columns.map((col: any) => {
+    const parts = [`"${col.name}"`, col.getSQLType()];
+    if (col.primary) parts.push("PRIMARY KEY");
+    const d = col.default;
+    const lit = typeof d === "string" ? `'${d.replace(/'/g, "''")}'` : typeof d === "boolean" ? (d ? "TRUE" : "FALSE") : typeof d === "number" ? String(d) : null;
+    if (col.notNull && (lit !== null || col.primary)) parts.push("NOT NULL");
+    if (lit !== null) parts.push(`DEFAULT ${lit}`);
+    return parts.join(" ");
+  });
+  return `CREATE TABLE IF NOT EXISTS "${cfg.name}" (${cols.join(", ")})`;
+}
+const CO = "billtest-co";
+beforeAll(async () => {
+  const sql = (db as any).$client;
+  for (const t of [schema.companies, schema.riders, schema.user, schema.memberships]) await sql.execute(ddlFor(t));
+  await sql.execute({
+    sql: "INSERT OR IGNORE INTO companies (id, name, billing_customer_id, billing_subscription_id, billing_status, billing_seats) VALUES (?,?,?,?,?,?)",
+    args: [CO, "Bill Test Co", "cus_1", "sub_1", "trialing", 3],
+  });
+});
 const { monthlyPrice } = await import("../../web/site/config");
 
 beforeEach(() => {
@@ -141,5 +177,38 @@ describe("signup billing", () => {
     expect(mapStatus("past_due")).toBe("past_due");
     expect(mapStatus("canceled")).toBe("canceled");
     expect(mapStatus("incomplete")).toBe("none");
+  });
+});
+
+describe("tenant self-service", () => {
+  it("setSeats puts the chosen user count on the subscription without proration", async () => {
+    const r = await setSeats(CO, 5);
+    expect(r.seats).toBe(5);
+    const u = calls.find((c) => c.method === "subscriptionItems.update")!;
+    expect(u.args[0]).toBe("si_1");
+    expect(u.args[1]).toEqual({ quantity: 5, proration_behavior: "none" });
+    const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, CO));
+    expect(co!.billingSeats).toBe(5);
+  });
+
+  it("syncSeats never bills fewer than the chosen seats", async () => {
+    await setSeats(CO, 4);
+    calls = [];
+    const r = await syncSeats(CO); // no active drivers in this db
+    expect(r.seats).toBe(4);
+    expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 4, proration_behavior: "none" });
+  });
+
+  it("cancel at period end flips the flag and mirrors the state", async () => {
+    await cancelAtPeriodEnd(CO, true);
+    expect(calls.find((c) => c.method === "subscriptions.update")!.args[1]).toEqual({ cancel_at_period_end: true });
+  });
+
+  it("closeAccount cancels now and seals the company", async () => {
+    await closeAccount(CO);
+    expect(calls.find((c) => c.method === "subscriptions.cancel")!.args[0]).toBe("sub_1");
+    const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, CO));
+    expect(co!.status).toBe("closed");
+    expect(co!.billingStatus).toBe("canceled");
   });
 });

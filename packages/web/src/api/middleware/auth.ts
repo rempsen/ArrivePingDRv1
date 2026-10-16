@@ -211,8 +211,39 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   c.set("companyId", companyId);
+
+  // A closed (or suspended) company is sealed for everyone but a superadmin:
+  // the tenant closed its own account from Settings → Billing, or we
+  // suspended it. Cached per company so this costs one query a minute.
+  if (!isSuperadmin(baseRole) && (await companyClosed(companyId))) {
+    return c.json(
+      { error: { code: "company_closed", message: "This account has been closed. Contact contact@nvc360.com to reopen it." } },
+      403,
+    );
+  }
   return next();
 });
+
+const closedCache = new Map<string, { at: number; closed: boolean }>();
+async function companyClosed(companyId: string): Promise<boolean> {
+  if (!companyId || companyId === "default") return false;
+  const hit = closedCache.get(companyId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.closed;
+  let closed = false;
+  try {
+    const [co] = await db.select({ status: schema.companies.status }).from(schema.companies).where(eq(schema.companies.id, companyId));
+    closed = co?.status === "closed" || co?.status === "suspended";
+  } catch {
+    closed = false;
+  }
+  if (closedCache.size > 5_000) closedCache.clear();
+  closedCache.set(companyId, { at: Date.now(), closed });
+  return closed;
+}
+/** Test/ops: forget cached closed/suspended flags (e.g. after reopening a tenant). */
+export function _resetCompanyClosedCache() {
+  closedCache.clear();
+}
 
 /**
  * The company (tenant) id for the current request. Throws if a tenant-scoped

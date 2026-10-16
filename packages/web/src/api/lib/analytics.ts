@@ -52,7 +52,12 @@ export type AnalyticsEvent =
   | "dispatch.assigned"
   | "user.signed_in"
   | "stripe.connect_started"
-  | "stripe.use_platform_toggled";
+  | "stripe.use_platform_toggled"
+  | "billing.seats_changed"
+  | "billing.cancel_scheduled"
+  | "billing.cancel_reverted"
+  | "billing.card_changed"
+  | "billing.account_closed";
 
 /**
  * Capture a business event. Fire-and-forget: never throws, never blocks the

@@ -27,7 +27,7 @@ import { db, sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { getStripe, stripeEnabled } from "./stripe";
 import { log } from "../api/lib/logger";
-import { pricingBands, STARTER_PRICE, STARTER_DRIVERS } from "../web/site/config";
+import { monthlyPrice, pricingBands, STARTER_PRICE, STARTER_DRIVERS } from "../web/site/config";
 
 export const TRIAL_DAYS = 30;
 /** Stable handle for the price in Stripe, so it is created once and found again. */
@@ -200,7 +200,9 @@ export async function driverSeatCount(companyId: string): Promise<number> {
 export async function syncSeats(companyId: string): Promise<{ seats: number; updated: boolean }> {
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   if (!co?.billingSubscriptionId || !stripeEnabled) return { seats: 0, updated: false };
-  const seats = Math.max(1, await driverSeatCount(companyId));
+  // The tenant chooses their seat count in Settings → Billing; the active
+  // driver count only ever raises it (you can't run 5 drivers on 3 seats).
+  const seats = Math.max(1, co.billingSeats || 1, await driverSeatCount(companyId));
   const stripe = getStripe();
   const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId);
   const item = sub.items.data[0];
@@ -234,4 +236,152 @@ export async function applySubscriptionState(sub: Stripe.Subscription): Promise<
 export async function companyForCustomer(customerId: string): Promise<string | null> {
   const [co] = await db.select({ id: schema.companies.id }).from(schema.companies).where(eq(schema.companies.billingCustomerId, customerId));
   return co?.id ?? null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Tenant self-service: Settings → Billing                                   */
+/* -------------------------------------------------------------------------- */
+
+export interface BillingSummary {
+  configured: boolean;
+  status: BillingStatus;
+  seats: number;
+  activeDrivers: number;
+  monthlyTotal: number;
+  breakdown: string;
+  plan: string;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  nextInvoiceAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: string | null;
+  paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+}
+
+function subscriptionItem(sub: Stripe.Subscription) {
+  return sub.items.data[0] ?? null;
+}
+
+/** Everything the Billing tab shows. Reads Stripe for the live subscription and card. */
+export async function billingSummary(companyId: string): Promise<BillingSummary> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  const activeDrivers = await driverSeatCount(companyId);
+  const seats = Math.max(1, co?.billingSeats || 1);
+  const price = monthlyPrice(seats);
+  const base: BillingSummary = {
+    configured: Boolean(co?.billingSubscriptionId && stripeEnabled),
+    status: (co?.billingStatus as BillingStatus) ?? "none",
+    seats,
+    activeDrivers,
+    monthlyTotal: price.total,
+    breakdown: price.breakdown,
+    plan: price.plan,
+    trialEndsAt: co?.billingTrialEndsAt ? co.billingTrialEndsAt.toISOString() : null,
+    trialDaysLeft: co?.billingTrialEndsAt ? Math.max(0, Math.ceil((co.billingTrialEndsAt.getTime() - Date.now()) / 86_400_000)) : null,
+    nextInvoiceAt: null,
+    cancelAtPeriodEnd: false,
+    cancelAt: null,
+    paymentMethod: null,
+  };
+  if (!base.configured || !co?.billingSubscriptionId) return base;
+  try {
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId, { expand: ["default_payment_method", "customer.invoice_settings.default_payment_method"] });
+    const item = subscriptionItem(sub);
+    const pm =
+      (sub.default_payment_method as Stripe.PaymentMethod | null) ??
+      ((sub.customer as Stripe.Customer)?.invoice_settings?.default_payment_method as Stripe.PaymentMethod | null) ??
+      null;
+    const periodEnd = (item as unknown as { current_period_end?: number })?.current_period_end ?? (sub as unknown as { current_period_end?: number }).current_period_end;
+    return {
+      ...base,
+      status: mapStatus(sub.status),
+      seats: Math.max(1, item?.quantity ?? seats),
+      ...(item?.quantity ? { ...monthlyPrice(item.quantity), monthlyTotal: monthlyPrice(item.quantity).total } : {}),
+      trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : base.trialEndsAt,
+      trialDaysLeft: sub.trial_end ? Math.max(0, Math.ceil((sub.trial_end * 1000 - Date.now()) / 86_400_000)) : base.trialDaysLeft,
+      nextInvoiceAt: sub.status === "canceled" ? null : periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+      cancelAt: sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null,
+      paymentMethod: pm?.card ? { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year } : null,
+    };
+  } catch (e) {
+    log.warn("billing: summary could not read Stripe", { companyId, err: (e as Error).message });
+    return base;
+  }
+}
+
+/** The tenant chooses how many users they pay for. Takes effect on the next invoice (no mid-month proration). */
+export async function setSeats(companyId: string, seats: number): Promise<{ seats: number }> {
+  const n = Math.max(1, Math.min(10_000, Math.floor(seats)));
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co) throw new Error("Company not found");
+  if (co.billingSubscriptionId && stripeEnabled) {
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId);
+    const item = subscriptionItem(sub);
+    if (item && !["canceled", "incomplete_expired"].includes(sub.status)) {
+      await stripe.subscriptionItems.update(item.id, { quantity: n, proration_behavior: "none" });
+    }
+  }
+  await db.update(schema.companies).set({ billingSeats: n }).where(eq(schema.companies.id, companyId));
+  return { seats: n };
+}
+
+/** Cancel at the end of the current period (or the trial): access continues until then, nothing more is charged. */
+export async function cancelAtPeriodEnd(companyId: string, cancel: boolean): Promise<void> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co?.billingSubscriptionId || !stripeEnabled) return;
+  const sub = await getStripe().subscriptions.update(co.billingSubscriptionId, { cancel_at_period_end: cancel });
+  await applySubscriptionState(sub);
+}
+
+/** A SetupIntent on the existing customer, so the card can be replaced (never removed). */
+export async function startPaymentMethodChange(companyId: string): Promise<{ clientSecret: string; setupIntentId: string } | null> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co?.billingCustomerId || !stripeEnabled) return null;
+  const si = await getStripe().setupIntents.create({
+    customer: co.billingCustomerId,
+    usage: "off_session",
+    automatic_payment_methods: { enabled: true },
+    metadata: { companyId, source: "arriveping-billing-change-card" },
+  });
+  return { clientSecret: si.client_secret!, setupIntentId: si.id };
+}
+
+/** After the browser confirmed the SetupIntent: make the new card the default everywhere. */
+export async function confirmPaymentMethodChange(companyId: string, setupIntentId: string): Promise<{ ok: boolean; message?: string }> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co?.billingCustomerId || !stripeEnabled) return { ok: false, message: "Billing is not set up for this account." };
+  const stripe = getStripe();
+  const si = await stripe.setupIntents.retrieve(setupIntentId);
+  const owner = typeof si.customer === "string" ? si.customer : si.customer?.id;
+  if (owner !== co.billingCustomerId || si.status !== "succeeded" || !si.payment_method) {
+    return { ok: false, message: "That card wasn't saved. Please try again." };
+  }
+  const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method.id;
+  await stripe.customers.update(co.billingCustomerId, { invoice_settings: { default_payment_method: pm } });
+  if (co.billingSubscriptionId) await stripe.subscriptions.update(co.billingSubscriptionId, { default_payment_method: pm });
+  return { ok: true };
+}
+
+/**
+ * Close the account for good: the subscription ends now (nothing further is
+ * charged) and the company is marked closed so nobody can sign into it.
+ * Data is kept; a superadmin can reopen it.
+ */
+export async function closeAccount(companyId: string): Promise<void> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co) throw new Error("Company not found");
+  if (co.billingSubscriptionId && stripeEnabled) {
+    try {
+      await getStripe().subscriptions.cancel(co.billingSubscriptionId, { prorate: false });
+    } catch (e) {
+      log.warn("billing: subscription cancel on close failed", { companyId, err: (e as Error).message });
+    }
+  }
+  await db
+    .update(schema.companies)
+    .set({ status: "closed", billingStatus: "canceled", updatedAt: new Date() })
+    .where(eq(schema.companies.id, companyId));
 }

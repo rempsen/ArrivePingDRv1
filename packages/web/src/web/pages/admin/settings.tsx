@@ -7,7 +7,7 @@ import { PageWrap, TenantLogo } from "../../components/brand";
 import { PageHead } from "./shell";
 import { Field, inputCls, BtnPrimary, ConfirmModal } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
-import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Upload, AlertTriangle, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard, UserCheck } from "lucide-react";
+import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Upload, AlertTriangle, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard, UserCheck, Receipt } from "lucide-react";
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { cn } from "../../lib/utils";
 import AutomationPage from "./automation";
@@ -15,6 +15,7 @@ import IntegrationsPage from "./integrations";
 import ApiAccessPage from "./api-access";
 import AuditPage from "./audit";
 import PaymentsSettingsTab from "./payments-settings";
+import BillingSettingsTab from "./billing-settings";
 import { CompanyCheckCard } from "./company-check";
 import {
   DEFAULT_GEOFENCE_RADIUS_M,
@@ -959,6 +960,7 @@ type SettingsSection = {
 
 const SECTIONS: SettingsSection[] = [
   { key: "company", label: "Company", icon: Building2, render: () => <CompanySettingsTab /> },
+  { key: "billing", label: "Billing", icon: Receipt, render: () => <BillingSettingsTab /> },
   { key: "payments", label: "Payments", icon: CreditCard, render: () => <PaymentsSettingsTab /> },
   { key: "automation", label: "Automation & AI", icon: Sparkles, render: () => <AutomationPage />, embedded: true },
   { key: "integrations", label: "Integrations", icon: Plug, render: () => <IntegrationsPage />, embedded: true },
