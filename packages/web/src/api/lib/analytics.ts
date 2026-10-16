@@ -57,7 +57,10 @@ export type AnalyticsEvent =
   | "billing.cancel_scheduled"
   | "billing.cancel_reverted"
   | "billing.card_changed"
-  | "billing.account_closed";
+  | "billing.account_closed"
+  | "billing.downsized"
+  | "team.deactivated"
+  | "team.reactivated";
 
 /**
  * Capture a business event. Fire-and-forget: never throws, never blocks the
