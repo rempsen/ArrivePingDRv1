@@ -76,6 +76,8 @@ export function DownsizePicker({
       if (prev.length >= needed) return prev;
       return [...prev, id];
     });
+    // Someone who is now being deactivated can't take over anyone's jobs.
+    setReassign((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, v === id ? undefined : v])));
   };
 
   const unresolved = selected.filter((id) => (byId.get(id)?.openJobs ?? 0) > 0 && reassign[id] === undefined);
@@ -96,9 +98,12 @@ export function DownsizePicker({
       const data = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
       if (!res.ok) {
         if (data.code === "stale") {
-          await candidates.refetch();
+          // The parent's `activeDrivers` (and so `needed`) comes from the billing
+          // summary; refresh both so the next attempt sends current numbers.
+          await Promise.all([candidates.refetch(), qc.invalidateQueries({ queryKey: ["billing", "summary"] })]);
           setSelected([]);
-          throw new Error("Your team changed since this opened — refresh and try again.");
+          setReassign({});
+          throw new Error("Your team changed since this opened — the list has been refreshed, please choose again.");
         }
         throw new Error(data.message || "Something went wrong");
       }

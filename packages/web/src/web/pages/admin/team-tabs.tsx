@@ -215,9 +215,10 @@ export function InternalTeamTab() {
   const deactivated = internal.filter((e: any) => e.membershipStatus === "disabled");
   // Office staff can carry jobs too (Settings → Company → "Who can be assigned"), so
   // offer every active person on the roster as a reassignment target.
+  // Only people with a rider profile can hold jobs, so only they are offered.
   const teammatesFor = (userId: string) =>
     (team.data?.employees ?? [])
-      .filter((e: any) => e.membershipStatus === "active" && e.id !== userId)
+      .filter((e: any) => e.membershipStatus === "active" && e.id !== userId && e.riderId)
       .map((e: any) => ({ userId: e.id, name: e.name }));
 
   return (

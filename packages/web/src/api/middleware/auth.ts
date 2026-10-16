@@ -188,6 +188,22 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     companyId = memberships[0]!.companyId;
   }
 
+  // Deactivated here (Settings → Team → Deactivate): the membership row is
+  // "disabled", so loadMemberships() left it out. Without this check a person
+  // whose ONLY company this was would have no memberships at all and the
+  // home-company fallback above would quietly let them keep working with
+  // their base role. Legacy users with no membership rows are unaffected.
+  if (
+    !isSuperadmin(baseRole) &&
+    !memberships.some((m) => m.companyId === companyId) &&
+    (await deactivatedMembership(userId, companyId))
+  ) {
+    return c.json(
+      { error: { code: "deactivated", message: "Your access to this company has been deactivated. Ask your administrator to reactivate it." } },
+      403,
+    );
+  }
+
   // ---- Per-company role overlay -------------------------------------------
   // The single highest-leverage line in this change. Dozens of handlers read
   // `user.role`, `user.permissions`, `user.staffType`. By overlaying the
@@ -223,6 +239,21 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
   return next();
 });
+
+/** True when this person has a `disabled` membership at this company (deactivated by an admin). */
+export async function deactivatedMembership(userId: string, companyId: string): Promise<boolean> {
+  if (!userId || !companyId) return false;
+  try {
+    const rows = await sdb
+      .select({ id: schema.memberships.id })
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.companyId, companyId), eq(schema.memberships.status, "disabled")))
+      .limit(1);
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 const closedCache = new Map<string, { at: number; closed: boolean }>();
 async function companyClosed(companyId: string): Promise<boolean> {

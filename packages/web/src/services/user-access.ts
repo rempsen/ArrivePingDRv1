@@ -19,13 +19,19 @@
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
+import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { OPEN_STATUSES } from "../shared/job-status";
 import { isAdminRole, isSuperadmin } from "../api/lib/permissions";
 import { audit } from "../api/lib/audit";
 import { queueCompanySync } from "./hubspot-sync";
 import { setSeats } from "./billing-subscription";
+import { fireEvent } from "./dispatch";
+
+/** Swappable for tests (a Stripe outage is simulated by making setSeats throw). */
+export const deps = { setSeats, fireEvent };
 import { monthlyPrice } from "../web/site/config";
+import { log } from "../api/lib/logger";
 
 export class AccessError extends Error {
   constructor(
@@ -62,7 +68,11 @@ async function loadMember(companyId: string, userId: string): Promise<Member | n
   const t = tdb(companyId);
   const membership = await t.selectOne(schema.memberships, eq(schema.memberships.userId, userId));
   if (!membership) return null;
-  const [user] = await t.raw.select().from(schema.user).where(eq(schema.user.id, userId));
+  // The membership row (tenant-scoped above) is what proves this person is
+  // ours; the user row itself is read on the system connection because the
+  // RLS policy on "user" only exposes active members, and a deactivated
+  // person is exactly who reactivate needs to find.
+  const [user] = await sdb.select().from(schema.user).where(eq(schema.user.id, userId));
   if (!user) return null;
   const rider = (await t.selectOne(schema.riders, eq(schema.riders.userId, userId))) ?? null;
   return { membership, user, rider };
@@ -90,7 +100,7 @@ export async function seatCandidates(companyId: string): Promise<SeatCandidate[]
   if (!members.length) return [];
   const riders = await t.select(schema.riders, eq(schema.riders.approval, "active"));
   const riderByUser = new Map(riders.map((r) => [r.userId, r]));
-  const users = await t.raw.select().from(schema.user).where(inArray(schema.user.id, members.map((m) => m.userId)));
+  const users = await sdb.select().from(schema.user).where(inArray(schema.user.id, members.map((m) => m.userId)));
   const userById = new Map(users.map((u) => [u.id, u]));
   const openCounts = new Map<string, number>();
   const riderIds = riders.map((r) => r.id);
@@ -135,6 +145,7 @@ async function activeFieldStaffCount(companyId: string): Promise<number> {
 /* -------------------------------------------------------------------------- */
 
 async function guardDeactivate(companyId: string, actor: Actor, target: Member) {
+  if (target.membership.status === "disabled") throw new AccessError(409, "already_deactivated", "This user is already deactivated.");
   if (target.user.id === actor.id) throw new AccessError(400, "self", "You cannot deactivate your own account.");
   const role = target.membership.role ?? target.user.role ?? "";
   if (isAdminRole(role)) {
@@ -143,7 +154,6 @@ async function guardDeactivate(companyId: string, actor: Actor, target: Member) 
     const remaining = admins.filter((m) => isAdminRole(m.role) && m.userId !== target.user.id);
     if (!remaining.length) throw new AccessError(400, "last_admin", "You cannot deactivate the last admin.");
   }
-  if (target.membership.status === "disabled") throw new AccessError(409, "already_deactivated", "This user is already deactivated.");
 }
 
 /** Resolve a reassignment target to an active rider profile at this company, or null for unassign. */
@@ -174,21 +184,69 @@ async function planDeactivation(companyId: string, actor: Actor, userId: string,
   return { member, jobs, toRiderId: await resolveReassignTarget(companyId, reassignTo, deactivating) };
 }
 
-/** The writes for one planned deactivation, inside an already-open tenant transaction. */
-async function applyDeactivation(tx: Parameters<Parameters<ReturnType<typeof tdb>["transaction"]>[0]>[0], companyId: string, plan: Plan, when: Date) {
-  if (plan.jobs.length) {
-    await tx
-      .update(schema.bookings)
-      .set({ riderId: plan.toRiderId ?? null, updatedAt: when } as Partial<typeof schema.bookings.$inferInsert>)
-      .where(and(eq(schema.bookings.companyId, companyId), inArray(schema.bookings.id, plan.jobs.map((j) => j.id))));
+type Tx = Parameters<Parameters<ReturnType<typeof tdb>["transaction"]>[0]>[0];
+
+/**
+ * The writes for one planned deactivation, inside an already-open tenant
+ * transaction. Jobs move through the same state changes dispatch uses:
+ * back to the board = "confirmed"/released with the assignment cleared;
+ * to a new tech = "assigned"/offered with the previous tech's drive and clock
+ * reset (assign.ts does the same). The UPDATE only touches jobs still on this
+ * rider and still open, and we re-check afterwards: a job that landed on them
+ * between planning and now rolls the whole thing back.
+ */
+async function applyDeactivation(tx: Tx, companyId: string, plan: Plan, when: Date) {
+  if (plan.member.rider) {
+    const rider = plan.member.rider;
+    if (plan.jobs.length) {
+      const reset = { enrouteAt: null, startedAt: null, clockState: "idle", lastResumeAt: null, insideGeofence: false, autoAssignedRuleId: "", autoAssignedAt: null, acceptedAt: null };
+      const set =
+        plan.toRiderId === null
+          ? { ...reset, riderId: null, status: "confirmed", assignStatus: "released", declineReason: "Technician deactivated", assignedAt: null }
+          : { ...reset, riderId: plan.toRiderId, status: "assigned", assignStatus: "offered", declineReason: "", assignedAt: when };
+      await tx
+        .update(schema.bookings)
+        .set(set as Partial<typeof schema.bookings.$inferInsert>)
+        .where(
+          and(
+            eq(schema.bookings.companyId, companyId),
+            eq(schema.bookings.riderId, rider.id),
+            inArray(schema.bookings.status, OPEN),
+            inArray(schema.bookings.id, plan.jobs.map((j) => j.id)),
+          ),
+        );
+    }
+    const remaining = await tx
+      .select({ id: schema.bookings.id })
+      .from(schema.bookings)
+      .where(and(eq(schema.bookings.companyId, companyId), eq(schema.bookings.riderId, rider.id), inArray(schema.bookings.status, OPEN), isNull(schema.bookings.deletedAt)));
+    if (remaining.length) {
+      throw new AccessError(409, "has_open_jobs", `${plan.member.user.name} was just assigned another job. Refresh and try again.`, { openJobs: remaining.length });
+    }
+    await tx.update(schema.riders).set({ approval: "suspended", status: "offline" }).where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.id, rider.id)));
   }
   await tx
     .update(schema.memberships)
     .set({ status: "disabled", deactivatedAt: when, updatedAt: when })
     .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, plan.member.membership.id)));
-  if (plan.member.rider) {
-    await tx.update(schema.riders).set({ approval: "suspended", status: "offline" }).where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.id, plan.member.rider.id)));
+}
+
+/** After commit: tell the new tech about each job they were handed. Never fails the request. */
+async function notifyReassigned(plans: Plan[]) {
+  for (const p of plans) {
+    if (!p.toRiderId) continue;
+    for (const j of p.jobs) await deps.fireEvent("assigned", j.id).catch(() => {});
   }
+}
+
+/** Audit + CRM sync after a committed change; a failure here must not turn a done action into a 500. */
+async function afterCommit(companyId: string, fn: () => Promise<unknown>) {
+  try {
+    await fn();
+  } catch (e) {
+    log.warn("user-access: post-commit bookkeeping failed", { companyId, err: (e as Error).message });
+  }
+  queueCompanySync(companyId);
 }
 
 function auditDeactivation(companyId: string, actor: Actor, plan: Plan) {
@@ -212,8 +270,10 @@ export async function deactivateUser(companyId: string, actor: Actor, userId: st
   const plan = await planDeactivation(companyId, actor, userId, opts.reassignTo, new Set([userId]));
   const when = new Date();
   await tdb(companyId).transaction((tx) => applyDeactivation(tx, companyId, plan, when));
-  await auditDeactivation(companyId, actor, plan);
-  queueCompanySync(companyId);
+  await afterCommit(companyId, async () => {
+    await notifyReassigned([plan]);
+    await auditDeactivation(companyId, actor, plan);
+  });
   return { deactivatedAt: when };
 }
 
@@ -232,7 +292,7 @@ export async function reactivateUser(companyId: string, actor: Actor, userId: st
         const monthlyDelta = monthlyPrice(seats + 1).total - monthlyPrice(seats).total;
         throw new AccessError(409, "seat_required", `Reactivating ${member.user.name} needs 1 more user on your plan.`, { seatsNeeded: 1, monthlyDelta });
       }
-      seats = (await setSeats(companyId, seats + 1)).seats;
+      seats = (await deps.setSeats(companyId, seats + 1)).seats;
     }
   }
   const when = new Date();
@@ -245,8 +305,9 @@ export async function reactivateUser(companyId: string, actor: Actor, userId: st
       await tx.update(schema.riders).set({ approval: "active" }).where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.id, member.rider.id)));
     }
   });
-  await audit({ companyId, actorId: actor.id, actorName: actor.name, action: "team.reactivate", entityType: "user", entityId: userId, summary: `Reactivated ${member.user.name}`, meta: { seats } });
-  queueCompanySync(companyId);
+  await afterCommit(companyId, () =>
+    audit({ companyId, actorId: actor.id, actorName: actor.name, action: "team.reactivate", entityType: "user", entityId: userId, summary: `Reactivated ${member.user.name}`, meta: { seats } }),
+  );
   return { seats };
 }
 
@@ -257,7 +318,10 @@ export async function downsize(
 ): Promise<{ seats: number; deactivated: string[] }> {
   const ids = Array.from(new Set(input.deactivate));
   if (!ids.length) throw new AccessError(400, "nothing_to_do", "Choose at least one user to deactivate.");
-  const active = await activeFieldStaffCount(companyId);
+  const candidates = new Set((await seatCandidates(companyId)).map((c) => c.userId));
+  const notSeat = ids.find((id) => !candidates.has(id));
+  if (notSeat) throw new AccessError(400, "not_a_seat", "Only active field staff count towards your plan and can be chosen here.");
+  const active = candidates.size;
   const expected = Math.max(1, active - ids.length);
   if (input.seats !== expected) {
     throw new AccessError(409, "stale", "Your team changed since this opened. Refresh and try again.", { activeDrivers: active, expectedSeats: expected });
@@ -268,13 +332,25 @@ export async function downsize(
     const reassign = Object.prototype.hasOwnProperty.call(input.reassign, id) ? input.reassign[id] : undefined;
     plans.push(await planDeactivation(companyId, actor, id, reassign, deactivating));
   }
+  // Stripe first, then the database in one transaction. If Stripe refuses,
+  // nobody has been deactivated; if the transaction fails, the seat count is
+  // put back. Either way the tenant never ends up half-changed.
+  const [co] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  const previousSeats = Math.max(1, co?.seats ?? 1);
+  const { seats } = await deps.setSeats(companyId, input.seats);
   const when = new Date();
-  await tdb(companyId).transaction(async (tx) => {
-    for (const p of plans) await applyDeactivation(tx, companyId, p, when);
+  try {
+    await tdb(companyId).transaction(async (tx) => {
+      for (const p of plans) await applyDeactivation(tx, companyId, p, when);
+    });
+  } catch (e) {
+    await deps.setSeats(companyId, previousSeats).catch((err) => log.warn("user-access: seat revert failed", { companyId, err: (err as Error).message }));
+    throw e;
+  }
+  await afterCommit(companyId, async () => {
+    await notifyReassigned(plans);
+    for (const p of plans) await auditDeactivation(companyId, actor, p);
+    await audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.downsize", entityType: "company", entityId: companyId, summary: `Plan reduced to ${seats} users`, meta: { seats, deactivated: ids } });
   });
-  const { seats } = await setSeats(companyId, input.seats);
-  for (const p of plans) await auditDeactivation(companyId, actor, p);
-  await audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.downsize", entityType: "company", entityId: companyId, summary: `Plan reduced to ${seats} users`, meta: { seats, deactivated: ids } });
-  queueCompanySync(companyId);
   return { seats, deactivated: ids };
 }

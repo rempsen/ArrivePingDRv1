@@ -88,7 +88,7 @@ export function DeactivateDialog({
           <button
             type="button"
             onClick={() => run.mutate()}
-            disabled={run.isPending || jobs.isLoading || needsChoice}
+            disabled={run.isPending || jobs.isLoading || jobs.isError || needsChoice}
             className="nvc-btn-primary flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />} Deactivate
@@ -104,6 +104,11 @@ export function DeactivateDialog({
         {jobs.isLoading && (
           <p className="flex items-center gap-2 text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Checking their open jobs…
+          </p>
+        )}
+        {jobs.isError && (
+          <p className="flex items-center gap-2 text-amber-warn">
+            <AlertTriangle className="h-4 w-4" /> Couldn't check their open jobs. Close and try again.
           </p>
         )}
         {count > 0 && (

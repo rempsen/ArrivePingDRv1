@@ -156,6 +156,28 @@ describe("POST /billing/downsize", () => {
   });
 });
 
+describe("seat candidates with no field staff", () => {
+  it("returns [] and excessActive 0", async () => {
+    const s = (db as any).$client;
+    await s.execute(`DELETE FROM riders WHERE company_id = '${CO}'`);
+    await s.execute(`DELETE FROM memberships WHERE company_id = '${CO}' AND role = 'rider'`);
+    const res = await call("/billing/seat-candidates");
+    expect(((await res.json()) as { candidates: unknown[] }).candidates).toEqual([]);
+    const sum = await call("/billing/summary");
+    expect(((await sum.json()) as { excessActive: number }).excessActive).toBe(0);
+  });
+});
+
+describe("reactivate with addSeat", () => {
+  it("is admin-only: a manager gets 403, no seat is added", async () => {
+    expect((await call("/team/uar-r2/deactivate", { method: "POST", body: {} })).status).toBe(200);
+    const res = await call("/team/uar-r2/reactivate", { method: "POST", body: { addSeat: true }, role: "manager", user: "uar-mgr" });
+    expect(res.status).toBe(403);
+    const sum = await call("/billing/summary");
+    expect(((await sum.json()) as { seats: number }).seats).toBe(2);
+  });
+});
+
 describe("authorisation", () => {
   it("non-admin gets 403 on every new route", async () => {
     const asRider = { role: "rider", user: "uar-r3" };

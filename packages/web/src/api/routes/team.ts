@@ -513,8 +513,12 @@ export const teamRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const me = c.get("user") as SessionUser;
     const cid = tenantId(c);
+    const { addSeat } = c.req.valid("json");
+    // Adding a seat changes what the company pays; that is an admin decision,
+    // like every other seat change in routes/billing.ts.
+    if (addSeat && !isAdminRole(me.role)) return c.json({ code: "admin_required", message: "Only an admin can add a user to the plan." }, 403);
     try {
-      const r = await reactivateUser(cid, me, id, { addSeat: c.req.valid("json").addSeat });
+      const r = await reactivateUser(cid, me, id, { addSeat });
       capture("team.reactivated", cid, { userId: id, by: me.id, seats: r.seats });
       return c.json({ ok: true, seats: r.seats }, 200);
     } catch (e) {

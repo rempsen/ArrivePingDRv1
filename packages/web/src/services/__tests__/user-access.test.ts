@@ -19,7 +19,7 @@ const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
 const { getTableConfig } = await import("drizzle-orm/pg-core");
 const { eq, and } = await import("drizzle-orm");
-const { openJobsFor, seatCandidates, deactivateUser, reactivateUser, downsize, AccessError } = await import("../user-access");
+const { openJobsFor, seatCandidates, deactivateUser, reactivateUser, downsize, AccessError, deps } = await import("../user-access");
 const { driverSeatCount } = await import("../billing-subscription");
 
 function ddlFor(table: any): string {
@@ -75,7 +75,7 @@ async function reseed() {
     ["bk-4", "rd-disp", "confirmed"],
   ];
   for (const [id, rid, status] of jobs) {
-    await sql.execute({ sql: "INSERT INTO bookings (id, company_id, customer_id, service_id, title, status, address, scheduled_at, rider_id) VALUES (?,?,?,?,?,?,?,?,?)", args: [id, CO, "cust", "svc", id, status, "", new Date().toISOString(), rid] });
+    await sql.execute({ sql: "INSERT INTO bookings (id, company_id, customer_id, service_id, title, status, address, scheduled_at, rider_id, assign_status, enroute_at, clock_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", args: [id, CO, "cust", "svc", id, status, "", new Date().toISOString(), rid, status === "completed" ? "" : "accepted", status === "enroute" ? new Date().toISOString() : null, status === "enroute" ? "running" : "idle"] });
   }
 }
 
@@ -83,7 +83,14 @@ beforeAll(async () => {
   const sql = (db as any).$client;
   for (const t of [schema.companies, schema.user, schema.memberships, schema.riders, schema.bookings, schema.auditLog]) await sql.execute(ddlFor(t));
 });
-beforeEach(reseed);
+const notified: string[] = [];
+deps.fireEvent = async (_event, bookingId) => {
+  notified.push(bookingId);
+};
+beforeEach(async () => {
+  notified.length = 0;
+  await reseed();
+});
 
 async function membership(userId: string) {
   const [m] = await db.select().from(schema.memberships).where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.companyId, CO)));
@@ -155,10 +162,27 @@ describe("deactivateUser", () => {
     expect(log?.entityId).toBe("ua-r1");
   });
 
-  it("with reassignTo null unassigns", async () => {
+  it("with reassignTo null returns jobs to the board as confirmed with assignment cleared", async () => {
     await deactivateUser(CO, ADMIN, "ua-r1", { reassignTo: null });
-    expect((await booking("bk-1")).riderId).toBeNull();
-    expect((await booking("bk-1")).status).toBe("assigned");
+    const b = await booking("bk-2");
+    expect(b.riderId).toBeNull();
+    expect(b.status).toBe("confirmed");
+    expect(b.assignStatus).toBe("released");
+    expect(b.enrouteAt).toBeNull();
+    expect(b.clockState).toBe("idle");
+    expect(notified).toEqual([]);
+  });
+
+  it("with reassignTo offers the jobs to the new tech and resets the clock", async () => {
+    await deactivateUser(CO, ADMIN, "ua-r1", { reassignTo: "ua-r3" });
+    const b = await booking("bk-2");
+    expect(b.riderId).toBe("rd-r3");
+    expect(b.status).toBe("assigned");
+    expect(b.assignStatus).toBe("offered");
+    expect(b.acceptedAt).toBeNull();
+    expect(b.enrouteAt).toBeNull();
+    expect(b.clockState).toBe("idle");
+    expect(notified.sort()).toEqual(["bk-1", "bk-2"]);
   });
 
   it("refuses self", async () => {
@@ -204,6 +228,11 @@ describe("reactivateUser", () => {
   it("404 for unknown membership", async () => {
     await expectAccessError(reactivateUser(CO, ADMIN, "ua-nobody", {}), 404, "not_found");
   });
+
+  it("404 when the user exists but their membership here was deleted", async () => {
+    await (db as any).$client.execute(`DELETE FROM memberships WHERE user_id = 'ua-r2' AND company_id = '${CO}'`);
+    await expectAccessError(reactivateUser(CO, ADMIN, "ua-r2", {}), 404, "not_found");
+  });
 });
 
 describe("downsize", () => {
@@ -220,6 +249,28 @@ describe("downsize", () => {
     await expectAccessError(downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r1", "ua-r3"], reassign: { "ua-r1": "ua-r3" } }), 400, "reassign_target_deactivated");
     expect((await membership("ua-r1")).status).toBe("active");
     expect((await booking("bk-1")).riderId).toBe("rd-r1");
+    expect(await seats()).toBe(10);
+  });
+
+  it("rejects ids that are not seat candidates", async () => {
+    await expectAccessError(downsize(CO, ADMIN, { seats: 2, deactivate: ["ua-disp"], reassign: {} }), 400, "not_a_seat");
+    expect((await membership("ua-disp")).status).toBe("active");
+  });
+
+  it("leaves everything unchanged when the seat update fails", async () => {
+    const real = deps.setSeats;
+    deps.setSeats = async () => {
+      throw new Error("stripe down");
+    };
+    try {
+      await expect(downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } })).rejects.toThrow("stripe down");
+    } finally {
+      deps.setSeats = real;
+    }
+    expect((await membership("ua-r1")).status).toBe("active");
+    expect((await membership("ua-r2")).status).toBe("active");
+    expect((await booking("bk-1")).riderId).toBe("rd-r1");
+    expect((await rider("rd-r1")).approval).toBe("active");
     expect(await seats()).toBe(10);
   });
 
