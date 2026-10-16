@@ -42,6 +42,7 @@ type Summary = {
   cancelAtPeriodEnd: boolean;
   cancelAt: string | null;
   paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+  stripeError?: string;
 };
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
@@ -126,6 +127,13 @@ export default function BillingSettingsTab() {
         <div className="nvc-card p-5 text-sm text-slate-300">
           This account isn't billed through ArrivePing's self-serve plan (it was set up by our team). Questions about your
           invoice? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
+        </div>
+      )}
+
+      {s?.stripeError && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          We couldn't reach Stripe just now, so the plan and card details below may be out of date. Reload in a moment.
+          <span className="mt-1 block text-xs text-amber-200/70">{s.stripeError}</span>
         </div>
       )}
 
@@ -246,6 +254,8 @@ export default function BillingSettingsTab() {
                   <span className="font-semibold capitalize text-white">{s.paymentMethod.brand}</span> ending in {s.paymentMethod.last4} · expires{" "}
                   {String(s.paymentMethod.expMonth).padStart(2, "0")}/{s.paymentMethod.expYear}
                 </p>
+              ) : s.stripeError ? (
+                <p className="text-sm text-slate-400">Card details unavailable right now.</p>
               ) : (
                 <p className="text-sm text-amber-300">No card on file. Add one so your plan continues after the trial.</p>
               )}

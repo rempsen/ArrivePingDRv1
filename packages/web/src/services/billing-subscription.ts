@@ -256,6 +256,8 @@ export interface BillingSummary {
   cancelAtPeriodEnd: boolean;
   cancelAt: string | null;
   paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+  /** Set when Stripe couldn't be read; the numbers above are then our last known values. */
+  stripeError?: string;
 }
 
 function subscriptionItem(sub: Stripe.Subscription) {
@@ -286,12 +288,28 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
   if (!base.configured || !co?.billingSubscriptionId) return base;
   try {
     const stripe = getStripe();
-    const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId, { expand: ["default_payment_method", "customer.invoice_settings.default_payment_method"] });
+    const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId, { expand: ["default_payment_method"] });
     const item = subscriptionItem(sub);
-    const pm =
-      (sub.default_payment_method as Stripe.PaymentMethod | null) ??
-      ((sub.customer as Stripe.Customer)?.invoice_settings?.default_payment_method as Stripe.PaymentMethod | null) ??
-      null;
+    // The card: the subscription's default, else the customer's default, else
+    // any card saved on the customer (a SetupIntent attaches one even when
+    // no default was recorded).
+    let pm: Stripe.PaymentMethod | null = (sub.default_payment_method as Stripe.PaymentMethod | null) ?? null;
+    const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+    if (!pm?.card) {
+      const cust = (await stripe.customers.retrieve(customerId, { expand: ["invoice_settings.default_payment_method"] })) as Stripe.Customer;
+      const def = cust.invoice_settings?.default_payment_method;
+      if (def && typeof def !== "string" && def.card) pm = def;
+    }
+    if (!pm?.card) {
+      const list = await stripe.customers.listPaymentMethods(customerId, { type: "card", limit: 1 });
+      const first = list.data[0];
+      if (first?.card) {
+        pm = first;
+        // Heal the record so the renewal charge has a card to use.
+        await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: first.id } }).catch(() => {});
+        await stripe.subscriptions.update(sub.id, { default_payment_method: first.id }).catch(() => {});
+      }
+    }
     const periodEnd = (item as unknown as { current_period_end?: number })?.current_period_end ?? (sub as unknown as { current_period_end?: number }).current_period_end;
     return {
       ...base,
@@ -307,7 +325,8 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
     };
   } catch (e) {
     log.warn("billing: summary could not read Stripe", { companyId, err: (e as Error).message });
-    return base;
+    // Say so on the page rather than quietly showing database values.
+    return { ...base, stripeError: (e as Error).message };
   }
 }
 
