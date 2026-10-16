@@ -12,11 +12,15 @@ process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
 
 const realStripe = { ...(await import("../stripe")) };
+const realStorage = { ...(await import("../../api/lib/storage")) };
+const deletedKeys: string[] = [];
 beforeAll(() => {
   mock.module("../stripe", () => ({ ...realStripe, stripeEnabled: false }));
+  mock.module("../../api/lib/storage", () => ({ ...realStorage, deleteObject: async (k: string) => void deletedKeys.push(k) }));
 });
 afterAll(() => {
   mock.module("../stripe", () => realStripe);
+  mock.module("../../api/lib/storage", () => realStorage);
 });
 
 const { db } = await import("../../api/database/index");
@@ -71,7 +75,7 @@ async function reseed() {
   await sql.execute({ sql: "INSERT INTO memberships (id, user_id, company_id, role, status) VALUES (?,?,?,?,?)", args: ["m-tech-b", "ad-tech", B, "admin", "active"] });
   await sql.execute({ sql: "INSERT INTO memberships (id, user_id, company_id, role, status) VALUES (?,?,?,?,?)", args: ["m-admin-a", "ad-admin", A, "admin", "active"] });
   await sql.execute({ sql: "INSERT INTO memberships (id, user_id, company_id, role, status, staff_type) VALUES (?,?,?,?,?,?)", args: ["m-other-a", "ad-other", A, "rider", "active", "technician"] });
-  await sql.execute({ sql: "INSERT INTO riders (id, user_id, company_id, approval, phone, photo_url, license_number, address) VALUES (?,?,?,?,?,?,?,?)", args: ["rd-tech", "ad-tech", A, "active", "204-555-0100", "https://img/head.png", "DL123", "1 Main St"] });
+  await sql.execute({ sql: "INSERT INTO riders (id, user_id, company_id, approval, phone, photo_url, photo_key, license_number, address) VALUES (?,?,?,?,?,?,?,?,?)", args: ["rd-tech", "ad-tech", A, "active", "204-555-0100", "https://img/head.png", "riders/ad-tech/head.jpg", "DL123", "1 Main St"] });
   await sql.execute({ sql: "INSERT INTO riders (id, user_id, company_id, approval) VALUES (?,?,?,?)", args: ["rd-other", "ad-other", A, "active"] });
   const jobs: [string, string, string][] = [
     ["bk-open", "rd-tech", "assigned"],
@@ -91,16 +95,26 @@ async function reseed() {
   await sql.execute({ sql: "INSERT INTO tech_invites (id, company_id, email, name, phone, token, status, user_id) VALUES (?,?,?,?,?,?,?,?)", args: ["ti-1", A, "ad-tech@t.test", "Tess Tech", "204-555-0100", "tok-ti", "pending", "ad-tech"] });
   await sql.execute({ sql: "INSERT INTO messages (id, company_id, rider_id, sender_role, sender_name, body) VALUES (?,?,?,?,?,?)", args: ["msg-1", A, "rd-tech", "tech", "Tess Tech", "on my way"] });
   await sql.execute({ sql: "INSERT INTO job_events (id, company_id, booking_id, kind, actor_role, actor_name) VALUES (?,?,?,?,?,?)", args: ["je-1", A, "bk-done", "note_added", "tech", "Tess Tech"] });
+  // A namesake on the same roster, on a job that was never Tess's — must keep her attribution.
+  await sql.execute({ sql: "INSERT INTO bookings (id, company_id, customer_id, service_id, title, status, address, scheduled_at, rider_id, assign_status, clock_state) VALUES (?,?,?,?,?,?,?,?,?,?,?)", args: ["bk-other", A, "cust", "svc", "bk-other", "completed", "", new Date().toISOString(), "rd-other", "", "idle"] });
+  await sql.execute({ sql: "INSERT INTO job_events (id, company_id, booking_id, kind, actor_role, actor_name) VALUES (?,?,?,?,?,?)", args: ["je-namesake", A, "bk-other", "note_added", "tech", "Tess Tech"] });
+  await sql.execute(`UPDATE bookings SET driver_notes = '[Voice note — Tess Tech, 9:00] Filter replaced' WHERE id = 'bk-done'`);
+  // Another user whose email ends with the tech's — their pending token must survive.
+  await sql.execute({ sql: 'INSERT INTO "verification" (id, identifier, value, expires_at) VALUES (?,?,?,?)', args: ["v-other", "bad-tech@t.test", "code", new Date(Date.now() + 86_400_000).toISOString()] });
   // A company the tech already LEFT (membership gone, rider row with PII kept).
   await sql.execute({ sql: "INSERT INTO companies (id, name, billing_status, billing_seats) VALUES (?,?,?,?)", args: ["ad-left", "Left Co", "active", 5] });
   await sql.execute({ sql: "INSERT INTO riders (id, user_id, company_id, approval, phone, license_number) VALUES (?,?,?,?,?,?)", args: ["rd-left", "ad-tech", "ad-left", "active", "204-555-0199", "DL999"] });
+  await sql.execute({ sql: "INSERT INTO messages (id, company_id, rider_id, sender_role, sender_name, body) VALUES (?,?,?,?,?,?)", args: ["msg-left", "ad-left", "rd-left", "tech", "Tess Tech", "done for the day"] });
 }
 
 beforeAll(async () => {
   const sql = (db as any).$client;
   for (const t of [schema.companies, schema.user, schema.memberships, schema.riders, schema.bookings, schema.auditLog, schema.session, schema.account, schema.verification, schema.pushTokens, schema.techInvites, schema.notifications, schema.messages, schema.jobEvents, schema.bookingChangeRequests]) await sql.execute(ddlFor(t));
 });
-beforeEach(reseed);
+beforeEach(async () => {
+  deletedKeys.length = 0;
+  await reseed();
+});
 
 async function one<T extends { id: string }>(table: any, id: string): Promise<T> {
   const [r] = await db.select().from(table).where(eq(table.id, id));
@@ -223,6 +237,14 @@ describe("deleteOwnAccount", () => {
     expect(ti.phone).toBe("");
     expect((await one<typeof schema.messages.$inferSelect>(schema.messages, "msg-1")).senderName).toBe("Deleted user");
     expect((await one<typeof schema.jobEvents.$inferSelect>(schema.jobEvents, "je-1")).actorName).toBe("Deleted user");
+    expect((await one<typeof schema.jobEvents.$inferSelect>(schema.jobEvents, "je-namesake")).actorName).toBe("Tess Tech");
+    expect((await one<typeof schema.bookings.$inferSelect>(schema.bookings, "bk-done")).driverNotes).toBe("[Voice note — Deleted user, 9:00] Filter replaced");
+    // Text at the company they had already left is scrubbed too.
+    expect((await one<typeof schema.messages.$inferSelect>(schema.messages, "msg-left")).senderName).toBe("Deleted user");
+    // The headshot object is removed from storage.
+    expect(deletedKeys).toEqual(["riders/ad-tech/head.jpg"]);
+    // Someone else's token whose email merely ends with ours survives.
+    expect((await db.select().from(schema.verification).where(eq(schema.verification.id, "v-other"))).length).toBe(1);
 
     // Teammates untouched.
     expect((await one<typeof schema.memberships.$inferSelect>(schema.memberships, "m-other-a")).status).toBe("active");
@@ -255,5 +277,10 @@ describe("deleteOwnAccount", () => {
     expect(await deletionBlockers("ad-tech")).toEqual([]);
     await sql.execute(`UPDATE memberships SET status = 'disabled' WHERE id = 'm-admin-b'`);
     await expectAccessError(deleteOwnAccount("ad-tech"), 409, "last_admin");
+    // ...and because it is one transaction, company A was not touched either.
+    expect((await one<typeof schema.memberships.$inferSelect>(schema.memberships, "m-tech-a")).status).toBe("active");
+    expect((await one<typeof schema.bookings.$inferSelect>(schema.bookings, "bk-open")).riderId).toBe("rd-tech");
+    expect((await one<typeof schema.riders.$inferSelect>(schema.riders, "rd-tech")).phone).toBe("204-555-0100");
+    expect((await one<typeof schema.user.$inferSelect>(schema.user, "ad-tech")).email).toBe("ad-tech@t.test");
   });
 });

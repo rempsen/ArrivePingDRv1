@@ -6,39 +6,48 @@
  * sign in to also let them delete the account from inside the app, and our
  * privacy policy promises deletion on request. The companies this person
  * worked for still need their job history (invoices, photos, time on site),
- * so the user row is ANONYMIZED rather than dropped:
+ * so the user row is ANONYMIZED rather than dropped.
  *
+ * Everything happens in ONE system-connection transaction (the only place in
+ * the codebase that legitimately writes across tenants, because the subject
+ * is one person's identity at every company they ever worked for):
+ *
+ *   - every company row involved is locked, then the last-admin rule is
+ *     checked for each company where they are an active admin — a failure
+ *     anywhere rolls back everywhere, so two co-admins deleting at once, or a
+ *     co-admin vanishing mid-request, can never leave a company with no admin
+ *     or an account that is half gone;
  *   - every open job they hold goes back to the board (same state change the
  *     office's Deactivate uses), finished work keeps its rider link;
- *   - every membership becomes disabled + deactivated_at, so each roster shows
- *     them under "Deactivated" and nothing can be done as them; the last-admin
- *     rule is re-checked inside each company's transaction with the company
- *     row locked, so two co-admins deleting at once cannot both get through;
- *   - every rider profile (including at companies they already left) is
- *     suspended and stripped of phone, headshot, licence and address;
+ *   - every membership becomes disabled + deactivated_at (invites are dropped);
+ *   - every rider profile — including at companies they already left — is
+ *     suspended and stripped of phone, headshot, licence and address; the
+ *     headshot object is deleted from storage after commit;
+ *   - free-text copies of the name on tenant rows (messages, job events and
+ *     voice-note lines on the jobs they worked, change requests, audit rows,
+ *     roster invites) are rewritten, scoped to THEIR jobs so a namesake on the
+ *     same roster is untouched;
  *   - the user row keeps its id and becomes "Deleted user" with role
- *     `deleted`; sessions, credentials, pending verifications (incl. password
- *     resets), push tokens, notifications and roster invites are removed, so
- *     there is nothing left to sign in with and no link that could bring the
- *     account back. authMiddleware refuses role `deleted` outright.
- *   - free-text copies of the name on messages, job events and change
- *     requests are rewritten; HubSpot contacts linked to the memberships are
- *     archived.
+ *     `deleted`; sessions, credentials, pending verifications (incl.
+ *     password resets), push tokens and notifications are removed, so there
+ *     is nothing left to sign in with and no link that could bring the
+ *     account back. authMiddleware refuses role `deleted`.
  *
- * Refused (nothing changes) when the person is the last active admin of any
- * company — someone has to be able to run it — and for platform superadmins,
- * whose access does not come from a membership. Re-running on an already
- * anonymized account repeats the cleanup (idempotent) so a crash midway can
- * always be finished.
+ * After commit: audit rows (never carrying the real name), HubSpot contact
+ * archival, CRM sync. Refused for platform superadmins (access does not come
+ * from a membership) and customers (their records need a different scrub).
+ * Re-running on an anonymized account repeats the cleanup (idempotent).
  */
-import { and, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, eq, inArray, like, or, sql, asc } from "drizzle-orm";
 import { sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { isAdminRole, isSuperadmin } from "../api/lib/permissions";
 import { audit } from "../api/lib/audit";
 import { log } from "../api/lib/logger";
-import { AccessError, applyDeactivation, loadMember, openJobsForRider, type Plan } from "./user-access";
+import { deleteObject } from "../api/lib/storage";
+import { OPEN_STATUSES } from "../shared/job-status";
+import { AccessError, applyDeactivation, type Member, type Plan, type Tx } from "./user-access";
 import { archiveHubspotContact, queueCompanySync } from "./hubspot-sync";
 
 export type DeletionBlocker = { companyId: string; company: string; reason: "last_admin" };
@@ -51,27 +60,29 @@ export const isDeletedUser = (u: { role?: string | null; email?: string | null }
   !!u && (u.role === DELETED_ROLE || /^deleted-.*@anon\.arriveping\.com$/.test(u.email ?? ""));
 
 type Membership = typeof schema.memberships.$inferSelect;
-
-async function allMemberships(userId: string): Promise<Membership[]> {
-  return sdb.select().from(schema.memberships).where(eq(schema.memberships.userId, userId));
-}
+type Rider = typeof schema.riders.$inferSelect;
+const OPEN = [...OPEN_STATUSES] as string[];
 
 /** Active admins at this company other than `userId`. */
 function otherActiveAdmins(rows: Membership[], userId: string): number {
   return rows.filter((o) => o.status === "active" && o.userId !== userId && isAdminRole(o.role ?? "")).length;
 }
 
-/** Companies where deleting this person would leave nobody in charge. */
+/** Where is this person an admin? Membership role first; a legacy admin with no membership rows counts at their home company. */
+function adminCompanies(user: typeof schema.user.$inferSelect, mine: Membership[]): string[] {
+  const set = new Set(mine.filter((m) => m.status === "active" && isAdminRole(m.role ?? "")).map((m) => m.companyId));
+  if (!mine.length && isAdminRole(user.role) && user.companyId) set.add(user.companyId);
+  return [...set];
+}
+
+/** Companies where deleting this person would leave nobody in charge (read-only preview). */
 export async function deletionBlockers(userId: string): Promise<DeletionBlocker[]> {
   const [user] = await sdb.select().from(schema.user).where(eq(schema.user.id, userId));
   if (!user) return [];
-  const mine = await allMemberships(userId);
-  // Where is this person an admin? Membership role first; a legacy admin with
-  // no membership rows at all still counts at their home company.
-  const adminAt = new Set(mine.filter((m) => m.status === "active" && isAdminRole(m.role ?? "")).map((m) => m.companyId));
-  if (!mine.length && isAdminRole(user.role) && user.companyId) adminAt.add(user.companyId);
-  if (!adminAt.size) return [];
-  const companies = await sdb.select().from(schema.companies).where(inArray(schema.companies.id, [...adminAt]));
+  const mine = await sdb.select().from(schema.memberships).where(eq(schema.memberships.userId, userId));
+  const adminAt = adminCompanies(user, mine);
+  if (!adminAt.length) return [];
+  const companies = await sdb.select().from(schema.companies).where(inArray(schema.companies.id, adminAt));
   const nameById = new Map(companies.map((c) => [c.id, c.name]));
   const out: DeletionBlocker[] = [];
   for (const companyId of adminAt) {
@@ -81,73 +92,36 @@ export async function deletionBlockers(userId: string): Promise<DeletionBlocker[
   return out.sort((a, b) => a.company.localeCompare(b.company));
 }
 
-/**
- * End one company relationship. Everything for the company happens in one
- * tenant transaction with the company row locked, so the last-admin re-check
- * inside it is authoritative even when two admins delete at the same moment.
- */
-async function releaseFromCompany(companyId: string, userId: string, when: Date): Promise<number> {
-  const member = await loadMember(companyId, userId);
-  if (!member) return 0;
-  const m = member.membership;
-  if (m.status === "invited") {
-    // Never accepted: there is nothing to keep, drop the invite outright.
-    await tdb(companyId).delete(schema.memberships, eq(schema.memberships.id, m.id));
-    return 0;
-  }
-  const jobs = member.rider && m.status !== "disabled" ? await openJobsForRider(companyId, member.rider.id) : [];
-  const plan: Plan = { member, jobs, toRiderId: jobs.length ? null : undefined };
-  await tdb(companyId).transaction(async (tx) => {
-    // Serialize deletions per company (and the office's own admin changes
-    // that lock the same row) so the admin count below cannot be stale.
-    await tx.select({ id: schema.companies.id }).from(schema.companies).where(eq(schema.companies.id, companyId)).for("update");
-    if (m.status === "active" && isAdminRole(m.role ?? "")) {
-      const rows = await tx.select().from(schema.memberships).where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.status, "active")));
-      if (otherActiveAdmins(rows, userId) === 0) {
-        throw new AccessError(409, "last_admin", "You are the only admin here. Another admin must be added first.", { blockers: [{ companyId, reason: "last_admin" }] });
-      }
-    }
-    if (m.status !== "disabled") await applyDeactivation(tx, companyId, plan, when, "Technician left ArrivePing");
-    // Free-text copies of the name that live on tenant rows.
-    await tx.update(schema.messages).set({ senderName: ANON_NAME }).where(and(eq(schema.messages.companyId, companyId), eq(schema.messages.senderRole, "tech"), member.rider ? eq(schema.messages.riderId, member.rider.id) : sql`false`));
-    // job_events has no actor id, only a role + display name; match the exact
-    // name under the tech role so the timeline stops naming them.
-    await tx.update(schema.jobEvents).set({ actorName: ANON_NAME }).where(and(eq(schema.jobEvents.companyId, companyId), eq(schema.jobEvents.actorRole, "tech"), eq(schema.jobEvents.actorName, member.user.name)));
-    await tx.update(schema.bookingChangeRequests).set({ requestedByName: ANON_NAME }).where(and(eq(schema.bookingChangeRequests.companyId, companyId), eq(schema.bookingChangeRequests.requestedBy, userId)));
-    await tx.update(schema.bookingChangeRequests).set({ decidedByName: ANON_NAME }).where(and(eq(schema.bookingChangeRequests.companyId, companyId), eq(schema.bookingChangeRequests.decidedBy, userId)));
-    await tx.update(schema.auditLog).set({ actorName: ANON_NAME }).where(and(eq(schema.auditLog.companyId, companyId), eq(schema.auditLog.actorId, userId)));
-    await tx.update(schema.techInvites).set({ status: "revoked", name: ANON_NAME, phone: "", email: anonEmail(userId) }).where(and(eq(schema.techInvites.companyId, companyId), eq(schema.techInvites.userId, userId)));
-  });
-  try {
-    await audit({
-      companyId,
-      actorId: userId,
-      actorName: ANON_NAME,
-      action: "account.delete",
-      entityType: "user",
-      entityId: userId,
-      summary: `A team member deleted their ArrivePing account (user ${userId})`,
-      meta: { openJobsReleased: jobs.length },
-    });
-  } catch (e) {
-    log.warn("account-deletion: audit failed", { companyId, err: (e as Error).message });
-  }
-  if (m.hubspotContactId) {
-    await archiveHubspotContact(m.hubspotContactId).catch((e) => log.warn("account-deletion: hubspot archive failed", { companyId, err: (e as Error).message }));
-  }
-  queueCompanySync(companyId);
-  return jobs.length;
-}
-
-/** Suspend + scrub every rider profile, including at companies the person already left. */
-async function scrubRiders(userId: string) {
-  const riders = await sdb.select().from(schema.riders).where(eq(schema.riders.userId, userId));
-  for (const r of riders) {
-    await tdb(r.companyId).update(
-      schema.riders,
-      { approval: "suspended", status: "offline", phone: "", photoUrl: "", photoKey: "", licensePlate: "", licenseNumber: "", address: "", notes: "", lat: null, lng: null, locationUpdatedAt: null },
-      eq(schema.riders.id, r.id),
-    );
+/** Rewrite every free-text copy of the name on one company's rows, scoped to this person's own rider identity / jobs. */
+async function scrubTenantText(tx: Tx, companyId: string, user: typeof schema.user.$inferSelect, rider: Rider | null) {
+  const co = (t: { companyId: any }) => eq(t.companyId, companyId);
+  await tx.update(schema.auditLog).set({ actorName: ANON_NAME }).where(and(co(schema.auditLog), eq(schema.auditLog.actorId, user.id)));
+  await tx.update(schema.bookingChangeRequests).set({ requestedByName: ANON_NAME }).where(and(co(schema.bookingChangeRequests), eq(schema.bookingChangeRequests.requestedBy, user.id)));
+  await tx.update(schema.bookingChangeRequests).set({ decidedByName: ANON_NAME }).where(and(co(schema.bookingChangeRequests), eq(schema.bookingChangeRequests.decidedBy, user.id)));
+  await tx
+    .update(schema.techInvites)
+    .set({ status: "revoked", name: ANON_NAME, phone: "", email: anonEmail(user.id) })
+    .where(and(co(schema.techInvites), or(eq(schema.techInvites.userId, user.id), eq(schema.techInvites.email, user.email))));
+  if (!rider) return;
+  // Jobs this rider is (or was) on: completed work keeps its rider link, so
+  // this is exactly the set of threads, timelines and notes that name them.
+  const myJobs = tx.select({ id: schema.bookings.id }).from(schema.bookings).where(and(co(schema.bookings), eq(schema.bookings.riderId, rider.id)));
+  await tx
+    .update(schema.messages)
+    .set({ senderName: ANON_NAME })
+    .where(and(co(schema.messages), eq(schema.messages.senderRole, "tech"), or(eq(schema.messages.riderId, rider.id), inArray(schema.messages.bookingId, myJobs))));
+  // job_events has no actor id, only role + display name: scope to their jobs
+  // and their exact name so a namesake's events on other jobs stay attributed.
+  await tx
+    .update(schema.jobEvents)
+    .set({ actorName: ANON_NAME })
+    .where(and(co(schema.jobEvents), eq(schema.jobEvents.actorRole, "tech"), eq(schema.jobEvents.actorName, user.name), inArray(schema.jobEvents.bookingId, myJobs)));
+  // Voice-note lines are appended to driver notes as "[Voice note — <name>, <time>] …".
+  if (user.name) {
+    await tx
+      .update(schema.bookings)
+      .set({ driverNotes: sql`replace(${schema.bookings.driverNotes}, ${user.name}, ${ANON_NAME})` })
+      .where(and(co(schema.bookings), eq(schema.bookings.riderId, rider.id), like(schema.bookings.driverNotes, `%${user.name}%`)));
   }
 }
 
@@ -159,10 +133,9 @@ export async function deleteOwnAccount(userId: string): Promise<{ companies: str
     throw new AccessError(400, "customer", "Customer records are deleted on request — email privacy@nvc360.com from this address and we will remove it within 30 days.");
   }
 
-  // Already anonymized (a previous run crashed partway)? Skip the admin check
-  // — the memberships are already disabled — and just finish the cleanup.
-  const alreadyDeleted = isDeletedUser(user);
-  if (!alreadyDeleted) {
+  // Friendly early refusal (with company names) before any lock is taken; the
+  // authoritative check happens again inside the transaction below.
+  if (!isDeletedUser(user)) {
     const blockers = await deletionBlockers(userId);
     if (blockers.length) {
       const names = blockers.map((b) => b.company).join(", ");
@@ -171,19 +144,61 @@ export async function deleteOwnAccount(userId: string): Promise<{ companies: str
   }
 
   const when = new Date();
-  const mine = await allMemberships(userId);
-  let releasedJobs = 0;
-  const companies: string[] = [];
-  for (const m of mine) {
-    releasedJobs += await releaseFromCompany(m.companyId, userId, when);
-    companies.push(m.companyId);
-  }
-  await scrubRiders(userId);
+  const result = await sdb.transaction(async (tx) => {
+    const mine = await tx.select().from(schema.memberships).where(eq(schema.memberships.userId, userId));
+    const riders = await tx.select().from(schema.riders).where(eq(schema.riders.userId, userId));
+    const companyIds = [...new Set([...mine.map((m) => m.companyId), ...riders.map((r) => r.companyId)])].sort();
 
-  // Identity: keep the id (bookings, audit rows and payouts point at it), drop
-  // everything that identifies the person, and remove every way back in. One
-  // transaction so a crash cannot leave an anonymized row with a live session.
-  await sdb.transaction(async (tx) => {
+    // Lock every company involved, in id order (same order everywhere → no deadlocks).
+    if (companyIds.length) {
+      await tx.select({ id: schema.companies.id }).from(schema.companies).where(inArray(schema.companies.id, companyIds)).orderBy(asc(schema.companies.id)).for("update");
+    }
+    // Last-admin rule, authoritative now that the rows are locked.
+    for (const companyId of adminCompanies(user, mine)) {
+      const rows = await tx.select().from(schema.memberships).where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.status, "active")));
+      if (otherActiveAdmins(rows, userId) === 0) {
+        throw new AccessError(409, "last_admin", "You are the only admin at one of your companies. Ask support@nvc360.com to make someone else the admin there, then delete your account.", { blockers: [{ companyId, reason: "last_admin" }] });
+      }
+    }
+
+    const riderByCompany = new Map(riders.map((r) => [r.companyId, r]));
+    let releasedJobs = 0;
+    const perCompanyJobs = new Map<string, number>();
+    for (const m of mine) {
+      if (m.status === "invited") {
+        await tx.delete(schema.memberships).where(eq(schema.memberships.id, m.id));
+        continue;
+      }
+      if (m.status === "disabled") continue;
+      const rider = riderByCompany.get(m.companyId) ?? null;
+      const open = rider
+        ? await tx
+            .select()
+            .from(schema.bookings)
+            .where(and(eq(schema.bookings.companyId, m.companyId), eq(schema.bookings.riderId, rider.id), inArray(schema.bookings.status, OPEN), sql`${schema.bookings.deletedAt} is null`))
+        : [];
+      const member: Member = { membership: m, user, rider };
+      const plan: Plan = {
+        member,
+        jobs: open.map((b) => ({ id: b.id, title: b.title, scheduledAt: b.scheduledAt.toISOString(), status: b.status })),
+        toRiderId: open.length ? null : undefined,
+      };
+      await applyDeactivation(tx, m.companyId, plan, when, "Technician left ArrivePing");
+      releasedJobs += open.length;
+      perCompanyJobs.set(m.companyId, open.length);
+    }
+
+    // Rider profiles everywhere (incl. companies already left): suspend + scrub.
+    for (const r of riders) {
+      await tx
+        .update(schema.riders)
+        .set({ approval: "suspended", status: "offline", phone: "", photoUrl: "", photoKey: "", licensePlate: "", licenseNumber: "", address: "", notes: "", lat: null, lng: null, locationUpdatedAt: null })
+        .where(eq(schema.riders.id, r.id));
+    }
+    for (const companyId of companyIds) await scrubTenantText(tx, companyId, user, riderByCompany.get(companyId) ?? null);
+
+    // Identity: keep the id (bookings, audit rows and payouts point at it),
+    // drop everything that identifies the person, and remove every way back in.
     await tx
       .update(schema.user)
       .set({
@@ -215,11 +230,40 @@ export async function deleteOwnAccount(userId: string): Promise<{ companies: str
     await tx.delete(schema.session).where(eq(schema.session.userId, userId));
     await tx.delete(schema.account).where(eq(schema.account.userId, userId));
     // better-auth keeps password-reset tokens as identifier "reset-password:<token>"
-    // with the user id in `value`; older flows keyed on the email. Clear both.
-    await tx.delete(schema.verification).where(or(eq(schema.verification.value, userId), eq(schema.verification.identifier, user.email), like(schema.verification.identifier, `%${user.email}`)));
+    // with the user id in `value`; email-keyed rows use the exact address.
+    await tx.delete(schema.verification).where(or(eq(schema.verification.value, userId), eq(schema.verification.identifier, user.email)));
     await tx.delete(schema.pushTokens).where(eq(schema.pushTokens.userId, userId));
     await tx.delete(schema.notifications).where(eq(schema.notifications.userId, userId));
+
+    return { companyIds, memberships: mine, riders, releasedJobs, perCompanyJobs };
   });
 
-  return { companies, releasedJobs };
+  // ---- After commit: bookkeeping that must never undo a committed deletion.
+  for (const r of result.riders) {
+    if (r.photoKey) await deleteObject(r.photoKey).catch((e) => log.warn("account-deletion: headshot delete failed", { key: r.photoKey, err: (e as Error).message }));
+  }
+  for (const companyId of result.companyIds) {
+    try {
+      await audit({
+        companyId,
+        actorId: userId,
+        actorName: ANON_NAME,
+        action: "account.delete",
+        entityType: "user",
+        entityId: userId,
+        summary: `A team member deleted their ArrivePing account (user ${userId})`,
+        meta: { openJobsReleased: result.perCompanyJobs.get(companyId) ?? 0 },
+      });
+    } catch (e) {
+      log.warn("account-deletion: audit failed", { companyId, err: (e as Error).message });
+    }
+    queueCompanySync(companyId);
+  }
+  for (const m of result.memberships) {
+    if (m.hubspotContactId) {
+      await archiveHubspotContact(m.hubspotContactId).catch((e) => log.warn("account-deletion: hubspot archive failed", { companyId: m.companyId, err: (e as Error).message }));
+    }
+  }
+
+  return { companies: result.memberships.map((m) => m.companyId), releasedJobs: result.releasedJobs };
 }
