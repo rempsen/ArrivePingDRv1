@@ -104,6 +104,8 @@ export default function SignupCompanyPage() {
   const [adminPhone, setAdminPhone] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [adminPassword2, setAdminPassword2] = useState("");
+  const [personErr, setPersonErr] = useState("");
 
   const [brand, setBrand] = useState<BrandProposal | null>(null);
   const [scouting, setScouting] = useState(false);
@@ -229,6 +231,11 @@ export default function SignupCompanyPage() {
   function continueToPayment(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
+    if (adminPassword !== adminPassword2) {
+      setPersonErr("Those passwords don't match. Please type them again.");
+      return;
+    }
+    setPersonErr("");
     setStep("payment");
   }
 
@@ -295,19 +302,19 @@ export default function SignupCompanyPage() {
   const found = [brand?.companyName, brand?.phone, brand?.address, brand?.email, brand?.suggestedIndustry].filter(Boolean).length;
 
   return (
-    <div className="grid min-h-screen bg-ink md:grid-cols-2">
+    <div className="grid min-h-screen bg-ink md:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
       {/* left visual */}
       <div className="nvc-grid-bg relative hidden overflow-hidden bg-ink-2 md:block">
         <div className="absolute -right-20 top-20 h-80 w-80 rounded-full bg-brand/20 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-cyan-glow/10 blur-3xl" />
-        <div className="relative flex h-full flex-col justify-between p-12 text-white">
+        <div className="relative flex h-full flex-col justify-between p-8 text-white xl:p-10">
           <Logo light imgClassName="h-10 w-auto" />
           <div>
-            <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">
+            <h1 className="font-display text-2xl font-bold leading-tight tracking-tight xl:text-3xl">
               Give us your website.
               <br /> <span className="text-glow text-cyan-glow">We'll set up the rest.</span>
             </h1>
-            <p className="mt-4 max-w-sm text-slate-400">
+            <p className="mt-4 max-w-sm text-sm text-slate-400">
               We read your site for your name, phone, address, brand and services,
               then preload your catalog, forms and notifications — before you've
               even picked a password.
@@ -322,7 +329,7 @@ export default function SignupCompanyPage() {
                   <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand/15 text-cyan-glow">
                     <x.i className="h-4 w-4" />
                   </span>
-                  <span className="text-slate-200">{x.t}</span>
+                  <span className="text-sm text-slate-200">{x.t}</span>
                 </div>
               ))}
             </div>
@@ -335,7 +342,7 @@ export default function SignupCompanyPage() {
 
       {/* form */}
       <div className="flex items-center justify-center px-5 py-10">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-xl">
           <div className="mb-6 md:hidden">
             <Logo light />
           </div>
@@ -669,6 +676,25 @@ export default function SignupCompanyPage() {
                       <div className="relative">
                         <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                         <input aria-label="Password" type="password" className={inputCls + " pl-11"} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Password (min. 8 characters)" minLength={8} required autoComplete="new-password" />
+                      </div>
+                      <div className="relative">
+                        <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <input
+                          aria-label="Confirm password"
+                          type="password"
+                          className={inputCls + " pl-11" + (adminPassword2 && adminPassword2 !== adminPassword ? " border-red-500/60" : "")}
+                          value={adminPassword2}
+                          onChange={(e) => setAdminPassword2(e.target.value)}
+                          placeholder="Confirm password"
+                          minLength={8}
+                          required
+                          autoComplete="new-password"
+                        />
+                      </div>
+                      <div className="min-h-[18px]" role="alert" aria-live="polite">
+                        {(personErr || (adminPassword2 && adminPassword2 !== adminPassword)) && (
+                          <p className="text-xs font-medium text-red-400">{personErr || "Passwords don't match yet."}</p>
+                        )}
                       </div>
                     </div>
 
