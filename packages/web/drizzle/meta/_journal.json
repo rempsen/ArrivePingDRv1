@@ -106,6 +106,13 @@
       "when": 1792171365376,
       "tag": "0014_hubspot_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792176893663,
+      "tag": "0015_user_deactivation",
+      "breakpoints": true
     }
   ]
 }
