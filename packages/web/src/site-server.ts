@@ -90,12 +90,18 @@ async function prerenderedPage(pathname: string): Promise<{ file?: ReturnType<ty
 }
 
 // Client-side routes in src/web/app.tsx that legitimately serve the SPA shell.
-const PUBLIC_PAGES = ["/", "/privacy", "/terms", ...landingPages.map((p) => p.path)];
+const PUBLIC_PAGES = ["/", "/privacy", "/terms", "/support", ...landingPages.map((p) => p.path)];
+// Public sections with per-item pages (help articles). Same treatment as the
+// exact public pages: served, never noindexed, even if a prerender is missing.
+const PUBLIC_PREFIX = ["/support/"];
 const APP_EXACT = new Set([...PUBLIC_PAGES, "/sign-in", "/sign-up", "/get-started", "/forgot-password", "/reset-password"]);
-const APP_PREFIX = ["/app", "/rider", "/admin", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/"];
+const APP_PREFIX = ["/app", "/rider", "/admin", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/", ...PUBLIC_PREFIX];
 const PUBLIC_EXACT = new Set(PUBLIC_PAGES);
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_EXACT.has(pathname) || pathname === "/blog" || PUBLIC_PREFIX.some((p) => pathname.startsWith(p));
+}
 function isPrivateRoute(pathname: string): boolean {
-  return !PUBLIC_EXACT.has(pathname) && pathname !== "/blog";
+  return !isPublicRoute(pathname);
 }
 function isAppRoute(pathname: string): boolean {
   if (APP_EXACT.has(pathname) || pathname === "/blog") return true;

@@ -138,7 +138,7 @@ function block(b: LegalBlock): ReactNode {
 }
 
 /** Turns `[label](href)` into links and `**text**` into bold; everything else is plain text. */
-function rich(text: string): ReactNode {
+export function rich(text: string): ReactNode {
   const re = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*/g;
   const out: ReactNode[] = [];
   let last = 0;

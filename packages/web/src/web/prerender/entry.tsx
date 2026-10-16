@@ -13,6 +13,7 @@ import Index from "../pages/index";
 import PrivacyPage from "../pages/privacy";
 import TermsPage from "../pages/terms";
 import SupportPage from "../pages/support";
+import SupportArticlePage from "../pages/support-article";
 import { LandingRoute } from "../pages/marketing/landing";
 import { CONTENT_UPDATED, landingByPath, landingPages } from "../site/content/landing";
 import { seoPages } from "../site/seo/pages";
@@ -39,6 +40,7 @@ export function render(path: string): { body: string; head: string } {
   // Blog bodies are compiled HTML; expose them to the post component for this render.
   (globalThis as { __BLOG_BODIES__?: Record<string, string> }).__BLOG_BODIES__ = bodies;
   let Page: ComponentType | undefined = fixed[path];
+  if (!Page && path.startsWith("/support/")) Page = SupportArticlePage;
   if (!Page && path === "/blog") Page = BlogIndexRoute;
   if (!Page && path.startsWith("/blog/category/")) Page = makeBlogCategory(path.slice("/blog/category/".length));
   if (!Page && path.startsWith("/blog/")) Page = makeBlogPost(path.slice("/blog/".length));
