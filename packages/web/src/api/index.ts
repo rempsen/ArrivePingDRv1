@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { queueCompanySync } from "../services/hubspot-sync";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { authMiddleware } from "./middleware/auth";
@@ -71,6 +72,10 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS ?? "*")
   .filter(Boolean);
 const ALLOW_ALL = CORS_ORIGINS.includes("*");
 
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+// High-frequency or irrelevant writes that never change CRM-visible data.
+const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections)(\/|$)/;
+
 const app = new Hono<{ Variables: Variables }>()
   // request id + per-request logger (correlation across the request lifecycle)
   .use("*", async (c, next) => {
@@ -90,6 +95,13 @@ const app = new Hono<{ Variables: Variables }>()
     // access log (skip noisy health checks)
     if (p !== "/api/health") {
       c.get("log").info("request", { status: c.res.status, ms });
+    }
+    // Any successful write by a tenant may have changed something HubSpot
+    // mirrors (settings, staff, onboarding answers) — ask for a debounced
+    // re-sync. Cheap: fingerprinted, at most once a minute per tenant.
+    if (c.res.status < 400 && !READ_METHODS.has(c.req.method) && !NO_CRM_SYNC.test(p)) {
+      const cid = c.get("companyId") as string | undefined;
+      if (cid) queueCompanySync(cid);
     }
   })
   .use(

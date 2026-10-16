@@ -1270,6 +1270,14 @@ export const companies = pgTable("companies", {
   billingStatus: text("billing_status").notNull().default("none"), // none | trialing | active | past_due | canceled | unpaid
   billingTrialEndsAt: timestamp("billing_trial_ends_at", { mode: "date", withTimezone: true }),
   billingSeats: integer("billing_seats").notNull().default(0),
+  // HubSpot CRM mirror (services/hubspot-sync.ts): the Company and Deal that
+  // represent this tenant in NVC360's HubSpot, the fingerprint of what was
+  // last pushed (so unchanged tenants cost no API calls) and when. NULL id =
+  // never pushed. Staff contacts are linked on memberships.hubspotContactId.
+  hubspotCompanyId: text("hubspot_company_id"),
+  hubspotDealId: text("hubspot_deal_id"),
+  hubspotHash: text("hubspot_hash").notNull().default(""),
+  hubspotSyncedAt: timestamp("hubspot_synced_at", { mode: "date", withTimezone: true }),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
@@ -1319,6 +1327,8 @@ export const memberships = pgTable(
     // Set when an admin adds someone who ALREADY has a login elsewhere. The
     // second company never sets a password; the person accepts to join.
     invitedBy: text("invited_by"),
+    // HubSpot contact mirroring this person at this company (hubspot-sync.ts).
+    hubspotContactId: text("hubspot_contact_id"),
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),

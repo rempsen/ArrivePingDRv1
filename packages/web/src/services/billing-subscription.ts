@@ -27,6 +27,7 @@ import { db, sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { getStripe, stripeEnabled } from "./stripe";
 import { log } from "../api/lib/logger";
+import { queueCompanySync } from "./hubspot-sync";
 import { monthlyPrice, pricingBands, STARTER_PRICE, STARTER_DRIVERS } from "../web/site/config";
 
 export const TRIAL_DAYS = 30;
@@ -229,6 +230,7 @@ export async function applySubscriptionState(sub: Stripe.Subscription): Promise<
       billingSeats: sub.items.data[0]?.quantity ?? co.billingSeats,
     })
     .where(eq(schema.companies.id, co.id));
+  queueCompanySync(co.id);
   return co.id;
 }
 
@@ -345,6 +347,7 @@ export async function setSeats(companyId: string, seats: number): Promise<{ seat
     }
   }
   await db.update(schema.companies).set({ billingSeats: n }).where(eq(schema.companies.id, companyId));
+  queueCompanySync(companyId);
   return { seats: n };
 }
 
@@ -404,6 +407,7 @@ export async function closeAccount(companyId: string): Promise<void> {
     .update(schema.companies)
     .set({ status: "closed", billingStatus: "canceled", updatedAt: new Date() })
     .where(eq(schema.companies.id, companyId));
+  queueCompanySync(companyId);
 }
 
 /** A one-line description of any Stripe payment method, for the Billing tab. */

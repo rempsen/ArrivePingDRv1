@@ -54,6 +54,7 @@ import {
   TRIAL_DAYS,
 } from "../../services/billing-subscription";
 import { notifySelfServeSignup } from "../../services/signup-notify";
+import { syncCompanyToHubspot } from "../../services/hubspot-sync";
 import { email as emailField, shortText } from "../lib/validate";
 import { loadSiteExcerpts } from "../../services/site-crawl";
 import { rescanWebsite } from "../../services/rescan";
@@ -255,6 +256,8 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       adminPhone: String(b.adminPhone ?? ""),
       trialEndsAt: billing?.ok ? billing.trialEndsAt : null,
     }).catch((e) => console.error("[onboarding] signup notification failed", e));
+    // 4) mirror the new tenant into HubSpot as Company + Contact + Deal (never blocks)
+    void syncCompanyToHubspot(companyId).catch(() => {});
 
     return c.json(
       {
