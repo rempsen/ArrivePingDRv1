@@ -232,8 +232,8 @@ export const seoPages: SeoPage[] = [
   blogIndex,
   ...blogCategoryPages,
   ...blogPostPages,
-  legal("/privacy", "Privacy Policy", "How ArrivePing and NVC360 collect, use and protect personal information, including technician location data."),
-  legal("/terms", "Terms & Conditions", "The terms that govern use of ArrivePing by NVC360."),
+  legal("/privacy", "Privacy Policy", "How arriveping.com by NVC360 collects, uses, discloses and safeguards your data and personal information, including technician location information."),
+  legal("/terms", "Terms of Service", "The terms that govern use of the arriveping.com by NVC360 platform, mobile app and website."),
 ];
 
 export const seoByPath: Record<string, SeoPage> = Object.fromEntries(seoPages.map((p) => [p.path, p]));
