@@ -184,12 +184,24 @@ export function mapStatus(s: Stripe.Subscription.Status): BillingStatus {
   }
 }
 
-/** Drivers that count as seats: riders whose approval is active (not invited, pending or suspended). */
+/**
+ * Users that count as seats: FIELD staff (membership role "rider", membership
+ * active) whose rider approval is active. Office staff may carry a rider
+ * profile so they can be assigned jobs, but they are never billed.
+ */
 export async function driverSeatCount(companyId: string): Promise<number> {
   const [row] = await sdb
     .select({ n: count() })
     .from(schema.riders)
-    .where(and(eq(schema.riders.companyId, companyId), eq(schema.riders.approval, "active")));
+    .innerJoin(schema.memberships, and(eq(schema.memberships.userId, schema.riders.userId), eq(schema.memberships.companyId, schema.riders.companyId)))
+    .where(
+      and(
+        eq(schema.riders.companyId, companyId),
+        eq(schema.riders.approval, "active"),
+        eq(schema.memberships.role, "rider"),
+        eq(schema.memberships.status, "active"),
+      ),
+    );
   return Number(row?.n ?? 0);
 }
 
