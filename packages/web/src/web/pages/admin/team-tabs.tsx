@@ -27,8 +27,12 @@ import {
   Wrench,
   Truck,
   KeyRound,
+  UserMinus,
+  UserCheck,
+  ChevronDown,
 } from "lucide-react";
 import { useWorkerNoun } from "../../lib/use-brand";
+import { DeactivateDialog, ReactivateDialog } from "../../components/deactivate-dialog";
 
 // ---------------------------------------------------------------------------
 // Shared role metadata (mirrors backend lib/permissions.ts)
@@ -100,6 +104,9 @@ export function InternalTeamTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [editEmp, setEditEmp] = useState<any>(null);
   const [delEmp, setDelEmp] = useState<any>(null);
+  const [deactivate, setDeactivate] = useState<{ userId: string; name: string } | null>(null);
+  const [reactivate, setReactivate] = useState<{ userId: string; name: string } | null>(null);
+  const [showDeactivated, setShowDeactivated] = useState(false);
   const [permEmp, setPermEmp] = useState<any>(null);
   const [err, setErr] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -201,9 +208,17 @@ export function InternalTeamTab() {
   });
 
   if (team.isLoading) return <FullLoader label="Loading team…" />;
-  const employees = (team.data?.employees ?? []).filter(
-    (e: any) => e.role !== "rider",
-  );
+  const internal = (team.data?.employees ?? []).filter((e: any) => e.role !== "rider");
+  // Deactivated staff keep their account for history; they sit in a collapsed
+  // group below rather than in the working list.
+  const employees = internal.filter((e: any) => e.membershipStatus !== "disabled");
+  const deactivated = internal.filter((e: any) => e.membershipStatus === "disabled");
+  // Office staff can carry jobs too (Settings → Company → "Who can be assigned"), so
+  // offer every active person on the roster as a reassignment target.
+  const teammatesFor = (userId: string) =>
+    (team.data?.employees ?? [])
+      .filter((e: any) => e.membershipStatus === "active" && e.id !== userId)
+      .map((e: any) => ({ userId: e.id, name: e.name }));
 
   return (
     <>
@@ -236,6 +251,9 @@ export function InternalTeamTab() {
                 <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100">
                   <button onClick={() => { setErr(""); setNewPw(""); setPwMsg(""); setEditEmp({ ...e }); }} title="Edit" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-white/5 hover:text-cyan-glow">
                     <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => setDeactivate({ userId: e.id, name: e.name })} title="Deactivate (keeps history; can be reactivated)" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-amber-warn/10 hover:text-amber-warn">
+                    <UserMinus className="h-3.5 w-3.5" />
                   </button>
                   <button onClick={() => setDelEmp(e)} title="Remove" className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 hover:bg-red-500/10 hover:text-red-400">
                     <Trash2 className="h-3.5 w-3.5" />
@@ -301,6 +319,51 @@ export function InternalTeamTab() {
           })}
         </div>
       )}
+
+      {deactivated.length > 0 && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setShowDeactivated((v) => !v)}
+            className="flex w-full items-center justify-between rounded-xl border border-white/5 bg-ink-2 px-4 py-3 text-left text-sm font-semibold text-slate-300 hover:bg-white/5"
+            aria-expanded={showDeactivated}
+          >
+            <span className="flex items-center gap-2">
+              <UserMinus className="h-4 w-4 text-slate-500" /> Deactivated ({deactivated.length})
+            </span>
+            <ChevronDown className={`h-4 w-4 transition ${showDeactivated ? "rotate-180" : ""}`} />
+          </button>
+          {showDeactivated && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {deactivated.map((e: any) => (
+                <div key={e.id} className="nvc-card flex items-center justify-between gap-3 p-4 opacity-80">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-white">{e.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {ROLE_META[e.role]?.label ?? e.roleLabel} · Deactivated {e.deactivatedAt ? new Date(e.deactivatedAt).toLocaleDateString() : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReactivate({ userId: e.id, name: e.name })}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-semibold text-white hover:bg-white/5"
+                  >
+                    <UserCheck className="h-3.5 w-3.5" /> Reactivate
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <DeactivateDialog
+        userId={deactivate?.userId ?? null}
+        name={deactivate?.name ?? ""}
+        teammates={deactivate ? teammatesFor(deactivate.userId) : []}
+        onClose={() => setDeactivate(null)}
+      />
+      <ReactivateDialog userId={reactivate?.userId ?? null} name={reactivate?.name ?? ""} onClose={() => setReactivate(null)} />
 
       {/* Create modal */}
       {showAdd && (

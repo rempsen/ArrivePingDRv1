@@ -166,6 +166,7 @@ export const teamRoutes = new Hono<AppEnv>()
           riderId: rd?.id ?? null,
           // Shown in the UI so an admin knows this person also works elsewhere.
           membershipStatus: u.membershipStatus ?? "active",
+          deactivatedAt: u.deactivatedAt ? u.deactivatedAt.toISOString() : null,
           isShared: u.isShared,
           createdAt: u.createdAt,
         };

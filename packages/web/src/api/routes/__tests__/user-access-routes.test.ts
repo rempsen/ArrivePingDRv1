@@ -166,3 +166,15 @@ describe("authorisation", () => {
     expect((await call("/billing/downsize", { ...asRider, method: "POST", body: { seats: 1, deactivate: ["uar-r1"], reassign: {} } })).status).toBe(403);
   });
 });
+
+describe("rosters expose deactivation", () => {
+  it("GET /team carries membershipStatus and deactivatedAt after a deactivation", async () => {
+    expect((await call("/team/uar-r2/deactivate", { method: "POST", body: {} })).status).toBe(200);
+    const res = await call("/team");
+    const json = (await res.json()) as { employees: { id: string; membershipStatus: string; deactivatedAt: string | null }[] };
+    const r2 = json.employees.find((e) => e.id === "uar-r2")!;
+    expect(r2.membershipStatus).toBe("disabled");
+    expect(typeof r2.deactivatedAt).toBe("string");
+    expect(json.employees.find((e) => e.id === "uar-r3")!.deactivatedAt).toBeNull();
+  });
+});

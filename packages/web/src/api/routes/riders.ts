@@ -238,6 +238,7 @@ export const ridersRoutes = new Hono<AppEnv>()
           email: ru?.email,
           phone: ru?.phone,
           membershipStatus: ru?.membershipStatus ?? "active",
+          deactivatedAt: ru?.deactivatedAt ? ru.deactivatedAt.toISOString() : null,
           isShared: ru?.isShared ?? false,
           /** Membership role at this company — lets the UI badge "Admin" etc. */
           role,
