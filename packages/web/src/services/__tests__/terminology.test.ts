@@ -1,5 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { nounPairs, retermText, retermDesign, DEFAULT_NOUNS } from "../terminology";
+
+// The module imports the tenant db; every suite in this process must point it
+// at the in-memory store before that import happens (see other tests here).
+process.env.DATABASE_URL = ":memory:";
+process.env.DATABASE_AUTH_TOKEN = "";
+const { nounPairs, retermText, retermDesign, DEFAULT_NOUNS } = await import("../terminology");
 
 const CONSULT = { workerNoun: "Consultant", customerNoun: "Client", jobNoun: "Engagement" };
 
