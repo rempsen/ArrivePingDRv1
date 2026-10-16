@@ -744,6 +744,11 @@ Rules:
   qualifying fields are captured (or the user explicitly says they're done /
   it's fine / skip it — then call it immediately regardless of what's
   missing). Don't drag either part out chasing perfection.
+- When you have no more questions, say exactly: "That covers everything.
+  Ready to start, or want to add more?" The screen then shows the user two
+  buttons. If they say they're ready (any wording), call finish_onboarding
+  right away and reply with one short line of welcome. If they want to add
+  more, ask what they'd like to add or change.
 
 CURRENT STATE:
 - Industry: ${snap.company.industry ? industryLabel(snap.company.industry) || snap.company.industry : "not yet set"}${snap.company.industryOther ? ` (${snap.company.industryOther})` : ""}
