@@ -261,6 +261,8 @@ export interface BillingSummary {
   status: BillingStatus;
   seats: number;
   activeDrivers: number;
+  /** Active drivers above the paid seat count; > 0 means the tenant must choose who to deactivate to lower seats. */
+  excessActive: number;
   monthlyTotal: number;
   breakdown: string;
   plan: string;
@@ -289,6 +291,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
     status: (co?.billingStatus as BillingStatus) ?? "none",
     seats,
     activeDrivers,
+    excessActive: Math.max(0, activeDrivers - seats),
     monthlyTotal: price.total,
     breakdown: price.breakdown,
     plan: price.plan,
@@ -330,6 +333,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
       ...base,
       status: mapStatus(sub.status),
       seats: Math.max(1, item?.quantity ?? seats),
+      excessActive: Math.max(0, activeDrivers - Math.max(1, item?.quantity ?? seats)),
       ...(item?.quantity ? { ...monthlyPrice(item.quantity), monthlyTotal: monthlyPrice(item.quantity).total } : {}),
       trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : base.trialEndsAt,
       trialDaysLeft: sub.trial_end ? Math.max(0, Math.ceil((sub.trial_end * 1000 - Date.now()) / 86_400_000)) : base.trialDaysLeft,

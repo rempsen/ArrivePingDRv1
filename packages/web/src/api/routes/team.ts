@@ -14,6 +14,8 @@ import {
 import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { audit } from "../lib/audit";
+import { AccessError, deactivateUser, openJobsFor, reactivateUser } from "../../services/user-access";
+import { capture } from "../lib/analytics";
 import { z } from "zod";
 import { jsonBody, shortText, optText, email as emailField, phone as phoneField, money, id as idField, longText } from "../lib/validate";
 import {
@@ -30,6 +32,12 @@ import {
 } from "../lib/permissions";
 
 type SessionUser = { id: string; role?: string; name?: string; email?: string };
+
+/** AccessError → its own status and `{ code, message, meta }`; anything else rethrows. */
+function accessErrorResponse(c: { json: (body: unknown, status: number) => Response }, e: unknown): Response {
+  if (e instanceof AccessError) return c.json({ code: e.code, message: e.message, meta: e.meta ?? null }, e.status);
+  throw e;
+}
 
 const INTERNAL = [
   "superadmin",
@@ -473,6 +481,44 @@ export const teamRoutes = new Hono<AppEnv>()
       return c.json({ message: "Couldn't send the email. Try again shortly." }, 502);
     }
     return c.json({ ok: true, email: target.email });
+  })
+
+  // ---- deactivate / reactivate (reversible; see services/user-access.ts) --
+  .get("/:id/open-jobs", requirePermission("techs:edit"), async (c) => {
+    const id = c.req.param("id");
+    const member = await tx(c).selectOne(schema.memberships, eq(schema.memberships.userId, id));
+    if (!member) return c.json({ message: "Not found" }, 404);
+    const jobs = await openJobsFor(tenantId(c), id);
+    return c.json({ count: jobs.length, jobs }, 200);
+  })
+  .post(
+    "/:id/deactivate",
+    requirePermission("techs:edit"),
+    jsonBody(z.object({ reassignTo: z.union([idField("Team member"), z.null()]).optional() })),
+    async (c) => {
+      const id = c.req.param("id");
+      const me = c.get("user") as SessionUser;
+      const cid = tenantId(c);
+      try {
+        const r = await deactivateUser(cid, me, id, { reassignTo: c.req.valid("json").reassignTo });
+        capture("team.deactivated", cid, { userId: id, by: me.id });
+        return c.json({ ok: true, deactivatedAt: r.deactivatedAt.toISOString() }, 200);
+      } catch (e) {
+        return accessErrorResponse(c, e);
+      }
+    },
+  )
+  .post("/:id/reactivate", requirePermission("techs:edit"), jsonBody(z.object({ addSeat: z.boolean().optional() })), async (c) => {
+    const id = c.req.param("id");
+    const me = c.get("user") as SessionUser;
+    const cid = tenantId(c);
+    try {
+      const r = await reactivateUser(cid, me, id, { addSeat: c.req.valid("json").addSeat });
+      capture("team.reactivated", cid, { userId: id, by: me.id, seats: r.seats });
+      return c.json({ ok: true, seats: r.seats }, 200);
+    } catch (e) {
+      return accessErrorResponse(c, e);
+    }
   })
 
   // ---- delete an employee ------------------------------------------------

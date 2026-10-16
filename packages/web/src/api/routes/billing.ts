@@ -16,6 +16,7 @@ import {
   confirmPaymentMethodChange,
   closeAccount,
 } from "../../services/billing-subscription";
+import { AccessError, downsize, seatCandidates } from "../../services/user-access";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
@@ -30,6 +31,33 @@ export const billingRoutes = new Hono<AppEnv>()
     capture("billing.seats_changed", tenantId(c), { seats: r.seats, by: (c.get("user") as { id: string }).id });
     return c.json({ ok: true, ...r }, 200);
   })
+
+  // Lowering seats below the active driver count: pick who comes off. One
+  // request reassigns their open jobs, deactivates them and sets the seats.
+  .get("/seat-candidates", requireAdmin, async (c) => c.json({ candidates: await seatCandidates(tenantId(c)) }, 200))
+  .post(
+    "/downsize",
+    requireAdmin,
+    jsonBody(
+      z.object({
+        seats: z.number().int().min(1).max(10_000),
+        deactivate: z.array(z.string().min(1).max(80)).min(1).max(500),
+        reassign: z.record(z.string().min(1).max(80), z.union([z.string().min(1).max(80), z.null()])).default({}),
+      }),
+    ),
+    async (c) => {
+      const cid = tenantId(c);
+      const me = c.get("user") as { id: string; role?: string; name?: string };
+      try {
+        const r = await downsize(cid, me, c.req.valid("json"));
+        capture("billing.downsized", cid, { seats: r.seats, deactivated: r.deactivated.length, by: me.id });
+        return c.json({ ok: true, ...r }, 200);
+      } catch (e) {
+        if (e instanceof AccessError) return c.json({ code: e.code, message: e.message, meta: e.meta ?? null }, e.status);
+        throw e;
+      }
+    },
+  )
 
   .post("/cancel", requireAdmin, async (c) => {
     await cancelAtPeriodEnd(tenantId(c), true);
