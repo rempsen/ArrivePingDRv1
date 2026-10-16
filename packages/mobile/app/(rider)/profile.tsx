@@ -179,7 +179,11 @@ export default function Profile() {
     // shared work phone at this driver's company until they re-pick.
     await clearActiveCompany().catch(() => {});
     await authClient.signOut().catch(() => {});
-    await clearToken();
+    try {
+      await clearToken();
+    } catch {
+      /* token store unavailable — the server-side session is already gone */
+    }
     qc.clear();
     router.replace("/sign-in");
   }
@@ -193,7 +197,14 @@ export default function Profile() {
 
   async function afterDeleted() {
     setDeleting(false);
-    await leaveDevice();
+    try {
+      await leaveDevice();
+    } catch {
+      // The account is gone server-side regardless; make sure the person
+      // still lands on sign-in rather than a dead Profile screen.
+      qc.clear();
+      router.replace("/sign-in");
+    }
     Alert.alert("Account deleted", "Your ArrivePing account has been deleted. Thanks for riding with us.");
   }
 

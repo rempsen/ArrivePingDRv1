@@ -144,6 +144,23 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     return next();
   }
 
+  // An anonymized ("Deleted user") account has no credentials left, but a
+  // session row that survived a crash, or a password-reset link opened after
+  // deletion, must not become a way back in.
+  if ((u as { role?: string }).role === "deleted") {
+    c.set("user", null);
+    c.set("companyId", "default");
+    c.set("memberships", []);
+    return c.json({ error: { code: "account_deleted", message: "This account has been deleted." } }, 401);
+  }
+
+  // Self-service account deletion must stay reachable for people whose only
+  // membership was deactivated or whose company was closed — they are the
+  // ones most likely to ask for it. These two routes are tenant-agnostic
+  // (they act on the caller's own user id across every company) so the
+  // deactivated / closed gates below don't apply to them.
+  const selfDeletion = (c.req.method === "DELETE" && /^\/api\/me\/?$/.test(c.req.path)) || c.req.path === "/api/me/deletion-preview";
+
   // ---- Multi-company resolution -------------------------------------------
   // A person can work for several companies (a contract technician on both
   // Acme's and Bolt's roster). `user.companyId` is their DEFAULT company; the
@@ -194,6 +211,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   // home-company fallback above would quietly let them keep working with
   // their base role. Legacy users with no membership rows are unaffected.
   if (
+    !selfDeletion &&
     !isSuperadmin(baseRole) &&
     !memberships.some((m) => m.companyId === companyId) &&
     (await deactivatedMembership(userId, companyId))
@@ -231,7 +249,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   // A closed (or suspended) company is sealed for everyone but a superadmin:
   // the tenant closed its own account from Settings → Billing, or we
   // suspended it. Cached per company so this costs one query a minute.
-  if (!isSuperadmin(baseRole) && (await companyClosed(companyId))) {
+  if (!selfDeletion && !isSuperadmin(baseRole) && (await companyClosed(companyId))) {
     return c.json(
       { error: { code: "company_closed", message: "This account has been closed. Contact contact@nvc360.com to reopen it." } },
       403,

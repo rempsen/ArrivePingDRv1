@@ -285,6 +285,7 @@ export async function reactivateUser(companyId: string, actor: Actor, userId: st
   const member = await loadMember(companyId, userId);
   if (!member) throw new AccessError(404, "not_found", "User not found.");
   if (member.membership.status !== "disabled") throw new AccessError(409, "not_deactivated", "This user is not deactivated.");
+  if (member.user.role === "deleted") throw new AccessError(409, "account_deleted", "This person deleted their ArrivePing account. Invite them again with a new email to bring them back.");
   // Same rule as deactivate and PATCH /team: admin-level accounts are a superadmin's to change.
   if (isAdminRole(member.membership.role ?? member.user.role) && !isSuperadmin(actor.role)) {
     throw new AccessError(403, "superadmin_required", "Only a superadmin can reactivate admin-level accounts.");

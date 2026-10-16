@@ -32,7 +32,10 @@ export const auth = betterAuth({
         type: "string",
         required: false,
         defaultValue: "customer",
-        input: true,
+        // Never client-writable: with input:true, POST /api/auth/update-user
+        // {"role":"superadmin"} would have let any signed-in user promote
+        // themselves. Roles are only ever set server-side via sdb.
+        input: false,
       },
       phone: {
         type: "string",

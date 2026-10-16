@@ -92,6 +92,20 @@ async function hs<T = any>(method: string, path: string, body?: unknown, attempt
   return (text ? JSON.parse(text) : {}) as T;
 }
 
+/**
+ * Archive (HubSpot's soft delete) a contact — used when a person deletes
+ * their ArrivePing account. No-op when HubSpot isn't configured.
+ */
+export async function archiveHubspotContact(contactId: string): Promise<void> {
+  if (!hubspotEnabled() || !contactId) return;
+  try {
+    await hs("DELETE", `/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`);
+  } catch (e) {
+    if (e instanceof HubSpotError && e.status === 404) return;
+    throw e;
+  }
+}
+
 /* ------------------------------------------------- custom property setup */
 
 type PropDef = { name: string; label: string; type: "string" | "number" | "date" | "bool" | "enumeration"; fieldType: string; options?: { label: string; value: string }[] };
@@ -275,6 +289,8 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
   for (const m of staff) {
     const u = userById.get(m.userId);
     if (!u?.email) continue;
+    // Someone who deleted their account must not be re-created as a contact.
+    if (u.role === "deleted" || u.email.endsWith("@anon.arriveping.com")) continue;
     const [firstname, lastname] = splitName(u);
     const role = m.role === "rider" ? settings?.workerNoun || "Technician" : (ROLE_LABELS[m.role] ?? m.role);
     const props: Props = {

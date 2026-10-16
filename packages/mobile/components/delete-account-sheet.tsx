@@ -37,11 +37,14 @@ export function DeleteAccountSheet({ open, onClose, onDeleted }: { open: boolean
     (async () => {
       try {
         const res = await fetch(`${API}/api/me/deletion-preview`, { headers: authHeaders() });
-        if (!res.ok) throw new Error();
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Your session has expired. Sign out, sign in again, then try deleting your account.");
+        }
+        if (!res.ok) throw new Error(`ArrivePing returned an error (${res.status}). Try again in a minute, or email support@nvc360.com.`);
         const data = (await res.json()) as Preview;
         if (!cancelled) setPreview(data);
-      } catch {
-        if (!cancelled) setPreviewErr("Couldn't reach ArrivePing. Check your connection and try again.");
+      } catch (e: any) {
+        if (!cancelled) setPreviewErr(e?.message || "Couldn't reach ArrivePing. Check your connection and try again.");
       }
     })();
     return () => {
@@ -61,12 +64,27 @@ export function DeleteAccountSheet({ open, onClose, onDeleted }: { open: boolean
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ confirm: "DELETE" }),
       });
-      const data = (await res.json().catch(() => ({}))) as { message?: string };
-      if (!res.ok) throw new Error(data.message || "Something went wrong. Your account was not deleted.");
-      await onDeleted();
+      // Route errors are `{message}`; the global handler wraps as `{error:{message}}`.
+      const data = (await res.json().catch(() => ({}))) as { message?: string; error?: { message?: string } };
+      if (!res.ok) {
+        const msg = data.message || data.error?.message;
+        throw new Error(
+          res.status >= 500
+            ? "ArrivePing hit a problem partway through. Your login may already be disabled — try again in a minute; running it again is safe."
+            : msg || "Something went wrong. Your account was not deleted.",
+        );
+      }
     } catch (e: any) {
       setErr(e?.message || "Something went wrong. Your account was not deleted.");
       setBusy(false);
+      return;
+    }
+    // Server side is done. Whatever happens on the device from here must not
+    // be reported as "not deleted".
+    try {
+      await onDeleted();
+    } catch {
+      /* the caller handles its own fallback */
     }
   }
 
