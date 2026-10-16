@@ -255,7 +255,7 @@ export interface BillingSummary {
   nextInvoiceAt: string | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: string | null;
-  paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+  paymentMethod: { kind: string; brand: string; last4: string; expMonth: number | null; expYear: number | null; label: string } | null;
   /** Set when Stripe couldn't be read; the numbers above are then our last known values. */
   stripeError?: string;
 }
@@ -295,15 +295,16 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
     // no default was recorded).
     let pm: Stripe.PaymentMethod | null = (sub.default_payment_method as Stripe.PaymentMethod | null) ?? null;
     const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
-    if (!pm?.card) {
+    if (!pm) {
       const cust = (await stripe.customers.retrieve(customerId, { expand: ["invoice_settings.default_payment_method"] })) as Stripe.Customer;
       const def = cust.invoice_settings?.default_payment_method;
-      if (def && typeof def !== "string" && def.card) pm = def;
+      if (def && typeof def !== "string") pm = def;
     }
-    if (!pm?.card) {
-      const list = await stripe.customers.listPaymentMethods(customerId, { type: "card", limit: 1 });
+    if (!pm) {
+      // Any saved method, whatever its type (card, Link, Apple Pay, bank).
+      const list = await stripe.customers.listPaymentMethods(customerId, { limit: 1 });
       const first = list.data[0];
-      if (first?.card) {
+      if (first) {
         pm = first;
         // Heal the record so the renewal charge has a card to use.
         await stripe.customers.update(customerId, { invoice_settings: { default_payment_method: first.id } }).catch(() => {});
@@ -321,7 +322,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
       nextInvoiceAt: sub.status === "canceled" ? null : periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
       cancelAt: sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null,
-      paymentMethod: pm?.card ? { brand: pm.card.brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year } : null,
+      paymentMethod: pm ? describePaymentMethod(pm) : null,
     };
   } catch (e) {
     log.warn("billing: summary could not read Stripe", { companyId, err: (e as Error).message });
@@ -403,4 +404,24 @@ export async function closeAccount(companyId: string): Promise<void> {
     .update(schema.companies)
     .set({ status: "closed", billingStatus: "canceled", updatedAt: new Date() })
     .where(eq(schema.companies.id, companyId));
+}
+
+/** A one-line description of any Stripe payment method, for the Billing tab. */
+export function describePaymentMethod(pm: Stripe.PaymentMethod): NonNullable<BillingSummary["paymentMethod"]> {
+  if (pm.card) {
+    const brand = pm.card.wallet?.type ? `${pm.card.brand} (${pm.card.wallet.type.replace(/_/g, " ")})` : pm.card.brand;
+    return { kind: "card", brand, last4: pm.card.last4, expMonth: pm.card.exp_month, expYear: pm.card.exp_year, label: `${cap(brand)} ending in ${pm.card.last4}` };
+  }
+  if (pm.type === "link") {
+    const email = (pm as unknown as { link?: { email?: string } }).link?.email ?? "";
+    return { kind: "link", brand: "Link", last4: "", expMonth: null, expYear: null, label: `Link${email ? ` (${email})` : ""}` };
+  }
+  const bank = (pm as unknown as Record<string, { last4?: string; bank_name?: string } | undefined>)[pm.type];
+  if (bank?.last4) {
+    return { kind: pm.type, brand: bank.bank_name ?? "Bank account", last4: bank.last4, expMonth: null, expYear: null, label: `${bank.bank_name ?? "Bank account"} ending in ${bank.last4}` };
+  }
+  return { kind: pm.type, brand: pm.type, last4: "", expMonth: null, expYear: null, label: cap(pm.type.replace(/_/g, " ")) };
+}
+function cap(s: string) {
+  return s ? s[0]!.toUpperCase() + s.slice(1) : s;
 }

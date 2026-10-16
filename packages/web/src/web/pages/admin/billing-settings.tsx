@@ -41,7 +41,7 @@ type Summary = {
   nextInvoiceAt: string | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: string | null;
-  paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+  paymentMethod: { kind: string; brand: string; last4: string; expMonth: number | null; expYear: number | null; label: string } | null;
   stripeError?: string;
 };
 
@@ -251,8 +251,10 @@ export default function BillingSettingsTab() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               {s.paymentMethod ? (
                 <p className="text-sm text-slate-200">
-                  <span className="font-semibold capitalize text-white">{s.paymentMethod.brand}</span> ending in {s.paymentMethod.last4} · expires{" "}
-                  {String(s.paymentMethod.expMonth).padStart(2, "0")}/{s.paymentMethod.expYear}
+                  <span className="font-semibold text-white">{s.paymentMethod.label}</span>
+                  {s.paymentMethod.expMonth && s.paymentMethod.expYear
+                    ? ` · expires ${String(s.paymentMethod.expMonth).padStart(2, "0")}/${s.paymentMethod.expYear}`
+                    : ""}
                 </p>
               ) : s.stripeError ? (
                 <p className="text-sm text-slate-400">Card details unavailable right now.</p>
