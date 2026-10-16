@@ -15,8 +15,8 @@
         "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#070b12"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#101827"
       },
       "edgeToEdgeEnabled": true
     },
@@ -45,11 +45,16 @@
       "entitlements": {
         "aps-environment": "production"
       },
-      "requireFullScreen": false
+      "requireFullScreen": false,
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      }
     },
     "splash": {
       "image": "./assets/splash-icon.png",
-      "resizeMode": "cover",
+      "resizeMode": "contain",
       "backgroundColor": "#070b12"
     },
     "name": "ArrivePing",
@@ -65,6 +70,15 @@
     "newArchEnabled": false,
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 150,
+          "resizeMode": "contain",
+          "backgroundColor": "#070b12"
+        }
+      ],
       [
         "expo-location",
         {
