@@ -40,6 +40,7 @@ export const nav = [
   { label: "Who it's for", href: brand.urls.who },
   { label: "Pricing", href: brand.urls.pricing },
   { label: "Blog", href: "/blog" },
+  { label: "Support", href: "/support" },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -496,9 +497,19 @@ export const footer = {
       ],
     },
     {
+      heading: "Support",
+      links: [
+        { label: "Help Center", href: "/support" },
+        { label: "Get started", href: "/support#get-started" },
+        { label: "Technician app", href: "/support#technician-app" },
+        { label: "Billing & plans", href: "/support#billing" },
+        { label: "Delete your account", href: "/support/delete-your-account" },
+        { label: "Contact support", href: "mailto:support@nvc360.com" },
+      ],
+    },
+    {
       heading: "Legal",
       links: [
-        { label: "Help & Support", href: "/support" },
         { label: "Privacy Policy", href: brand.urls.privacy },
         { label: "Terms of Service", href: brand.urls.terms },
       ],

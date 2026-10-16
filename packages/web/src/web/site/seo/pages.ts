@@ -10,6 +10,7 @@ import { faqs as homeFaqs } from "../config";
 import { blogCategories, categoryBySlug } from "../blog/categories";
 import { authorFor } from "../blog/meta";
 import { landingPages, type LandingPage } from "../content/landing";
+import { articles } from "../support/articles";
 import { absolute, breadcrumbs, faqPage, graph, ORG_ID, organization, SITE_ID, SITE_URL, softwareApplication, webPage, website, type JsonLd } from "./schema";
 
 export type SeoPage = {
@@ -226,6 +227,21 @@ const blogPostPages: SeoPage[] = posts.map((p) => {
   };
 });
 
+const supportArticlePages: SeoPage[] = articles.map((a) => ({
+  ...legal(`/support/${a.slug}`, a.title, a.summary),
+  section: "Company",
+  priority: 0.4,
+  changefreq: "monthly",
+  jsonLd: graph([
+    webPage(`/support/${a.slug}`, `${a.title} | ArrivePing Help`, a.summary),
+    breadcrumbs([
+      { name: "ArrivePing", path: "/" },
+      { name: "Help Center", path: "/support" },
+      { name: a.title, path: `/support/${a.slug}` },
+    ]),
+  ]),
+}));
+
 export const seoPages: SeoPage[] = [
   home,
   ...landingPages.map(fromLanding),
@@ -234,7 +250,8 @@ export const seoPages: SeoPage[] = [
   ...blogPostPages,
   legal("/privacy", "Privacy Policy", "How arriveping.com by NVC360 collects, uses, discloses and safeguards your data and personal information, including technician location information."),
   legal("/terms", "Terms of Service", "The terms that govern use of the arriveping.com by NVC360 platform, mobile app and website."),
-  { ...legal("/support", "Help & Support", "How to reach ArrivePing support, sign in to the technician app, manage location sharing and notifications, and delete your account."), section: "Company", priority: 0.4, changefreq: "monthly" },
+  { ...legal("/support", "Help Center", "ArrivePing help: set up your company, the technician app, dispatch, customer notifications, billing, account deletion and troubleshooting. Email support@nvc360.com."), label: "Help Center", section: "Company", priority: 0.5, changefreq: "weekly" },
+  ...supportArticlePages,
 ];
 
 export const seoByPath: Record<string, SeoPage> = Object.fromEntries(seoPages.map((p) => [p.path, p]));
