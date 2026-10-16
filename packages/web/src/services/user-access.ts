@@ -62,9 +62,9 @@ export type ReassignTarget = string | null;
 const FIELD_ROLE = "rider";
 const OPEN = [...OPEN_STATUSES] as string[];
 
-type Member = { membership: typeof schema.memberships.$inferSelect; user: typeof schema.user.$inferSelect; rider: typeof schema.riders.$inferSelect | null };
+export type Member = { membership: typeof schema.memberships.$inferSelect; user: typeof schema.user.$inferSelect; rider: typeof schema.riders.$inferSelect | null };
 
-async function loadMember(companyId: string, userId: string): Promise<Member | null> {
+export async function loadMember(companyId: string, userId: string): Promise<Member | null> {
   const t = tdb(companyId);
   const membership = await t.selectOne(schema.memberships, eq(schema.memberships.userId, userId));
   if (!membership) return null;
@@ -78,7 +78,7 @@ async function loadMember(companyId: string, userId: string): Promise<Member | n
   return { membership, user, rider };
 }
 
-async function openJobsForRider(companyId: string, riderId: string): Promise<OpenJob[]> {
+export async function openJobsForRider(companyId: string, riderId: string): Promise<OpenJob[]> {
   const rows = await tdb(companyId).select(
     schema.bookings,
     and(eq(schema.bookings.riderId, riderId), inArray(schema.bookings.status, OPEN), isNull(schema.bookings.deletedAt)),
@@ -173,7 +173,7 @@ async function resolveReassignTarget(companyId: string, reassignTo: ReassignTarg
   return r.id;
 }
 
-type Plan = { member: Member; jobs: OpenJob[]; toRiderId: string | null | undefined };
+export type Plan = { member: Member; jobs: OpenJob[]; toRiderId: string | null | undefined };
 
 /** Validate one deactivation and work out what its jobs do. `undefined` toRiderId = nothing to move. */
 async function planDeactivation(companyId: string, actor: Actor, userId: string, reassignTo: ReassignTarget | undefined, deactivating: Set<string>): Promise<Plan> {
@@ -188,7 +188,7 @@ async function planDeactivation(companyId: string, actor: Actor, userId: string,
   return { member, jobs, toRiderId: await resolveReassignTarget(companyId, reassignTo, deactivating) };
 }
 
-type Tx = Parameters<Parameters<ReturnType<typeof tdb>["transaction"]>[0]>[0];
+export type Tx = Parameters<Parameters<ReturnType<typeof tdb>["transaction"]>[0]>[0];
 
 /**
  * The writes for one planned deactivation, inside an already-open tenant
@@ -199,14 +199,14 @@ type Tx = Parameters<Parameters<ReturnType<typeof tdb>["transaction"]>[0]>[0];
  * rider and still open, and we re-check afterwards: a job that landed on them
  * between planning and now rolls the whole thing back.
  */
-async function applyDeactivation(tx: Tx, companyId: string, plan: Plan, when: Date) {
+export async function applyDeactivation(tx: Tx, companyId: string, plan: Plan, when: Date, declineReason = "Technician deactivated") {
   if (plan.member.rider) {
     const rider = plan.member.rider;
     if (plan.jobs.length) {
       const reset = { enrouteAt: null, startedAt: null, clockState: "idle", lastResumeAt: null, insideGeofence: false, autoAssignedRuleId: "", autoAssignedAt: null, acceptedAt: null };
       const set =
         plan.toRiderId === null
-          ? { ...reset, riderId: null, status: "confirmed", assignStatus: "released", declineReason: "Technician deactivated", assignedAt: null }
+          ? { ...reset, riderId: null, status: "confirmed", assignStatus: "released", declineReason, assignedAt: null }
           : { ...reset, riderId: plan.toRiderId, status: "assigned", assignStatus: "offered", declineReason: "", assignedAt: when };
       await tx
         .update(schema.bookings)

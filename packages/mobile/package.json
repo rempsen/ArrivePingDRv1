@@ -10,9 +10,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "go": "expo start --go",
-    "_paused_ship:ios": "bash scripts/ship-ios.sh",
-    "_paused_build:ios": "eas build --platform ios --profile production",
-    "_paused_submit:ios": "eas submit --platform ios --latest --profile production"
+    "ship:ios": "bash scripts/ship-ios.sh",
+    "build:ios": "eas build --platform ios --profile production",
+    "submit:ios": "eas submit --platform ios --latest --profile production"
   },
   "dependencies": {
     "@better-auth/expo": "1.4.22",
@@ -60,7 +60,9 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["expo-live-activity"]
+        "exclude": [
+          "expo-live-activity"
+        ]
       }
     }
   }

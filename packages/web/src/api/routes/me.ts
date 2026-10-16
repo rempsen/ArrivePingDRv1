@@ -18,6 +18,9 @@ import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { requireAuth, loadMemberships } from "../middleware/auth";
 import { isSuperadmin } from "../lib/permissions";
 import { detachMembership } from "../lib/memberships";
+import { deleteOwnAccount, deletionBlockers } from "../../services/account-deletion";
+import { AccessError } from "../../services/user-access";
+import { capture } from "../lib/analytics";
 import type { AppEnv } from "../env";
 import { computeTechPay } from "../../shared/tech-pay";
 import { parseLineItems, round2 } from "../../shared/catalog";
@@ -696,6 +699,38 @@ export const meRoutes = new Hono<AppEnv>()
           invitedAt: m.createdAt,
         })),
     });
+  })
+
+  /**
+   * "Can I delete my account, and what would happen?" — backs the confirm
+   * sheet in the driver app so it can say up front if the person is the last
+   * admin somewhere, instead of failing after they've typed DELETE.
+   */
+  .get("/deletion-preview", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    if (isSuperadmin(me.role)) return c.json({ allowed: false, blockers: [], reason: "superadmin" });
+    const blockers = await deletionBlockers(me.id);
+    return c.json({ allowed: blockers.length === 0, blockers });
+  })
+
+  /**
+   * Delete MY account (App Store 5.1.1(v)). Anonymizes the person and ends
+   * every membership; see services/account-deletion.ts for exactly what goes
+   * and what stays. The client must send `{ confirm: "DELETE" }` so a stray
+   * request can never do this by accident. Signs the caller out everywhere.
+   */
+  .delete("/", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    const body = (await c.req.json().catch(() => ({}))) as { confirm?: unknown };
+    if (body.confirm !== "DELETE") return c.json({ code: "confirm_required", message: "Type DELETE to confirm." }, 400);
+    try {
+      const r = await deleteOwnAccount(me.id);
+      for (const companyId of r.companies) capture("account.deleted", companyId, { userId: me.id, releasedJobs: r.releasedJobs });
+      return c.json({ ok: true, ...r });
+    } catch (e) {
+      if (e instanceof AccessError) return c.json({ code: e.code, message: e.message, meta: e.meta ?? null }, e.status);
+      throw e;
+    }
   })
 
   /** Decline / leave a company you were invited to. */

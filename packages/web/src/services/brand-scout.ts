@@ -176,7 +176,7 @@ function findChrome(): string | null {
   ].filter((n): n is string => !!n);
   const pathDirs = (process.env.PATH ?? "").split(":").filter(Boolean);
   for (const n of names) {
-    const candidates = n.includes("/") ? [n] : pathDirs.map((d) => join(d, n));
+    const candidates = n.includes("/") ? [n] : pathDirs.map((d: string) => join(d, n));
     for (const c of candidates) {
       if (existsSync(c)) {
         chromeBinCache = c;

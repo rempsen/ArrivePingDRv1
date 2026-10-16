@@ -96,7 +96,15 @@ function Body({ doc }: { doc: LegalDoc }) {
             ))}
             <p className="legal__other small">
               See also:{" "}
-              {doc.path === "/privacy" ? <a href="/terms">Terms of Service</a> : <a href="/privacy">Privacy Policy</a>}
+              {doc.path !== "/privacy" && <a href="/privacy">Privacy Policy</a>}
+              {doc.path === "/support" && " · "}
+              {doc.path !== "/terms" && <a href="/terms">Terms of Service</a>}
+              {doc.path !== "/support" && (
+                <>
+                  {" · "}
+                  <a href="/support">Help &amp; Support</a>
+                </>
+              )}
             </p>
           </article>
         </div>

@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { authClient, captureToken } from "../lib/auth";
-import { C, R } from "../lib/theme";
+import { C, R, FORM } from "../lib/theme";
 import { Button } from "../components/ui";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
@@ -123,7 +123,7 @@ const s = StyleSheet.create({
   forgotWrap: { alignSelf: "center", marginTop: 18, padding: 8 },
   forgotText: { color: C.brand, fontSize: 13, fontWeight: "700" },
   safe: { flex: 1, backgroundColor: C.bg },
-  scroll: { flexGrow: 1, justifyContent: "center", padding: 24, gap: 36 },
+  scroll: { ...FORM, flexGrow: 1, justifyContent: "center", padding: 24, gap: 36 },
   brandWrap: { alignItems: "center", gap: 6 },
   // 1047×305 white wordmark on the dark canvas (was the black NVC roundel, invisible on #070b12)
   logo: { width: 220, height: 64, marginBottom: 14 },

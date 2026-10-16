@@ -498,6 +498,7 @@ export const footer = {
     {
       heading: "Legal",
       links: [
+        { label: "Help & Support", href: "/support" },
         { label: "Privacy Policy", href: brand.urls.privacy },
         { label: "Terms of Service", href: brand.urls.terms },
       ],

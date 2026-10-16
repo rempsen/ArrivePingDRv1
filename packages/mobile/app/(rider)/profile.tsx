@@ -1,26 +1,28 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking } from "react-native";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, SignOut } from "phosphor-react-native";
+import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { authClient, clearToken, authHeaders } from "../../lib/auth";
 import { unregisterPushToken } from "../../lib/push";
 import { stopLocationSharing } from "../../lib/use-location-heartbeat";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
 import Constants from "expo-constants";
-import { C, R } from "../../lib/theme";
+import { C, R, WIDE } from "../../lib/theme";
 import { Avatar, Card, Button, FullLoader, Row } from "../../components/ui";
 import { isBiometricAvailable, getLockPreference, setLockPreference, clearUnlockStamp } from "../../lib/biometric-lock";
 import { clearActiveCompany, getActiveCompany, setActiveCompany } from "../../lib/active-company";
 import { useMyCompanies } from "../../lib/my-companies";
 import { useNotifySummary, companyCount } from "../../lib/notify-summary";
 import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../../components/company-alert";
+import { DeleteAccountSheet } from "../../components/delete-account-sheet";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
+const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
 
 /**
  * The presence states the API's PATCH /riders/me actually accepts, derived from
@@ -35,6 +37,7 @@ export default function Profile() {
   const qc = useQueryClient();
   const { data: session } = authClient.useSession();
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const biometric = useQuery({
     queryKey: ["biometric-lock"],
@@ -154,36 +157,48 @@ export default function Profile() {
     }
   }
 
+  /**
+   * Take this device fully dark and return to sign-in. Shared by Sign out and
+   * Delete account (after the server has already removed the account).
+   */
+  async function leaveDevice() {
+    // Unhook this device before clearing auth: stop background GPS and
+    // remove the push token so a logged-out phone goes dark. Also clear
+    // the "already unlocked today" stamp so the NEXT sign-in on this
+    // device (possibly a different driver, shared phone) always gets
+    // one fresh biometric prompt rather than inheriting today's unlock.
+    await unregisterPushToken().catch(() => {});
+    await stopLocationSharing().catch(() => {});
+    // A signed-out phone must go fully dark: end any Live Activity too,
+    // or the Dynamic Island keeps showing ArrivePing job status to whoever
+    // holds the phone next, and iOS keeps treating us as having live
+    // background content.
+    await endAllLiveActivities().catch(() => {});
+    await clearUnlockStamp().catch(() => {});
+    // Leaving a stale company id behind would point the NEXT driver on a
+    // shared work phone at this driver's company until they re-pick.
+    await clearActiveCompany().catch(() => {});
+    await authClient.signOut().catch(() => {});
+    await clearToken();
+    qc.clear();
+    router.replace("/sign-in");
+  }
+
   async function signOut() {
     Alert.alert("Sign out", "End your session?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: async () => {
-          // Unhook this device before clearing auth: stop background GPS and
-          // remove the push token so a logged-out phone goes dark. Also clear
-          // the "already unlocked today" stamp so the NEXT sign-in on this
-          // device (possibly a different driver, shared phone) always gets
-          // one fresh biometric prompt rather than inheriting today's unlock.
-          await unregisterPushToken().catch(() => {});
-          await stopLocationSharing().catch(() => {});
-          // A signed-out phone must go fully dark: end any Live Activity too,
-          // or the Dynamic Island keeps showing ArrivePing job status to whoever
-          // holds the phone next, and iOS keeps treating us as having live
-          // background content.
-          await endAllLiveActivities().catch(() => {});
-          await clearUnlockStamp().catch(() => {});
-          // Leaving a stale company id behind would point the NEXT driver on a
-          // shared work phone at this driver's company until they re-pick.
-          await clearActiveCompany().catch(() => {});
-          await authClient.signOut().catch(() => {});
-          await clearToken();
-          qc.clear();
-          router.replace("/sign-in");
-        },
-      },
+      { text: "Sign out", style: "destructive", onPress: leaveDevice },
     ]);
+  }
+
+  async function afterDeleted() {
+    setDeleting(false);
+    await leaveDevice();
+    Alert.alert("Account deleted", "Your ArrivePing account has been deleted. Thanks for riding with us.");
+  }
+
+  function openLink(path: string) {
+    Linking.openURL(`${API}${path}`).catch(() => Alert.alert("Couldn't open link", `${API}${path}`));
   }
 
   if (me.isLoading) return <FullLoader />;
@@ -366,9 +381,43 @@ export default function Profile() {
           <Row label="License plate" value={rider?.licensePlate} />
         </Card>
 
+        <Card>
+          <Text style={s.cardTitle}>About &amp; legal</Text>
+          {(
+            [
+              { label: "Privacy Policy", path: "/privacy", Icon: ShieldCheck },
+              { label: "Terms of Service", path: "/terms", Icon: FileText },
+              { label: "Help & Support", path: "/support", Icon: Lifebuoy },
+            ] as const
+          ).map(({ label, path, Icon }) => (
+            <Pressable
+              key={path}
+              onPress={() => openLink(path)}
+              style={s.linkRow}
+              accessibilityRole="link"
+              accessibilityLabel={label}
+              accessibilityHint="Opens in your browser"
+            >
+              <Icon color={C.sub} size={18} />
+              <Text style={s.linkTxt}>{label}</Text>
+              <CaretRight color={C.muted} size={16} />
+            </Pressable>
+          ))}
+        </Card>
+
         <Button title="Sign out" variant="danger" icon={<SignOut color="#fff" size={18} weight="bold" />} onPress={signOut} />
-        <Text style={s.foot}>ArrivePing Technician · v1.0</Text>
+        <Pressable
+          onPress={() => setDeleting(true)}
+          style={s.deleteLink}
+          accessibilityRole="button"
+          accessibilityLabel="Delete my account"
+          accessibilityHint="Permanently deletes your ArrivePing login"
+        >
+          <Text style={s.deleteTxt}>Delete my account</Text>
+        </Pressable>
+        <Text style={s.foot}>ArrivePing Technician · v{APP_VERSION}</Text>
       </ScrollView>
+      <DeleteAccountSheet open={deleting} onClose={() => setDeleting(false)} onDeleted={afterDeleted} />
     </SafeAreaView>
   );
 }
@@ -400,9 +449,9 @@ const s = StyleSheet.create({
   coRole: { color: C.sub, fontSize: 11.5, marginTop: 1 },
   coDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.brand },
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 8 },
+  header: { ...WIDE, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 8 },
   title: { color: C.text, fontSize: 24, fontWeight: "800" },
-  scroll: { padding: 16, gap: 16, paddingBottom: 40 },
+  scroll: { ...WIDE, padding: 16, gap: 16, paddingBottom: 40 },
   idCard: {
     alignItems: "center",
     gap: 8,
@@ -459,5 +508,9 @@ const s = StyleSheet.create({
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.muted },
   knobOn: { backgroundColor: "#03130d", alignSelf: "flex-end" },
   cardTitle: { color: C.text, fontSize: 15, fontWeight: "700", marginBottom: 6 },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  linkTxt: { color: C.text, fontSize: 14.5, flex: 1 },
+  deleteLink: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 16 },
+  deleteTxt: { color: C.muted, fontSize: 13.5, fontWeight: "600", textDecorationLine: "underline" },
   foot: { color: C.muted, fontSize: 12, textAlign: "center", marginTop: 8 },
 });

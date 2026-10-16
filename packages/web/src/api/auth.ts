@@ -52,7 +52,7 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: (request) => {
     const origin = request?.headers.get("origin");
-    return ["mobile://", "homeserve://", ...(origin ? [origin] : ["*"])];
+    return ["mobile://", "homeserve://", "arriveping://", ...(origin ? [origin] : ["*"])];
   },
   plugins: [bearer(), expo()],
 });

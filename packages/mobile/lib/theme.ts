@@ -47,6 +47,16 @@ export const R = {
   pill: 999,
 } as const;
 
+/**
+ * iPad: the app is phone-first, so on a 10–13" screen every list and card
+ * would otherwise stretch edge to edge. Spread one of these into a screen's
+ * scroll content container (and its header, so they stay aligned) to keep
+ * content a readable width, centred. No-ops on phones (width < max).
+ */
+export const WIDE = { width: "100%", maxWidth: 760, alignSelf: "center" } as const;
+/** Narrower cap for single-column forms (sign-in, onboarding, company picker). */
+export const FORM = { width: "100%", maxWidth: 520, alignSelf: "center" } as const;
+
 export const S = {
   xs: 4,
   sm: 8,
