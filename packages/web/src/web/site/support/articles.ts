@@ -198,7 +198,7 @@ export const articles: Article[] = [
           "**Arrived.** A geofence around the job address marks you as arrived and starts the on-site time clock. If the address is off or you parked around the corner, tap **Arrived** yourself.",
         ],
       },
-      { type: "p", text: "Customers can text or call you from their tracking page to share gate codes or parking details. They never see your personal number." },
+      { type: "p", text: "Customers can text or call you from their tracking page to share gate codes or parking details. The buttons use the phone number on your roster profile, so if you'd rather not take customer calls on a personal phone, ask your office to put a work number on your profile." },
     ],
   },
   {
@@ -554,7 +554,7 @@ export const articles: Article[] = [
         items: [
           "**Exports:** jobs, customers, technicians and time on site as CSV, Excel, PDF or JSON from Money → Reports.",
           "**Calendar feeds:** subscribe to a technician's or the company's schedule from Google Calendar, Outlook or Apple Calendar.",
-          "**Webhooks, Zapier and Make:** fire on job created, assigned, on the way, arrived and completed. Set them up under Setup → Settings → **Integrations**.",
+          "**Webhooks, Zapier and Make:** fire on job created, assigned, on the way, arrived and completed. Add and test webhooks on the **Webhooks** tab under Setup → **Notifications**; Zapier and Make connect through them.",
           "**API & MCP:** Setup → Settings → **API & MCP** issues keys for your own scripts and an MCP server so AI agents can read and act on your dispatch data.",
         ],
       },
