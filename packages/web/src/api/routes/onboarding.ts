@@ -700,6 +700,11 @@ ${fitBlock}
 
 Rules:
 - One question at a time. Never dump a checklist of questions on them.
+- Ask each question ONCE. Save the user's answer with a tool FIRST, then ask
+  the next question AFTER the tool result. Never write a question, call a
+  tool, and then write the same question again (or a reworded version of
+  it) — the user sees both and it reads as a stutter. If you already asked
+  before the tool ran, say nothing after it.
 - Open with ONE short line that shows you already did your homework (name
   the industry, tagline, or a specific service you saw on their site — not a
   generic "Welcome!"), then go straight into whatever's missing in Part 1,
@@ -1145,14 +1150,52 @@ correction like that — it reads like you weren't listening.`;
         // which is exactly the "run-on sentence, no spacing" look this was
         // reported as. Treat every text-start after the first as a new
         // paragraph so step boundaries always render as a clean break.
+        //
+        // Seen live (2026-10-16): the model asked "What's the best phone
+        // number?", called update_brand_profile, then asked the same thing
+        // again in the next step, so the user saw the question twice. The
+        // first segment of a turn streams live; every later segment (the
+        // ones after a tool call) is buffered to its text-end and dropped if
+        // it repeats a question already shown this turn.
         let textSegments = 0;
+        const shown: string[] = [];
+        let buffer: string | null = null;
+        const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+        const isRepeat = (t: string) => {
+          const n = norm(t);
+          if (!n) return true;
+          return shown.some((prev) => {
+            if (prev === n) return true;
+            // same question reworded: most of its words already appeared
+            const words = n.split(" ").filter((w) => w.length > 3);
+            if (words.length < 4) return false;
+            const prevSet = new Set(prev.split(" "));
+            return words.filter((w) => prevSet.has(w)).length / words.length >= 0.6;
+          });
+        };
         try {
           for await (const part of result.fullStream) {
             if (part.type === "text-start") {
               textSegments++;
-              if (textSegments > 1) await stream.writeSSE({ event: "delta", data: "\n\n" });
+              buffer = textSegments > 1 ? "" : null;
+              if (buffer === null) shown.push("");
             } else if (part.type === "text-delta") {
-              await stream.writeSSE({ event: "delta", data: part.text });
+              if (buffer === null) {
+                shown[shown.length - 1] += part.text;
+                await stream.writeSSE({ event: "delta", data: part.text });
+              } else {
+                buffer += part.text;
+              }
+            } else if (part.type === "text-end") {
+              if (buffer === null) {
+                shown[shown.length - 1] = norm(shown[shown.length - 1] ?? "");
+              } else {
+                if (!isRepeat(buffer)) {
+                  shown.push(norm(buffer));
+                  await stream.writeSSE({ event: "delta", data: "\n\n" + buffer.trim() });
+                }
+                buffer = null;
+              }
             } else if (part.type === "tool-result") {
               await stream.writeSSE({
                 event: "tool",
