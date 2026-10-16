@@ -6,7 +6,7 @@ import { TrendUp, CheckCircle, Receipt, Star } from "phosphor-react-native";
 import Constants from "expo-constants";
 import { authHeaders } from "../../lib/auth";
 import { getActiveCompany } from "../../lib/active-company";
-import { C, R, S, money, fmtDate } from "../../lib/theme";
+import { C, R, S, money, fmtDate, WIDE } from "../../lib/theme";
 import { Card, Empty, StatusBadge, ListSkeleton } from "../../components/ui";
 import { useJobNoun } from "../../lib/use-brand";
 
@@ -344,10 +344,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 8 },
+  header: { ...WIDE, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 8 },
   title: { color: C.text, fontSize: 24, fontWeight: "800" },
   subtitle: { color: C.sub, fontSize: 12.5, fontWeight: "600", marginTop: 2 },
-  scroll: { padding: 16, paddingBottom: 40 },
+  scroll: { ...WIDE, padding: 16, paddingBottom: 40 },
   heroCard: {
     backgroundColor: C.brandDeep,
     borderRadius: R.sheet,

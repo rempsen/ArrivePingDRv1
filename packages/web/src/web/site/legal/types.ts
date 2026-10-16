@@ -26,5 +26,5 @@ export interface LegalDoc {
   intro: string[];
   sections: LegalSection[];
   /** Canonical path, used for the <link rel="canonical"> and the document title. */
-  path: "/privacy" | "/terms";
+  path: "/privacy" | "/terms" | "/support";
 }

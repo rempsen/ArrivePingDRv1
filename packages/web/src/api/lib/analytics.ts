@@ -60,6 +60,7 @@ export type AnalyticsEvent =
   | "billing.account_closed"
   | "billing.downsized"
   | "team.deactivated"
+  | "account.deleted"
   | "team.reactivated";
 
 /**

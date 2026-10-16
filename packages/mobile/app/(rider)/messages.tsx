@@ -23,7 +23,7 @@ import {
   Wrench,
 } from "phosphor-react-native";
 import { authHeaders } from "../../lib/auth";
-import { C, R } from "../../lib/theme";
+import { C, R, WIDE } from "../../lib/theme";
 import { FullLoader } from "../../components/ui";
 import { NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { useActiveCompanyName } from "../../lib/my-companies";
@@ -310,7 +310,7 @@ const s = StyleSheet.create({
   },
   title: { color: C.text, fontSize: 20, fontWeight: "800" },
   sub: { color: C.sub, fontSize: 13, marginTop: 2 },
-  scroll: { padding: 16, gap: 12, paddingBottom: 30 },
+  scroll: { ...WIDE, padding: 16, gap: 12, paddingBottom: 30 },
   offersWrap: {
     backgroundColor: "rgba(14,165,233,0.06)",
     borderWidth: 1,

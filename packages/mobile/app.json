@@ -44,7 +44,8 @@
       },
       "entitlements": {
         "aps-environment": "production"
-      }
+      },
+      "requireFullScreen": false
     },
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -54,8 +55,11 @@
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.1",
-    "scheme": "homeserve",
+    "version": "1.0.2",
+    "scheme": [
+      "arriveping",
+      "homeserve"
+    ],
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": false,
@@ -94,7 +98,7 @@
       "@sentry/react-native",
       "expo-audio"
     ],
-    "runtimeVersion": "1.0.1",
+    "runtimeVersion": "1.0.2",
     "updates": {
       "url": "https://u.expo.dev/6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"
     }

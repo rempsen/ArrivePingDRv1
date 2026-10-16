@@ -57,7 +57,7 @@ import { useCustomerNoun, useJobNoun } from "../../lib/use-brand";
 import { useLiveMessageSignal } from "../../lib/live-messages";
 import { NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { getToken, authHeaders } from "../../lib/auth";
-import { C, R, money, fmtDate, assetUrl } from "../../lib/theme";
+import { C, R, money, fmtDate, assetUrl, WIDE } from "../../lib/theme";
 import { StatusBadge, Button, FullLoader } from "../../components/ui";
 import { SignaturePad } from "../../components/signature-pad";
 import { isVoiceNoteSupported, startVoiceNote, uploadVoiceNote, type Recording } from "../../lib/voice-note";
@@ -1938,7 +1938,7 @@ const s = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   topTitle: { flex: 1, color: C.text, fontSize: 17, fontWeight: "800", textAlign: "center" },
-  scroll: { padding: 16, gap: 14 },
+  scroll: { ...WIDE, padding: 16, gap: 14 },
   statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   price: { color: C.green, fontSize: 20, fontWeight: "900" },
   block: {

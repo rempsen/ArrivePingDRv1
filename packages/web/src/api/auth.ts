@@ -32,7 +32,10 @@ export const auth = betterAuth({
         type: "string",
         required: false,
         defaultValue: "customer",
-        input: true,
+        // Never client-writable: with input:true, POST /api/auth/update-user
+        // {"role":"superadmin"} would have let any signed-in user promote
+        // themselves. Roles are only ever set server-side via sdb.
+        input: false,
       },
       phone: {
         type: "string",
@@ -52,7 +55,7 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   trustedOrigins: (request) => {
     const origin = request?.headers.get("origin");
-    return ["mobile://", "homeserve://", ...(origin ? [origin] : ["*"])];
+    return ["mobile://", "homeserve://", "arriveping://", ...(origin ? [origin] : ["*"])];
   },
   plugins: [bearer(), expo()],
 });

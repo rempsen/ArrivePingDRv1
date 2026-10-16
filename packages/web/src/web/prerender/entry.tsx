@@ -12,6 +12,7 @@ import type { ComponentType } from "react";
 import Index from "../pages/index";
 import PrivacyPage from "../pages/privacy";
 import TermsPage from "../pages/terms";
+import SupportPage from "../pages/support";
 import { LandingRoute } from "../pages/marketing/landing";
 import { CONTENT_UPDATED, landingByPath, landingPages } from "../site/content/landing";
 import { seoPages } from "../site/seo/pages";
@@ -29,6 +30,7 @@ const fixed: Record<string, ComponentType> = {
   "/": Index,
   "/privacy": PrivacyPage,
   "/terms": TermsPage,
+  "/support": SupportPage,
 };
 
 export function render(path: string): { body: string; head: string } {
