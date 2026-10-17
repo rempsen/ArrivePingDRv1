@@ -21,6 +21,8 @@ export interface GuideStep {
   body: string;
   anchor?: AnchorId;
   inNav?: boolean;
+  /** Clicked before the step if `anchor` isn't on screen yet (e.g. opens a form). */
+  open?: AnchorId;
   route?: string;
   placement?: "top" | "bottom" | "left" | "right" | "auto" | "center";
 }
@@ -79,6 +81,58 @@ export const CHAPTERS: Chapter[] = [
     ],
   },
   {
+    id: "create-job",
+    number: 2,
+    title: "Create a {job}",
+    summary: "Book work for a {customer} in under a minute.",
+    roles: EVERYONE,
+    steps: [
+      {
+        id: "nav",
+        anchor: "nav.jobs",
+        inNav: true,
+        placement: "right",
+        title: "Every {job} in one list",
+        body: "{jobs} lists all your work: search it, filter it, export it. Let's book one.",
+      },
+      {
+        id: "new",
+        route: "/admin/work-orders",
+        anchor: "jobs.new",
+        placement: "bottom",
+        title: "Start a new {job}",
+        body: "New {job} opens the booking form. We'll open it for you on the next step.",
+      },
+      {
+        id: "customer",
+        route: "/admin/work-orders",
+        open: "jobs.new",
+        anchor: "wo.customer",
+        placement: "bottom",
+        title: "Who it's for",
+        body: "Pick a {customer}, or type a new name to add one. Their address and phone fill in for you.",
+      },
+      {
+        id: "schedule",
+        route: "/admin/work-orders",
+        open: "jobs.new",
+        anchor: "wo.schedule",
+        placement: "bottom",
+        title: "When it happens",
+        body: "Set the date and time. The {customer} gets a booking confirmation when you save.",
+      },
+      {
+        id: "create",
+        route: "/admin/work-orders",
+        open: "jobs.new",
+        anchor: "wo.create",
+        placement: "top",
+        title: "Save it",
+        body: "Create {job} puts it on the Scheduler. Leave {worker} empty and ArrivePing picks the closest qualified one.",
+      },
+    ],
+  },
+  {
     id: "scheduler",
     number: 3,
     title: "Scheduler & calendar",
@@ -104,6 +158,7 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "views",
         route: "/admin/scheduler",
+        open: "sched.calendar",
         anchor: "sched.views",
         placement: "bottom",
         title: "Zoom in or out",
@@ -112,6 +167,7 @@ export const CHAPTERS: Chapter[] = [
       {
         id: "queue",
         route: "/admin/scheduler",
+        open: "sched.calendar",
         anchor: "sched.queue",
         placement: "right",
         title: "Nothing slips through",

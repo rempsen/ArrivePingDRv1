@@ -31,7 +31,7 @@ PASSWORD = os.environ["E2E_PASSWORD"]
 SHOT_DIR = os.environ.get("SHOT_DIR", "/tmp/guide-shots")
 
 # Keep in sync with src/web/guide/registry.ts (chapter id -> step count).
-CHAPTERS = {"find-your-way": 4, "scheduler": 5}
+CHAPTERS = {"find-your-way": 4, "create-job": 5, "scheduler": 5}
 VIEWPORTS = {"desktop": {"width": 1280, "height": 800}, "phone": {"width": 390, "height": 844}}
 
 
@@ -45,6 +45,42 @@ def sign_in(page):
 
 def card(page):
     return page.locator(".ap-guide-card")
+
+
+def welcome(page):
+    """First visit: the Welcome sheet opens by itself; 'Plan my week' -> scheduler chapter."""
+    page.goto(f"{BASE_URL}/admin", wait_until="networkidle")
+    dialog = page.get_by_role("dialog", name=re.compile("Welcome to ArrivePing"))
+    expect(dialog).to_be_visible(timeout=10_000)
+    page.screenshot(path=f"{SHOT_DIR}/welcome.png")
+    dialog.get_by_role("button", name="Dispatcher").click()
+    dialog.get_by_role("button", name=re.compile("Plan my week")).click()
+    dialog.get_by_role("button", name="Show me around").click()
+    expect(card(page)).to_contain_text("Scheduler", timeout=10_000)
+    page.keyboard.press("Escape")
+    expect(card(page)).to_have_count(0, timeout=5_000)
+    # Never shows again.
+    page.reload(wait_until="networkidle")
+    page.wait_for_timeout(1500)
+    expect(page.get_by_role("dialog", name=re.compile("Welcome to ArrivePing"))).to_have_count(0)
+
+
+def board_mode_from_menu(page):
+    """Scheduler already in Board mode, chapter launched from the Guide menu:
+    the calendar-only steps must still show (the guide switches to Calendar),
+    and focus returns to the Guide launcher afterwards."""
+    page.goto(f"{BASE_URL}/admin/scheduler", wait_until="networkidle")
+    page.get_by_role("button", name="Board").click()
+    page.locator('[data-tour="guide.button"]:visible').first.click()
+    page.get_by_role("menuitem", name=re.compile("Scheduler")).click()
+    steps = CHAPTERS["scheduler"]
+    for i in range(steps):
+        expect(card(page)).to_contain_text(f"{i + 1} of {steps}", timeout=10_000)
+        page.wait_for_timeout(300)
+        page.keyboard.press("Enter")
+    expect(card(page)).to_have_count(0, timeout=5_000)
+    on_launcher = page.evaluate("() => document.activeElement?.getAttribute('data-tour') === 'guide.button'")
+    assert on_launcher, "focus did not return to the Guide launcher"
 
 
 def run_chapter(page, vp_name, chapter, steps):
@@ -78,22 +114,27 @@ def main() -> int:
             page.set_default_timeout(15_000)
             try:
                 sign_in(page)
+                if vp_name == "desktop":
+                    welcome(page)
+                    print("PASS desktop: Welcome sheet")
                 for chapter, steps in CHAPTERS.items():
                     run_chapter(page, vp_name, chapter, steps)
                     print(f"PASS {vp_name}: {chapter} ({steps} steps)")
+                if vp_name == "desktop":
+                    board_mode_from_menu(page)
+                    print("PASS desktop: Board mode + focus back to launcher")
                 # Esc exits mid-chapter.
                 page.goto(f"{BASE_URL}/admin?guide=find-your-way", wait_until="networkidle")
                 expect(card(page)).to_be_visible(timeout=10_000)
                 page.keyboard.press("Escape")
                 expect(card(page)).to_have_count(0, timeout=5_000)
                 print(f"PASS {vp_name}: Esc exits")
-                # Progress recorded for completed chapters.
-                done = page.evaluate(
-                    "() => Object.entries(localStorage).filter(([k]) => k.startsWith('ap_guide_v1:')).map(([,v]) => v).join('')"
-                )
-                for chapter in CHAPTERS:
-                    if not re.search(rf'"{chapter}":"completed"', done):
-                        raise AssertionError(f"{chapter} not recorded as completed: {done}")
+                # Progress recorded (server-side) for completed chapters: the
+                # Guide menu shows a tick per completed chapter.
+                page.reload(wait_until="networkidle")
+                page.locator('[data-tour="guide.button"]:visible').first.click()
+                expect(page.get_by_role("menu").get_by_label("Completed")).to_have_count(len(CHAPTERS), timeout=5_000)
+                page.keyboard.press("Escape")
                 print(f"PASS {vp_name}: progress recorded")
             except (AssertionError, PWTimeout) as e:
                 failures.append(f"{vp_name}: {e}")

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Check, Compass, PlayCircle } from "lucide-react";
 import { tourAttr } from "./anchors";
 import { useGuide } from "./GuideProvider";
+import { interpolate } from "./registry";
 
 /**
  * The always-available entry point to the Guide: a button that opens the
@@ -9,7 +10,7 @@ import { useGuide } from "./GuideProvider";
  * search + Ask ArrivePing); the trigger and anchor stay the same.
  */
 export function GuideButton({ variant }: { variant: "sidebar" | "icon" }) {
-  const { chapters, status, startChapter } = useGuide();
+  const { chapters, status, startChapter, terms } = useGuide();
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -79,9 +80,9 @@ export function GuideButton({ variant }: { variant: "sidebar" | "icon" }) {
                 <PlayCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />
               )}
               <span className="min-w-0">
-                <span className="block text-sm font-semibold text-slate-100">{c.title}</span>
+                <span className="block text-sm font-semibold text-slate-100">{interpolate(c.title, terms)}</span>
                 <span className="block text-xs text-slate-500">
-                  {c.summary} · {c.steps.length} steps
+                  {interpolate(c.summary, terms)} · {c.steps.length} steps
                 </span>
               </span>
             </button>

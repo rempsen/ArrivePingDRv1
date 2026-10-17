@@ -432,6 +432,7 @@ export default function SchedulerPage() {
                 <LayoutGrid className="h-3.5 w-3.5" /> Board
               </button>
               <button
+                {...tourAttr("sched.calendar")}
                 onClick={() => setMode("calendar")}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${mode === "calendar" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
               >

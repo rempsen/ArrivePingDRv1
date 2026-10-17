@@ -24,6 +24,9 @@ import { capture } from "../lib/analytics";
 import type { AppEnv } from "../env";
 import { computeTechPay } from "../../shared/tech-pay";
 import { parseLineItems, round2 } from "../../shared/catalog";
+import { jsonBody } from "../lib/validate";
+import { mergeOnboarding, ONBOARDING_MAX_BYTES, parseOnboarding } from "../../shared/onboarding";
+import { OnboardingPatchSchema } from "../../shared/onboarding-schema";
 
 type SessionUser = { id: string; role?: string; companyId?: string };
 
@@ -121,6 +124,41 @@ async function countsForCompany(
 }
 
 export const meRoutes = new Hono<AppEnv>()
+  /**
+   * ArrivePing Guide progress for me at the acting company: Welcome answers,
+   * tour chapters done, checklist hidden. Per person per company, stored on
+   * the membership. No membership (a superadmin acting as a tenant) = an
+   * empty record that is never written.
+   */
+  .get("/onboarding", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    const companyId = (c.get("companyId") as string) ?? "default";
+    const m = await tdb(companyId).selectOne(schema.memberships, eq(schema.memberships.userId, me.id));
+    return c.json({ state: parseOnboarding(m?.onboarding), persisted: Boolean(m) });
+  })
+  .patch("/onboarding", requireAuth, jsonBody(OnboardingPatchSchema), async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    const companyId = (c.get("companyId") as string) ?? "default";
+    const patch = c.req.valid("json");
+    const t = tdb(companyId);
+    const m = await t.selectOne(schema.memberships, eq(schema.memberships.userId, me.id));
+    if (!m) return c.json({ state: mergeOnboarding(parseOnboarding(null), patch), persisted: false });
+    const next = mergeOnboarding(parseOnboarding(m.onboarding), patch);
+    const text = JSON.stringify(next);
+    if (text.length > ONBOARDING_MAX_BYTES) return c.json({ message: "Onboarding record too large" }, 413);
+    await t.update(
+      schema.memberships,
+      { onboarding: text, updatedAt: new Date() },
+      eq(schema.memberships.id, m.id),
+    );
+    if (patch.welcomeDoneAt) {
+      capture("guide.welcome_completed", me.id, { companyId, persona: next.persona, goal: next.goal, teamSize: next.teamSize });
+    }
+    for (const [chapter, p] of Object.entries(patch.tours ?? {})) {
+      capture(p.status === "completed" ? "guide.chapter_completed" : "guide.chapter_skipped", me.id, { companyId, chapter });
+    }
+    return c.json({ state: next, persisted: true });
+  })
   /**
    * Every company this person can act as, with the role they hold at each and
    * a display name for the picker.
