@@ -34,7 +34,14 @@ import {
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 
-type CalView = "day" | "week" | "month";
+type CalView = "day" | "week" | "workweek" | "month";
+
+const CAL_VIEWS: Array<{ key: CalView; label: string }> = [
+  { key: "day", label: "Day" },
+  { key: "week", label: "Week" },
+  { key: "workweek", label: "Work Week" },
+  { key: "month", label: "Month" },
+];
 
 function startOfWeek(d: Date) {
   const x = new Date(d);
@@ -358,18 +365,20 @@ export default function SchedulerPage() {
   function shift(dir: number) {
     const x = new Date(anchor);
     if (calView === "day") x.setDate(x.getDate() + dir);
-    else if (calView === "week") x.setDate(x.getDate() + dir * 7);
+    else if (calView === "week" || calView === "workweek") x.setDate(x.getDate() + dir * 7);
     else x.setMonth(x.getMonth() + dir);
     setAnchor(x);
   }
 
   let calDays: Date[] = [];
   if (calView === "day") calDays = [new Date(anchor)];
-  else if (calView === "week") {
+  else if (calView === "week" || calView === "workweek") {
+    // Work Week drops the weekend: Monday through Friday of the anchor's week.
     const s = startOfWeek(anchor);
-    calDays = Array.from({ length: 7 }, (_, i) => {
+    const work = calView === "workweek";
+    calDays = Array.from({ length: work ? 5 : 7 }, (_, i) => {
       const d = new Date(s);
-      d.setDate(s.getDate() + i);
+      d.setDate(s.getDate() + i + (work ? 1 : 0));
       return d;
     });
   } else {
@@ -391,7 +400,7 @@ export default function SchedulerPage() {
             month: "short",
             day: "numeric",
           })
-        : `${calDays[0]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${calDays[6]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        : `${calDays[0]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${calDays[calDays.length - 1]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 
   const today = new Date();
 
@@ -603,13 +612,15 @@ export default function SchedulerPage() {
               {calLabel}
             </h3>
             <div className="ml-auto flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
-              {(["day", "week", "month"] as CalView[]).map((v) => (
+              {CAL_VIEWS.map(({ key: v, label }) => (
                 <button
                   key={v}
+                  type="button"
+                  aria-pressed={calView === v}
                   onClick={() => setCalView(v)}
-                  className={`rounded-md px-3 py-1 text-xs font-semibold capitalize ${calView === v ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
+                  className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold ${calView === v ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
                 >
-                  {v}
+                  {label}
                 </button>
               ))}
             </div>
@@ -794,7 +805,7 @@ export default function SchedulerPage() {
                     const jobs = jobsOn(d);
                     const laid = layoutDayJobs(
                       jobs,
-                      calView === "week" ? WEEK_MAX_LANES : Infinity,
+                      calView === "week" || calView === "workweek" ? WEEK_MAX_LANES : Infinity,
                     );
                     const colPx = gridWidth > 0 ? (gridWidth - 52) / calDays.length : 0;
                     // hidden jobs, grouped by start time -> one "+N" pill each
