@@ -2118,6 +2118,137 @@
   color: var(--ink-muted);
 }
 
+/* "Would you like to be contacted?" under the trial card (components/ContactAsk.tsx) */
+.site .contact-ask {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.site .contact-ask__q {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.site .contact-ask__q legend {
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.site .contact-ask__opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+.site .contact-ask__opt {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+.site .contact-ask__opt input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.site .contact-ask__opt span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-strong);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  transition:
+    border-color var(--time-fast) var(--ease-standard),
+    background-color var(--time-fast) var(--ease-standard),
+    color var(--time-fast) var(--ease-standard);
+}
+.site .contact-ask__opt span::before {
+  /* radio dot */
+  content: "";
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-muted);
+  box-sizing: border-box;
+  transition: border var(--time-fast) var(--ease-standard);
+}
+.site .contact-ask__opt:hover span {
+  border-color: var(--ink-muted);
+  color: var(--ink);
+}
+.site .contact-ask__opt input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.site .contact-ask__opt input:checked + span::before {
+  border: 5px solid var(--accent);
+}
+.site .contact-ask__opt input:focus-visible + span {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.site .contact-ask__note,
+.site .contact-ask__lede {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.site .contact-ask__form {
+  display: grid;
+  gap: 14px;
+}
+.site .contact-ask__opt-label {
+  margin-left: 4px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.site .contact-ask__send {
+  width: 100%;
+}
+.site .contact-ask__done {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-control);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--line));
+  background: var(--success-soft);
+}
+.site .contact-ask__done:focus {
+  outline: none; /* programmatic focus only; moving focus here reads it out */
+}
+.site .contact-ask__done svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--success);
+}
+.site .contact-ask__done p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.site .contact-ask__done strong {
+  color: var(--ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .site .contact-ask__opt span,
+  .site .contact-ask__opt span::before {
+    transition: none;
+  }
+}
+
 /* ---------- Help Center (/support, /support/:slug) ---------- */
 .site .sr-only {
   position: absolute;

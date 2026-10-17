@@ -61,6 +61,7 @@ import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
 import { demoRequestRoutes } from "./routes/demo-request";
 import { supportMessageRoutes } from "./routes/support-message";
+import { contactRequestRoutes } from "./routes/contact-request";
 import { punchlistRoutes } from "./routes/punchlist";
 import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
 import { demoHealth } from "../services/demo-refresh";
@@ -207,6 +208,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/api/public/demo-request", demoRequestRoutes)
   // PUBLIC Help Center "Send us a message" — posts to the support Slack channel + emails support@.
   .route("/api/public/support-message", supportMessageRoutes)
+  // PUBLIC homepage "contact me" choice — saves the lead, pushes it to HubSpot, emails contact@.
+  .route("/api/public/contact-request", contactRequestRoutes)
   // PUBLIC self-serve onboarding — scrape-on-URL-entry + tenant signup.
   // Unauthenticated by design (nobody has a login yet); each op has its own
   // IP-keyed rate limiter (see routes/onboarding.ts).
