@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Check, Compass, PlayCircle } from "lucide-react";
+import { Check, Compass, FlaskConical, PlayCircle } from "lucide-react";
+import { useAuth } from "../hooks/use-auth";
+import { useAddSampleDay, useSampleDay } from "./SampleDayBanner";
 import { tourAttr } from "./anchors";
 import { useGuide } from "./GuideProvider";
 import { interpolate } from "./registry";
@@ -15,6 +17,10 @@ export function GuideButton({ variant }: { variant: "sidebar" | "icon" }) {
   const menuId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
   const done = chapters.filter((c) => status[c.id] === "completed").length;
+  const { role } = useAuth();
+  const sample = useSampleDay();
+  const addSample = useAddSampleDay();
+  const canAddSample = (role === "admin" || role === "superadmin") && sample.data && !sample.data.active;
 
   useEffect(() => {
     if (!open) return;
@@ -87,6 +93,27 @@ export function GuideButton({ variant }: { variant: "sidebar" | "icon" }) {
               </span>
             </button>
           ))}
+          {canAddSample && (
+            <>
+              <div className="my-1.5 border-t border-white/5" />
+              <button
+                role="menuitem"
+                type="button"
+                disabled={addSample.isPending}
+                onClick={() => {
+                  setOpen(false);
+                  addSample.mutate();
+                }}
+                className="flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-white/[0.05] disabled:opacity-60"
+              >
+                <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-slate-100">Add a sample day</span>
+                  <span className="block text-xs text-slate-500">{interpolate("Pretend {workers} and {jobs} to practise on", terms)}</span>
+                </span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

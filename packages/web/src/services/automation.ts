@@ -535,6 +535,12 @@ export async function runAutomations(
     );
 
     if (!rules.length) return 0;
+    // Sample-day jobs (services/sample-day.ts) never trigger a rule: a rule can
+    // text or notify real people.
+    if (ctx.bookingId) {
+      const sb = await t.selectOne(schema.bookings, eq(schema.bookings.id, ctx.bookingId));
+      if (sb?.isSample) return 0;
+    }
     rules.sort((a, b) => Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0));
 
     // Resolve lookup-backed facts (zone, skill class, local hour) once.
@@ -646,6 +652,7 @@ export async function sweepTimeTriggers(now: Date = new Date()): Promise<number>
         const t = tdb(companyId);
         const techs = await t.select(schema.riders, eq(schema.riders.status, "available"));
         for (const tech of techs) {
+          if (tech.isSample) continue; // sample-day tech: never "idle" for real
           const since = tech.locationUpdatedAt ? Number(tech.locationUpdatedAt) : null;
           const mins = since ? (now.getTime() - since) / 60000 : idleMins + 1;
           if (mins < idleMins) continue;
