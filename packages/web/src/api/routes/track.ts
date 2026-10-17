@@ -4,7 +4,7 @@ import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, inArray } from "drizzle-orm";
 import { sendSms, trackingUrl } from "../../services/sms";
-import { tripEngine, EN_ROUTE_STATUSES } from "../../services/trip-engine";
+import { tripEngine } from "../../services/trip-engine";
 import { trackLimiter, trackWriteLimiter } from "../lib/rate-limit";
 import { streamSSE } from "hono/streaming";
 import { subscribeTrack, publishMsg } from "../../services/realtime";
@@ -121,6 +121,13 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
     ? { name: co.name, email: co.contactEmail || "", phone: co.phone || "" }
     : null;
 
+  // HARD RULE: the customer sees the technician's location only after the tech
+  // has tapped "Start Driving" (status "enroute") for THIS job, and only until
+  // they arrive. Assigned/accepted jobs, on-site, completed and cancelled jobs
+  // still show the job, time and cost, but never where the tech is, nor
+  // anything derived from it (live ETA, distance, route).
+  const shareLocation = b.status === "enroute";
+
   let tech: any = null;
   if (b.riderId) {
     const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
@@ -134,8 +141,10 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
         skillClass: r.skillClass,
         color: r.color,
         photoUrl: r.photoUrl,
-        lat: r.lat,
-        lng: r.lng,
+        // Live position only while the tech is travelling to this job; see
+        // `shareLocation` below.
+        lat: shareLocation ? r.lat : null,
+        lng: shareLocation ? r.lng : null,
       };
     }
   }
@@ -147,11 +156,13 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   latestRows.sort((a, z) => Number(z.createdAt) - Number(a.createdAt));
   const latest = latestRows[0];
 
-  const techLocation = latest
-    ? { lat: latest.lat, lng: latest.lng }
-    : tech?.lat
-      ? { lat: tech.lat, lng: tech.lng }
-      : null;
+  const techLocation = !shareLocation
+    ? null
+    : latest
+      ? { lat: latest.lat, lng: latest.lng }
+      : tech?.lat
+        ? { lat: tech.lat, lng: tech.lng }
+        : null;
 
   // Road-following route + live ETA while the tech is driving to the job.
   // `routeProvider` tells the client whether `route` traces real streets
@@ -163,7 +174,7 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   let etaDistanceKm = b.etaDistanceKm ?? null;
   if (
     techLocation &&
-    EN_ROUTE_STATUSES.has(b.status) &&
+    shareLocation &&
     b.lat != null &&
     b.lng != null
   ) {
@@ -176,7 +187,10 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
       etaMins = snap.etaMins;
       etaDistanceKm = snap.distanceKm;
     }
-  } else if (!EN_ROUTE_STATUSES.has(b.status) && !PRE_DISPATCH_STATUSES.has(b.status)) {
+  } else if (!shareLocation && !PRE_DISPATCH_STATUSES.has(b.status)) {
+    // Assigned/accepted: any stored ETA was computed from the tech's live
+    // position (routes/tracking.ts), so it would leak where they are before
+    // they've set off.
     // Tech is on site (or the job is done): an ETA is meaningless now, and the
     // last driving ETA used to linger as a "3 min" badge on the van marker
     // next to a "Your technician has arrived!" card.
@@ -302,14 +316,16 @@ export const trackRoutes = new Hono<AppEnv>()
     if (!b) return c.json({ message: "Not found" }, 404);
 
     return streamSSE(c, async (stream) => {
-      // initial snapshot immediately so the map paints without waiting
-      const snap = await buildSnapshot(b);
-      await stream.writeSSE({ event: "snapshot", data: JSON.stringify(snap) });
-
       // All socket writes happen on this main async loop. Hono's streamSSE does
       // not reliably flush writes issued from a detached setInterval while the
       // generator is parked, so the realtime callback only flips a dirty flag
       // and the loop drains it on its next tick.
+      //
+      // Subscribe BEFORE building the first snapshot, and build it from a
+      // fresh read of the booking: the location gate in buildSnapshot keys off
+      // status, so a status change (e.g. arrival) between the token lookup
+      // above and the subscription must not be missed or the first frame
+      // would carry the tech's position after they've arrived.
       let closed = false;
       let dirty = false;
       const unsub = subscribeTrack(token, () => {
@@ -319,6 +335,17 @@ export const trackRoutes = new Hono<AppEnv>()
         closed = true;
         unsub();
       });
+
+      // initial snapshot immediately so the map paints without waiting
+      const first = await resolveByToken(token);
+      if (!first) {
+        // Link expired or job gone in the gap: send nothing stale.
+        closed = true;
+        unsub();
+        return;
+      }
+      const snap = await buildSnapshot(first);
+      await stream.writeSSE({ event: "snapshot", data: JSON.stringify(snap) });
 
       const TICK_MS = 1_000;
       const PING_EVERY = 20; // ticks → 20s heartbeat
