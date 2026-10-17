@@ -63,6 +63,8 @@ export const support = {
   email: "support@nvc360.com",
   privacyEmail: "privacy@nvc360.com",
   salesEmail: "contact@nvc360.com",
+  /** Customer-support channel in the NVC360 Slack workspace. */
+  slackUrl: "https://nvc360workspace.slack.com/archives/C094EBATVAS",
   hours: "Monday to Friday, 8:00 am – 6:00 pm Central Time",
   response: "We reply within one business day, and sooner for anything that stops a crew from working.",
   maker: "ArrivePing is made by NVC360 in Winnipeg, Manitoba.",
