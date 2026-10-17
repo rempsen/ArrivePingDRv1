@@ -64,7 +64,9 @@ export function SiteFooter() {
             <img src={brand.icon} alt="" width={16} height={16} className="footer__mini-mark" aria-hidden="true" />
             {footer.legal}
           </span>
-          <span>{brand.launch}</span>
+          <a href={footer.maker.href} target="_blank" rel="noopener">
+            {footer.maker.label}
+          </a>
         </div>
       </div>
     </footer>

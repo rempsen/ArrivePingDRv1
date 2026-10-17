@@ -92,7 +92,7 @@ export const footageLabel = "ArrivePing app"; // screen-reader text; the visible
 /* ------------------------------------------------------------------ */
 
 export const hero = {
-  eyebrow: `Field service software · ${brand.launch}`,
+  eyebrow: "AI-powered field service software and client communications",
   title: "The right tech, at the door, right when you said.",
   body:
     "ArrivePing shows your whole team live, sends each job to the closest qualified technician, and keeps your customer updated with a live ETA. No more calls asking where the technician is.",
@@ -515,5 +515,6 @@ export const footer = {
       ],
     },
   ],
-  legal: `© ${new Date().getFullYear()} NVC360. All rights reserved.`,
+  legal: `© ${new Date().getFullYear()} ArrivePing. All Rights Reserved.`,
+  maker: { label: "An NVC360 product", href: "https://nvc360.com" },
 };
