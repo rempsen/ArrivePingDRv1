@@ -72,6 +72,9 @@ export const riders = pgTable("riders", {
   lat: real("lat"),
   lng: real("lng"),
   locationUpdatedAt: timestamp("location_updated_at", { mode: "date", withTimezone: true }),
+  // Sample-day technician (services/sample-day.ts). Never billed, never
+  // synced to HubSpot, never in reports or exports; removed by "Clear sample data".
+  isSample: boolean("is_sample").notNull().default(false),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("riders_company_idx").on(t.companyId),
@@ -314,6 +317,12 @@ export const bookings = pgTable("bookings", {
    * to the next run.
    */
   payoutId: text("payout_id").notNull().default(""),
+  /**
+   * Sample-day job (services/sample-day.ts): part of the pretend day every new
+   * company starts with. fireEvent sends nothing for it, the delay watch and
+   * automations skip it, and reports/exports leave it out.
+   */
+  isSample: boolean("is_sample").notNull().default(false),
   // public tracking
   publicToken: text("public_token")
     .notNull()
@@ -1278,6 +1287,9 @@ export const companies = pgTable("companies", {
   hubspotDealId: text("hubspot_deal_id"),
   hubspotHash: text("hubspot_hash").notNull().default(""),
   hubspotSyncedAt: timestamp("hubspot_synced_at", { mode: "date", withTimezone: true }),
+  // Sample day state (services/sample-day.ts), JSON SampleDayState. NULL = never
+  // seeded. Once cleared it keeps { clearedAt } so it is never re-seeded on its own.
+  sampleData: text("sample_data"),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });

@@ -7,6 +7,7 @@ import { DispatchMessenger } from "../../components/dispatch-messenger";
 import { OnboardingChat } from "../../components/onboarding-chat";
 import { TenantSwitcher } from "../../components/tenant-switcher";
 import { GuideProvider } from "../../guide/GuideProvider";
+import { SampleDayBanner } from "../../guide/SampleDayBanner";
 import { GuideButton } from "../../guide/GuideButton";
 import { groupAnchor, navAnchor } from "../../guide/anchors";
 import { useAuth } from "../../hooks/use-auth";
@@ -402,7 +403,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <main className="md:pl-[228px]">{children}</main>
+      <main className="md:pl-[228px]">
+        <SampleDayBanner />
+        {children}
+      </main>
 
       {/* persistent dispatch messaging — available on every admin screen */}
       <DispatchMessenger />

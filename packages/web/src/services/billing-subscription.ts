@@ -198,6 +198,7 @@ export async function driverSeatCount(companyId: string): Promise<number> {
       and(
         eq(schema.riders.companyId, companyId),
         eq(schema.riders.approval, "active"),
+        eq(schema.riders.isSample, false), // sample-day techs are never billed
         eq(schema.memberships.role, "rider"),
         eq(schema.memberships.status, "active"),
       ),

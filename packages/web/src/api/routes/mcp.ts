@@ -544,7 +544,7 @@ const TOOLS: ToolDef[] = [
       properties: { since: { type: "string" }, until: { type: "string" } },
     },
     handler: async (a, t) => {
-      const conds = [eq(schema.bookings.status, "completed")] as any[];
+      const conds = [eq(schema.bookings.status, "completed"), eq(schema.bookings.isSample, false)] as any[];
       if (a.since)
         conds.push(gte(schema.bookings.scheduledAt, new Date(a.since)));
       if (a.until)

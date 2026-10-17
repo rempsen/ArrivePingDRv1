@@ -238,6 +238,8 @@ export async function sweepDelays(now: Date = new Date()): Promise<{
             // re-flagging it and can even auto-text a customer about a job
             // that's already been archived.
             isNull(schema.bookings.deletedAt),
+            // Sample-day jobs never run late for real and must never auto-text.
+            eq(schema.bookings.isSample, false),
           ),
         );
 
