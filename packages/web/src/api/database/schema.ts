@@ -1329,6 +1329,11 @@ export const memberships = pgTable(
     invitedBy: text("invited_by"),
     // HubSpot contact mirroring this person at this company (hubspot-sync.ts).
     hubspotContactId: text("hubspot_contact_id"),
+    // ArrivePing Guide progress for this person at this company (JSON text,
+    // shape = OnboardingState in shared/onboarding.ts): Welcome answers, tour
+    // chapters completed/skipped, checklist hidden. Per company on purpose —
+    // a technician who becomes an admin elsewhere starts that guide fresh.
+    onboarding: text("onboarding"),
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
     // Set while status === "disabled" by an admin's Deactivate; cleared on Reactivate.
     deactivatedAt: timestamp("deactivated_at", { mode: "date", withTimezone: true }),

@@ -18,8 +18,15 @@ export const ANCHORS = [
   "nav.map",
   "guide.button",
   "topbar.menu",
+  // Jobs page + new-job form
+  "jobs.new",
+  "wo.customer",
+  "wo.schedule",
+  "wo.assign",
+  "wo.create",
   // Scheduler
   "sched.mode",
+  "sched.calendar",
   "sched.new-job",
   "sched.views",
   "sched.queue",

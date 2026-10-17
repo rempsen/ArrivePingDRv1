@@ -61,7 +61,10 @@ export type AnalyticsEvent =
   | "billing.downsized"
   | "team.deactivated"
   | "account.deleted"
-  | "team.reactivated";
+  | "team.reactivated"
+  | "guide.welcome_completed"
+  | "guide.chapter_completed"
+  | "guide.chapter_skipped";
 
 /**
  * Capture a business event. Fire-and-forget: never throws, never blocks the
