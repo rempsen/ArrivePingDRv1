@@ -156,12 +156,15 @@ co AS (
     AND (rng.bil IS NULL OR c.billing_status = rng.bil)
 )`;
 
-/** Jobs of the companies in scope. A completed job's time is when it finished. */
+/**
+ * Jobs of the companies in scope. A completed job's time is when it finished.
+ * Sample-day jobs (services/sample-day.ts) are pretend work and never count.
+ */
 const BK = `bk AS (
   SELECT b.id, b.company_id, b.status, b.priority, b.created_at, b.delay_flagged_at,
     CASE WHEN b.status = 'completed' THEN COALESCE(b.finished_at, b.scheduled_at, b.created_at) END AS done_at
   FROM bookings b JOIN co ON co.id = b.company_id
-  WHERE b.deleted_at IS NULL
+  WHERE b.deleted_at IS NULL AND NOT b.is_sample
 )`;
 
 /** People at those companies. Platform staff (superadmin) and deactivated people are left out. */
@@ -181,11 +184,11 @@ const SEEN = `seen AS (
   GROUP BY s.user_id
 )`;
 
-/** Approved technicians / drivers per company. */
+/** Approved technicians / drivers per company (sample-day technicians left out). */
 const TECHS = `rd AS (
   SELECT r.company_id, COUNT(*)::int AS techs
   FROM riders r JOIN co ON co.id = r.company_id
-  WHERE r.approval = 'active'
+  WHERE r.approval = 'active' AND NOT r.is_sample
   GROUP BY r.company_id
 )`;
 
@@ -450,7 +453,7 @@ upd AS (
 team AS (
   SELECT r.company_id, COUNT(*)::int AS n
   FROM riders r JOIN co ON co.id = r.company_id
-  WHERE r.approval = 'active'
+  WHERE r.approval = 'active' AND NOT r.is_sample
   GROUP BY r.company_id ORDER BY n DESC, r.company_id LIMIT 1
 ),
 fast AS (
@@ -539,30 +542,32 @@ export interface MetricDef {
 }
 
 const JOBS_FROM = `bookings x JOIN co ON co.id = x.company_id`;
+/** A job that counts: not deleted, not sample-day pretend work. */
+const REAL_JOB = "x.deleted_at IS NULL AND NOT x.is_sample";
 
 export const METRICS: MetricDef[] = [
   {
     id: "jobs_created", label: "Jobs created", group: "Jobs",
     description: "Jobs added, by when they were created.",
-    from: JOBS_FROM, at: "x.created_at", where: "x.deleted_at IS NULL", value: "COUNT(*)", format: "count",
+    from: JOBS_FROM, at: "x.created_at", where: REAL_JOB, value: "COUNT(*)", format: "count",
     extra: { status: "x.status", priority: "x.priority" },
   },
   {
     id: "jobs_completed", label: "Jobs completed", group: "Jobs",
     description: "Jobs finished, by when they finished.",
     from: JOBS_FROM, at: "COALESCE(x.finished_at, x.scheduled_at, x.created_at)",
-    where: "x.deleted_at IS NULL AND x.status = 'completed'", value: "COUNT(*)", format: "count",
+    where: `${REAL_JOB} AND x.status = 'completed'`, value: "COUNT(*)", format: "count",
     extra: { priority: "x.priority" },
   },
   {
     id: "jobs_cancelled", label: "Jobs cancelled", group: "Jobs",
     description: "Cancelled jobs, by when they were created.",
-    from: JOBS_FROM, at: "x.created_at", where: "x.deleted_at IS NULL AND x.status = 'cancelled'", value: "COUNT(*)", format: "count",
+    from: JOBS_FROM, at: "x.created_at", where: `${REAL_JOB} AND x.status = 'cancelled'`, value: "COUNT(*)", format: "count",
   },
   {
     id: "late_arrivals", label: "Running-late alerts", group: "Jobs",
     description: "Jobs flagged as running late, by when the flag went up.",
-    from: JOBS_FROM, at: "x.delay_flagged_at", where: "x.deleted_at IS NULL AND x.delay_flagged_at IS NOT NULL", value: "COUNT(*)", format: "count",
+    from: JOBS_FROM, at: "x.delay_flagged_at", where: `${REAL_JOB} AND x.delay_flagged_at IS NOT NULL`, value: "COUNT(*)", format: "count",
   },
   {
     id: "customer_updates", label: "Customer updates sent", group: "Customers",

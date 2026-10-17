@@ -80,6 +80,9 @@ beforeAll(async () => {
   await job("acme-fx", at("2026-09-05", "13:00"), { deleted_at: at("2026-09-05", "14:00") });
   // Bolt: one job, completed the same day, flagged running late.
   await job("bolt-fx", at("2026-09-12", "08:00"), { status: "completed", finished_at: at("2026-09-12", "17:00"), delay_flagged_at: at("2026-09-12", "09:00") });
+  // Sample-day work (pretend jobs and a pretend technician) never counts.
+  await job("acme-fx", at("2026-09-05", "16:00"), { is_sample: true, status: "completed", finished_at: at("2026-09-05", "17:00") });
+  await insert("riders", { id: "r-sample-fx", company_id: "acme-fx", approval: "active", is_sample: true, created_at: at("2026-08-15") });
   // Demo: a busy day that must not count unless test tenants are included.
   for (let i = 0; i < 10; i++) await job("demo-fx", at("2026-09-15", "10:00"), i < 5 ? { status: "completed", finished_at: at("2026-09-15", "16:00") } : {});
 
