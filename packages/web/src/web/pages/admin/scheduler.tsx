@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
+import { tourAttr } from "../../guide/anchors";
 
 type CalView = "day" | "week" | "workweek" | "month";
 
@@ -423,7 +424,7 @@ export default function SchedulerPage() {
         subtitle={`Dispatch ${jobsLower} to a ${noun.toLowerCase()} — or let AI suggest the best match`}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
+            <div {...tourAttr("sched.mode")} className="flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
               <button
                 onClick={() => setMode("board")}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${mode === "board" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
@@ -438,6 +439,7 @@ export default function SchedulerPage() {
               </button>
             </div>
             <button
+              {...tourAttr("sched.new-job")}
               onClick={() => setNewDate(new Date())}
               className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-deep"
             >
@@ -489,7 +491,7 @@ export default function SchedulerPage() {
         <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         {/* far-left work queue — every active job still missing a tech, drag
             onto a day to set its date */}
-        <div className="nvc-card flex h-fit flex-col">
+        <div {...tourAttr("sched.queue")} className="nvc-card flex h-fit flex-col">
           <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
             <Inbox className="h-4 w-4 text-amber-warn" />
             <h2 className="font-bold text-white">Work Queue</h2>
@@ -611,7 +613,7 @@ export default function SchedulerPage() {
             <h3 className="font-display text-base font-bold text-white">
               {calLabel}
             </h3>
-            <div className="ml-auto flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
+            <div {...tourAttr("sched.views")} className="ml-auto flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
               {CAL_VIEWS.map(({ key: v, label }) => (
                 <button
                   key={v}

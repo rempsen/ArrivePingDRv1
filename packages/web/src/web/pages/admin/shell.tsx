@@ -6,6 +6,9 @@ import { Logo, TenantLogo } from "../../components/brand";
 import { DispatchMessenger } from "../../components/dispatch-messenger";
 import { OnboardingChat } from "../../components/onboarding-chat";
 import { TenantSwitcher } from "../../components/tenant-switcher";
+import { GuideProvider } from "../../guide/GuideProvider";
+import { GuideButton } from "../../guide/GuideButton";
+import { groupAnchor, navAnchor } from "../../guide/anchors";
 import { useAuth } from "../../hooks/use-auth";
 import { useWorkerNoun, useCustomerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
 import { authClient, clearToken } from "../../lib/auth";
@@ -129,6 +132,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { nounPlural: jobPlural } = useJobNoun();
   const brand = useBrand();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The Guide opens/closes the mobile drawer so sidebar items can be
+  // spotlighted on phones too (guide/TourRunner.tsx dispatches this).
+  useEffect(() => {
+    const onGuide = (e: Event) => {
+      const d = (e as CustomEvent<{ drawer?: "open" | "close" }>).detail;
+      if (d?.drawer) setDrawerOpen(d.drawer === "open");
+    };
+    window.addEventListener("ap:guide", onGuide);
+    return () => window.removeEventListener("ap:guide", onGuide);
+  }, []);
 
   // superadmins get a "Companies" (tenant registry) entry at the bottom of Operations.
   const groups: NavGroup[] =
@@ -197,7 +210,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return (
       <>
         {groups.map((g) => (
-          <div key={g.heading} className="mb-3">
+          <div key={g.heading} className="mb-3" data-tour={groupAnchor(g.heading)}>
             <p className="px-3 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600/80">
               {g.heading}
             </p>
@@ -209,6 +222,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={n.to}
                     to={n.to}
+                    data-tour={navAnchor(n.to)}
                     className={cn(
                       "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150",
                       active
@@ -293,6 +307,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   function UserFooter() {
     return (
       <div className="border-t border-white/[0.06] p-3">
+        <div className="mb-2.5">
+          <GuideButton variant="sidebar" />
+        </div>
         <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-2.5 py-2 ring-1 ring-white/[0.05]">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand/20 text-xs font-bold text-brand">
             {user?.name?.[0]?.toUpperCase() ?? "D"}
@@ -324,6 +341,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   // container for position:sticky, which silently breaks every sticky bar
   // inside the admin (e.g. the Companies A–Z index). clip only clips.
   return (
+    <GuideProvider>
     <div className="min-h-screen overflow-x-clip bg-ink text-slate-200">
       {/* desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[228px] flex-col border-r border-white/[0.06] bg-ink-2 md:flex">
@@ -345,6 +363,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 items-center gap-1">
           <button
             onClick={() => setDrawerOpen(true)}
+            data-tour="topbar.menu"
             aria-label="Open menu"
             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-300 hover:bg-white/5"
           >
@@ -352,6 +371,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </button>
           <TenantIdentity compact />
         </div>
+        <GuideButton variant="icon" />
       </header>
 
       {/* mobile slide-in drawer */}
@@ -391,6 +411,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           companies.onboardingCompletedAt is set. */}
       <OnboardingChat />
     </div>
+    </GuideProvider>
   );
 }
 

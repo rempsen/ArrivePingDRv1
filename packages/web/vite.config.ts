@@ -84,6 +84,10 @@ export default defineConfig(({ command, mode }) => {
 						if (id.includes("leaflet") || id.includes("maplibre")) return "vendor-maps";
 						if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
 						if (id.includes("pdf-lib")) return "vendor-pdf";
+						// The Guide's tour engine (React Joyride + Floating UI) loads only
+						// when someone starts a tour (guide/GuideProvider lazy-imports
+						// TourRunner); keep it out of the shared vendor chunk.
+						if (/node_modules\/(\.bun\/[^/]+\/node_modules\/)?(react-joyride|@floating-ui|@fastify\/deepmerge|@gilbarbara|is-lite|react-innertext|scroll|scrollparent)\//.test(id)) return "vendor-guide";
 						// better-auth lazily initializes its exports (only on first
 						// method call, not on import). When Rollup interleaves it
 						// with unrelated deps in the generic `vendor` chunk, the
