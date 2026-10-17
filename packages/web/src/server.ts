@@ -4,6 +4,7 @@ import { rowsNeedingPoll, triggerVerify } from "./services/email-domains";
 import { seedRolePermissions } from "./api/routes/team";
 import { startRetentionSweeps } from "./services/retention";
 import { sweepHubspotSync, hubspotEnabled } from "./services/hubspot-sync";
+import { retryContactRequests } from "./services/contact-request";
 import { startScheduler } from "./services/scheduler";
 // Importing these registers their scheduler task handlers (review_request,
 // maintenance_reminder) at boot. Without the import the queue would claim the
@@ -136,6 +137,12 @@ if (hubspotEnabled()) {
     void oncePerTick("hubspot-sweep", sweepHubspotSync);
   }, 30 * 60 * 1000);
 }
+
+// Homepage "contact me" leads: retry a HubSpot push or sales email that didn't
+// go through (restart mid-call, outage). Backs off per lead; see contact-request.ts.
+setInterval(() => {
+  void oncePerTick("contact-request-retry", () => retryContactRequests());
+}, 5 * 60 * 1000);
 
 const server = Bun.serve({
   port,

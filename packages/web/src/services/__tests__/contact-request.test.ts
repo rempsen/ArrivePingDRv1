@@ -28,11 +28,11 @@ afterAll(() => {
   mock.module("../email", () => realEmail);
 });
 
-const { parseContact, splitName, pushContactRequestToHubspot, emailContactRequest, submitContactRequest, LEAD_SOURCE } = await import("../contact-request");
+const { parseContact, splitName, normalizePhone, phoneVariants, displayPhone, pushContactRequestToHubspot, emailContactRequest, submitContactRequest, retryContactRequests, retryDelayMs, MAX_ATTEMPTS, LEAD_SOURCE } =
+  await import("../contact-request");
 const { _setHubspotFetch, _resetHubspotForTests } = await import("../hubspot-sync");
 const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
-const { getTableConfig } = await import("drizzle-orm/pg-core");
 const { eq } = await import("drizzle-orm");
 const { Hono } = await import("hono");
 const { contactRequestRoutes } = await import("../../api/routes/contact-request");
@@ -41,6 +41,7 @@ type Call = { method: string; path: string; body: any };
 let calls: Call[] = [];
 let searchHits: Record<string, any[]> = {};
 let failCreate: number | null = null;
+let failCreateTimes = Infinity;
 let failNotes = false;
 let nextId = 5000;
 
@@ -55,34 +56,23 @@ function stubFetch(url: string, init?: RequestInit): Promise<Response> {
   const s = /^\/crm\/v3\/objects\/(\w+)\/search$/.exec(path);
   if (s) {
     const f = body.filterGroups[0].filters[0];
-    return json(200, { results: searchHits[`${s[1]}:${f.propertyName}=${f.value}`] ?? [] });
+    const vals: string[] = f.operator === "IN" ? f.values : [f.value];
+    const hit = vals.map((v) => searchHits[`${s[1]}:${f.propertyName}=${v}`]).find(Boolean);
+    return json(200, { results: hit ?? [] });
   }
   if (path === "/crm/v3/objects/contacts" && method === "POST") {
     if (failCreate === 409) return json(409, { message: "Contact already exists. Existing ID: 777" });
-    if (failCreate) return json(failCreate, { message: "boom" });
+    if (failCreate && failCreateTimes-- > 0) return json(failCreate, { message: "boom" });
     return json(201, { id: String(nextId++) });
   }
   if (path === "/crm/v3/objects/notes" && method === "POST") return failNotes ? json(403, { message: "missing scope" }) : json(201, { id: "n1" });
   return json(404, { message: `unhandled ${method} ${path}` });
 }
 
-function ddlFor(table: any): string {
-  const cfg = getTableConfig(table);
-  const cols = cfg.columns.map((col: any) => {
-    const parts = [`"${col.name}"`, col.getSQLType()];
-    if (col.primary) parts.push("PRIMARY KEY");
-    const d = col.default;
-    const lit = typeof d === "string" ? `'${d.replace(/'/g, "''")}'` : null;
-    if (col.notNull && (lit !== null || col.primary)) parts.push("NOT NULL");
-    if (lit !== null) parts.push(`DEFAULT ${lit}`);
-    if (col.name === "created_at") parts.push("NOT NULL DEFAULT now()");
-    return parts.join(" ");
-  });
-  return `CREATE TABLE IF NOT EXISTS "${cfg.name}" (${cols.join(", ")})`;
-}
-
 beforeAll(async () => {
-  await (db as any).execute(ddlFor(schema.contactRequests));
+  // Build the table from the real migration, so the test also proves 0017 applies cleanly.
+  const sqlText = await Bun.file(new URL("../../../drizzle/0017_contact_requests.sql", import.meta.url)).text();
+  for (const stmt of sqlText.split("--> statement-breakpoint").map((x) => x.trim()).filter(Boolean)) await (db as any).execute(stmt);
   _setHubspotFetch(stubFetch as unknown as typeof fetch);
 });
 afterAll(() => _setHubspotFetch(null));
@@ -92,6 +82,7 @@ beforeEach(async () => {
   sent = [];
   searchHits = {};
   failCreate = null;
+  failCreateTimes = Infinity;
   failNotes = false;
   nextId = 5000;
   emailResult = { ok: true };
@@ -105,12 +96,22 @@ const lead = { name: "Marcus Bell", email: "marcus@prairiecomfort.ca", company: 
 describe("parseContact", () => {
   it("accepts an email (lower-cased) or a phone with 10–15 digits", () => {
     expect(parseContact(" Marcus@PrairieComfort.ca ")).toEqual({ email: "marcus@prairiecomfort.ca" });
-    expect(parseContact("(204) 555-0199")).toEqual({ phone: "(204) 555-0199" });
-    expect(parseContact("+1 204 555 0199")).toEqual({ phone: "+1 204 555 0199" });
+    expect(parseContact("(204) 555-0199")).toEqual({ phone: "+12045550199" });
+    expect(parseContact("+1 204 555 0199")).toEqual({ phone: "+12045550199" });
+    expect(parseContact("+44 20 7946 0958")).toEqual({ phone: "+442079460958" });
   });
   it("rejects anything else", () => {
     for (const bad of ["", "marcus@", "555-0199", "call me", "204-555-0199 ext 4", "1".repeat(16)]) expect(parseContact(bad)).toBeNull();
   });
+  it("normalises phones to E.164 and looks them up under common spellings", () => {
+    expect(normalizePhone("1-204-555-0199")).toBe("+12045550199");
+    expect(normalizePhone("555-0199")).toBeNull();
+    expect(displayPhone("+12045550199")).toBe("(204) 555-0199");
+    expect(displayPhone("+442079460958")).toBe("+442079460958");
+    const v = phoneVariants("+12045550199");
+    for (const x of ["+12045550199", "2045550199", "(204) 555-0199", "204-555-0199", "+1 (204) 555-0199"]) expect(v).toContain(x);
+  });
+
   it("splits a name into first and last", () => {
     expect(splitName("Marcus Bell")).toEqual({ firstname: "Marcus", lastname: "Bell" });
     expect(splitName("Mary Ann  O'Neil")).toEqual({ firstname: "Mary Ann", lastname: "O'Neil" });
@@ -140,8 +141,9 @@ describe("pushContactRequestToHubspot", () => {
   });
 
   it("finds a phone-only lead by phone and never edits an existing contact", async () => {
-    searchHits["contacts:phone=(204) 555-0199"] = [{ id: "42" }];
-    const r = await pushContactRequestToHubspot({ name: "Someone Else", phone: "(204) 555-0199" });
+    // HubSpot has it stored the way someone once typed it; we search every common spelling.
+    searchHits["contacts:phone=204-555-0199"] = [{ id: "42" }];
+    const r = await pushContactRequestToHubspot({ name: "Someone Else", phone: "+12045550199" });
     expect(r).toEqual({ status: "synced", contactId: "42", existing: true });
     expect(calls.some((c) => c.method === "PATCH")).toBe(false);
     expect(calls.some((c) => c.method === "POST" && c.path === "/crm/v3/objects/contacts")).toBe(false);
@@ -182,9 +184,9 @@ describe("emailContactRequest", () => {
     expect(sent[0].html).toContain("https://app.hubspot.com/contacts/4455/record/0-1/5000");
   });
   it("has no Reply-To for a phone-only lead and flags a failed HubSpot push", async () => {
-    await emailContactRequest({ name: "Pat", phone: "204 555 0199" }, { status: "failed", error: "x" });
+    await emailContactRequest({ name: "Pat", phone: "+12045550199" }, { status: "failed", error: "x" });
     expect(sent[0].replyTo).toBeUndefined();
-    expect(sent[0].text).toContain("Phone: 204 555 0199");
+    expect(sent[0].text).toContain("Phone: (204) 555-0199");
     expect(sent[0].text).toContain("add it by hand");
   });
 });
@@ -211,13 +213,77 @@ describe("submitContactRequest", () => {
   it("keeps the lead and records failures when HubSpot and email both fail", async () => {
     failCreate = 500;
     emailResult = { ok: false };
-    const r = await submitContactRequest({ name: "Pat", phone: "204 555 0199" });
+    const r = await submitContactRequest({ name: "Pat", phone: "+12045550199" });
     expect(r.delivered).toBe(true); // it's saved
     await r.done;
     const [row] = await db.select().from(schema.contactRequests).where(eq(schema.contactRequests.id, r.id!));
     expect(row!.hubspotStatus).toBe("failed");
     expect(row!.hubspotError).toContain("HubSpot 500");
     expect(row!.emailStatus).toBe("failed");
+  });
+});
+
+describe("retryContactRequests", () => {
+  const T0 = new Date("2026-10-18T15:00:00Z");
+  const later = (min: number) => new Date(T0.getTime() + min * 60_000);
+  async function failedLead() {
+    failCreate = 500;
+    failCreateTimes = 1; // HubSpot down for the first try only
+    emailResult = { ok: true };
+    const r = await submitContactRequest(lead);
+    await r.done;
+    await db.update(schema.contactRequests).set({ lastAttemptAt: T0, createdAt: T0 }).where(eq(schema.contactRequests.id, r.id!));
+    sent = [];
+    calls = [];
+    return r.id!;
+  }
+  const row = async (id: string) => (await db.select().from(schema.contactRequests).where(eq(schema.contactRequests.id, id)))[0]!;
+
+  it("waits out the backoff, then retries only the channel that failed", async () => {
+    const id = await failedLead();
+    expect((await row(id)).hubspotStatus).toBe("failed");
+    expect(retryDelayMs(1)).toBe(10 * 60_000);
+
+    expect((await retryContactRequests(later(5))).retried).toBe(0); // too soon
+    const out = await retryContactRequests(later(11));
+    expect(out.retried).toBe(1);
+    const r = await row(id);
+    expect(r).toMatchObject({ hubspotStatus: "synced", hubspotError: "", emailStatus: "sent", attempts: 2 });
+    expect(sent).toHaveLength(0); // the email had already gone; not sent twice
+    expect(calls.some((c) => c.method === "POST" && c.path === "/crm/v3/objects/contacts")).toBe(true);
+
+    expect((await retryContactRequests(later(60))).checked).toBe(0); // nothing left owed
+  });
+
+  it("picks up a lead left pending by a restart", async () => {
+    const [ins] = await db
+      .insert(schema.contactRequests)
+      .values({ name: "Pat Lee", phone: "+12045550199", lastAttemptAt: T0, createdAt: T0 })
+      .returning({ id: schema.contactRequests.id });
+    await retryContactRequests(later(15));
+    expect(await row(ins!.id)).toMatchObject({ hubspotStatus: "synced", emailStatus: "sent", attempts: 2 });
+    expect(sent[0].text).toContain("(204) 555-0199");
+  });
+
+  it("stops after MAX_ATTEMPTS and reports it", async () => {
+    const id = await failedLead();
+    failCreateTimes = Infinity; // HubSpot stays down
+    let t = 0;
+    let gaveUp = 0;
+    for (let i = 1; i < MAX_ATTEMPTS; i++) {
+      t += retryDelayMs(i) / 60_000 + 1;
+      gaveUp += (await retryContactRequests(later(t))).gaveUp;
+    }
+    expect((await row(id)).attempts).toBe(MAX_ATTEMPTS);
+    expect(gaveUp).toBe(1);
+    expect((await retryContactRequests(later(t + 10_000))).checked).toBe(0);
+  });
+
+  it("never lets two sweeps retry the same lead", async () => {
+    await failedLead();
+    failCreateTimes = 0;
+    const [a, b] = await Promise.all([retryContactRequests(later(11)), retryContactRequests(later(11))]);
+    expect(a.retried + b.retried).toBe(1);
   });
 });
 
@@ -232,7 +298,7 @@ describe("POST /api/public/contact-request", () => {
     expect(r.status).toBe(200);
     const rows = await db.select().from(schema.contactRequests);
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.phone).toBe("204-555-0199");
+    expect(rows[0]!.phone).toBe("+12045550199");
   });
 
   it("rejects a missing name or an unusable contact with field errors", async () => {

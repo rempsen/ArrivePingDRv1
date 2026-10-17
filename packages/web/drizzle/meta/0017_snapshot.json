@@ -1,5 +1,5 @@
 {
-  "id": "6d20e6a9-9876-4ec4-98c3-09f343ac408d",
+  "id": "68fefc7a-e41f-4411-8897-829fb80bd5b3",
   "prevId": "3a8b76e9-dbb7-40ae-a624-61fa19b4dad7",
   "version": "7",
   "dialect": "postgresql",
@@ -2338,6 +2338,20 @@
           "notNull": true,
           "default": "'pending'"
         },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "last_attempt_at": {
+          "name": "last_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2352,6 +2366,27 @@
           "columns": [
             {
               "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "contact_requests_retry_idx": {
+          "name": "contact_requests_retry_idx",
+          "columns": [
+            {
+              "expression": "email_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "hubspot_status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

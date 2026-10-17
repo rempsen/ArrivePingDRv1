@@ -528,5 +528,5 @@ export async function sweepHubspotSync(): Promise<{ checked: number; pushed: num
 /* ------------------------------------------------- shared with other pushes */
 // Low-level helpers reused by the marketing-site lead push (services/contact-request.ts),
 // so every HubSpot call shares one token, transport, retry and test stub.
-export { hs as hubspotRequest, findByProperty as hubspotFindByProperty, nonEmpty as hubspotNonEmpty, ownerId as hubspotOwnerId };
+export { hs as hubspotRequest, nonEmpty as hubspotNonEmpty, ownerId as hubspotOwnerId };
 export type { HsObject as HubspotObject };

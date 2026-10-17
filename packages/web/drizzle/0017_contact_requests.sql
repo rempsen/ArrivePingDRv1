@@ -10,10 +10,13 @@ CREATE TABLE "contact_requests" (
 	"hubspot_status" text DEFAULT 'pending' NOT NULL,
 	"hubspot_error" text DEFAULT '' NOT NULL,
 	"email_status" text DEFAULT 'pending' NOT NULL,
+	"attempts" integer DEFAULT 1 NOT NULL,
+	"last_attempt_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX "contact_requests_created_idx" ON "contact_requests" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "contact_requests_retry_idx" ON "contact_requests" USING btree ("email_status","hubspot_status");--> statement-breakpoint
 -- Global marketing leads: RLS on with no policy, so app_runtime (tenant traffic) sees nothing;
 -- only app_system (BYPASSRLS, the `sdb` connection) reads and writes this table.
 ALTER TABLE "contact_requests" ENABLE ROW LEVEL SECURITY;

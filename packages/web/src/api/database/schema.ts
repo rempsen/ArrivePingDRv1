@@ -1695,9 +1695,15 @@ export const contactRequests = pgTable(
     hubspotError: text("hubspot_error").notNull().default(""),
     // "pending" | "sent" | "skipped" | "failed"
     emailStatus: text("email_status").notNull().default("pending"),
+    // delivery attempts so far; the retry sweep (services/contact-request.ts) backs off on these
+    attempts: integer("attempts").notNull().default(1),
+    lastAttemptAt: timestamp("last_attempt_at", { mode: "date", withTimezone: true })
+      .notNull()
+      .default(sql`now()`),
     createdAt: now(),
   },
   (t) => ({
     createdIdx: index("contact_requests_created_idx").on(t.createdAt),
+    retryIdx: index("contact_requests_retry_idx").on(t.emailStatus, t.hubspotStatus),
   }),
 );
