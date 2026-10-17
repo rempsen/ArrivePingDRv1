@@ -316,14 +316,16 @@ export const trackRoutes = new Hono<AppEnv>()
     if (!b) return c.json({ message: "Not found" }, 404);
 
     return streamSSE(c, async (stream) => {
-      // initial snapshot immediately so the map paints without waiting
-      const snap = await buildSnapshot(b);
-      await stream.writeSSE({ event: "snapshot", data: JSON.stringify(snap) });
-
       // All socket writes happen on this main async loop. Hono's streamSSE does
       // not reliably flush writes issued from a detached setInterval while the
       // generator is parked, so the realtime callback only flips a dirty flag
       // and the loop drains it on its next tick.
+      //
+      // Subscribe BEFORE building the first snapshot, and build it from a
+      // fresh read of the booking: the location gate in buildSnapshot keys off
+      // status, so a status change (e.g. arrival) between the token lookup
+      // above and the subscription must not be missed or the first frame
+      // would carry the tech's position after they've arrived.
       let closed = false;
       let dirty = false;
       const unsub = subscribeTrack(token, () => {
@@ -333,6 +335,17 @@ export const trackRoutes = new Hono<AppEnv>()
         closed = true;
         unsub();
       });
+
+      // initial snapshot immediately so the map paints without waiting
+      const first = await resolveByToken(token);
+      if (!first) {
+        // Link expired or job gone in the gap: send nothing stale.
+        closed = true;
+        unsub();
+        return;
+      }
+      const snap = await buildSnapshot(first);
+      await stream.writeSSE({ event: "snapshot", data: JSON.stringify(snap) });
 
       const TICK_MS = 1_000;
       const PING_EVERY = 20; // ticks → 20s heartbeat
