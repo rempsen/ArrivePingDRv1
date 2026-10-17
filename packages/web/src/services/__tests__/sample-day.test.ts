@@ -17,6 +17,8 @@ const { driverSeatCount } = await import("../billing-subscription");
 const { loadDataset } = await import("../../api/routes/export");
 const { tdb } = await import("../../api/database/tenant");
 const { isFictionalPhone, isUndeliverableEmail } = await import("../../shared/sample-contact");
+const { Hono } = await import("hono");
+const { payoutsRoutes } = await import("../../api/routes/payouts");
 
 const CO = "sample-day-co";
 const OTHER = "sample-day-other";
@@ -115,6 +117,27 @@ describe("safety", () => {
     expect(await driverSeatCount(CO)).toBe(0);
   });
 
+  it("payroll never pays a sample job", async () => {
+    // Give the sample techs a real pay rate: the completed sample jobs would
+    // then produce non-zero payouts if they were picked up.
+    await db.update(schema.riders).set({ payRatePerHour: 40 }).where(eq(schema.riders.companyId, CO));
+    const app = new Hono<any>().use("*", async (c, next) => {
+      c.set("companyId", CO);
+      c.set("user", { id: "real-admin", role: "admin", name: "Admin" });
+      return next();
+    });
+    app.route("/payouts", payoutsRoutes);
+    const res = await app.request("/payouts/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ periodStart: "2026-10-01", periodEnd: "2026-10-31" }),
+    });
+    expect(res.status).toBeLessThan(500);
+    expect(await count(schema.payouts, eq(schema.payouts.companyId, CO))).toBe(0);
+    const jobs = await db.select().from(schema.bookings).where(eq(schema.bookings.companyId, CO));
+    expect(jobs.every((b) => !b.payoutId)).toBe(true);
+  });
+
   it("exports leave every sample row out", async () => {
     const t = tdb(CO);
     for (const ds of ["work-orders", "technicians", "clients", "invoices"]) {
@@ -183,6 +206,8 @@ describe("clearSampleDay", () => {
     await db.insert(schema.bookings).values([
       // Their own job, given to a sample tech: kept, back in the queue.
       { id: "own-1", companyId: CO, customerId: "real-cust", serviceId: svc, riderId: riders[0]!.id, status: "assigned", scheduledAt: NOW, address: "1 Real St" },
+      // Their own job a sample tech had already started: back in the queue too.
+      { id: "own-3", companyId: CO, customerId: "real-cust", serviceId: svc, riderId: riders[1]!.id, status: "in_progress", scheduledAt: NOW, address: "3 Real St" },
       // A job they booked for a sample customer: goes with the customer.
       { id: "own-2", companyId: CO, customerId: sampleCustomer.id, serviceId: svc, status: "pending", scheduledAt: NOW, address: "2 Real St" },
     ]);
@@ -190,7 +215,7 @@ describe("clearSampleDay", () => {
     await db.insert(schema.user).values({ id: "other-u", companyId: OTHER, name: "Other", email: "o@other.test", role: "customer" } as any);
 
     const r = await sd.clearSampleDay(CO, NOW);
-    expect(r).toEqual({ jobs: 8, people: 9, linkedJobs: 1, unassigned: 1 });
+    expect(r).toEqual({ jobs: 8, people: 9, linkedJobs: 1, unassigned: 2 });
 
     expect(await count(schema.bookings, and(eq(schema.bookings.companyId, CO), eq(schema.bookings.isSample, true)))).toBe(0);
     expect(await count(schema.user, eq(schema.user.isSample, true))).toBe(0);
@@ -198,6 +223,8 @@ describe("clearSampleDay", () => {
     expect(await count(schema.memberships, eq(schema.memberships.companyId, CO))).toBe(0);
     const [own1] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, "own-1"));
     expect(own1).toMatchObject({ riderId: null, status: "pending" });
+    const [own3] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, "own-3"));
+    expect(own3).toMatchObject({ riderId: null, status: "pending" });
     expect(await count(schema.bookings, eq(schema.bookings.id, "own-2"))).toBe(0);
     expect(await count(schema.user, eq(schema.user.id, "real-cust"))).toBe(1);
     expect(await count(schema.user, eq(schema.user.id, "other-u"))).toBe(1);

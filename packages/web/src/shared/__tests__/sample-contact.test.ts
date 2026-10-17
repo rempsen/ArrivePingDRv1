@@ -4,9 +4,14 @@ import { isFictionalPhone, isUndeliverableEmail, sampleEmail, samplePhone, SAMPL
 describe("sample contact details", () => {
   it("makes undeliverable, per-company emails", () => {
     const e = sampleEmail("acme-hvac", "tech1");
-    expect(e).toBe(`tech1.acme-hvac@${SAMPLE_EMAIL_DOMAIN}`);
+    expect(e).toMatch(new RegExp(`^tech1\\.acme-hvac-[a-z0-9]+@${SAMPLE_EMAIL_DOMAIN.replace(/\./g, "\\.")}$`));
     expect(isUndeliverableEmail(e)).toBe(true);
     expect(sampleEmail("a", "x")).not.toBe(sampleEmail("b", "x"));
+    // Two long slugs that share their first 40 characters must not collide
+    // (user.email is globally unique).
+    const base = "a-very-long-company-name-that-goes-on-and-on";
+    expect(sampleEmail(`${base}-one`, "c1")).not.toBe(sampleEmail(`${base}-two`, "c1"));
+    expect(sampleEmail("acme", "c1")).toBe(sampleEmail("acme", "c1"));
   });
 
   it("recognises only .invalid hosts", () => {

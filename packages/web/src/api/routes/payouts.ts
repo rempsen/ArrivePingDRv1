@@ -62,6 +62,8 @@ export const payoutsRoutes = new Hono<AppEnv>()
       and(
         eq(schema.bookings.status, "completed"),
         isNull(schema.bookings.deletedAt),
+        // Sample-day jobs (services/sample-day.ts) are pretend work: never paid.
+        eq(schema.bookings.isSample, false),
         gte(schema.bookings.scheduledAt, start),
         lte(schema.bookings.scheduledAt, end),
       ),

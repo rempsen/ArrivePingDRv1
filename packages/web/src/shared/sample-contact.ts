@@ -12,9 +12,19 @@ export const SAMPLE_EMAIL_DOMAIN = "sample.arriveping.invalid";
 /** Fictional NANP area code used for sample phone numbers. */
 const SAMPLE_AREA = "204";
 
+/** Short, stable hash of the full company id (FNV-1a), so truncation can never collide. */
+function idHash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
 export function sampleEmail(companyId: string, who: string): string {
-  const cid = companyId.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40) || "co";
-  return `${who}.${cid}@${SAMPLE_EMAIL_DOMAIN}`;
+  const cid = companyId.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || "co";
+  return `${who}.${cid}-${idHash(companyId)}@${SAMPLE_EMAIL_DOMAIN}`;
 }
 
 /** (204) 555-01NN for n in 0..99. */

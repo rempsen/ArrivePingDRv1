@@ -500,7 +500,10 @@ export async function clearSampleDay(companyId: string, now = new Date()): Promi
   const toUnassign = ownWithSampleTech.filter((b) => !removeIds.includes(b.id));
 
   for (const b of toUnassign) {
-    const backToQueue = ["assigned", "accepted", "enroute"].includes(b.status);
+    // Any job that isn't finished goes back to the queue: an "arrived" or
+    // "in progress" job with nobody on it would sit in an active state that
+    // the queue never shows.
+    const backToQueue = ["assigned", "accepted", "enroute", "arrived", "in_progress"].includes(b.status);
     await t.update(
       schema.bookings,
       { riderId: null, ...(backToQueue ? { status: "pending", assignStatus: "none" } : {}) },
