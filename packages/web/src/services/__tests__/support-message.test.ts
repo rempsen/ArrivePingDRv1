@@ -61,6 +61,12 @@ describe("slackPayload", () => {
     expect(fields).not.toContain("<!here>");
   });
 
+  it("escapes the fallback text, which Slack parses as mrkdwn and shows in notifications", () => {
+    const p = slackPayload({ ...msg, name: "<!channel> Bob", company: "<!here>", message: "<@U123> hi" });
+    expect(p.text).not.toMatch(/<[!@]/);
+    expect(p.text).toContain("&lt;!channel&gt; Bob");
+  });
+
   it("puts the message in a plain_text block so links and mentions don't render", () => {
     const body = (slackPayload(msg).blocks[2] as any).text;
     expect(body.type).toBe("plain_text");
@@ -71,7 +77,7 @@ describe("slackPayload", () => {
     const p = slackPayload({ ...msg, message: "x".repeat(5_000) });
     expect(JSON.stringify(p)).toContain("mailto:marcus@prairiecomfort.ca");
     expect((p.blocks[2] as any).text.text.length).toBeLessThanOrEqual(2_901);
-    expect(p.text.length).toBeLessThanOrEqual(150);
+    expect(p.text.length).toBeLessThanOrEqual(160);
   });
 });
 

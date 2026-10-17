@@ -1,7 +1,7 @@
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { z } from "zod";
-import { rateLimit, keyByIp } from "../lib/rate-limit";
+import { rateLimit, keyByIp, envLimit } from "../lib/rate-limit";
 import { parseBody, email as emailField, optText } from "../lib/validate";
 import { deliverSupportMessage } from "../../services/support-message";
 
@@ -31,7 +31,8 @@ const SupportMessageBody = z.object({
 
 const supportLimiter = rateLimit({
   name: "public-support-message",
-  limit: Number(process.env.RL_SUPPORT_MESSAGE_LIMIT ?? 5),
+  // envLimit falls back to 5 on a missing or malformed value, so a typo can never disable the limit.
+  limit: () => envLimit("RL_SUPPORT_MESSAGE_LIMIT", 5),
   windowMs: 10 * 60_000,
   keyFn: keyByIp,
 });

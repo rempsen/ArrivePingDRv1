@@ -57,8 +57,9 @@ export function slackPayload(m: SupportMessage) {
     text: k === "Email" ? `*${k}*\n<mailto:${slackEsc(v)}|${slackEsc(v)}>` : `*${k}*\n${slackEsc(v)}`,
   }));
   return {
-    // Fallback for notifications and clients that don't render blocks.
-    text: oneLine(`Support message from ${m.name}${m.company ? ` (${m.company})` : ""}: ${m.message}`),
+    // Fallback for notifications and clients that don't render blocks. Slack parses
+    // it as mrkdwn, so escape it: an unescaped <!channel> here would ping everyone.
+    text: slackEsc(oneLine(`Support message from ${m.name}${m.company ? ` (${m.company})` : ""}: ${m.message}`)),
     blocks: [
       { type: "header", text: { type: "plain_text", text: oneLine(`💬 ${m.name}${m.company ? ` · ${m.company}` : ""}`) } },
       { type: "section", fields },
