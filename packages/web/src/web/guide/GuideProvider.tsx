@@ -41,7 +41,15 @@ const QK = ["me", "onboarding"] as const;
  * tenant) has nowhere to store progress on the server, so it is kept in this
  * browser instead. Without it the Welcome sheet would reopen on every load.
  */
-const localKey = (userId: string) => `ap.guide.onboarding.${userId}`;
+/** The company being acted as (the superadmin switcher), or "home". Progress is per person per company. */
+function activeCompany(): string {
+  try {
+    return window.localStorage.getItem("active_company") || "home";
+  } catch {
+    return "home";
+  }
+}
+const localKey = (userId: string) => `ap.guide.onboarding.${userId}.${activeCompany()}`;
 function readLocal(userId: string): OnboardingState {
   try {
     return parseOnboarding(window.localStorage.getItem(localKey(userId)));
@@ -84,8 +92,10 @@ export function GuideProvider({ children }: { children: ReactNode }) {
 
   const qc = useQueryClient();
   const persistedRef = useRef<boolean | null>(null);
+  // Keyed by company too, so switching tenants never shows another tenant's progress.
+  const company = activeCompany();
   const stateQ = useQuery({
-    queryKey: [...QK, userId],
+    queryKey: [...QK, userId, company],
     queryFn: () => fetchState(userId, persistedRef),
     staleTime: 60_000,
     enabled: userId !== "anon",
@@ -109,7 +119,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
 
   const save = useCallback(
     async (patch: OnboardingPatch) => {
-      const key = [...QK, userId];
+      const key = [...QK, userId, company];
       const local = qc.setQueryData<OnboardingState>(key, (cur) => mergeOnboarding(cur ?? EMPTY_ONBOARDING, patch));
       if (persistedRef.current === false) {
         if (local) writeLocal(userId, local);
@@ -126,9 +136,11 @@ export function GuideProvider({ children }: { children: ReactNode }) {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = (await res.json()) as { state: OnboardingState; persisted?: boolean };
-        // A newer save already carries everything this one sent; let it settle.
-        if (seq === seqRef.current) pendingRef.current = null;
-        const confirmed = pendingRef.current ? mergeOnboarding(body.state, pendingRef.current) : body.state;
+        // A newer save was sent after this one and carries everything this one
+        // did: its reply is the one to trust, even if it arrives first.
+        if (seq !== seqRef.current) return;
+        pendingRef.current = null;
+        const confirmed = body.state;
         qc.setQueryData(key, confirmed);
         if (body.persisted === false) {
           persistedRef.current = false;
@@ -139,7 +151,7 @@ export function GuideProvider({ children }: { children: ReactNode }) {
         console.warn("[guide] could not save progress; will retry with the next save", e);
       }
     },
-    [qc, userId],
+    [qc, userId, company],
   );
 
   const startChapter = useCallback((id: string) => {
