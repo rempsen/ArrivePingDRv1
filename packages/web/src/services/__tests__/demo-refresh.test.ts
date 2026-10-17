@@ -86,6 +86,13 @@ beforeAll(async () => {
   ]) {
     await s.execute(ddlFor(t));
   }
+  // Every test file shares one in-memory database, and other suites (e.g. the
+  // HubSpot sync test) create their own "Prairie Comfort HVAC". The resolver
+  // rightly refuses to pick between two, so clear any other one first.
+  await s.execute({
+    sql: `DELETE FROM "companies" WHERE "name" ILIKE 'Prairie Comfort HVAC%' AND "id" <> ?`,
+    args: [CO],
+  });
   await db.insert(schema.companies).values([
     { id: CO, name: "Prairie Comfort HVAC", officeLat: 49.88, officeLng: -97.15 },
     { id: OTHER, name: "Real Customer Co" },
