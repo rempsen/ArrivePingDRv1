@@ -323,7 +323,9 @@ async function buildOnboardingSnapshot(cid: string) {
       const services = await selectAll(schema.services);
       const catalog = await selectAll(schema.catalogItems);
       const options = await selectAll(schema.optionCategories);
-      const riders = await selectAll(schema.riders);
+      // Sample-day technicians aren't the tenant's team: leave them out of the
+      // roster the setup chat reasons about.
+      const riders = (await selectAll(schema.riders)).filter((r) => !r.isSample);
       const invites = await selectAll(schema.techInvites);
       return { settings, forms, templates, services, catalog, options, riders, invites };
     },

@@ -72,9 +72,11 @@ const niceDay = (k: string) => {
 // This file used to carry its own copy of it, with the same axis-swap bug, so
 // zone reports attributed zero jobs to every zone. One implementation now.
 
+// Sample-day rows (services/sample-day.ts) are a pretend day for learning the
+// app: they never count toward the company's numbers.
 async function techNameMap(t: TenantDb) {
-  const riders = await t.select(schema.riders);
-  const users = await usersForCompany(t.companyId);
+  const riders = (await t.select(schema.riders)).filter((r) => !r.isSample);
+  const users = (await usersForCompany(t.companyId)).filter((u) => !u.isSample);
   const uById = new Map(users.map((u) => [u.id, u]));
   const map = new Map<string, { name: string; riderId: string }>();
   for (const r of riders) {
@@ -118,7 +120,7 @@ export const reportsRoutes = new Hono<AppEnv>()
     // ---- shared dataset: bookings in range (+ filters) ----
     const loadBookings = async () => {
       let bs = await t.select(schema.bookings);
-      bs = bs.filter((b) => inRange(b.scheduledAt));
+      bs = bs.filter((b) => !b.isSample && inRange(b.scheduledAt));
       if (fStatus) bs = bs.filter((b) => b.status === fStatus);
       if (fTech) bs = bs.filter((b) => b.riderId === fTech);
       return bs;
@@ -460,9 +462,9 @@ export const reportsRoutes = new Hono<AppEnv>()
       /* ======================= INVOICES / AR ======================= */
       case "invoices-ar": {
         let inv = await t.select(schema.invoices);
-        inv = inv.filter((i) => inRange(i.createdAt));
         const users = await usersForCompany(t.companyId);
         const uById = new Map(users.map((u) => [u.id, u]));
+        inv = inv.filter((i) => inRange(i.createdAt) && !uById.get(i.customerId)?.isSample);
         const now = Date.now();
         let paid = 0, unpaid = 0;
         const aging = { current: 0, d30: 0, d60: 0, d90: 0 };

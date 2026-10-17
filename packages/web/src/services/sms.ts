@@ -3,6 +3,8 @@
  * Gracefully no-ops (logs only) when env is not configured.
  */
 
+import { isFictionalPhone } from "../shared/sample-contact";
+
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const FROM = process.env.TWILIO_FROM_NUMBER;
 
@@ -91,6 +93,11 @@ export function smsSegments(body: string): number {
 }
 
 export async function sendSms(to: string, body: string): Promise<SmsResult> {
+  // Sample-day numbers (555-0100..0199) are fictional; never hand one to Twilio.
+  if (isFictionalPhone(to)) {
+    console.log(`[sms:skip] sample/fictional number ${to}`);
+    return { ok: false, skipped: true, error: "sample contact" };
+  }
   if (!smsConfigured) {
     console.log(`[sms:skip] would text ${to}: ${toGsm7(body)}`);
     return { ok: false, skipped: true };
