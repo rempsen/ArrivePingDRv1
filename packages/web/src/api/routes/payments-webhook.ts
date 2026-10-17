@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { getStripe, stripeEnabled, STRIPE_WEBHOOK_SECRET, STRIPE_CONNECT_WEBHOOK_SECRET, fromMinor } from "../../services/stripe";
 import { syncInvoiceFromIntent, ledger } from "./payments";
 import { syncAccountFlags } from "../../services/stripe-connect";
+import { applySubscriptionState, companyForCustomer, syncSeats } from "../../services/billing-subscription";
 import { log } from "../lib/logger";
 import type Stripe from "stripe";
 import type { AppEnv } from "../env";
@@ -146,6 +147,38 @@ export const paymentsWebhookRoutes = new Hono<AppEnv>().post("/", async (c) => {
           status: "pending",
           memo: `Dispute opened: ${dp.reason}`,
         });
+        break;
+      }
+      // ---- ArrivePing's own subscriptions (self-serve tenants) ------------
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted":
+      case "customer.subscription.trial_will_end": {
+        const sub = event.data.object as Stripe.Subscription;
+        const companyId = await applySubscriptionState(sub);
+        log.info("stripe subscription event", { type: event.type, subscriptionId: sub.id, companyId, status: sub.status });
+        break;
+      }
+      // Fires a few days before each renewal (and before the trial ends):
+      // the moment to put the real driver count on the subscription.
+      case "invoice.upcoming": {
+        const inv = event.data.object as Stripe.Invoice;
+        const customerId = typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
+        const companyId = customerId ? await companyForCustomer(customerId) : null;
+        if (companyId) {
+          const r = await syncSeats(companyId);
+          log.info("stripe invoice.upcoming: seats synced", { companyId, ...r });
+        }
+        break;
+      }
+      case "invoice.payment_failed": {
+        const inv = event.data.object as Stripe.Invoice;
+        const customerId = typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
+        const companyId = customerId ? await companyForCustomer(customerId) : null;
+        if (companyId) {
+          await db.update(schema.companies).set({ billingStatus: "past_due" }).where(eq(schema.companies.id, companyId));
+          log.warn("stripe subscription payment failed", { companyId, invoiceId: inv.id });
+        }
         break;
       }
       default:

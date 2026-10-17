@@ -163,7 +163,7 @@ Customers want to know when the technician is coming. Dispatchers want to know w
 
 The best customer experience is not created after the job is done. It begins the moment the customer knows exactly what is happening.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ## References
 

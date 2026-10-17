@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { audiences, brand, chapters, closing, faqs, monthlyPrice, pricing, stats, stories, story } from "../config";
 import { MediaSlot } from "../components/MediaSlot";
-import { DemoForm } from "../components/DemoForm";
 import { useAnchorNav } from "../components/SiteHeader";
 import { usePlayback } from "../motion/playback";
 import { scrollToAnchor, useScrollspy } from "../motion/use-scrollspy";
@@ -257,7 +256,7 @@ export function FAQ() {
       <div className="container">
         <div className="intro intro--center" data-reveal="">
           <span className="eyebrow">FAQs</span>
-          <h2 className="h-section">Questions we hear at every demo</h2>
+          <h2 className="h-section">Questions we hear before every signup</h2>
         </div>
         <div className="faq" data-reveal="">
           {faqs.map((f) => (
@@ -317,8 +316,9 @@ export function OurStory() {
 
 /* ---------------- Closing CTA ---------------- */
 export function ClosingCTA() {
+  const t = closing.trial;
   return (
-    <section id="book-a-demo" className="closing anchor">
+    <section id="free-trial" className="closing anchor">
       <img src={brand.watermark} alt="" aria-hidden="true" className="closing__watermark" />
       <div className="container closing__grid">
         <div data-reveal="">
@@ -326,18 +326,27 @@ export function ClosingCTA() {
             {brand.launch}
           </span>
           <h2>{closing.title}</h2>
-          <p className="closing__body">
-            ArrivePing is launching November 2026. Book a walkthrough now and be among the first teams set up.
-          </p>
+          <p className="closing__body">{closing.body}</p>
           <div className="closing__motif">
             <MediaSlot id="closing-motif" className="slot--dark" />
           </div>
           <p className="closing__contact">
-            Prefer email? <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
+            Questions first? <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
           </p>
         </div>
         <div data-reveal="" data-reveal-delay="1">
-          <DemoForm />
+          <div className="form-card trial-card">
+            <h3>{t.title}</h3>
+            <ul className="trial-card__points">
+              {t.points.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+            <a href={brand.urls.signUp} className="btn btn--primary trial-card__cta">
+              {t.cta}
+            </a>
+            <p className="small trial-card__fine">{t.fine}</p>
+          </div>
         </div>
       </div>
     </section>

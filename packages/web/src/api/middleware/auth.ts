@@ -144,6 +144,23 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     return next();
   }
 
+  // An anonymized ("Deleted user") account has no credentials left, but a
+  // session row that survived a crash, or a password-reset link opened after
+  // deletion, must not become a way back in.
+  if ((u as { role?: string }).role === "deleted") {
+    c.set("user", null);
+    c.set("companyId", "default");
+    c.set("memberships", []);
+    return c.json({ error: { code: "account_deleted", message: "This account has been deleted." } }, 401);
+  }
+
+  // Self-service account deletion must stay reachable for people whose only
+  // membership was deactivated or whose company was closed — they are the
+  // ones most likely to ask for it. These two routes are tenant-agnostic
+  // (they act on the caller's own user id across every company) so the
+  // deactivated / closed gates below don't apply to them.
+  const selfDeletion = (c.req.method === "DELETE" && /^\/api\/me\/?$/.test(c.req.path)) || c.req.path === "/api/me/deletion-preview";
+
   // ---- Multi-company resolution -------------------------------------------
   // A person can work for several companies (a contract technician on both
   // Acme's and Bolt's roster). `user.companyId` is their DEFAULT company; the
@@ -188,6 +205,23 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     companyId = memberships[0]!.companyId;
   }
 
+  // Deactivated here (Settings → Team → Deactivate): the membership row is
+  // "disabled", so loadMemberships() left it out. Without this check a person
+  // whose ONLY company this was would have no memberships at all and the
+  // home-company fallback above would quietly let them keep working with
+  // their base role. Legacy users with no membership rows are unaffected.
+  if (
+    !selfDeletion &&
+    !isSuperadmin(baseRole) &&
+    !memberships.some((m) => m.companyId === companyId) &&
+    (await deactivatedMembership(userId, companyId))
+  ) {
+    return c.json(
+      { error: { code: "deactivated", message: "Your access to this company has been deactivated. Ask your administrator to reactivate it." } },
+      403,
+    );
+  }
+
   // ---- Per-company role overlay -------------------------------------------
   // The single highest-leverage line in this change. Dozens of handlers read
   // `user.role`, `user.permissions`, `user.staffType`. By overlaying the
@@ -211,8 +245,54 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   c.set("companyId", companyId);
+
+  // A closed (or suspended) company is sealed for everyone but a superadmin:
+  // the tenant closed its own account from Settings → Billing, or we
+  // suspended it. Cached per company so this costs one query a minute.
+  if (!selfDeletion && !isSuperadmin(baseRole) && (await companyClosed(companyId))) {
+    return c.json(
+      { error: { code: "company_closed", message: "This account has been closed. Contact contact@nvc360.com to reopen it." } },
+      403,
+    );
+  }
   return next();
 });
+
+/** True when this person has a `disabled` membership at this company (deactivated by an admin). */
+export async function deactivatedMembership(userId: string, companyId: string): Promise<boolean> {
+  if (!userId || !companyId) return false;
+  try {
+    const rows = await sdb
+      .select({ id: schema.memberships.id })
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.companyId, companyId), eq(schema.memberships.status, "disabled")))
+      .limit(1);
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+const closedCache = new Map<string, { at: number; closed: boolean }>();
+async function companyClosed(companyId: string): Promise<boolean> {
+  if (!companyId || companyId === "default") return false;
+  const hit = closedCache.get(companyId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.closed;
+  let closed = false;
+  try {
+    const [co] = await db.select({ status: schema.companies.status }).from(schema.companies).where(eq(schema.companies.id, companyId));
+    closed = co?.status === "closed" || co?.status === "suspended";
+  } catch {
+    closed = false;
+  }
+  if (closedCache.size > 5_000) closedCache.clear();
+  closedCache.set(companyId, { at: Date.now(), closed });
+  return closed;
+}
+/** Test/ops: forget cached closed/suspended flags (e.g. after reopening a tenant). */
+export function _resetCompanyClosedCache() {
+  closedCache.clear();
+}
 
 /**
  * The company (tenant) id for the current request. Throws if a tenant-scoped

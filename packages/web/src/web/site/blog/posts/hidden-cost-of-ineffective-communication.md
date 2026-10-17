@@ -62,7 +62,7 @@ Ineffective communication is a costly problem, but it is entirely solvable. The 
 
 The future of field service belongs to companies that leverage real-time data to empower their teams and delight their clients. It is time to stop calling for updates and start operating with total visibility.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ### References
 

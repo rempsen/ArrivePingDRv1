@@ -66,11 +66,11 @@ function Landing({ page }: { page: LandingPage }) {
             <h1 className="lp-hero__title">{page.h1}</h1>
             <p className="lede lp-hero__lede">{page.lede}</p>
             <div className="lp-hero__cta">
-              <a href="#book-a-demo" className="btn btn--primary">
-                Book a demo
+              <a href={brand.urls.signUp} className="btn btn--primary">
+                Sign up free
               </a>
-              <a href={brand.urls.getStarted} className="btn btn--secondary">
-                Start your setup
+              <a href={brand.urls.how} className="btn btn--secondary">
+                See how it works
               </a>
             </div>
             <p className="lp-hero__fine">{brand.launch} · From $49 USD a month · No app for customers</p>

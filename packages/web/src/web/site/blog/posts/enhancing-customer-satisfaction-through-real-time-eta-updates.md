@@ -58,4 +58,4 @@ Automated, real-time ETA updates are no longer optional for service businesses t
 
 Investing in this kind of transparency is a strategic move that pays off in customer retention, brand reputation, and overall profitability.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

@@ -193,4 +193,4 @@ The pizza has arrived. The technician is still somewhere in a four-hour window. 
 
 ArrivePing by NVC360 brings real-time arrival updates to field service. When a technician heads out, the customer gets an [on-my-way text with a live tracking link](/customer-notifications) and ETA, with no app to download. It was built in Winnipeg by a team that ran 800+ field technicians, and it launches in November 2026.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

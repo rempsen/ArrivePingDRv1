@@ -13,7 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, CaretRight, Clock, CurrencyDollar, CheckCircle, Buildings } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { authClient } from "../../lib/auth";
-import { C, R, fmtDate, money } from "../../lib/theme";
+import { C, R, fmtDate, money, WIDE } from "../../lib/theme";
 import { StatusBadge, Card, Button, ListSkeleton, Empty } from "../../components/ui";
 import Constants from "expo-constants";
 import { authHeaders } from "../../lib/auth";
@@ -321,6 +321,7 @@ function JobHead({ b, chevron }: { b: Booking; chevron?: boolean }) {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   header: {
+    ...WIDE,
     paddingHorizontal: 20,
     paddingTop: 6,
     paddingBottom: 14,
@@ -384,7 +385,7 @@ const s = StyleSheet.create({
   },
   elsewhereTitle: { color: C.text, fontSize: 14, fontWeight: "800" },
   elsewhereSub: { color: C.red, fontSize: 12, fontWeight: "600", marginTop: 2 },
-  scroll: { padding: 16, gap: 22, paddingBottom: 40 },
+  scroll: { ...WIDE, padding: 16, gap: 22, paddingBottom: 40 },
   section: { color: C.sub, fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
   jobTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   svc: { color: C.text, fontSize: 16, fontWeight: "700" },

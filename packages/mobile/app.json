@@ -15,8 +15,8 @@
         "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#070b12"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#101827"
       },
       "edgeToEdgeEnabled": true
     },
@@ -44,23 +44,41 @@
       },
       "entitlements": {
         "aps-environment": "production"
+      },
+      "requireFullScreen": false,
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
       }
     },
     "splash": {
       "image": "./assets/splash-icon.png",
-      "resizeMode": "cover",
+      "resizeMode": "contain",
       "backgroundColor": "#070b12"
     },
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.1",
-    "scheme": "homeserve",
+    "version": "1.0.2",
+    "scheme": [
+      "arriveping",
+      "homeserve"
+    ],
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": false,
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 150,
+          "resizeMode": "contain",
+          "backgroundColor": "#070b12"
+        }
+      ],
       [
         "expo-location",
         {
@@ -94,7 +112,7 @@
       "@sentry/react-native",
       "expo-audio"
     ],
-    "runtimeVersion": "1.0.1",
+    "runtimeVersion": "1.0.2",
     "updates": {
       "url": "https://u.expo.dev/6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"
     }

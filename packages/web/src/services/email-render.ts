@@ -229,7 +229,7 @@ export function starterDesigns(): { name: string; description: string; subject: 
             { label: "Service", value: "{{service}}" },
             { label: "When", value: "{{when}}" },
             { label: "Address", value: "{{address}}" },
-            { label: "Technician", value: "{{techName}}" },
+            { label: "{{workerNoun}}", value: "{{techName}}" },
           ],
         },
         { type: "button", label: "Track live", url: "{{trackUrl}}", align: "left" },

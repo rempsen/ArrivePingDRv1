@@ -52,4 +52,4 @@ Most of your local competitors are likely still operating the old way—relying 
 
 The companies that win are those that combine expert technical skill with an effortless customer experience. A platform that automates your communication and keeps your clients informed is no longer optional—it is essential for long-term success.
 
-That is what ArrivePing is built for: an [on-my-way text with a live tracking link and ETA](/customer-notifications) for every visit, running-late notices when a job slips, and review requests after the work is done—with no app for your customer to download. See how it works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+That is what ArrivePing is built for: an [on-my-way text with a live tracking link and ETA](/customer-notifications) for every visit, running-late notices when a job slips, and review requests after the work is done—with no app for your customer to download. See how it works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

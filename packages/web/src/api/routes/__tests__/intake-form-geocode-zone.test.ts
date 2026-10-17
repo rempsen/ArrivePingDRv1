@@ -143,9 +143,19 @@ function submit(
   });
 }
 
-async function newestBooking(companyId: string) {
-  const rows = await db.select().from(schema.bookings);
-  return rows.filter((b) => b.companyId === companyId).at(-1);
+/**
+ * The booking a submit() just created. Postgres returns rows in heap order
+ * when there is no ORDER BY, and the test DDL drops the created_at default,
+ * so "last row" is not "newest" once another test file has freed heap slots.
+ * Identify the new row by set difference instead.
+ */
+async function bookingIds(companyId: string) {
+  return new Set((await db.select().from(schema.bookings)).filter((b) => b.companyId === companyId).map((b) => b.id));
+}
+async function newestBooking(companyId: string, before: Set<string>) {
+  const rows = (await db.select().from(schema.bookings)).filter((b) => b.companyId === companyId && !before.has(b.id));
+  expect(rows.length).toBe(1);
+  return rows[0];
 }
 
 describe("public intake — hand-typed address is geocoded, then zone-enforced", () => {
@@ -164,11 +174,12 @@ describe("public intake — hand-typed address is geocoded, then zone-enforced",
 
   it("accepts a hand-typed in-area address and persists the RESOLVED coordinates", async () => {
     geoResult = INSIDE;
+    const before = await bookingIds(CO);
 
     const res = await submit({ address: "1 Portage Ave, Winnipeg MB" });
 
     expect(res.status).toBe(201);
-    const b = await newestBooking(CO);
+    const b = await newestBooking(CO, before);
     expect(b?.lat).toBeCloseTo(INSIDE.lat, 4);
     expect(b?.lng).toBeCloseTo(INSIDE.lng, 4);
     // The old behaviour: the column default pinned every intake lead here.
@@ -177,11 +188,12 @@ describe("public intake — hand-typed address is geocoded, then zone-enforced",
 
   it("keeps the lead when the geocoder can't resolve the address, flagged unverified", async () => {
     geoResult = null;
+    const before = await bookingIds(CO);
 
     const res = await submit({ address: "behind the blue house past the barn" });
 
     expect(res.status).toBe(201);
-    const b = await newestBooking(CO);
+    const b = await newestBooking(CO, before);
     expect(JSON.parse(b?.fieldData || "{}").zoneStatus).toBe("unverified");
   });
 
@@ -196,10 +208,11 @@ describe("public intake — hand-typed address is geocoded, then zone-enforced",
     // Enforcement is off for this tenant (no zones drawn), but the lat/lng
     // column default still put the job in downtown Toronto.
     geoResult = OUTSIDE;
+    const before = await bookingIds(OPEN_CO);
     const res = await submit({ address: "500 Centre St S, Calgary AB" }, { company: OPEN_CO, key: OPEN_KEY });
     expect(res.status).toBe(201);
     expect(geoCalls).toEqual(["500 Centre St S, Calgary AB"]);
-    const b = await newestBooking(OPEN_CO);
+    const b = await newestBooking(OPEN_CO, before);
     expect(b?.lat).toBeCloseTo(OUTSIDE.lat, 4);
     expect(b?.lng).toBeCloseTo(OUTSIDE.lng, 4);
   });

@@ -36,12 +36,15 @@ function RootLayout() {
   useEffect(() => setupNetworkIntegration(), []);
   return (
     <ErrorBoundary>
-      {/* Runable analytics provider — do not remove, required for analytics tracking */}
+      {/* Runable analytics provider — do not remove, required for analytics tracking.
+          devmode follows the build: dev-client / Expo Go sessions stay tagged
+          as dev, TestFlight and App Store builds report real usage. (It shipped
+          hard-coded to true, so production events were being discarded.) */}
       <OneDollarStatsProvider
         config={{
           hostname,
           collectorUrl: "https://r.lilstts.com/events",
-          devmode: true,
+          devmode: __DEV__,
         }}
       >
         <SafeAreaProvider>

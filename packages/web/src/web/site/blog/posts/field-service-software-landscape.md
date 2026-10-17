@@ -58,4 +58,4 @@ ArrivePing focuses on the job lifecycle, customer communication, and dispatch, a
 
 The field service management industry is evolving rapidly, and businesses can no longer afford to rely on fragmented or inadequate solutions. The demand for real-time visibility, automation, and seamless customer communication is only growing. ArrivePing is built to fill that gap for construction, home service and specialty service operations that want calmer dispatch days and better-informed customers, without a heavy implementation.
 
-ArrivePing launches in November 2026. See how it works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+ArrivePing launches in November 2026. See how it works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

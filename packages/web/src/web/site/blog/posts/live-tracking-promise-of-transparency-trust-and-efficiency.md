@@ -46,4 +46,4 @@ Incorporating live tracking isn’t just about adopting new technology—it’s 
 
 At NVC360, we believe that little moving dot on the map represents much more than a technician’s location—it’s a promise of **transparency, trust, and performance.** For service companies across Canada, live tracking is one of the most practical ways to thrive in today’s service-driven world.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

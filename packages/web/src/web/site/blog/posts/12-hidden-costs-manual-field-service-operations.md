@@ -126,7 +126,7 @@ The field service industry is evolving rapidly, and the home services market is 
 
 ArrivePing gives your customers the “Uber-like” experience they now expect, while giving your office the visibility and automation it needs to run a calmer dispatch day.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ## References
 

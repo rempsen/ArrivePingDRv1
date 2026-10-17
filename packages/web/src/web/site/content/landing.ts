@@ -825,7 +825,7 @@ const workiz: LandingPage = {
       columns: ["", "ArrivePing", "Workiz"],
       rows: [
         { label: "Published pricing", cells: [AP_PRICE_CELL, { text: "Standard, Pro and Ultimate plans; prices on request", href: "https://www.workiz.com/pricing-plans/" }] },
-        { label: "Free trial", cells: ["Book a demo; launching November 2026", { text: "7-day free trial", href: "https://www.workiz.com/pricing-plans/" }] },
+        { label: "Free trial", cells: ["30-day free trial, as many users as you like; nothing charged until day 30", { text: "7-day free trial", href: "https://www.workiz.com/pricing-plans/" }] },
         { label: "On-my-way text", cells: ["Included in every plan, with a live tracking page and ETA", { text: "On My Way feature; an \"On My Way Pro\" tier is documented in the help centre", href: "https://www.workiz.com/features/on-my-way/" }] },
         { label: "Live map of the team", cells: ["Yes, from the technician app on their phone; no hardware", "Not verified on Workiz's public pages at the time of writing"] },
         { label: "Automatic assignment by location and skill", cells: ["Yes, in every plan", "Not verified on Workiz's public pages at the time of writing"] },

@@ -151,6 +151,17 @@ function factsFromTool(t: ToolEvent): Fact[] {
   }
 }
 
+/**
+ * Does the concierge's last message sound like "I'm out of questions, shall
+ * we wrap up?" The prompt asks it to use exactly this phrasing, and the
+ * fallbacks catch the natural variants seen in testing ("ready to wrap up
+ * onboarding and get you dispatching?").
+ */
+export function looksLikeWrapUp(text: string): boolean {
+  const t = text.toLowerCase();
+  return /ready to (start|wrap up|go|finish|dispatch)|covers everything|that'?s everything|shall we (wrap|finish)|anything else (you'?d like|to add)|want to add more/.test(t);
+}
+
 function toolLabel(t: ToolEvent): string {
   switch (t.name) {
     case "update_brand_profile": {
@@ -321,6 +332,11 @@ export function OnboardingChat() {
 
   const [dismissed, setDismissed] = useState(false);
   const [lines, setLines] = useState<Line[]>([]);
+  // The concierge has run out of questions and is asking whether to wrap up:
+  // show buttons instead of leaving the user to work out what to type.
+  const [offerFinish, setOfferFinish] = useState(false);
+  // finish_onboarding ran: show the "all set" state for a beat before closing.
+  const [allSet, setAllSet] = useState(false);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [err, setErr] = useState("");
@@ -442,12 +458,15 @@ export function OnboardingChat() {
       () => {
         historyRef.current = [...newHistory, { role: "assistant", content: assistantText }];
         setStreaming(false);
+        setOfferFinish(looksLikeWrapUp(assistantText));
       },
       () => {
         setStreaming(false);
+        setOfferFinish(false);
+        setAllSet(true);
         setChecklist((c) => (c ? { ...c, done: true } : c));
         qc.invalidateQueries({ queryKey: ["onboarding", "status"] });
-        setTimeout(() => setDismissed(true), 1400);
+        setTimeout(() => setDismissed(true), 2200);
       },
       (msg) => {
         setStreaming(false);
@@ -460,6 +479,14 @@ export function OnboardingChat() {
     const text = input.trim();
     if (!text || streaming) return;
     setInput("");
+    setOfferFinish(false);
+    runTurn([...historyRef.current, { role: "user", content: text }]);
+  }
+
+  /** Quick replies for the wrap-up moment, so nobody has to guess what to type. */
+  function quickReply(text: string) {
+    if (streaming) return;
+    setOfferFinish(false);
     runTurn([...historyRef.current, { role: "user", content: text }]);
   }
 
@@ -630,6 +657,37 @@ export function OnboardingChat() {
         </div>
 
         {err && <p className="px-5 pb-1 text-xs text-red-400">{err}</p>}
+
+        {allSet && (
+          <div className="mx-4 mb-3 flex items-center gap-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+            <CheckCircle2 className="h-5 w-5 shrink-0" />
+            <span>
+              <span className="font-semibold text-white">You're all set.</span> Opening your dashboard…
+            </span>
+          </div>
+        )}
+
+        {offerFinish && !streaming && !allSet && (
+          <div className="mx-4 mb-3 rounded-xl border border-brand/30 bg-brand/[0.08] p-3">
+            <p className="mb-2 text-xs text-slate-300">That's everything we needed. What would you like to do?</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => quickReply("Yes, I'm ready to start. Finish the setup.")}
+                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white transition hover:bg-brand-deep"
+              >
+                <CheckCircle2 className="h-4 w-4" /> Yes, I'm ready to start
+              </button>
+              <button
+                type="button"
+                onClick={() => quickReply("I'd like to add or change a few more things first.")}
+                className="flex h-10 flex-1 items-center justify-center rounded-lg border border-white/15 text-sm font-semibold text-slate-200 transition hover:bg-white/5"
+              >
+                I'd like to add more
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* composer */}
         <div className="flex items-center gap-2 border-t border-white/5 p-3">

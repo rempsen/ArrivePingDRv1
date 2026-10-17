@@ -1260,6 +1260,24 @@ export const companies = pgTable("companies", {
   // a connected account. Meant for the ArrivePing tenant (the company that
   // owns the platform) — its money belongs in the platform bank anyway.
   stripeUsePlatform: boolean("stripe_use_platform").notNull().default(false),
+  // ArrivePing's OWN subscription billing (platform Stripe account), for
+  // self-serve tenants: one Customer + one Subscription per company, started
+  // at signup with a 30-day trial and the card on file. Seats = active
+  // drivers, re-counted before each invoice (services/billing-subscription.ts).
+  // NULL customer/subscription = not self-serve billed (invoiced by hand).
+  billingCustomerId: text("billing_customer_id"),
+  billingSubscriptionId: text("billing_subscription_id"),
+  billingStatus: text("billing_status").notNull().default("none"), // none | trialing | active | past_due | canceled | unpaid
+  billingTrialEndsAt: timestamp("billing_trial_ends_at", { mode: "date", withTimezone: true }),
+  billingSeats: integer("billing_seats").notNull().default(0),
+  // HubSpot CRM mirror (services/hubspot-sync.ts): the Company and Deal that
+  // represent this tenant in NVC360's HubSpot, the fingerprint of what was
+  // last pushed (so unchanged tenants cost no API calls) and when. NULL id =
+  // never pushed. Staff contacts are linked on memberships.hubspotContactId.
+  hubspotCompanyId: text("hubspot_company_id"),
+  hubspotDealId: text("hubspot_deal_id"),
+  hubspotHash: text("hubspot_hash").notNull().default(""),
+  hubspotSyncedAt: timestamp("hubspot_synced_at", { mode: "date", withTimezone: true }),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
@@ -1309,7 +1327,11 @@ export const memberships = pgTable(
     // Set when an admin adds someone who ALREADY has a login elsewhere. The
     // second company never sets a password; the person accepts to join.
     invitedBy: text("invited_by"),
+    // HubSpot contact mirroring this person at this company (hubspot-sync.ts).
+    hubspotContactId: text("hubspot_contact_id"),
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
+    // Set while status === "disabled" by an admin's Deactivate; cleared on Reactivate.
+    deactivatedAt: timestamp("deactivated_at", { mode: "date", withTimezone: true }),
     createdAt: now(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   },

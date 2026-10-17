@@ -159,4 +159,4 @@ The winners will not be the platforms with the most features — but the ones th
 
 The key question is not whether to adopt FSM software, but **which approach aligns with how your business actually operates**. Platforms that integrate, simplify, and respect existing workflows will continue to outperform bloated, high-friction alternatives.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

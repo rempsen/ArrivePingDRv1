@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { MapPinLine, BellRinging, Camera } from "phosphor-react-native";
-import { C, R } from "../lib/theme";
+import { C, R, FORM } from "../lib/theme";
 import { Button } from "../components/ui";
 import { markOnboardingSeen } from "../lib/onboarding";
 
@@ -83,7 +83,7 @@ export default function Onboarding() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  scroll: { flexGrow: 1, padding: 24, paddingTop: 12, justifyContent: "center", gap: 22 },
+  scroll: { ...FORM, flexGrow: 1, padding: 24, paddingTop: 12, justifyContent: "center", gap: 22 },
   title: { fontSize: 24, fontWeight: "800", color: C.text, textAlign: "center" },
   sub: { fontSize: 14, color: C.sub, textAlign: "center", marginBottom: 6 },
   item: { flexDirection: "row", gap: 14, alignItems: "flex-start" },

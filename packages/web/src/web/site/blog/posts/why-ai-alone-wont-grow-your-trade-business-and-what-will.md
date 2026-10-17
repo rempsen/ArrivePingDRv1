@@ -75,4 +75,4 @@ AI is a powerful accelerant, but not a silver bullet. True growth in the trades 
 
 ArrivePing by NVC360 is built around that combination: automatic assignment that your dispatchers can override, customer updates that answer “where’s my technician?” before anyone has to call, and a team in Winnipeg that has run field operations at scale.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

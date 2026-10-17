@@ -3,6 +3,7 @@ import { reconcileAllRiders } from "./services/presence";
 import { rowsNeedingPoll, triggerVerify } from "./services/email-domains";
 import { seedRolePermissions } from "./api/routes/team";
 import { startRetentionSweeps } from "./services/retention";
+import { sweepHubspotSync, hubspotEnabled } from "./services/hubspot-sync";
 import { startScheduler } from "./services/scheduler";
 // Importing these registers their scheduler task handlers (review_request,
 // maintenance_reminder) at boot. Without the import the queue would claim the
@@ -123,6 +124,18 @@ pollEmailDomains().catch((e) => console.error("email-domain poll (boot) failed",
 setInterval(() => {
   void oncePerTick("email-domain-poll", pollEmailDomains);
 }, 2 * 60 * 1000);
+
+// HubSpot mirror: every eligible tenant is re-checked every 30 min (the
+// fingerprint makes unchanged tenants free); writes trigger it sooner.
+console.log(hubspotEnabled() ? "hubspot: tenant sync ENABLED" : "hubspot: disabled (set HUBSPOT_ACCESS_TOKEN to enable)");
+if (hubspotEnabled()) {
+  setTimeout(() => {
+    void oncePerTick("hubspot-sweep", sweepHubspotSync);
+  }, 30 * 1000);
+  setInterval(() => {
+    void oncePerTick("hubspot-sweep", sweepHubspotSync);
+  }, 30 * 60 * 1000);
+}
 
 const server = Bun.serve({
   port,

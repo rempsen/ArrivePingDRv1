@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { FullLoader } from "../../components/loader";
 import { money, dismiss } from "../../lib/utils";
-import { Plus, X, Pencil, Trash2, Clock } from "lucide-react";
+import { Plus, X, Pencil, Trash2, Clock, ChevronDown, ChevronRight, Search } from "lucide-react";
 
 type Svc = {
   id?: string;
@@ -26,6 +26,9 @@ export default function AdminServices() {
   const confirm = useConfirm();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Svc | null>(null);
+  const [q, setQ] = useState("");
+  // Groups start open; the set holds the ones the admin has collapsed.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const services = useQuery({
     queryKey: ["services"],
@@ -41,69 +44,160 @@ export default function AdminServices() {
   const list = services.data?.services ?? [];
   const categories = Array.from(new Set([...list.map((s) => s.category).filter(Boolean), ...SUGGESTED_CATEGORIES]));
 
+  const needle = q.trim().toLowerCase();
+  const visible = needle
+    ? list.filter((s) => `${s.name} ${s.category} ${s.description}`.toLowerCase().includes(needle))
+    : list;
+  // Group by category, biggest groups first, services A–Z inside each.
+  const groups = new Map<string, typeof list>();
+  for (const s of visible) {
+    const key = s.category?.trim() || "General";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(s);
+  }
+  const ordered = [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([name, items]) => [name, [...items].sort((x, y) => x.name.localeCompare(y.name))] as const);
+  const allOpen = collapsed.size === 0;
+
+  const toggle = (name: string) =>
+    setCollapsed((c) => {
+      const next = new Set(c);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+
   return (
     <div className="w-full min-w-0 space-y-5 px-4 py-6 pb-24 md:px-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-extrabold text-white">Services</h1>
           <p className="text-sm text-slate-500">
-            {list.length} {list.length === 1 ? "service" : "services"} — these are the choices in the "Service" picker when you create a job, and on your customer booking page.
+            {list.length} {list.length === 1 ? "service" : "services"} in {groups.size || 0} {groups.size === 1 ? "group" : "groups"} — the choices in the
+            "Service" picker on new jobs and on your booking page.
           </p>
         </div>
         <button
           onClick={() => setEditing(EMPTY)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-deep"
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-deep"
         >
           <Plus className="h-4 w-4" /> New service
         </button>
       </div>
+
+      {list.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[240px] flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <input
+              aria-label="Search services"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search services…"
+              className="w-full rounded-lg border border-white/10 bg-ink-2 py-2 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setCollapsed(allOpen ? new Set(ordered.map(([n]) => n)) : new Set())}
+            className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5"
+          >
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+        </div>
+      )}
 
       {list.length === 0 && (
         <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
           No services yet. Add your first one — it will show up immediately in the New Job dialog.
         </div>
       )}
+      {list.length > 0 && visible.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">No services match "{q}".</div>
+      )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {list.map((s) => (
-          <div key={s.id} className="overflow-hidden rounded-2xl border border-white/5 nvc-card">
-            {s.image && <img src={s.image} alt="" className="h-32 w-full object-cover" />}
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-bold text-white">{s.name}</h3>
-                  <span className="text-xs font-medium text-cyan-glow">{s.category}</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-extrabold text-white">{money(s.basePrice)}</div>
-                  <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                    <Clock className="h-3 w-3" /> {s.durationMins} min
+      <div className="space-y-3">
+        {ordered.map(([name, items]) => {
+          const isOpen = !collapsed.has(name);
+          return (
+            <div key={name} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+              <div className="flex items-center justify-between pr-2 hover:bg-white/5">
+                <button
+                  type="button"
+                  onClick={() => toggle(name)}
+                  aria-expanded={isOpen}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-4 py-3 text-left"
+                >
+                  {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />}
+                  <span className="truncate text-sm font-semibold text-white">{name}</span>
+                  <span className="shrink-0 text-xs text-slate-500">
+                    {items.length} {items.length === 1 ? "service" : "services"}
                   </span>
-                </div>
-              </div>
-              <p className="mt-1.5 line-clamp-2 text-xs text-slate-500">{s.description}</p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => setEditing(s as Svc)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white/5 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit
                 </button>
                 <button
-                  onClick={async () => {
-                    if (await confirm({ title: `Delete "${s.name}"?`, message: "It will no longer be selectable on new jobs or the booking page. Existing jobs keep their service." }))
-                      del.mutate(s.id);
-                  }}
-                  aria-label={`Delete ${s.name}`}
-                  title={`Delete ${s.name}`}
-                  className="grid w-10 place-items-center rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                  type="button"
+                  onClick={() => setEditing({ ...EMPTY, category: name })}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-cyan-glow hover:bg-white/10"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Plus className="h-3.5 w-3.5" /> Add
                 </button>
               </div>
+
+              {isOpen && (
+                <ul className="divide-y divide-white/5 border-t border-white/10">
+                  {items.map((s) => (
+                    <li key={s.id} className="group flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.04]">
+                      {s.image ? (
+                        <img src={s.image} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
+                      ) : (
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-white/5 text-[11px] font-bold text-slate-400">
+                          {s.name.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-white">{s.name}</div>
+                        {s.description && <div className="truncate text-[11px] text-slate-500">{s.description}</div>}
+                      </div>
+                      <span className="hidden shrink-0 items-center gap-1 text-xs text-slate-500 sm:flex">
+                        <Clock className="h-3 w-3" /> {s.durationMins} min
+                      </span>
+                      <span className="w-20 shrink-0 text-right text-sm font-semibold text-white">{money(s.basePrice)}</span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(s as Svc)}
+                          aria-label={`Edit ${s.name}`}
+                          title="Edit"
+                          className="grid h-8 w-8 place-items-center rounded-md text-slate-400 hover:bg-white/10 hover:text-white"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: `Delete "${s.name}"?`,
+                                message: "It will no longer be selectable on new jobs or the booking page. Existing jobs keep their service.",
+                              })
+                            )
+                              del.mutate(s.id);
+                          }}
+                          aria-label={`Delete ${s.name}`}
+                          title="Delete"
+                          className="grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-white/10 hover:text-red-400"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {editing && (

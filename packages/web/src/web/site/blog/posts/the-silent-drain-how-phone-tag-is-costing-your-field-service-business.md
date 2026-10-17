@@ -65,4 +65,4 @@ The costs of communication inefficiencies and “phone tag” in field service b
 
 ArrivePing by NVC360 is built to move you beyond outdated communication methods, offering an “Uber-like” experience for both your team and your customers. It launches in November 2026.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

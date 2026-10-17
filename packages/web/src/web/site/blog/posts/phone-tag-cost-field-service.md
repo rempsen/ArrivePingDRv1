@@ -64,7 +64,7 @@ This shift matters for any business that deploys people in the field. ArrivePing
 
 The “phone tag” loop is more than just an inconvenience; it’s an expensive problem for the [field service industry](/blog/field-service-software-landscape). The traditional reliance on verbal communication in a mobile environment is a recipe for lost productivity, financial drain, and customer dissatisfaction. Real-time information for your team and automatic updates for your customers break that cycle. It’s time to stop chasing calls.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ### References
 

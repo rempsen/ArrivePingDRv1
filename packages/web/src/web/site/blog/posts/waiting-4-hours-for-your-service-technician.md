@@ -45,4 +45,4 @@ What will you do with your 4 hours?
 
 Next time, consider using a service supplier that uses ArrivePing—so you get a text when your technician is on the way, with a [live tracking link and ETA](/customer-notifications) instead of a four-hour window.
 
-Running a service business? See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+Running a service business? See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

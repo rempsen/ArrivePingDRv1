@@ -178,7 +178,7 @@ That competitive gap is available to any construction business willing to close 
 - **Commercial construction firms** watching margin evaporate on large projects where field-to-office lag turns small problems into expensive ones
 - **Any construction company managing crews in the field** where the gap between what dispatch knows and what workers have costs money every single day
 
-ArrivePing launches in November 2026. See how it works for your crews: [book a demo](https://arriveping.com/#book-a-demo).
+See how it works for your crews: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ---
 

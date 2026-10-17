@@ -3,9 +3,10 @@ import { Link } from "wouter";
 import { api } from "../lib/api";
 import { authClient, captureToken } from "../lib/auth";
 import { Logo } from "../components/brand";
-import { Loader } from "../components/loader";
 import { Field, inputCls } from "../components/modal";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../components/provisioning-progress";
+import { SignupReveal } from "../components/signup-reveal";
+import { SignupPayment, type BillingIds } from "../components/signup-payment";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../services/industry-presets";
 import {
   Building2,
@@ -71,7 +72,7 @@ type BrandProposal = {
   warnings: string[];
 };
 
-type Step = "site" | "details" | "login";
+type Step = "site" | "reveal" | "details" | "person" | "payment";
 
 /** Loose "is this at least a domain" check — gates the auto-scout so it
  * doesn't fire on every keystroke of "a", "ac", "acm…". The real validation
@@ -84,18 +85,6 @@ function looksLikeDomain(v: string): boolean {
 }
 
 const AUTO_SCOUT_DEBOUNCE_MS = 900;
-
-/** What the scout is doing while the admin waits — rotated every few seconds
- * so a 30–60 s scrape reads as progress, not a hung spinner. */
-const SCOUT_STAGES = [
-  "Reading your homepage…",
-  "Picking out your logo and brand colours…",
-  "Looking for your phone number and address…",
-  "Checking your About and Contact pages…",
-  "Finding the people on your team page…",
-  "Working out what kind of business you run…",
-  "Almost there — pulling it all together…",
-];
 
 export default function SignupCompanyPage() {
   const [step, setStep] = useState<Step>("site");
@@ -110,14 +99,19 @@ export default function SignupCompanyPage() {
   const [industry, setIndustry] = useState("");
   const [industryOther, setIndustryOther] = useState("");
 
-  const [adminName, setAdminName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [adminPassword2, setAdminPassword2] = useState("");
+  const [personErr, setPersonErr] = useState("");
 
   const [brand, setBrand] = useState<BrandProposal | null>(null);
   const [scouting, setScouting] = useState(false);
-  const [scoutStage, setScoutStage] = useState(0);
   const [scoutErr, setScoutErr] = useState("");
+  // Key for the reveal component so a re-scan restarts its show from the top.
+  const [revealRun, setRevealRun] = useState(0);
   const [scoutedFor, setScoutedFor] = useState(""); // last website string we actually scouted
 
   const [submitting, setSubmitting] = useState(false);
@@ -166,8 +160,10 @@ export default function SignupCompanyPage() {
 
   async function runScout(site: string) {
     setScouting(true);
-    setScoutStage(0);
     setScoutErr("");
+    setBrand(null);
+    setRevealRun((n) => n + 1);
+    setStep("reveal");
     try {
       const res = await (api.public as any).onboarding.scout.$post({
         json: { website: site, name: name || undefined },
@@ -178,7 +174,6 @@ export default function SignupCompanyPage() {
       setBrand(p);
       setScoutedFor(site);
       applyPrefill(p);
-      setStep((s) => (s === "site" ? "details" : s));
     } catch (e: any) {
       setScoutErr(e.message || "Couldn't read that site — you can still sign up and fill this in yourself.");
     } finally {
@@ -200,18 +195,23 @@ export default function SignupCompanyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [website]);
 
-  // Rotate the "what we're doing" line while the scout runs.
-  useEffect(() => {
-    if (!scouting) return;
-    const id = setInterval(() => setScoutStage((s) => Math.min(s + 1, SCOUT_STAGES.length - 1)), 4500);
-    return () => clearInterval(id);
-  }, [scouting]);
-
   function skipWebsite() {
     if (timerRef.current) clearTimeout(timerRef.current);
     setNoWebsite(true);
     setScoutErr("");
     setStep("details");
+  }
+
+  /** "Yes, that's us" on the reveal: the scraped values stand; go straight
+   * to the person step unless something essential is missing. */
+  function confirmReveal() {
+    if (!name.trim() || !industry || (industry === "other" && !industryOther.trim())) {
+      setDetailsErr(!name.trim() ? "We just need your company name." : "Tell us what kind of business this is.");
+      setStep("details");
+      return;
+    }
+    setDetailsErr("");
+    setStep("person");
   }
 
   function continueToLogin(e: React.FormEvent) {
@@ -225,11 +225,21 @@ export default function SignupCompanyPage() {
       setDetailsErr("Tell us in a few words what your business does.");
       return;
     }
-    setStep("login");
+    setStep("person");
   }
 
-  async function submit(e: React.FormEvent) {
+  function continueToPayment(e: React.FormEvent) {
     e.preventDefault();
+    setErr("");
+    if (adminPassword !== adminPassword2) {
+      setPersonErr("Those passwords don't match. Please type them again.");
+      return;
+    }
+    setPersonErr("");
+    setStep("payment");
+  }
+
+  async function submit(billing: BillingIds) {
     setErr("");
     setSubmitting(true);
     try {
@@ -252,10 +262,15 @@ export default function SignupCompanyPage() {
           industryOther: industry === "other" ? industryOther : undefined,
           contactEmail: contactEmail.trim() || undefined,
           phone: phone.trim() || undefined,
-          adminName,
+          adminName: `${firstName.trim()} ${lastName.trim()}`.trim(),
+          adminFirstName: firstName.trim(),
+          adminLastName: lastName.trim(),
+          adminPhone: adminPhone.trim() || undefined,
           adminEmail,
           adminPassword,
           brand: reviewedBrand,
+          billingCustomerId: billing?.customerId,
+          billingSetupIntentId: billing?.setupIntentId,
         },
       });
       const d = await res.json();
@@ -287,19 +302,19 @@ export default function SignupCompanyPage() {
   const found = [brand?.companyName, brand?.phone, brand?.address, brand?.email, brand?.suggestedIndustry].filter(Boolean).length;
 
   return (
-    <div className="grid min-h-screen bg-ink md:grid-cols-2">
+    <div className="grid min-h-screen bg-ink md:grid-cols-[minmax(0,1fr)_minmax(0,3fr)]">
       {/* left visual */}
       <div className="nvc-grid-bg relative hidden overflow-hidden bg-ink-2 md:block">
         <div className="absolute -right-20 top-20 h-80 w-80 rounded-full bg-brand/20 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-cyan-glow/10 blur-3xl" />
-        <div className="relative flex h-full flex-col justify-between p-12 text-white">
+        <div className="relative flex h-full flex-col justify-between p-8 text-white xl:p-10">
           <Logo light imgClassName="h-10 w-auto" />
           <div>
-            <h1 className="font-display text-4xl font-bold leading-tight tracking-tight">
+            <h1 className="font-display text-2xl font-bold leading-tight tracking-tight xl:text-3xl">
               Give us your website.
               <br /> <span className="text-glow text-cyan-glow">We'll set up the rest.</span>
             </h1>
-            <p className="mt-4 max-w-sm text-slate-400">
+            <p className="mt-4 max-w-sm text-sm text-slate-400">
               We read your site for your name, phone, address, brand and services,
               then preload your catalog, forms and notifications — before you've
               even picked a password.
@@ -314,7 +329,7 @@ export default function SignupCompanyPage() {
                   <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand/15 text-cyan-glow">
                     <x.i className="h-4 w-4" />
                   </span>
-                  <span className="text-slate-200">{x.t}</span>
+                  <span className="text-sm text-slate-200">{x.t}</span>
                 </div>
               ))}
             </div>
@@ -327,7 +342,7 @@ export default function SignupCompanyPage() {
 
       {/* form */}
       <div className="flex items-center justify-center px-5 py-10">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-xl">
           <div className="mb-6 md:hidden">
             <Logo light />
           </div>
@@ -382,15 +397,7 @@ export default function SignupCompanyPage() {
                       </div>
                     </Field>
 
-                    {scouting ? (
-                      <div className="rounded-xl border border-brand/20 bg-brand/[0.06] px-4 py-3" aria-live="polite">
-                        <p className="flex items-center gap-2 text-sm font-semibold text-cyan-glow">
-                          <Sparkles className="h-4 w-4" /> Reading {website.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "")}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-300">{SCOUT_STAGES[scoutStage]}</p>
-                        <p className="mt-1 text-xs text-slate-500">Usually under a minute.</p>
-                      </div>
-                    ) : (
+                    {!scouting && (
                       <button
                         type="submit"
                         disabled={!looksLikeDomain(website.trim())}
@@ -398,15 +405,6 @@ export default function SignupCompanyPage() {
                       >
                         Scan my site <ArrowRight className="h-4 w-4" />
                       </button>
-                    )}
-
-                    {scoutErr && (
-                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-300">
-                        <p>{scoutErr}</p>
-                        <button type="button" onClick={skipWebsite} className="mt-1.5 font-semibold text-amber-200 underline">
-                          Fill in my details by hand instead
-                        </button>
-                      </div>
                     )}
 
                     {!scouting && (
@@ -421,7 +419,44 @@ export default function SignupCompanyPage() {
                 </>
               )}
 
-              {/* ── Step 2: review details ──────────────────────────────── */}
+              {/* ── Step 2: the show — what we read, then "is this right?" ── */}
+              {step === "reveal" && (
+                <>
+                  <h2 className="font-display text-3xl font-bold tracking-tight text-white">
+                    {scouting || !brand ? "Reading your site" : `Hello, ${brand.companyName || name || "there"}`}
+                  </h2>
+                  <p className="mt-1 text-slate-400">
+                    {scouting || !brand ? "We're setting up your workspace from what's already on your website." : "Here's what we learned about you."}
+                  </p>
+                  <div className="mt-5">
+                    <SignupReveal
+                      key={revealRun}
+                      site={website.trim()}
+                      scouting={scouting}
+                      brand={brand}
+                      error={scoutErr}
+                      onConfirm={confirmReveal}
+                      onFix={() => setStep("details")}
+                      onSkip={skipWebsite}
+                    />
+                  </div>
+                  {!scouting && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBrand(null);
+                        setScoutedFor("");
+                        setStep("site");
+                      }}
+                      className="mt-4 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"
+                    >
+                      <ArrowLeft className="h-3 w-3" /> Different website
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* ── Step 3: review details ──────────────────────────────── */}
               {step === "details" && (
                 <>
                   <h2 className="font-display text-3xl font-bold tracking-tight text-white">
@@ -604,19 +639,26 @@ export default function SignupCompanyPage() {
                 </>
               )}
 
-              {/* ── Step 3: admin login ─────────────────────────────────── */}
-              {step === "login" && (
+              {/* ── Step 4: the person ──────────────────────────────────── */}
+              {step === "person" && (
                 <>
-                  <h2 className="font-display text-3xl font-bold tracking-tight text-white">Last step — your login</h2>
+                  <h2 className="font-display text-3xl font-bold tracking-tight text-white">Now, about you</h2>
                   <p className="mt-1 text-slate-400">
-                    This is the account that runs {name.trim() || "your company"} on ArrivePing.
+                    This is the login that runs {name.trim() || "your company"} on ArrivePing.
                   </p>
 
-                  <form onSubmit={submit} className="mt-5 space-y-4">
+                  <form onSubmit={continueToPayment} className="mt-5 space-y-4">
                     <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="relative">
+                          <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                          <input aria-label="First name" className={inputCls + " pl-11"} value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" required />
+                        </div>
+                        <input aria-label="Last name" className={inputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" required />
+                      </div>
                       <div className="relative">
-                        <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                        <input aria-label="Your name" className={inputCls + " pl-11"} value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Your name" required autoComplete="name" />
+                        <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <input aria-label="Mobile number" type="tel" className={inputCls + " pl-11"} value={adminPhone} onChange={(e) => setAdminPhone(e.target.value)} placeholder="Mobile number" required autoComplete="tel" />
                       </div>
                       <div className="relative">
                         <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -635,41 +677,65 @@ export default function SignupCompanyPage() {
                         <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                         <input aria-label="Password" type="password" className={inputCls + " pl-11"} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Password (min. 8 characters)" minLength={8} required autoComplete="new-password" />
                       </div>
+                      <div className="relative">
+                        <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <input
+                          aria-label="Confirm password"
+                          type="password"
+                          className={inputCls + " pl-11" + (adminPassword2 && adminPassword2 !== adminPassword ? " border-red-500/60" : "")}
+                          value={adminPassword2}
+                          onChange={(e) => setAdminPassword2(e.target.value)}
+                          placeholder="Confirm password"
+                          minLength={8}
+                          required
+                          autoComplete="new-password"
+                        />
+                      </div>
+                      <div className="min-h-[18px]" role="alert" aria-live="polite">
+                        {(personErr || (adminPassword2 && adminPassword2 !== adminPassword)) && (
+                          <p className="text-xs font-medium text-red-400">{personErr || "Passwords don't match yet."}</p>
+                        )}
+                      </div>
                     </div>
 
                     <p className="rounded-lg bg-white/[0.03] px-3.5 py-2.5 text-xs leading-relaxed text-slate-400">
                       <Sparkles className="mr-1 inline h-3 w-3 text-cyan-glow" />
-                      After this, a short AI conversation picks up anything we still don't know — hours, service area, your team — and finishes the setup with you.
+                      Next: a card for after your free trial. Nothing is charged for 30 days, and you can cancel any time before then.
                     </p>
-
-                    <div className="min-h-[44px]" role="alert" aria-live="polite">
-                      {err && (
-                        <div className="flex min-h-[44px] items-center rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-400">
-                          {err}
-                        </div>
-                      )}
-                    </div>
 
                     <button
                       type="submit"
-                      disabled={submitting}
-                      className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+                      className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep"
                     >
-                      {submitting ? (
-                        <Loader className="h-5 w-5 border-white/40 border-t-white" />
-                      ) : (
-                        <>Create my account <ArrowRight className="h-4 w-4" /></>
-                      )}
+                      Continue <ArrowRight className="h-4 w-4" />
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setStep("details")}
+                      onClick={() => setStep(brand ? "reveal" : "details")}
                       className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"
                     >
-                      <ArrowLeft className="h-3 w-3" /> Back to company details
+                      <ArrowLeft className="h-3 w-3" /> Back
                     </button>
                   </form>
+                </>
+              )}
+
+              {/* ── Step 5: card for after the trial ───────────────────── */}
+              {step === "payment" && (
+                <>
+                  <h2 className="font-display text-3xl font-bold tracking-tight text-white">Start your free trial</h2>
+                  <p className="mt-1 text-slate-400">A card on file for after your 30 days. We won't charge it today.</p>
+                  <div className="mt-5">
+                    <SignupPayment
+                      person={{ email: adminEmail, name: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: adminPhone }}
+                      companyName={name.trim()}
+                      onSaved={submit}
+                      onBack={() => setStep("person")}
+                      submitting={submitting}
+                      submitError={err}
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -690,10 +756,12 @@ export default function SignupCompanyPage() {
 function StepDots({ step }: { step: Step }) {
   const steps: { id: Step; label: string }[] = [
     { id: "site", label: "Website" },
-    { id: "details", label: "Details" },
-    { id: "login", label: "Login" },
+    { id: "details", label: "Your company" },
+    { id: "person", label: "You" },
+    { id: "payment", label: "Trial" },
   ];
-  const idx = steps.findIndex((s) => s.id === step);
+  // The reveal is part of the website step as far as progress goes.
+  const idx = steps.findIndex((s) => s.id === (step === "reveal" ? "site" : step));
   return (
     <ol className="mb-5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider" aria-label="Signup progress">
       {steps.map((s, i) => (

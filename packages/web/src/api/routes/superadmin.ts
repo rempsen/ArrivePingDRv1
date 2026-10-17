@@ -1,4 +1,5 @@
 import type { AppEnv } from "../env";
+import { syncCompanyToHubspot, hubspotEnabled } from "../../services/hubspot-sync";
 
 /**
  * SUPERADMIN — B2B tenant provisioning & registry.
@@ -127,6 +128,28 @@ export const superadminRoutes = new Hono<AppEnv>()
     const choice = c.req.query("key") === "current" ? "current" : "new";
     const report = await runGoogleSmoke({ choice, includeRaw: c.req.query("raw") === "1" });
     return c.json(report, 200);
+  })
+
+  // ---- client-IP diagnostic -----------------------------------------------
+  // Shows exactly which address headers reach the app through the hosting
+  // edge (Cloudflare and the platform's proxies), so the rate limiter can key
+  // on a header a client can't forge. Only the caller's own request is shown.
+  .get("/client-ip", requireSuperadmin, (c) => {
+    const names = [
+      "cf-connecting-ip",
+      "true-client-ip",
+      "fly-client-ip",
+      "x-forwarded-for",
+      "x-real-ip",
+      "x-envoy-external-address",
+      "forwarded",
+      "via",
+      "cf-ray",
+      "fly-region",
+    ];
+    const headers: Record<string, string | null> = {};
+    for (const n of names) headers[n] = c.req.header(n) ?? null;
+    return c.json({ headers, note: "Compare these with your own public IP (search 'what is my IP')." }, 200);
   })
 
   // ---- list all tenants -------------------------------------------------
@@ -419,6 +442,27 @@ export const superadminRoutes = new Hono<AppEnv>()
     const b = c.req.valid("json");
     const result = await provisionCompany(b, { id: me?.id, name: me?.name }, { source: "superadmin" });
     return c.json(result, 201);
+  })
+
+  // ---- push ONE tenant to HubSpot (Company + Contacts + Deal), ignoring the
+  // change fingerprint. Also the way to bring a hand-made tenant into the CRM.
+  .post("/companies/:id/hubspot-sync", requireSuperadmin, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const id = c.req.param("id");
+    const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, id));
+    if (!co) return c.json({ message: "Not found" }, 404);
+    if (!hubspotEnabled()) return c.json({ message: "HubSpot sync is not configured (HUBSPOT_ACCESS_TOKEN)" }, 503);
+    const r = await syncCompanyToHubspot(id, { force: true });
+    await audit({
+      actorId: me?.id,
+      actorName: me?.name,
+      action: "update",
+      entityType: "company",
+      entityId: id,
+      summary: r.ok ? `Synced "${co.name}" to HubSpot (company ${r.hubspotCompanyId}, deal ${r.hubspotDealId}, ${r.contacts} contacts)` : `HubSpot sync failed for "${co.name}": ${r.error ?? "unknown"}`,
+      companyId: id,
+    });
+    return c.json({ result: r }, r.ok ? 200 : 502);
   })
 
   // ---- re-scan ONE tenant's website (item G) -----------------------------

@@ -1,7 +1,8 @@
 import { Hono } from "hono";
+import { ensureFormCategories } from "../../services/form-categories";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, tx } from "../middleware/auth";
+import { requireAuth, tenantId, tx } from "../middleware/auth";
 import { z } from "zod";
 import { jsonBody, shortText, longText, hexColor } from "../lib/validate";
 import type { AppEnv } from "../env";
@@ -41,6 +42,7 @@ export const templatesRoutes = new Hono<AppEnv>()
   })
   .post("/", requireAuth, jsonBody(TemplateBody), async (c) => {
     const body = c.req.valid("json");
+    if (body.category) await ensureFormCategories(tenantId(c), [body.category]);
     const [t] = await tx(c).insert(schema.taskTemplates, {
       name: body.name,
       category: body.category ?? "General",

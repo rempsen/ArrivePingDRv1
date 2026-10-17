@@ -42,6 +42,11 @@ export interface AttachArgs {
 export async function attachMembership(a: AttachArgs) {
   const status = a.status ?? "active";
   const t = tdb(a.companyId);
+  // A person who deleted their account (services/account-deletion.ts) is
+  // anonymized, not removed; re-attaching would put "Deleted user" back on a
+  // roster with no way to sign in. Invite them afresh with a real email.
+  const [who] = await sdb.select({ role: schema.user.role }).from(schema.user).where(eq(schema.user.id, a.userId));
+  if (who?.role === "deleted") throw new Error("This person deleted their ArrivePing account and cannot be re-added. Send a new invitation to their email instead.");
   const existing = await t.selectOne(
     schema.memberships,
     eq(schema.memberships.userId, a.userId),
@@ -188,6 +193,8 @@ export async function usersForCompany(companyId: string) {
         staffType: m.staffType ?? u.staffType,
         managerId: m.managerId ?? u.managerId,
         membershipStatus: m.status,
+        /** When an admin deactivated them here (status "disabled"); null otherwise. */
+        deactivatedAt: m.deactivatedAt ?? null,
         /** True when this company is not the person's home company. */
         isShared: u.companyId !== companyId,
       };

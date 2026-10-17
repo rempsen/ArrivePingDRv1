@@ -84,8 +84,8 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
               Sign in
             </Link>
           )}
-          <a href={brand.urls.demo} className="btn btn--primary btn--sm" onClick={(e) => go(e, brand.urls.demo)}>
-            Book a demo
+          <a href={brand.urls.signUp} className="btn btn--primary btn--sm">
+            Sign up free
           </a>
           <button
             ref={menuBtn}
@@ -136,14 +136,11 @@ export const SiteHeader = forwardRef<HTMLElement, Props>(function SiteHeader({ d
             ))}
             <div className="drawer__actions">
               <a
-                href={brand.urls.demo}
+                href={brand.urls.signUp}
                 className="btn btn--primary"
-                onClick={(e) => {
-                  go(e, brand.urls.demo);
-                  setOpen(false);
-                }}
+                onClick={() => setOpen(false)}
               >
-                Book a demo
+                Sign up free
               </a>
               {dashboardHref ? (
                 <Link to={dashboardHref} className="btn btn--secondary">

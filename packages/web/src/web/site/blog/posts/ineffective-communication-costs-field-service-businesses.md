@@ -223,7 +223,7 @@ The research is unambiguous. The companies that invest in closing the communicat
 
 ArrivePing by NVC360 launches in November 2026, built in Winnipeg for businesses that deploy people in the field.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ---
 

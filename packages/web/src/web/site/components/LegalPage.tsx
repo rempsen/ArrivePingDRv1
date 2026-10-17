@@ -96,7 +96,15 @@ function Body({ doc }: { doc: LegalDoc }) {
             ))}
             <p className="legal__other small">
               See also:{" "}
-              {doc.path === "/privacy" ? <a href="/terms">Terms &amp; Conditions</a> : <a href="/privacy">Privacy Policy</a>}
+              {doc.path !== "/privacy" && <a href="/privacy">Privacy Policy</a>}
+              {doc.path === "/support" && " · "}
+              {doc.path !== "/terms" && <a href="/terms">Terms of Service</a>}
+              {doc.path !== "/support" && (
+                <>
+                  {" · "}
+                  <a href="/support">Help &amp; Support</a>
+                </>
+              )}
             </p>
           </article>
         </div>
@@ -129,18 +137,22 @@ function block(b: LegalBlock): ReactNode {
   }
 }
 
-/** Turns `[label](href)` into links; everything else is plain text. */
-function rich(text: string): ReactNode {
-  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+/** Turns `[label](href)` into links and `**text**` into bold; everything else is plain text. */
+export function rich(text: string): ReactNode {
+  const re = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*/g;
   const out: ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     out.push(
-      <a key={m.index} href={m[2]} className="legal__link">
-        {m[1]}
-      </a>,
+      m[3] !== undefined ? (
+        <strong key={m.index}>{m[3]}</strong>
+      ) : (
+        <a key={m.index} href={m[2]} className="legal__link">
+          {m[1]}
+        </a>
+      ),
     );
     last = m.index + m[0].length;
   }

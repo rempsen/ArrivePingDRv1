@@ -95,4 +95,4 @@ The “Uberization” of field service is not a passing trend; it is the new sta
 
 ArrivePing by NVC360 was built for exactly this: a [live map of your technicians](/fleet-tracking), [automatic assignment](/dispatch-software) of the closest qualified tech, and [on-my-way texts with a live tracking link](/customer-notifications) that need no customer app or account. It launches in November 2026.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

@@ -37,11 +37,25 @@ import {
   provisionCompany,
   websiteUrlSchema,
   CompanyCreateBody,
+  slugify,
   seedCatalogForCompany,
   seedOptionCatalogForCompany,
   loadIcpKnowledge,
 } from "../../services/company-provisioning";
 import { scoutBrand } from "../../services/brand-scout";
+import { ensureFormCategories } from "../../services/form-categories";
+import { applyTerminology } from "../../services/terminology";
+import { getStripe, stripeEnabled, STRIPE_PUBLISHABLE_KEY } from "../../services/stripe";
+import {
+  createSignupSetup,
+  startTrialSubscription,
+  cancelSubscriptionQuietly,
+  setSeats,
+  TRIAL_DAYS,
+} from "../../services/billing-subscription";
+import { notifySelfServeSignup } from "../../services/signup-notify";
+import { syncCompanyToHubspot } from "../../services/hubspot-sync";
+import { email as emailField, shortText } from "../lib/validate";
 import { loadSiteExcerpts } from "../../services/site-crawl";
 import { rescanWebsite } from "../../services/rescan";
 import {
@@ -98,6 +112,24 @@ const SelfServeSignupBody = CompanyCreateBody.omit({
   managerName: true,
   managerEmail: true,
   managerPassword: true,
+}).extend({
+  // From POST /billing/setup, once Payment Element has saved the card.
+  // Required whenever Stripe is configured: no card, no trial.
+  billingCustomerId: optText(80),
+  billingSetupIntentId: optText(80),
+});
+
+const BillingSetupBody = z.object({
+  email: emailField("Email"),
+  name: shortText("Your name", 200),
+  companyName: optText(200),
+  phone: optText(40),
+});
+const onboardingBillingLimiter = rateLimit({
+  name: "onboarding-billing",
+  limit: 10,
+  windowMs: 60 * 60_000,
+  keyFn: keyByIp,
 });
 
 export const onboardingPublicRoutes = new Hono<AppEnv>()
@@ -117,23 +149,123 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     }
   })
 
-  // POST /api/public/onboarding/signup — provisions a brand-new tenant end to
-  // end (same pipeline the superadmin panel uses) and returns just enough for
-  // the client to immediately sign the admin in with the credentials THEY
-  // typed. Deliberately does NOT return the raw API key secret here — unlike
-  // the superadmin flow (a trusted internal operator acting on someone else's
+  // GET /api/public/onboarding/billing/config — is the card step on, and
+  // what the browser needs to render it.
+  .get("/billing/config", (c) =>
+    c.json({ enabled: stripeEnabled, publishableKey: STRIPE_PUBLISHABLE_KEY, trialDays: TRIAL_DAYS }, 200),
+  )
+
+  // POST /api/public/onboarding/billing/setup — a Stripe customer + a
+  // SetupIntent so Payment Element can SAVE the card (nothing is charged).
+  // The subscription itself is created at /signup, with the trial.
+  .post("/billing/setup", onboardingBillingLimiter, jsonBody(BillingSetupBody), async (c) => {
+    if (!stripeEnabled) return c.json({ message: "Billing is not configured" }, 503);
+    const b = c.req.valid("json");
+    try {
+      const setup = await createSignupSetup({
+        email: b.email,
+        name: b.name,
+        companyName: b.companyName ?? "",
+        phone: b.phone || undefined,
+      });
+      return c.json({ ...setup, publishableKey: STRIPE_PUBLISHABLE_KEY }, 200);
+    } catch (e) {
+      console.error("[onboarding] billing setup failed", e);
+      return c.json({ message: "We couldn't start the payment step. Please try again in a moment." }, 502);
+    }
+  })
+
+  // POST /api/public/onboarding/signup — starts the 30-day trial subscription
+  // on the saved card, then provisions a brand-new tenant end to end (same
+  // pipeline the superadmin panel uses) and returns just enough for the
+  // client to immediately sign the admin in with the credentials THEY typed.
+  // Deliberately does NOT return the raw API key secret here — unlike the
+  // superadmin flow (a trusted internal operator acting on someone else's
   // behalf), this response body is sitting in a stranger's browser before
   // they've even authenticated; the admin can view/rotate their key from
   // Settings once signed in.
   .post("/signup", onboardingSignupLimiter, jsonBody(SelfServeSignupBody), async (c) => {
-    const b = c.req.valid("json");
-    const result = await provisionCompany({ ...b, plan: "starter" }, {}, { source: "self_serve" });
+    const { billingCustomerId, billingSetupIntentId, ...b } = c.req.valid("json");
+    // Self-serve can't be asked to pick another slug on a collision, so take
+    // the next free one ("acme-hvac-2") before anything is created.
+    const base = slugify(b.slug || b.name);
+    if (!base) return c.json({ message: "We need your company name to set up your account." }, 400);
+    let slug = base;
+    for (let i = 2; i < 50; i++) {
+      const [dupe] = await db.select({ id: schema.companies.id }).from(schema.companies).where(eq(schema.companies.id, slug));
+      if (!dupe) break;
+      slug = `${base.slice(0, 44)}-${i}`;
+    }
+
+    // 1) the trial subscription, so a tenant never exists without billing
+    let billing: Awaited<ReturnType<typeof startTrialSubscription>> | null = null;
+    if (stripeEnabled) {
+      if (!billingCustomerId || !billingSetupIntentId) {
+        return c.json({ message: "Add a payment method to start your free trial." }, 400);
+      }
+      try {
+        billing = await startTrialSubscription({
+          customerId: billingCustomerId,
+          setupIntentId: billingSetupIntentId,
+          companyId: slug,
+          companyName: b.name,
+        });
+      } catch (e) {
+        console.error("[onboarding] trial subscription failed", e);
+        return c.json({ message: "We couldn't start your free trial with that card. Please try again." }, 502);
+      }
+      if (!billing.ok) return c.json({ message: billing.message }, 400);
+    }
+
+    // 2) the tenant
+    let result: Awaited<ReturnType<typeof provisionCompany>>;
+    try {
+      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve" });
+    } catch (e) {
+      if (billing?.ok) await cancelSubscriptionQuietly(billing.subscriptionId);
+      throw e;
+    }
+    const companyId = result.company.id;
+    if (billing?.ok) {
+      await db
+        .update(schema.companies)
+        .set({
+          billingCustomerId: billing.customerId,
+          billingSubscriptionId: billing.subscriptionId,
+          billingStatus: billing.status,
+          billingTrialEndsAt: billing.trialEndsAt,
+          billingSeats: 1,
+        })
+        .where(eq(schema.companies.id, companyId));
+      // Belt and braces: keep Stripe's metadata pointing at the real tenant id.
+      if (companyId !== slug) {
+        await getStripe()
+          .subscriptions.update(billing.subscriptionId, { metadata: { companyId, source: "arriveping-self-serve" } })
+          .catch(() => {});
+      }
+    }
+
+    // 3) tell the team (never blocks the signup)
+    void notifySelfServeSignup({
+      companyId,
+      companyName: result.company.name,
+      website: b.website ?? "",
+      industry: b.industry ?? "",
+      adminName: String(b.adminName ?? ""),
+      adminEmail: b.adminEmail,
+      adminPhone: String(b.adminPhone ?? ""),
+      trialEndsAt: billing?.ok ? billing.trialEndsAt : null,
+    }).catch((e) => console.error("[onboarding] signup notification failed", e));
+    // 4) mirror the new tenant into HubSpot as Company + Contact + Deal (never blocks)
+    void syncCompanyToHubspot(companyId).catch(() => {});
+
     return c.json(
       {
-        companySlug: result.company.id,
+        companySlug: companyId,
         companyName: result.company.name,
         admin: result.admin,
         seeded: result.seeded,
+        trialEndsAt: billing?.ok ? billing.trialEndsAt.toISOString() : null,
       },
       201,
     );
@@ -476,7 +608,10 @@ without it unless the user explicitly says to skip/finish everything.
 
   Ask AT MINIMUM (call save_qualifying_baseline as soon as each is answered,
   don't wait to batch them):
-    1. How many ${snap.settings.workerNoun.toLowerCase()}s/techs do they have? (technicianCount)
+    1. How many ${snap.settings.workerNoun.toLowerCase()}s will use ArrivePing? (technicianCount)
+       Say it plainly: this is the number of users on their plan — the
+       first month is free whatever the number, and they can change it any
+       time in Settings → Billing.
     2. How many vehicles in the fleet? (vehicleCount)
     3. Roughly how many ${snap.settings.jobNoun.toLowerCase()}s/calls per day? (jobsPerDay)
     4. Do they sell/offer routine maintenance plans (recurring service
@@ -574,6 +709,11 @@ ${fitBlock}
 
 Rules:
 - One question at a time. Never dump a checklist of questions on them.
+- Ask each question ONCE. Save the user's answer with a tool FIRST, then ask
+  the next question AFTER the tool result. Never write a question, call a
+  tool, and then write the same question again (or a reworded version of
+  it) — the user sees both and it reads as a stutter. If you already asked
+  before the tool ran, say nothing after it.
 - Open with ONE short line that shows you already did your homework (name
   the industry, tagline, or a specific service you saw on their site — not a
   generic "Welcome!"), then go straight into whatever's missing in Part 1,
@@ -613,6 +753,11 @@ Rules:
   qualifying fields are captured (or the user explicitly says they're done /
   it's fine / skip it — then call it immediately regardless of what's
   missing). Don't drag either part out chasing perfection.
+- When you have no more questions, say exactly: "That covers everything.
+  Ready to start, or want to add more?" The screen then shows the user two
+  buttons. If they say they're ready (any wording), call finish_onboarding
+  right away and reply with one short line of welcome. If they want to add
+  more, ask what they'd like to add or change.
 
 CURRENT STATE:
 - Industry: ${snap.company.industry ? industryLabel(snap.company.industry) || snap.company.industry : "not yet set"}${snap.company.industryOther ? ` (${snap.company.industryOther})` : ""}
@@ -698,8 +843,17 @@ correction like that — it reads like you weren't listening.`;
               patch[key] = val.trim();
             }
             if (Object.keys(patch).length === 0) return { updated: [] };
+            const before = await t.selectOne(schema.companySettings);
             await t.update(schema.companySettings, patch);
-            return { updated: Object.keys(patch) };
+            // Terminology changed? Re-term every seeded notification so the
+            // customer and the team read the tenant's own words, not ours.
+            let retermed = 0;
+            const nounKeys = ["workerNoun", "workerNounPlural", "customerNoun", "customerNounPlural", "jobNoun", "jobNounPlural"] as const;
+            if (before && nounKeys.some((k) => k in patch)) {
+              const after = { ...before, ...patch } as typeof before;
+              retermed = await applyTerminology(cid, before, after).catch(() => 0);
+            }
+            return { updated: Object.keys(patch), ...(retermed ? { notificationsUpdated: retermed } : {}) };
           },
         }),
         rescan_website: tool({
@@ -775,6 +929,7 @@ correction like that — it reads like you weren't listening.`;
             kind: z.enum(["service", "product"]).optional(),
           }),
           execute: async (input) => {
+            if (input.category) await ensureFormCategories(cid, [input.category]);
             const [row] = await t.insert(schema.catalogItems, {
               kind: input.kind ?? "service",
               name: input.name.slice(0, 200),
@@ -824,7 +979,12 @@ correction like that — it reads like you weren't listening.`;
             }
             if (!saved.length) return { saved: [] };
             await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
-            return { saved };
+            // The user count IS the plan: put it on the subscription right away.
+            let seats: number | undefined;
+            if (typeof input.technicianCount === "number" && input.technicianCount > 0) {
+              seats = (await setSeats(cid, input.technicianCount).catch(() => ({ seats: undefined }))).seats;
+            }
+            return { saved, ...(seats ? { planSeats: seats, note: `Plan set to ${seats} user${seats === 1 ? "" : "s"}; first month free.` } : {}) };
           },
         }),
         save_icp_qualifying_answer: tool({
@@ -1019,14 +1179,52 @@ correction like that — it reads like you weren't listening.`;
         // which is exactly the "run-on sentence, no spacing" look this was
         // reported as. Treat every text-start after the first as a new
         // paragraph so step boundaries always render as a clean break.
+        //
+        // Seen live (2026-10-16): the model asked "What's the best phone
+        // number?", called update_brand_profile, then asked the same thing
+        // again in the next step, so the user saw the question twice. The
+        // first segment of a turn streams live; every later segment (the
+        // ones after a tool call) is buffered to its text-end and dropped if
+        // it repeats a question already shown this turn.
         let textSegments = 0;
+        const shown: string[] = [];
+        let buffer: string | null = null;
+        const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+        const isRepeat = (t: string) => {
+          const n = norm(t);
+          if (!n) return true;
+          return shown.some((prev) => {
+            if (prev === n) return true;
+            // same question reworded: most of its words already appeared
+            const words = n.split(" ").filter((w) => w.length > 3);
+            if (words.length < 4) return false;
+            const prevSet = new Set(prev.split(" "));
+            return words.filter((w) => prevSet.has(w)).length / words.length >= 0.6;
+          });
+        };
         try {
           for await (const part of result.fullStream) {
             if (part.type === "text-start") {
               textSegments++;
-              if (textSegments > 1) await stream.writeSSE({ event: "delta", data: "\n\n" });
+              buffer = textSegments > 1 ? "" : null;
+              if (buffer === null) shown.push("");
             } else if (part.type === "text-delta") {
-              await stream.writeSSE({ event: "delta", data: part.text });
+              if (buffer === null) {
+                shown[shown.length - 1] += part.text;
+                await stream.writeSSE({ event: "delta", data: part.text });
+              } else {
+                buffer += part.text;
+              }
+            } else if (part.type === "text-end") {
+              if (buffer === null) {
+                shown[shown.length - 1] = norm(shown[shown.length - 1] ?? "");
+              } else {
+                if (!isRepeat(buffer)) {
+                  shown.push(norm(buffer));
+                  await stream.writeSSE({ event: "delta", data: "\n\n" + buffer.trim() });
+                }
+                buffer = null;
+              }
             } else if (part.type === "tool-result") {
               await stream.writeSSE({
                 event: "tool",

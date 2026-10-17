@@ -224,6 +224,7 @@ export default function IntakeForm() {
         <Field key={f.id} label={f.label} required={req}>
           <AddressAutocomplete
             source="public"
+            form={{ companyId, slug }}
             theme="light"
             value={v[f.key] || ""}
             inputClassName={inputCls}

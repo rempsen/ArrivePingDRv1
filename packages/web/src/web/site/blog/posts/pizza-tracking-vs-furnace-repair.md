@@ -54,7 +54,7 @@ The gap between the “pizza experience” and the “furnace experience” is c
 
 Embracing transparency isn’t just about being “nice” to customers; it’s a competitive necessity. Companies that provide real-time visibility tend to see higher margins, lower labor costs, and higher customer lifetime value.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ### References
 

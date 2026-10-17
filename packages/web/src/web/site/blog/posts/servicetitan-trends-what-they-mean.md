@@ -222,7 +222,7 @@ The contractors winning in 2025 are not ripping out their ServiceTitan or QuickB
 
 ArrivePing by NVC360 launches in November 2026. It gives your team a live map of technicians, automatic client ETAs, and a tracking page your customers can open from a text.
 
-See how ArrivePing works for your team: [book a demo](https://arriveping.com/#book-a-demo).
+See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ---
 

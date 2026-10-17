@@ -26,7 +26,7 @@ import {
   companyCount,
   type NotifySummary,
 } from "../lib/notify-summary";
-import { C, R } from "../lib/theme";
+import { C, R, FORM } from "../lib/theme";
 import { Button } from "../components/ui";
 import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../components/company-alert";
 
@@ -386,7 +386,7 @@ export default function PickCompany() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  scroll: { padding: 20, paddingTop: 28, gap: 22 },
+  scroll: { ...FORM, padding: 20, paddingTop: 28, gap: 22 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 8 },
   head: { gap: 8 },
   iconWrap: {

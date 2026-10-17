@@ -24,7 +24,8 @@ import { AttachmentManager } from "../../components/attachment-manager";
 import { CustomFieldsForm } from "../../components/custom-fields";
 import { TechShifts } from "../../components/tech-shifts";
 import { WorkOrderModal } from "../../components/work-order-modal";
-import { Star, Phone, Mail, Truck, Plus, Trash2, UserPlus, X, Camera, Wrench, Users, ShieldCheck, KeyRound, ClipboardList } from "lucide-react";
+import { Star, Phone, Mail, Truck, Plus, Trash2, UserPlus, X, Camera, Wrench, Users, ShieldCheck, KeyRound, ClipboardList, UserMinus, UserCheck, ChevronDown } from "lucide-react";
+import { DeactivateDialog, ReactivateDialog } from "../../components/deactivate-dialog";
 import { TechAvatar } from "../../components/tech-avatar";
 import { InternalTeamTab, RolesPermissionsTab } from "./team-tabs";
 import { ImportMenu } from "../../components/import-menu";
@@ -73,6 +74,9 @@ function FieldStaffTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [delId, setDelId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [deactivate, setDeactivate] = useState<{ userId: string; name: string } | null>(null);
+  const [reactivate, setReactivate] = useState<{ userId: string; name: string } | null>(null);
+  const [showDeactivated, setShowDeactivated] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "rating" | "jobs">("name");
   const [form, setForm] = useState({
@@ -149,8 +153,14 @@ function FieldStaffTab() {
   });
 
   if (riders.isLoading) return <FullLoader label="Loading technicians…" />;
-  let list = riders.data?.riders ?? [];
+  const allRiders = (riders.data?.riders ?? []) as any[];
+  // Deactivated people keep their profile for history but live in their own
+  // collapsed group below, not in the working roster.
+  const deactivated = allRiders.filter((r: any) => r.membershipStatus === "disabled");
+  let list = allRiders.filter((r: any) => r.membershipStatus !== "disabled");
   if (statusFilter !== "all") list = list.filter((r: any) => r.status === statusFilter);
+  const teammatesFor = (userId: string) =>
+    allRiders.filter((r: any) => r.membershipStatus !== "disabled" && r.userId !== userId && r.approval === "active").map((r: any) => ({ userId: r.userId, name: r.name ?? "" }));
   list = [...list].sort((a: any, b: any) => {
     if (sortBy === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
     if (sortBy === "jobs") return (b.completedJobs ?? 0) - (a.completedJobs ?? 0);
@@ -229,13 +239,22 @@ function FieldStaffTab() {
                     account lives under Internal Team, so no delete button —
                     turning the setting off is how they leave this list. */}
                 {!r.isOfficeStaff && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDelId(r.id); }}
-                    title="Remove technician"
-                    className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-lg text-slate-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeactivate({ userId: r.userId, name: r.name ?? "" }); }}
+                      title="Deactivate (keeps history; can be reactivated)"
+                      className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 transition hover:bg-amber-warn/10 hover:text-amber-warn"
+                    >
+                      <UserMinus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDelId(r.id); }}
+                      title="Remove technician"
+                      className="grid h-7 w-7 place-items-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 )}
                 <div className="flex items-center gap-3">
                   <TechAvatar
@@ -322,6 +341,52 @@ function FieldStaffTab() {
           })}
         </div>
       )}
+
+      {deactivated.length > 0 && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setShowDeactivated((v) => !v)}
+            className="flex w-full items-center justify-between rounded-xl border border-white/5 bg-ink-2 px-4 py-3 text-left text-sm font-semibold text-slate-300 hover:bg-white/5"
+            aria-expanded={showDeactivated}
+          >
+            <span className="flex items-center gap-2">
+              <UserMinus className="h-4 w-4 text-slate-500" /> Deactivated ({deactivated.length})
+            </span>
+            <ChevronDown className={`h-4 w-4 transition ${showDeactivated ? "rotate-180" : ""}`} />
+          </button>
+          {showDeactivated && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {deactivated.map((r: any) => (
+                <div key={r.id} className="nvc-card flex items-center justify-between gap-3 p-4 opacity-80">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-white">{r.name}</p>
+                    <p className="text-xs text-slate-500">
+                      Deactivated {r.deactivatedAt ? fmtDateShort(r.deactivatedAt) : ""}
+                      {r.email ? ` · ${r.email}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReactivate({ userId: r.userId, name: r.name ?? "" })}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-xs font-semibold text-white hover:bg-white/5"
+                  >
+                    <UserCheck className="h-3.5 w-3.5" /> Reactivate
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <DeactivateDialog
+        userId={deactivate?.userId ?? null}
+        name={deactivate?.name ?? ""}
+        teammates={deactivate ? teammatesFor(deactivate.userId) : []}
+        onClose={() => setDeactivate(null)}
+      />
+      <ReactivateDialog userId={reactivate?.userId ?? null} name={reactivate?.name ?? ""} onClose={() => setReactivate(null)} />
 
       {/* add modal */}
       <Modal

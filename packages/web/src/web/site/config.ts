@@ -15,14 +15,15 @@ export const brand = {
   tagline: "Appointment arrivals your customers can actually plan around.",
   logoDark: "/arriveping-logo-dark.png?v=3", // navy wordmark for light surfaces
   logoLight: "/arriveping-logo-light.png?v=3", // white wordmark for dark surfaces
-  icon: "/apple-touch-icon.png?v=3", // square navy "AP" + ping rings mark, full-bleed — used as a badge
-  watermark: "/arriveping-icon-dark.png?v=3", // white "AP" on navy — ghosted behind the closing section
+  icon: "/apple-touch-icon.png?v=4", // square navy "AP" + ping rings mark, full-bleed — used as a badge
+  watermark: "/arriveping-icon-dark.png?v=4", // white "AP" on navy — ghosted behind the closing section
   contactEmail: "contact@nvc360.com",
   launch: "Launching November 2026",
   urls: {
     signIn: "/sign-in",
     getStarted: "/get-started",
-    demo: "/#book-a-demo",
+    signUp: "/get-started",
+    trial: "/#free-trial",
     product: "/#product",
     how: "/#how-it-works",
     who: "/#who-its-for",
@@ -39,6 +40,7 @@ export const nav = [
   { label: "Who it's for", href: brand.urls.who },
   { label: "Pricing", href: brand.urls.pricing },
   { label: "Blog", href: "/blog" },
+  { label: "Support", href: "/support" },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -94,9 +96,9 @@ export const hero = {
   title: "The right tech, at the door, right when you said.",
   body:
     "ArrivePing shows your whole team live, sends each job to the closest qualified technician, and keeps your customer updated with a live ETA. No more calls asking where the technician is.",
-  primary: { label: "Book a demo", href: brand.urls.demo },
+  primary: { label: "Sign up free", href: brand.urls.signUp },
   secondary: { label: "See how it works", href: brand.urls.how },
-  fine: "No app for customers · Technicians use the ArrivePing mobile app · Up and running in hours",
+  fine: "30 days free, as many users as you like · No charge until day 30 · Cancel any time",
   feedLabel: "One job, start to finish",
   film: {
     large: "/media/site-hero-film-1600.mp4",
@@ -360,7 +362,7 @@ export const pricing = {
       price: "$49",
       unit: "per month",
       features: ["Workflow set up for how your team works", "Catalog pre-loaded with your services and parts", "Operating the same day"],
-      cta: { label: "Get started", href: brand.urls.getStarted },
+      cta: { label: "Sign up free", href: brand.urls.signUp },
     },
     {
       name: "Growing team",
@@ -368,7 +370,7 @@ export const pricing = {
       price: "$30",
       unit: "per added driver / month",
       features: ["Everything in Starter", "Dispatcher license included", "One simple rate for drivers 3–29", "Add or remove drivers month to month"],
-      cta: { label: "Book a demo", href: brand.urls.demo },
+      cta: { label: "Sign up free", href: brand.urls.signUp },
       featured: true,
     },
     {
@@ -377,7 +379,7 @@ export const pricing = {
       price: "$25",
       unit: "per driver / month from driver 30",
       features: ["Everything in Growing team", "Dispatcher license included", "Custom integrations with your systems", "Live onboarding with our team"],
-      cta: { label: "Talk to sales", href: brand.urls.demo },
+      cta: { label: "Sign up free", href: brand.urls.signUp },
     },
   ],
 } as const;
@@ -419,7 +421,7 @@ export const faqs = [
   },
   {
     q: "Does it replace our scheduling or invoicing tools?",
-    a: "ArrivePing includes scheduling, dispatch, work orders and invoicing, but you can start with arrivals and customer updates alone. We will walk through your current tools at the demo.",
+    a: "ArrivePing includes scheduling, dispatch, work orders and invoicing, but you can start with arrivals and customer updates alone. Your 30-day trial is the walkthrough: sign up, and the setup agent builds your workspace from your website in about an hour.",
   },
   {
     q: "How is it priced?",
@@ -429,41 +431,17 @@ export const faqs = [
 
 export const closing = {
   title: "Give your team clarity — and your customers a better arrival experience.",
-  body: "Tell us a little about your team and we will set up a 30-minute walkthrough.",
-  form: {
-    title: "Book a demo",
-    fields: {
-      name: "Your name",
-      email: "Work email",
-      company: "Company",
-      industry: "Industry",
-      industryOther: "Your industry",
-      teamSize: "Field team size (optional)",
-    },
-    teamSizes: ["1–4", "5–14", "15–49", "50+"],
-    // Our 18 ICPs — same names as the signup dropdown (services/industry-presets.ts, core + outlier tiers).
-    industries: [
-      "Childcare & Babysitting",
-      "Commercial Building Maintenance Contractor",
-      "Concrete & Foundation Repair",
-      "Design-Build Renovations & Additions",
-      "Electrical",
-      "Equipment & Tool Rental",
-      "Fire & Flood Restoration",
-      "Flooring",
-      "Garage Doors",
-      "Home Building & Development",
-      "Home Renovation & General Contracting",
-      "HVAC & Plumbing",
-      "Landscaping & Snow Removal",
-      "Painting & Decorating",
-      "Property Manager — Maintenance Operations",
-      "Roofing, Siding & Exteriors",
-      "Sports Clubs & Academies",
-      "Tree Care & Arborist Services",
+  body: "Sign up, give us your website, and the setup agent builds your workspace while you watch. Thirty days free, as many users as you like, and nothing charged until day 30.",
+  trial: {
+    title: "Start your 30-day free trial",
+    points: [
+      "As many users as you like, for the whole trial",
+      "Card on file, nothing charged for 30 days",
+      "Cancel any time before day 30 and you're never billed",
+      "After that, from $49 a month; drivers at the published rates",
     ],
-    otherIndustry: "Other",
-    submit: "Request a demo",
+    cta: "Sign up free",
+    fine: "Set up in about an hour. No sales call needed.",
   },
 };
 
@@ -513,16 +491,27 @@ export const footer = {
       links: [
         { label: "About", href: "/about" },
         { label: "Blog", href: "/blog" },
-        { label: "Book a demo", href: brand.urls.demo },
+        { label: "Sign up free", href: brand.urls.signUp },
         { label: "Sign in", href: brand.urls.signIn },
         { label: brand.contactEmail, href: `mailto:${brand.contactEmail}` },
+      ],
+    },
+    {
+      heading: "Support",
+      links: [
+        { label: "Help Center", href: "/support" },
+        { label: "Get started", href: "/support#get-started" },
+        { label: "Technician app", href: "/support#technician-app" },
+        { label: "Billing & plans", href: "/support#billing" },
+        { label: "Delete your account", href: "/support/delete-your-account" },
+        { label: "Contact support", href: "mailto:support@nvc360.com" },
       ],
     },
     {
       heading: "Legal",
       links: [
         { label: "Privacy Policy", href: brand.urls.privacy },
-        { label: "Terms & Conditions", href: brand.urls.terms },
+        { label: "Terms of Service", href: brand.urls.terms },
       ],
     },
   ],

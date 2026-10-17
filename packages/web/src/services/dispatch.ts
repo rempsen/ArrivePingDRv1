@@ -187,6 +187,7 @@ export const TEMPLATE_VARS: { key: keyof Vars; label: string }[] = [
   { key: "jobNumber", label: "Job number" },
   { key: "service", label: "Service name" },
   { key: "techName", label: "Technician name" },
+  { key: "workerNoun", label: "Tenant's word for a technician (e.g. \"Consultant\")" },
   { key: "address", label: "Job address" },
   { key: "when", label: "Scheduled date/time" },
   { key: "eta", label: "ETA (minutes)" },
