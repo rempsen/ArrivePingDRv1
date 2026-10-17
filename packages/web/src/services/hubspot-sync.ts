@@ -246,7 +246,7 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
   ]);
   const userById = new Map(users.map((u) => [u.id, u]));
   const staff = members.filter((m) => m.role !== "customer" && m.status !== "removed");
-  const drivers = riders.filter((r) => r.approval === "active").length;
+  const drivers = riders.filter((r) => r.approval === "active" && !r.isSample).length;
   const office = staff.filter((m) => m.role !== "rider").length;
   const seats = Math.max(co.billingSeats, 0);
   const amount = monthlyPrice(Math.max(seats, 1)).total;
@@ -289,6 +289,7 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
   for (const m of staff) {
     const u = userById.get(m.userId);
     if (!u?.email) continue;
+    if (u.isSample) continue; // sample-day people are fictional
     // Someone who deleted their account must not be re-created as a contact.
     if (u.role === "deleted" || u.email.endsWith("@anon.arriveping.com")) continue;
     const [firstname, lastname] = splitName(u);

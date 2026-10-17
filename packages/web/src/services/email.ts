@@ -5,6 +5,7 @@ import { fmtInZone } from "../shared/tz";
 import { pickSender, pickRetrySender, type SenderIdentity } from "./sender";
 import { verifiedDomainsForCompany } from "./email-domains";
 import { logoDims, contrastText } from "./email-render";
+import { isUndeliverableEmail } from "../shared/sample-contact";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -29,7 +30,13 @@ interface SendEmailOptions {
   attachments?: EmailAttachment[];
 }
 
-export async function sendEmail({ to, subject, html, text, from, replyTo, attachments }: SendEmailOptions) {
+export async function sendEmail({ to: toIn, subject, html, text, from, replyTo, attachments }: SendEmailOptions) {
+  // Sample-day people have .invalid addresses; drop them before anything else.
+  const to = (Array.isArray(toIn) ? toIn : [toIn]).filter((a) => !isUndeliverableEmail(a));
+  if (!to.length) {
+    console.log(`[email:skip] sample/undeliverable recipient ${String(toIn)}`);
+    return { ok: false, skipped: true, error: "sample contact" };
+  }
   if (!resend) {
     console.log(`[email:skipped no RESEND_API_KEY] to=${to} subject="${subject}"`);
     return { ok: false, skipped: true };

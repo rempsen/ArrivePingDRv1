@@ -708,8 +708,9 @@ export const DATASET_COLUMNS: Record<string, { key: string; label: string; kind?
 
 export async function loadDataset(dataset: string, t: TenantDb): Promise<Record<string, any>[]> {
   const cid = t.companyId;
+  // Sample-day rows (services/sample-day.ts) are never exported.
   if (dataset === "work-orders") {
-    const bs = await t.select(schema.bookings);
+    const bs = (await t.select(schema.bookings)).filter((b) => !b.isSample);
     return Promise.all(bs.map(async (b) => {
       const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
       const [cu] = await sdb.select().from(schema.user).where(eq(schema.user.id, b.customerId));
@@ -726,18 +727,19 @@ export async function loadDataset(dataset: string, t: TenantDb): Promise<Record<
     }));
   }
   if (dataset === "technicians") {
-    const ts = await t.select(schema.riders);
+    const ts = (await t.select(schema.riders)).filter((r) => !r.isSample);
     return Promise.all(ts.map(async (tr) => {
       const [ru] = await sdb.select().from(schema.user).where(eq(schema.user.id, tr.userId));
       return { id: tr.id, name: ru?.name ?? "", email: ru?.email ?? "", phone: tr.phone || ru?.phone || "", vehicle: tr.vehicle, skillClass: tr.skillClass, skills: tr.skills, status: tr.status, rating: tr.rating, completedJobs: tr.completedJobs };
     }));
   }
   if (dataset === "clients") {
-    const us = (await usersForCompany(cid)).filter((u) => u.role === "customer");
+    const us = (await usersForCompany(cid)).filter((u) => u.role === "customer" && !u.isSample);
     return us.map((u) => ({ id: u.id, name: u.name, email: u.email, phone: u.phone, createdAt: u.createdAt }));
   }
   if (dataset === "invoices") {
-    const inv = await t.select(schema.invoices);
+    const sampleUsers = new Set((await usersForCompany(cid)).filter((u) => u.isSample).map((u) => u.id));
+    const inv = (await t.select(schema.invoices)).filter((i) => !sampleUsers.has(i.customerId));
     return inv.map((i) => ({ number: i.number, amount: i.amount, tax: i.tax, total: i.total, status: i.status, method: i.method, paidAt: i.paidAt, createdAt: i.createdAt }));
   }
   return [];

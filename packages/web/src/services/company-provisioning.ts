@@ -51,6 +51,7 @@ import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-cata
 import { scoutStarterCatalog, scoutStarterOptionCatalog } from "./catalog-scout";
 import { saveSiteCrawl } from "./site-crawl";
 import { buildExcerpts } from "./brand-scout";
+import { seedSampleDay } from "./sample-day";
 
 void _jsonBody; // (import kept intentionally unused-safe; see note above)
 
@@ -460,6 +461,8 @@ export interface ProvisionResult {
     notificationCopyBranded: number;
     /** Whether the raw website crawl was persisted to site_crawls. */
     crawlSaved: boolean;
+    /** The sample day (services/sample-day.ts) was laid out. */
+    sampleDay: boolean;
   };
 }
 
@@ -900,6 +903,20 @@ export async function provisionCompany(
     });
   }
 
+  // 3b) the sample day: three sample technicians, six sample customers and a
+  //     day of jobs, so the Guide has something real to point at and the
+  //     board isn't empty on first login. Every row is flagged is_sample and
+  //     can never message anyone; the admin clears it from the banner.
+  //     Best-effort: signup must never fail because of it.
+  let sampleDay = false;
+  if (process.env.SAMPLE_DAY !== "off") {
+    try {
+      sampleDay = (await seedSampleDay(slug)).seeded;
+    } catch (e) {
+      console.error("[provisioning] sample day seeding failed", e);
+    }
+  }
+
   // 4) auto-issue this tenant's unique, full-scope secret API key. Locked to
   //    this companyId — every read/write through it can only ever touch this
   //    one tenant. Raw key shown ONCE (caller must display/store it now).
@@ -941,6 +958,7 @@ export async function provisionCompany(
       optionCategories: optionCategoriesSeeded,
       notificationCopyBranded,
       crawlSaved,
+      sampleDay,
     },
   };
 }
