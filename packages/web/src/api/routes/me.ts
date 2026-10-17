@@ -141,16 +141,29 @@ export const meRoutes = new Hono<AppEnv>()
     const companyId = (c.get("companyId") as string) ?? "default";
     const patch = c.req.valid("json");
     const t = tdb(companyId);
-    const m = await t.selectOne(schema.memberships, eq(schema.memberships.userId, me.id));
-    if (!m) return c.json({ state: mergeOnboarding(parseOnboarding(null), patch), persisted: false });
-    const next = mergeOnboarding(parseOnboarding(m.onboarding), patch);
-    const text = JSON.stringify(next);
-    if (text.length > ONBOARDING_MAX_BYTES) return c.json({ message: "Onboarding record too large" }, 413);
-    await t.update(
-      schema.memberships,
-      { onboarding: text, updatedAt: new Date() },
-      eq(schema.memberships.id, m.id),
-    );
+    // Read, merge and write under a row lock, so two overlapping saves (finish
+    // the Welcome, then exit a chapter a moment later) can't both read the old
+    // record and have the second write drop the first one's changes.
+    const out = await t.transaction(async (tx) => {
+      const [m] = await tx
+        .select()
+        .from(schema.memberships)
+        .where(t.scope(schema.memberships, eq(schema.memberships.userId, me.id)))
+        .limit(1)
+        .for("update");
+      if (!m) return { next: mergeOnboarding(parseOnboarding(null), patch), persisted: false as const };
+      const next = mergeOnboarding(parseOnboarding(m.onboarding), patch);
+      const text = JSON.stringify(next);
+      if (text.length > ONBOARDING_MAX_BYTES) return { tooLarge: true as const };
+      await tx
+        .update(schema.memberships)
+        .set({ onboarding: text, updatedAt: new Date() })
+        .where(eq(schema.memberships.id, m.id));
+      return { next, persisted: true as const };
+    });
+    if ("tooLarge" in out) return c.json({ message: "Onboarding record too large" }, 413);
+    const { next } = out;
+    if (!out.persisted) return c.json({ state: next, persisted: false });
     if (patch.welcomeDoneAt) {
       capture("guide.welcome_completed", me.id, { companyId, persona: next.persona, goal: next.goal, teamSize: next.teamSize });
     }

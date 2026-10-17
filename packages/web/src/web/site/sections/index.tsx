@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { audiences, brand, chapters, closing, faqs, monthlyPrice, pricing, stats, stories, story } from "../config";
 import { MediaSlot } from "../components/MediaSlot";
+import { ContactAsk } from "../components/ContactAsk";
 import { useAnchorNav } from "../components/SiteHeader";
 import { usePlayback } from "../motion/playback";
 import { scrollToAnchor, useScrollspy } from "../motion/use-scrollspy";
@@ -346,6 +347,7 @@ export function ClosingCTA() {
               {t.cta}
             </a>
             <p className="small trial-card__fine">{t.fine}</p>
+            <ContactAsk />
           </div>
         </div>
       </div>

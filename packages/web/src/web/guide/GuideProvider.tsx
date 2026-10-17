@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCustomerNoun, useJobNoun, useWorkerNoun } from "../lib/use-brand";
 import { useAuth } from "../hooks/use-auth";
 import { apiFetch, apiHeaders } from "../lib/api";
-import { EMPTY_ONBOARDING, mergeOnboarding, type OnboardingPatch, type OnboardingState } from "../../shared/onboarding";
+import { EMPTY_ONBOARDING, mergeOnboarding, mergePatches, parseOnboarding, type OnboardingPatch, type OnboardingState } from "../../shared/onboarding";
 import { chapterById, CHAPTERS, type Chapter, type Terms } from "./registry";
 
 /**
@@ -36,9 +36,40 @@ interface GuideContextValue {
 const GuideContext = createContext<GuideContextValue | null>(null);
 const QK = ["me", "onboarding"] as const;
 
-async function fetchState(): Promise<OnboardingState> {
+/**
+ * Someone with no membership at the acting company (a superadmin acting as a
+ * tenant) has nowhere to store progress on the server, so it is kept in this
+ * browser instead. Without it the Welcome sheet would reopen on every load.
+ */
+/** The company being acted as (the superadmin switcher), or "home". Progress is per person per company. */
+function activeCompany(): string {
+  try {
+    return window.localStorage.getItem("active_company") || "home";
+  } catch {
+    return "home";
+  }
+}
+const localKey = (userId: string) => `ap.guide.onboarding.${userId}.${activeCompany()}`;
+function readLocal(userId: string): OnboardingState {
+  try {
+    return parseOnboarding(window.localStorage.getItem(localKey(userId)));
+  } catch {
+    return { ...EMPTY_ONBOARDING, tours: {} };
+  }
+}
+function writeLocal(userId: string, state: OnboardingState) {
+  try {
+    window.localStorage.setItem(localKey(userId), JSON.stringify(state));
+  } catch {
+    /* private mode / storage full: progress is session-only */
+  }
+}
+
+async function fetchState(userId: string, persistedRef: { current: boolean | null }): Promise<OnboardingState> {
   const res = await apiFetch("/api/me/onboarding", { headers: apiHeaders() });
-  return ((await res.json()) as { state: OnboardingState }).state;
+  const body = (await res.json()) as { state: OnboardingState; persisted?: boolean };
+  persistedRef.current = body.persisted !== false;
+  return body.persisted === false ? readLocal(userId) : body.state;
 }
 
 export function GuideProvider({ children }: { children: ReactNode }) {
@@ -60,7 +91,15 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   );
 
   const qc = useQueryClient();
-  const stateQ = useQuery({ queryKey: [...QK, userId], queryFn: fetchState, staleTime: 60_000, enabled: userId !== "anon" });
+  const persistedRef = useRef<boolean | null>(null);
+  // Keyed by company too, so switching tenants never shows another tenant's progress.
+  const company = activeCompany();
+  const stateQ = useQuery({
+    queryKey: [...QK, userId, company],
+    queryFn: () => fetchState(userId, persistedRef),
+    staleTime: 60_000,
+    enabled: userId !== "anon",
+  });
   const state = stateQ.data ?? null;
   const [activeChapterId, setActive] = useState<string | null>(null);
   const activeRef = useRef<string | null>(null);
@@ -72,23 +111,47 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     return out;
   }, [state]);
 
+  // Changes not yet confirmed by the server. Every save sends all of them, so
+  // a save that failed is retried by the next one instead of being lost, and
+  // the server's reply never wipes a change that is still on its way.
+  const pendingRef = useRef<OnboardingPatch | null>(null);
+  const seqRef = useRef(0);
+
   const save = useCallback(
     async (patch: OnboardingPatch) => {
-      const key = [...QK, userId];
-      qc.setQueryData<OnboardingState>(key, (cur) => mergeOnboarding(cur ?? EMPTY_ONBOARDING, patch));
+      const key = [...QK, userId, company];
+      const local = qc.setQueryData<OnboardingState>(key, (cur) => mergeOnboarding(cur ?? EMPTY_ONBOARDING, patch));
+      if (persistedRef.current === false) {
+        if (local) writeLocal(userId, local);
+        return;
+      }
+      pendingRef.current = mergePatches(pendingRef.current, patch);
+      const sending = pendingRef.current;
+      const seq = ++seqRef.current;
       try {
         const res = await apiFetch("/api/me/onboarding", {
           method: "PATCH",
           headers: { ...apiHeaders(), "content-type": "application/json" },
-          body: JSON.stringify(patch),
+          body: JSON.stringify(sending),
         });
-        const body = (await res.json()) as { state: OnboardingState };
-        qc.setQueryData(key, body.state);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { state: OnboardingState; persisted?: boolean };
+        // A newer save was sent after this one and carries everything this one
+        // did: its reply is the one to trust, even if it arrives first.
+        if (seq !== seqRef.current) return;
+        pendingRef.current = null;
+        const confirmed = body.state;
+        qc.setQueryData(key, confirmed);
+        if (body.persisted === false) {
+          persistedRef.current = false;
+          pendingRef.current = null;
+          writeLocal(userId, confirmed);
+        }
       } catch (e) {
-        console.warn("[guide] could not save progress", e);
+        console.warn("[guide] could not save progress; will retry with the next save", e);
       }
     },
-    [qc, userId],
+    [qc, userId, company],
   );
 
   const startChapter = useCallback((id: string) => {

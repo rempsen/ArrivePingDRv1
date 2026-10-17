@@ -136,6 +136,8 @@ export const CUSTOM_PROPERTIES: Record<"companies" | "contacts" | "deals", PropD
     { name: "arriveping_user_id", label: "ArrivePing user id", type: "string", fieldType: "text" },
     { name: "arriveping_role", label: "ArrivePing role", type: "string", fieldType: "text" },
     { name: "arriveping_member_status", label: "ArrivePing membership status", type: "string", fieldType: "text" },
+    // Set on contacts created from the website's "contact me" choice (services/contact-request.ts).
+    { name: "arriveping_lead_source", label: "ArrivePing lead source", type: "string", fieldType: "text" },
   ],
   deals: [{ name: "arriveping_company_id", label: "ArrivePing tenant id", type: "string", fieldType: "text" }],
 };
@@ -523,3 +525,9 @@ export async function sweepHubspotSync(): Promise<{ checked: number; pushed: num
   }
   return out;
 }
+
+/* ------------------------------------------------- shared with other pushes */
+// Low-level helpers reused by the marketing-site lead push (services/contact-request.ts),
+// so every HubSpot call shares one token, transport, retry and test stub.
+export { hs as hubspotRequest, nonEmpty as hubspotNonEmpty, ownerId as hubspotOwnerId };
+export type { HsObject as HubspotObject };
