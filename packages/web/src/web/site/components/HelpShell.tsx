@@ -8,6 +8,7 @@ import { rich } from "./LegalPage";
 import { usePageMeta } from "../seo/head";
 import type { ArticleBlock } from "../support/articles";
 import { support } from "../support/articles";
+import { SupportMessageForm } from "./SupportMessageForm";
 import "../site.css";
 
 /**
@@ -117,7 +118,7 @@ export function ContactCard({ compact = false }: { compact?: boolean }) {
         </a>
         . {support.response}
       </p>
-      <SlackButton />
+      <SupportMessageForm />
       <dl className="help-contact__facts">
         <div>
           <dt>Hours</dt>
@@ -159,57 +160,3 @@ export function ContactCard({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Official Slack mark (four-colour hash). Brand colours must not be altered. */
-function SlackMark() {
-  return (
-    <svg viewBox="0 0 122.8 122.8" aria-hidden="true" focusable="false">
-      <path
-        fill="#e01e5a"
-        d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"
-      />
-      <path
-        fill="#36c5f0"
-        d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z"
-      />
-      <path
-        fill="#2eb67d"
-        d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z"
-      />
-      <path
-        fill="#ecb22e"
-        d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z"
-      />
-    </svg>
-  );
-}
-
-/** "Message us on Slack" — opens the customer-support channel in a new tab. */
-function SlackButton() {
-  return (
-    <a
-      className="help-slack"
-      href={support.slackUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Message us on Slack (opens in a new tab)"
-    >
-      <span className="help-slack__mark">
-        <SlackMark />
-      </span>
-      <span className="help-slack__text">
-        <span className="help-slack__title">Message us on Slack</span>
-        <span className="help-slack__sub">Chat with our support team</span>
-      </span>
-      <svg className="help-slack__arrow" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-        <path
-          d="M7 13l6-6M8 7h5v5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </a>
-  );
-}
