@@ -443,6 +443,13 @@ export const closing = {
     cta: "Sign up free",
     fine: "Set up in about an hour. No sales call needed.",
   },
+  /** The "contact me" choice under the trial card (components/ContactAsk.tsx). */
+  contact: {
+    question: "Would you like to be contacted by an NVC360 associate?",
+    yesLede: "Leave a name and the best way to reach you. We'll get in touch within one business day.",
+    noNote: "No problem. Start your free trial above whenever you're ready.",
+    cta: "Contact me",
+  },
 };
 
 export const footer = {

@@ -1668,3 +1668,36 @@ export const deficiencies = pgTable(
     pollIdx: index("defic_poll_idx").on(t.companyId, t.updatedAt),
   }),
 );
+
+/**
+ * "Would you like to be contacted by an NVC360 associate?" — marketing-site
+ * leads from the homepage sign-up card. Global (not tenant-owned): the visitor
+ * has no account. RLS is enabled with no policy, so the tenant runtime role
+ * can't read it; only the system connection (`sdb`) touches this table.
+ */
+export const contactRequests = pgTable(
+  "contact_requests",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    email: text("email").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    company: text("company").notNull().default(""),
+    // where on the site it came from, e.g. "homepage"
+    source: text("source").notNull().default("homepage"),
+    // sales workflow: "new" until someone picks it up in HubSpot
+    status: text("status").notNull().default("new"),
+    hubspotContactId: text("hubspot_contact_id"),
+    // "pending" | "synced" | "skipped" (HubSpot not configured) | "failed"
+    hubspotStatus: text("hubspot_status").notNull().default("pending"),
+    hubspotError: text("hubspot_error").notNull().default(""),
+    // "pending" | "sent" | "skipped" | "failed"
+    emailStatus: text("email_status").notNull().default("pending"),
+    createdAt: now(),
+  },
+  (t) => ({
+    createdIdx: index("contact_requests_created_idx").on(t.createdAt),
+  }),
+);
