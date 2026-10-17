@@ -121,6 +121,11 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
     ? { name: co.name, email: co.contactEmail || "", phone: co.phone || "" }
     : null;
 
+  // Customers see the technician's location only while the tech is on the way
+  // to their appointment. From arrival on (on site, completed, cancelled) the
+  // link still shows the job, time and cost, but never where the tech is.
+  const shareLocation = EN_ROUTE_STATUSES.has(b.status);
+
   let tech: any = null;
   if (b.riderId) {
     const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
@@ -134,8 +139,10 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
         skillClass: r.skillClass,
         color: r.color,
         photoUrl: r.photoUrl,
-        lat: r.lat,
-        lng: r.lng,
+        // Live position only while the tech is travelling to this job; see
+        // `shareLocation` below.
+        lat: shareLocation ? r.lat : null,
+        lng: shareLocation ? r.lng : null,
       };
     }
   }
@@ -147,11 +154,13 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   latestRows.sort((a, z) => Number(z.createdAt) - Number(a.createdAt));
   const latest = latestRows[0];
 
-  const techLocation = latest
-    ? { lat: latest.lat, lng: latest.lng }
-    : tech?.lat
-      ? { lat: tech.lat, lng: tech.lng }
-      : null;
+  const techLocation = !shareLocation
+    ? null
+    : latest
+      ? { lat: latest.lat, lng: latest.lng }
+      : tech?.lat
+        ? { lat: tech.lat, lng: tech.lng }
+        : null;
 
   // Road-following route + live ETA while the tech is driving to the job.
   // `routeProvider` tells the client whether `route` traces real streets

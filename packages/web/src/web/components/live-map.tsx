@@ -163,6 +163,12 @@ export function LiveMap({
           lastEta.current = etaMins;
         }
       }
+    } else if (riderMarker.current) {
+      // Location withdrawn (e.g. the tech arrived): don't leave the last
+      // position on the customer's map.
+      riderMarker.current.remove();
+      riderMarker.current = null;
+      lastEta.current = undefined;
     }
 
     // Route line: only drawn from server-supplied road geometry. There is
