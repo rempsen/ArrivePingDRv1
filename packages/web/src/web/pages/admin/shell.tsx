@@ -37,6 +37,7 @@ import {
   Star,
   BellRing,
   Building2,
+  ChartNoAxesCombined,
   FileText,
   Rocket,
   Menu,
@@ -157,6 +158,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     to: "/admin/companies",
                     label: "Companies",
                     icon: Building2,
+                  },
+                  {
+                    to: "/admin/analytics",
+                    label: "Analytics",
+                    icon: ChartNoAxesCombined,
                   },
                   {
                     to: "/admin/mobile-release",

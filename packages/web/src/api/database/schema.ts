@@ -1084,6 +1084,7 @@ export const notificationDeliveries = pgTable("notification_deliveries", {
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("notifdeliv_company_idx").on(t.companyId),
+  createdIdx: index("notifdeliv_created_idx").on(t.createdAt), // platform analytics: deliveries per day
 }));
 
 /** Pending technician invites (invite-only onboarding). */
@@ -1290,6 +1291,10 @@ export const companies = pgTable("companies", {
   // Sample day state (services/sample-day.ts), JSON SampleDayState. NULL = never
   // seeded. Once cleared it keeps { clearedAt } so it is never re-seeded on its own.
   sampleData: text("sample_data"),
+  // NVC360's own, sales-demo and test tenants. Platform analytics leaves them
+  // out by default (services/platform-analytics) so demo traffic never reads
+  // as real usage; a superadmin flips it per tenant in Analytics → Tenants.
+  isInternal: boolean("is_internal").notNull().default(false),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
