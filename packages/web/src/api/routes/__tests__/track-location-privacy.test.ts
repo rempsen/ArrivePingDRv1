@@ -1,9 +1,11 @@
 /**
  * Location privacy on the PUBLIC tracking link — GET /api/track/:token.
  *
- * Product rule: the customer sees the technician's live location only while the
- * technician is on the way to their appointment. From arrival on, the link
- * still shows the job (title, time, price), but never where the tech is.
+ * Hard rule: the customer sees the technician's live location only after the
+ * technician has tapped "Start Driving" for THIS job (status "enroute"), and
+ * only until they arrive. Before that (assigned / accepted) and from arrival on,
+ * the link still shows the job (title, time, price), but never where the tech
+ * is, nor a live ETA or distance computed from it.
  *
  * Before this, buildSnapshot() returned the latest tracking ping (and the
  * rider's last lat/lng) whatever the job status, so the customer's map kept
@@ -63,12 +65,15 @@ async function seedJob(status: string) {
   await s.execute({
     sql: `INSERT INTO bookings
             (id, company_id, customer_id, service_id, title, status, assign_status,
-             scheduled_at, address, lat, lng, rider_id, price, public_token, finished_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+             scheduled_at, address, lat, lng, rider_id, price, public_token, finished_at,
+             eta_mins, eta_distance_km)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [
       JOB, CO, CUST, SVC, "Furnace repair", status, "assigned",
       Date.now() - 3_600_000, "1 Test St", 49.8951, -97.1384, RIDER, 250, TOKEN,
       status === "completed" ? Date.now() : null,
+      // A live ETA the ping handler would have stored from the tech's position.
+      7, 3.2,
     ],
   });
   await s.execute({
@@ -122,14 +127,17 @@ describe("GET /api/track/:token — technician location", () => {
     expect(snap.tech.lat).toBe(49.91);
   });
 
-  for (const status of ["arrived", "onsite", "in_progress", "paused", "completed", "cancelled"]) {
-    it(`hides it once the job is ${status}, but keeps the job details`, async () => {
+  for (const status of ["assigned", "accepted", "arrived", "onsite", "in_progress", "paused", "completed", "cancelled"]) {
+    it(`hides it while the job is ${status}, but keeps the job details`, async () => {
       await seedJob(status);
       const snap = await snapshot();
       expect(snap.techLocation).toBeNull();
       expect(snap.tech.lat).toBeNull();
       expect(snap.tech.lng).toBeNull();
       expect(snap.route ?? null).toBeNull();
+      // No live ETA or distance either: both are computed from the tech's position.
+      expect(snap.etaMins ?? null).toBeNull();
+      expect(snap.etaDistanceKm ?? null).toBeNull();
       // The rest of the page still works: who, what, when, how much.
       expect(snap.tech.name).toBe("Tess Tech");
       expect(snap.status).toBe(status);

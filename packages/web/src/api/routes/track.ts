@@ -4,7 +4,7 @@ import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, inArray } from "drizzle-orm";
 import { sendSms, trackingUrl } from "../../services/sms";
-import { tripEngine, EN_ROUTE_STATUSES } from "../../services/trip-engine";
+import { tripEngine } from "../../services/trip-engine";
 import { trackLimiter, trackWriteLimiter } from "../lib/rate-limit";
 import { streamSSE } from "hono/streaming";
 import { subscribeTrack, publishMsg } from "../../services/realtime";
@@ -121,10 +121,12 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
     ? { name: co.name, email: co.contactEmail || "", phone: co.phone || "" }
     : null;
 
-  // Customers see the technician's location only while the tech is on the way
-  // to their appointment. From arrival on (on site, completed, cancelled) the
-  // link still shows the job, time and cost, but never where the tech is.
-  const shareLocation = EN_ROUTE_STATUSES.has(b.status);
+  // HARD RULE: the customer sees the technician's location only after the tech
+  // has tapped "Start Driving" (status "enroute") for THIS job, and only until
+  // they arrive. Assigned/accepted jobs, on-site, completed and cancelled jobs
+  // still show the job, time and cost, but never where the tech is, nor
+  // anything derived from it (live ETA, distance, route).
+  const shareLocation = b.status === "enroute";
 
   let tech: any = null;
   if (b.riderId) {
@@ -172,7 +174,7 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
   let etaDistanceKm = b.etaDistanceKm ?? null;
   if (
     techLocation &&
-    EN_ROUTE_STATUSES.has(b.status) &&
+    shareLocation &&
     b.lat != null &&
     b.lng != null
   ) {
@@ -185,7 +187,10 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
       etaMins = snap.etaMins;
       etaDistanceKm = snap.distanceKm;
     }
-  } else if (!EN_ROUTE_STATUSES.has(b.status) && !PRE_DISPATCH_STATUSES.has(b.status)) {
+  } else if (!shareLocation && !PRE_DISPATCH_STATUSES.has(b.status)) {
+    // Assigned/accepted: any stored ETA was computed from the tech's live
+    // position (routes/tracking.ts), so it would leak where they are before
+    // they've set off.
     // Tech is on site (or the job is done): an ETA is meaningless now, and the
     // last driving ETA used to linger as a "3 min" badge on the van marker
     // next to a "Your technician has arrived!" card.
