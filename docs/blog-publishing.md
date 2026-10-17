@@ -90,8 +90,35 @@ The first three covers in this format were too alike: same angle, same warm gold
 | preferred-provider | woman, homeowner | right (device in bg) | front door, van arriving | dusk, warm | wide |
 | no-call-no-show | man 40s, homeowner | right | kitchen table, driveway through window | golden hour, warm | over-shoulder from left |
 | last-mile | woman 30s, homeowner | right | front porch, van on street | golden hour, warm | over-shoulder from left |
+| phone-vs-vehicle-gps-tracking | woman 30s, technician | left (into dash mount) | van cab, residential street | rainy overcast, cool desaturated | through open passenger door, subject right |
 
-Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left.
+Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left, and two van-cab shots in a row. Good next options: no person at all (trucks at a dock, a dispatcher's screen), night or fluorescent light, a man or an older technician, a construction site.
+
+## Why the format works, and what to add (researched 2026-10-17)
+
+The evidence behind the standard format, and four habits the research says to add. Strategy-level and technical work lives in `docs/seo-geo-strategy.md`.
+
+**What the evidence says**
+
+| Finding | Source | What it means for a post |
+|---|---|---|
+| Adding quotations (+41%), statistics (+31%) and cited sources (+28%) raised a page's visibility in generative-engine answers; keyword stuffing lowered it (−8%). Sources ranked 5th in search gained the most: +115% from citing sources, while the top-ranked source lost ground | [Aggarwal et al., "GEO: Generative Engine Optimization", KDD 2024](https://arxiv.org/abs/2311.09735) | A new, low-authority site benefits most from cited, quotable writing. Keep every number sourced, and quote the primary source's own words where they are short and strong |
+| Only 38% of pages cited in Google AI Overviews also rank in the top 10 for that query (863,000 keywords, early 2026), down from 76% in July 2025 | [Ahrefs via Search Engine Journal, 2026](https://www.searchenginejournal.com/google-ai-overview-citations-from-top-ranking-pages-drop-sharply/568637/) | A post can be cited before it ranks. Write for the exact sub-question an assistant fans out to, not only the head term |
+| AI Mode and AI Overviews use "query fan-out": several related searches across subtopics, which surfaces a wider set of pages | [Google Search Central](https://developers.google.com/search/docs/appearance/ai-features) | One specific question per post, with H2s phrased as the follow-up questions |
+| 28.3% of the 1,000 pages ChatGPT cited most had no organic keywords at all; educational pages were 19.4% of citations, blog posts 1.9% | [Ahrefs, Oct 2025](https://ahrefs.com/blog/chatgpts-most-cited-pages/) | Write reference pages (definitions, comparisons, how-tos), not company news |
+| 75% of pages cited by ChatGPT, Gemini and Perplexity were updated within the past year; 28% of "fresh" pages were older posts that had been refreshed | [Seer Interactive, July 2026](https://www.seerinteractive.com/insights/study-content-recencys-impact-on-ai-visibility-in-2026) | Re-check figures and bump `updated` when a post is genuinely revised; never bump it without a change |
+| Branded web mentions (0.66–0.71) and YouTube mentions (~0.74) correlate with AI visibility far more than backlinks or Domain Rating (≤0.33), across 75,000 brands | [Ahrefs, Dec 2025](https://ahrefs.com/blog/ai-brand-visibility-correlations/) | Correlation, not proof. Off-site mentions matter most for a new brand, so write posts others will quote, and say "ArrivePing by NVC360" plainly |
+| Google: no special schema or AI file is needed; "unique, non-commodity content" for visitors is the foundation | [Google Search Central](https://developers.google.com/search/docs/appearance/ai-features); [John Mueller, May 2025](https://developers.google.com/search/blog/2025/05/succeeding-in-ai-search) | Information gain beats volume. Every post needs something the other ten results don't have |
+| Microsoft Bing: descriptive headings, Q&A, tables, one-to-two-sentence self-contained answers; don't hide answers in tabs, images or PDFs | [Microsoft, Oct 2025](https://about.ads.microsoft.com/en/blog/post/october-2025/optimizing-your-content-for-inclusion-in-ai-search-answers) | Matches our format; add a comparison table where a choice is being made |
+
+**Add to every post from now on**
+
+1. **A comparison or decision table** whenever the reader is choosing between options.
+2. **One or two short direct quotes** from a primary source (a regulator, a study), in quotation marks, attributed in the sentence.
+3. **An entity line** in "How ArrivePing does this": "ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba," plus the origin fact from `/about` where it fits. It separates the brand from Arrive, Arrive Logistics and arrive.gg.
+4. **A "when not to choose us" paragraph.** Honest limits make the page safer to cite and match the comparison pages.
+
+**Topic selection for a new brand:** pick buyer questions where ArrivePing's real differentiators are the answer (phone-based tracking, auto-dispatch by distance and skill, the customer tracking page, Canada), rather than another "Uber effect" or 4-hour-window post.
 
 Checks before a pull request is opened:
 
