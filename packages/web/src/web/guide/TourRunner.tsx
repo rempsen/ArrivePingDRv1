@@ -50,7 +50,7 @@ export default function TourRunner({ chapter, terms, onFinish }: TourRunnerProps
           id: `${chapter.id}.${s.id}`,
           title: interpolate(s.title, terms),
           content: interpolate(s.body, terms),
-          data: { chapter: `Chapter ${chapter.number} · ${chapter.title}` },
+          data: { chapter: `Chapter ${chapter.number} · ${interpolate(chapter.title, terms)}` },
           target: anchor ? () => findAnchor(anchor) : "body",
           placement: anchor ? (s.placement ?? "auto") : "center",
           before: async () => {
@@ -60,6 +60,9 @@ export default function TourRunner({ chapter, terms, onFinish }: TourRunnerProps
               navigate(s.route);
             }
             if (mobile) setDrawer(Boolean(s.inNav));
+            if (anchor && s.open && !findAnchor(anchor)) {
+              (await waitForAnchor(s.open, 4000))?.click();
+            }
             if (anchor) await waitForAnchor(anchor, 4000);
           },
         } satisfies Step;
@@ -92,8 +95,11 @@ export default function TourRunner({ chapter, terms, onFinish }: TourRunnerProps
       if (data.type !== EVENTS.TOUR_END && data.type !== EVENTS.TOUR_STATUS) return;
       setDrawer(false);
       const skipped = data.status === STATUS.SKIPPED || data.action === ACTIONS.CLOSE || data.action === ACTIONS.SKIP;
+      // Back to where the user was; if that was a menu item that has since
+      // closed (e.g. the Guide menu), back to the Guide launcher instead.
       const el = returnFocusRef.current;
-      if (el && document.contains(el)) el.focus({ preventScroll: true });
+      const target = el && document.contains(el) && el !== document.body ? el : findAnchor("guide.button");
+      target?.focus({ preventScroll: true });
       onFinish(skipped ? "skipped" : "completed", data.index);
     }
   };

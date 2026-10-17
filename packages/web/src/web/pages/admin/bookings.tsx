@@ -281,6 +281,7 @@ export default function AdminWorkOrders() {
           <div className="flex items-center gap-2">
             <ExportMenu params={params} columns={facets.data?.columns ?? []} />
             <button
+              data-tour="jobs.new"
               onClick={() => setNewOpen(true)}
               className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-deep"
             >

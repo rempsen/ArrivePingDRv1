@@ -1066,7 +1066,7 @@ export function WorkOrderModal({
               <BtnGhost onClick={onClose}>Cancel</BtnGhost>
             )}
           </div>
-          <BtnPrimary onClick={submit} disabled={busy || deleting}>
+          <BtnPrimary onClick={submit} disabled={busy || deleting} data-tour={isEdit ? undefined : "wo.create"}>
             {busy
               ? (isEdit ? "Saving…" : "Creating…")
               : (isEdit ? "Save and Close" : `Create ${jobNoun}`)}
@@ -1078,6 +1078,7 @@ export function WorkOrderModal({
 
         {/* ── Core fields ── */}
         <Field
+          tour="wo.customer"
           label={customerNoun}
           hint={creatingCustomer ? `New ${customerNoun.toLowerCase()} — added to your ${customerNoun.toLowerCase()} list when saved` : undefined}
         >
@@ -1204,7 +1205,7 @@ export function WorkOrderModal({
           <input aria-label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title" className={inputCls} />
         </Field>
 
-        <Field label="Schedule">
+        <Field label="Schedule" tour="wo.schedule">
           <DateTimePicker
             value={scheduledAt}
             onChange={setScheduledAt}
@@ -1306,7 +1307,7 @@ export function WorkOrderModal({
         )}
 
         {/* ── Tech assignment (smart filtered) ───────────────────────── */}
-        <Field label={`Assign ${noun}`} hint="Optional — auto-dispatches">
+        <Field label={`Assign ${noun}`} hint="Optional — auto-dispatches" tour="wo.assign">
           {(() => {
             const allRiders: any[] = riders.data?.riders ?? [];
             const filterLower = techFilter.toLowerCase();

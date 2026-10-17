@@ -114,13 +114,16 @@ export function Field({
   label,
   children,
   hint,
+  tour,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: React.ReactNode;
+  /** Guide tour anchor id (see guide/anchors.ts). */
+  tour?: string;
 }) {
   return (
-    <label className="block">
+    <label className="block" data-tour={tour}>
       <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
         {label}
       </span>
