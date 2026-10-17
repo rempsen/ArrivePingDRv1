@@ -7,7 +7,7 @@
  * The in-memory database is shared with other test files, so every fixture
  * company here has its own industry and every query filters on it.
  */
-import { describe, it, expect, beforeAll, beforeEach } from "bun:test";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -122,6 +122,13 @@ beforeAll(async () => {
 });
 
 beforeEach(() => A._clearAnalyticsCache());
+
+// Other files share this database and count sample rows across every company
+// (sample-day.test.ts), so take this file's sample rows back out when done.
+afterAll(async () => {
+  await client.execute("DELETE FROM bookings WHERE company_id = 'acme-fx' AND is_sample");
+  await client.execute("DELETE FROM riders WHERE id = 'r-sample-fx'");
+});
 
 describe("headline", () => {
   it("counts the real companies only, against the period before", async () => {
