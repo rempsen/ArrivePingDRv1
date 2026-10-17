@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EMPTY_ONBOARDING, mergeOnboarding, parseOnboarding } from "../onboarding";
+import { EMPTY_ONBOARDING, mergeOnboarding, mergePatches, parseOnboarding } from "../onboarding";
 import { OnboardingPatchSchema } from "../onboarding-schema";
 
 const at = "2026-10-17T22:00:00.000Z";
@@ -29,5 +29,17 @@ describe("guide onboarding state", () => {
     expect(OnboardingPatchSchema.safeParse({ admin: true }).success).toBe(false);
     expect(OnboardingPatchSchema.safeParse({ tours: { "../x": { status: "completed", at } } }).success).toBe(false);
     expect(OnboardingPatchSchema.safeParse({ tours: { scheduler: { status: "done", at } } }).success).toBe(false);
+  });
+
+  test("unsent patches combine: nothing is dropped, completed stays completed", () => {
+    const a = mergePatches(null, { welcomeDoneAt: at, goal: "eta" });
+    const b = mergePatches(a, { tours: { scheduler: { status: "completed", at } } });
+    const c = mergePatches(b, { tours: { scheduler: { status: "skipped", at }, "create-job": { status: "skipped", at } } });
+    expect(c).toEqual({
+      welcomeDoneAt: at,
+      goal: "eta",
+      tours: { scheduler: { status: "completed", at }, "create-job": { status: "skipped", at } },
+    });
+    expect("v" in c).toBe(false);
   });
 });

@@ -57,5 +57,15 @@ export function mergeOnboarding(cur: OnboardingState, patch: OnboardingPatch): O
   return { ...cur, ...rest, v: 1, tours };
 }
 
+/**
+ * Combine two patches that have not reached the server yet into one, with the
+ * same rules as mergeOnboarding (later wins; a completed chapter stays completed).
+ */
+export function mergePatches(a: OnboardingPatch | null, b: OnboardingPatch): OnboardingPatch {
+  if (!a) return b;
+  const { v: _v, ...merged } = mergeOnboarding({ ...a, v: 1, tours: { ...a.tours } }, b);
+  return merged;
+}
+
 /** Hard cap on stored size — the record is small by design. */
 export const ONBOARDING_MAX_BYTES = 8 * 1024;
