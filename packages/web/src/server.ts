@@ -12,6 +12,7 @@ import "./services/reviews";
 import "./services/maintenance";
 import { sweepTimeTriggers } from "./services/automation";
 import { sweepDelays } from "./services/delay-watch";
+import { demoTick } from "./services/demo-refresh";
 import { log, captureException } from "./api/lib/logger";
 import { initRealtimeBus } from "./services/realtime";
 import { initRateLimitStore } from "./api/lib/rate-limit";
@@ -98,6 +99,15 @@ setInterval(() => {
 // nobody acts within the tenant's grace period.
 setInterval(() => {
   void oncePerTick("delay-sweep", sweepDelays);
+}, 60 * 1000);
+
+// Sales demo tenant (Prairie Comfort HVAC): keep its schedule filled from
+// yesterday through the next 7 days and move every job forward with the clock,
+// so a prospect never opens a board full of "running late" work. No-op unless
+// that tenant exists; DEMO_REFRESH=off disables it. See services/demo-refresh.ts.
+void oncePerTick("demo-refresh", () => demoTick({ tidy: true }));
+setInterval(() => {
+  void oncePerTick("demo-refresh", () => demoTick());
 }, 60 * 1000);
 
 // Auto-poll pending/verifying email sending domains and flip to verified.

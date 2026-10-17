@@ -26,6 +26,7 @@ import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
+import { demoHealth, demoStatus, demoTick, resolveDemoTenant } from "../../services/demo-refresh";
 import { audit } from "../lib/audit";
 import { ensureDefaultTenantKey } from "../lib/tenant-keys";
 import { scoutBrand } from "../../services/brand-scout";
@@ -114,6 +115,15 @@ export const superadminRoutes = new Hono<AppEnv>()
   // One live call per API on the new project's key; returns status and a
   // short summary, never the key. ?key=current tests GOOGLE_MAPS_API_KEY
   // instead; ?raw=1 adds response bodies for recording test fixtures.
+  // Sales demo tenant refresh (services/demo-refresh.ts): status, and "run it now".
+  .get("/demo-refresh", requireSuperadmin, async (c) => {
+    return c.json({ last: demoStatus(), health: await demoHealth() });
+  })
+  .post("/demo-refresh", requireSuperadmin, async (c) => {
+    await resolveDemoTenant(true);
+    const report = await demoTick({ tidy: true });
+    return c.json({ report, health: await demoHealth() });
+  })
   .get("/google-smoke", requireSuperadmin, async (c) => {
     const choice = c.req.query("key") === "current" ? "current" : "new";
     const report = await runGoogleSmoke({ choice, includeRaw: c.req.query("raw") === "1" });
