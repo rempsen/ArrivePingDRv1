@@ -169,6 +169,6 @@ ArrivePing was built by the team at NVC360, operators who managed 800+ field tec
 
 A [live map of your technicians](/fleet-tracking). [On-my-way texts with a live ETA](/customer-notifications), and a running-late notice when a job slips. Job photos and invoicing. Exports, webhooks, Zapier and Make so it works alongside the tools you already use. No vehicle GPS hardware to install, and most teams dispatch their first job within an hour.
 
-ArrivePing launches in November 2026. The Uber Effect is coming to field service; the only question is whether you’re delivering it or watching a competitor do it first.
+ArrivePing is available now. The Uber Effect is coming to field service; the only question is whether you’re delivering it or watching a competitor do it first.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

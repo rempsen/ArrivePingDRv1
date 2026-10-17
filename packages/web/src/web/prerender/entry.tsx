@@ -86,7 +86,7 @@ export function llmsTxt(): string {
     .join("\n\n");
   return `# ArrivePing
 
-> ArrivePing (by NVC360, Winnipeg, Manitoba, Canada) is field service management and dispatch software for HVAC, plumbing, electrical, construction, installation and last-mile delivery teams. It shows technicians and drivers on a live map, auto-assigns each work order to the closest qualified technician or driver by distance, skills, availability and workload, sends the job to the mobile app, and texts customers an Uber-style live tracking link with an ETA and one-tap text or call. Pricing starts at $49 USD per month. Launching November 2026.
+> ArrivePing (by NVC360, Winnipeg, Manitoba, Canada) is field service management and dispatch software for HVAC, plumbing, electrical, construction, installation and last-mile delivery teams. It shows technicians and drivers on a live map, auto-assigns each work order to the closest qualified technician or driver by distance, skills, availability and workload, sends the job to the mobile app, and texts customers an Uber-style live tracking link with an ETA and one-tap text or call. Pricing starts at $49 USD per month. Available now with a 30-day free trial.
 
 Key facts:
 - Name: ArrivePing (also written "ArrivePing by NVC360"). Not affiliated with Arrive, Arrive Logistics, Arrive AI or arrive.gg.

@@ -18,7 +18,7 @@ export const brand = {
   icon: "/apple-touch-icon.png?v=4", // square navy "AP" + ping rings mark, full-bleed — used as a badge
   watermark: "/arriveping-icon-dark.png?v=4", // white "AP" on navy — ghosted behind the closing section
   contactEmail: "contact@nvc360.com",
-  launch: "Launching November 2026",
+  launch: "Now available",
   urls: {
     signIn: "/sign-in",
     getStarted: "/get-started",

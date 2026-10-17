@@ -67,7 +67,7 @@ In an industry where small inefficiencies snowball into massive costs, ArrivePin
 
 ## Ready to Transform Your Field Operations?
 
-If your business relies on a mobile workforce, you can’t afford to operate the old way. The technology exists to eliminate chaos, reduce costs, and deliver exceptional customer experiences. ArrivePing launches in November 2026.
+If your business relies on a mobile workforce, you can’t afford to operate the old way. The technology exists to eliminate chaos, reduce costs, and deliver exceptional customer experiences. ArrivePing is available now.
 
 *NVC360 is proudly building ArrivePing in Winnipeg, Manitoba, creating jobs and driving tech innovation across Canada.*
 

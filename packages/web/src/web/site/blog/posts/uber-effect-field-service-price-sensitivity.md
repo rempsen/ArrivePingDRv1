@@ -56,7 +56,7 @@ The future of field service isn’t just about who has the best tools or the fas
 
 By investing in communication automation, you are essentially “buying” your customers’ loyalty and protecting your margins. In 2026 and beyond, the companies that win won’t be the cheapest—they’ll be the easiest to work with.
 
-ArrivePing by NVC360 launches in November 2026. See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
+ArrivePing by NVC360 is available now. See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ---
 

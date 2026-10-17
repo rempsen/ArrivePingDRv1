@@ -412,7 +412,7 @@ const about: LandingPage = {
   meta: {
     title: "About ArrivePing by NVC360 | Winnipeg, Canada",
     description:
-      "ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It began as a tool built for a contractor running 800+ field technicians. Launching November 2026.",
+      "ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It began as a tool built for a contractor running 800+ field technicians. It's available now, with a 30-day free trial.",
   },
   eyebrow: "About ArrivePing",
   h1: "ArrivePing is field service software built in the field, in Winnipeg.",
@@ -432,7 +432,7 @@ const about: LandingPage = {
         "Product: ArrivePing, field service management software for dispatch, technician tracking and customer communication",
         "Company: NVC360, Winnipeg, Manitoba, Canada: AI software tooling and automations, custom AI solutions, consulting and software development",
         "History: first built for National Interiors, a specialty subcontractor running 800+ field technicians (sold in 2021); NVC360 was founded in late 2023 to rebuild it as a multi-tenant platform",
-        "Launch: November 2026",
+        "Availability: available now, with a 30-day free trial",
         "Pricing: from $49 USD a month, published at arriveping.com/pricing",
         "Platforms: web dispatch console, technician app for iOS and Android, browser-based customer tracking pages",
         "Contact: contact@nvc360.com",
@@ -500,7 +500,7 @@ const jobber: LandingPage = {
         { label: "Customer tracking link with ETA", cells: ["Included in every plan", { text: "Customizable on-my-way text; we found no live tracking link or ETA described on the feature page", href: "https://www.getjobber.com/features/customer-communication-management/" }] },
         { label: "Automatic assignment", cells: ["Auto-assigns by distance, skills, availability and workload", { text: "\"Find a time\" suggests openings by availability and drive time; we found no automatic skill-based assignment described", href: "https://www.getjobber.com/features/scheduling/" }] },
         { label: "Setup", cells: ["AI setup agent builds your workspace from your website; most teams dispatch within an hour", "Self-serve with a 14-day free trial"] },
-        { label: "Company", cells: ["NVC360, Winnipeg, MB; launching November 2026", "Jobber, Edmonton, AB; established vendor"] },
+        { label: "Company", cells: ["NVC360, Winnipeg, MB; available now", "Jobber, Edmonton, AB; established vendor"] },
       ],
     },
     {

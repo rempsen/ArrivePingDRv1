@@ -74,6 +74,6 @@ The result is fewer inbound calls to the office, faster job completion, and high
 
 ## Conclusion
 
-Uber changed personal transportation by combining transparency, speed, and communication. ArrivePing by NVC360 brings the same approach to field service businesses, launching in November 2026. By improving field staff efficiency and automating client communications, you can complete more jobs, build trust, earn repeat customers, and grow your brand.
+Uber changed personal transportation by combining transparency, speed, and communication. ArrivePing by NVC360 brings the same approach to field service businesses, available now. By improving field staff efficiency and automating client communications, you can complete more jobs, build trust, earn repeat customers, and grow your brand.
 
 Ready to [Uberize](/blog/uberize-your-field-service-business) your business? See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

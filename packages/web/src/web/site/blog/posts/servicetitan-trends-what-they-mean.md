@@ -220,7 +220,7 @@ The contractors winning in 2025 are not ripping out their ServiceTitan or QuickB
 
 ## Add Real-Time Visibility to Your Field Operations
 
-ArrivePing by NVC360 launches in November 2026. It gives your team a live map of technicians, automatic client ETAs, and a tracking page your customers can open from a text.
+ArrivePing by NVC360 is available now. It gives your team a live map of technicians, automatic client ETAs, and a tracking page your customers can open from a text.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 

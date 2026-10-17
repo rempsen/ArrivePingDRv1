@@ -105,7 +105,7 @@ The construction industry is at an inflection point. The firms that are moving n
 
 The good news is that you do not need to be Skanska to start capturing these benefits. The most impactful first step is not building proprietary AI or deploying robotics on your job sites. It is solving the most fundamental operational problem in field service: getting the right person to the right place at the right time, and making sure the client knows exactly what is happening every step of the way.
 
-That is the problem ArrivePing, built by NVC360, is designed to solve. It launches in November 2026. See how it works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
+That is the problem ArrivePing, built by NVC360, is designed to solve. It is available now. See how it works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
 ## References
 

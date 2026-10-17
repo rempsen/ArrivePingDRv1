@@ -46,7 +46,7 @@ For the technicians, the experience changes just as much. They no longer waste t
 
 The field service industry is evolving rapidly, and the businesses that thrive will be those that prioritize operational visibility and customer experience. Real-time technician tracking is no longer a luxury; it is a necessity for remaining competitive. By embracing this technology, companies can reduce costs, boost productivity, and deliver the transparent, responsive service that modern customers demand. The transition from reactive dispatching to proactive, data-driven management is the key to sustained growth and profitability in the field service sector.
 
-ArrivePing by NVC360 brings this to your team: a live map of technicians from the app on their phones, automatic on-my-way texts with a live tracking page, and geofenced arrival times. It launches in November 2026.
+ArrivePing by NVC360 brings this to your team: a live map of technicians from the app on their phones, automatic on-my-way texts with a live tracking page, and geofenced arrival times. It is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 

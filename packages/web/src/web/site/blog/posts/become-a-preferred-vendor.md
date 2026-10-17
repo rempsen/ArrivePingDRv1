@@ -198,7 +198,7 @@ In most local field service markets, the bar for “excellent communication expe
 
 The business that sends a branded text with a live tracking link when the technician is on the way — automatically, on every single job — does not look like a competitor. It looks like a different category of company entirely. And clients treat it that way: with loyalty, with referrals, and with dramatically reduced price sensitivity.
 
-ArrivePing launches in November 2026. It needs no vehicle hardware, works alongside your existing accounting and CRM tools, and most teams dispatch their first job within an hour of setup.
+ArrivePing is available now. It needs no vehicle hardware, works alongside your existing accounting and CRM tools, and most teams dispatch their first job within an hour of setup.
 
 **Preferred vendor status is not given. It is built — one frictionless experience at a time.**
 

@@ -125,6 +125,6 @@ In 2026, customers won’t settle for communication practices from 2006. They ex
 
 ArrivePing helps you move your customer experience from frustrating phone calls and vague promises to real-time communication that builds trust, loyalty, and referrals.
 
-Your technicians do great work. Make sure your customers feel that excellence from the first call to the final invoice. ArrivePing launches in November 2026.
+Your technicians do great work. Make sure your customers feel that excellence from the first call to the final invoice. ArrivePing is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

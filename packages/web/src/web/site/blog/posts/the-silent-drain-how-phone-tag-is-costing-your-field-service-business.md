@@ -63,6 +63,6 @@ ArrivePing turns the traditional, reactive field service model into a proactive,
 
 The costs of communication inefficiencies and “phone tag” in field service businesses are undeniable. From lost revenue due to missed calls to reduced productivity from constant interruptions, these issues significantly impact profitability and growth. The solution is clear: embracing modern, integrated platforms that prioritize real-time communication and transparency.
 
-ArrivePing by NVC360 is built to move you beyond outdated communication methods, offering an “Uber-like” experience for both your team and your customers. It launches in November 2026.
+ArrivePing by NVC360 is built to move you beyond outdated communication methods, offering an “Uber-like” experience for both your team and your customers. It is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

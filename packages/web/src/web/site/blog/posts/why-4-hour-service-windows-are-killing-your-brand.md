@@ -97,6 +97,6 @@ The billion-dollar question is: How much longer can you afford to make your cust
 
 ## About ArrivePing
 
-ArrivePing by NVC360 sends customers an [on-my-way text or email](/customer-notifications) with a link to a live tracking page showing their technician’s progress and ETA, with no app or account to set up. It is built in Winnipeg by a team that ran 800+ field technicians, and it launches in November 2026.
+ArrivePing by NVC360 sends customers an [on-my-way text or email](/customer-notifications) with a link to a live tracking page showing their technician’s progress and ETA, with no app or account to set up. It is built in Winnipeg by a team that ran 800+ field technicians, and it is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

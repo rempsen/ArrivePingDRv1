@@ -49,7 +49,7 @@ This level of real-time visibility and two-way communication transforms the cust
 
 The “[Uber Effect](/blog/uber-effect-field-service-price-sensitivity)” has fundamentally reshaped consumer expectations. Businesses that embrace real-time communication and advanced field service management software are not just meeting these expectations; they are exceeding them, building stronger customer relationships, and driving operational excellence. The technology gap for smaller companies is closing, thanks to accessible and integrated solutions that empower them to compete with larger players.
 
-It’s no longer a question of if your customers demand real-time service, but when you will deliver it. ArrivePing launches in November 2026.
+It’s no longer a question of if your customers demand real-time service, but when you will deliver it. ArrivePing is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.
 
