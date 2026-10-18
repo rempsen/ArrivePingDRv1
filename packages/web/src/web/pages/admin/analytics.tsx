@@ -423,7 +423,9 @@ function FilterBar({
         id="an-tenant"
         aria-label="Company"
         value={filters.tenant}
-        onChange={(e) => set({ tenant: e.target.value })}
+        // One company already has one industry and plan, so the company and the
+        // industry/plan filters replace each other rather than combine to nothing.
+        onChange={(e) => set(e.target.value ? { tenant: e.target.value, industry: "", billing: "" } : { tenant: "" })}
         className={`${selectCls} max-w-[16rem]`}
       >
         <option value="">All companies</option>
@@ -438,7 +440,7 @@ function FilterBar({
         id="an-industry"
         aria-label="Industry"
         value={filters.industry}
-        onChange={(e) => set({ industry: e.target.value })}
+        onChange={(e) => set(e.target.value ? { industry: e.target.value, tenant: "" } : { industry: "" })}
         className={selectCls}
       >
         <option value="">All industries</option>
@@ -448,7 +450,7 @@ function FilterBar({
           </option>
         ))}
       </select>
-      <select id="an-billing" aria-label="Billing" value={filters.billing} onChange={(e) => set({ billing: e.target.value })} className={selectCls}>
+      <select id="an-billing" aria-label="Billing" value={filters.billing} onChange={(e) => set(e.target.value ? { billing: e.target.value, tenant: "" } : { billing: "" })} className={selectCls}>
         <option value="">All plans</option>
         {(catalog?.billingStatuses ?? []).map((b) => (
           <option key={b} value={b}>
