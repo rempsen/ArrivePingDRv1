@@ -37,8 +37,10 @@ export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
 /** How long the "assigned" notifications wait, so an Undo inside the window reaches nobody. */
 export const NOTIFY_GRACE_MS = 8_000;
 export { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
-/** The longest decline reason an Undo token carries back (tokens stay under 2,000 characters even for 4-byte text). */
-const MAX_KEPT_REASON = 200;
+/** The longest decline/release reason an Undo can restore (the decline form's limit). */
+const MAX_KEPT_REASON = 2_000;
+/** Longest Undo token accepted: room for that reason even in 4-byte text, base64'd. */
+export const MAX_UNDO_TOKEN = 12_000;
 
 /** What changed on the job, for the map to patch its copy. */
 export interface JobPatch {
@@ -120,7 +122,7 @@ export function readUndo(token: unknown, now = Date.now()): UndoClaims | "invali
 
 /** Either kind of token, verified and unexpired. */
 export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "invalid" | "expired" {
-  if (typeof token !== "string" || token.length > 2_000) return "invalid";
+  if (typeof token !== "string" || token.length > MAX_UNDO_TOKEN) return "invalid";
   const parts = token.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return "invalid";
   const [body, mac] = parts as [string, string];
@@ -263,6 +265,9 @@ export async function dispatchAssign(
     return { ok: true, job: patchOf(r.booking), undo: null };
   }
   let undo: string | null = null;
+  // A reason too long to carry back can't be restored exactly: no Undo then
+  // (the notice still waits out the window, so nothing is sent early).
+  const restorable = (was.declineReason ?? "").length <= MAX_KEPT_REASON;
   if (undoable) {
     // The "assigned" notice gives the time, so a move still waiting to be
     // announced has nothing to add (as on the immediate path in assignJob).
@@ -279,14 +284,13 @@ export async function dispatchAssign(
       s: was.status,
       a: was.assignStatus,
       ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString() } : {}),
-      // Kept short so the token stays a small header-sized string.
-      ...(was.declineReason ? { d: was.declineReason.slice(0, MAX_KEPT_REASON) } : {}),
+      ...(was.declineReason ? { d: was.declineReason } : {}),
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
       ...(toldFrom ? { n: toldFrom } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     // Already announced (the notice couldn't be held): no Undo to offer.
-    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId))) undo = null;
+    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId)) || !restorable) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.
     void publishDispatch(companyId, { kind: "job", jobId: input.bookingId });
   }

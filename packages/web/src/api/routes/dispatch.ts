@@ -30,7 +30,7 @@ import { jsonBody, id as idField, ValidationError } from "../lib/validate";
 import type { AppEnv } from "../env";
 import { loadBoard, MAX_BOARD_DAYS } from "../../services/dispatch-board";
 import { loadCandidates, MAX_CANDIDATE_JOBS } from "../../services/dispatch-candidates";
-import { dispatchAssign, readAnyUndo } from "../../services/dispatch-assign";
+import { dispatchAssign, MAX_UNDO_TOKEN, readAnyUndo } from "../../services/dispatch-assign";
 import { dispatchSchedule, loadDayLoad, MAX_LOAD_DAYS, undoAny } from "../../services/dispatch-schedule";
 import { subscribeDispatch, type DispatchSignal } from "../../services/realtime";
 
@@ -52,7 +52,7 @@ const ScheduleBody = z.object({
   /** The dispatcher confirmed "Move it there anyway?". */
   force: z.boolean().optional(),
 });
-const UndoBody = z.object({ token: z.string({ message: "Undo token is required" }).min(1, "Undo token is required").max(2_000) });
+const UndoBody = z.object({ token: z.string({ message: "Undo token is required" }).min(1, "Undo token is required").max(MAX_UNDO_TOKEN) });
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 

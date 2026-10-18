@@ -266,6 +266,15 @@ describe("dispatchAssign + undoAssign", () => {
     expect(kinds).not.toContain("assigned");
   });
 
+  it("carries a long decline reason back in full", async () => {
+    const reason = "Customer asked for a different technician. ".repeat(40).trim();
+    const id = await job(CO, { status: "confirmed", assignStatus: "declined", declineReason: reason });
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    expect((await row(id)).declineReason).toBe(reason);
+    await flushNotices();
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();
