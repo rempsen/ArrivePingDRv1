@@ -34,7 +34,14 @@ type Summary = {
   configured: boolean;
   status: "none" | "trialing" | "active" | "past_due" | "canceled" | "unpaid";
   seats: number;
+  /** Active field staff: each one is a user on the plan. */
   activeDrivers: number;
+  /** Active office users (admins, managers, dispatchers), the included one among them. */
+  activeOffice: number;
+  /** Office licenses included in every plan (1). */
+  includedOffice: number;
+  /** activeDrivers + max(0, activeOffice - includedOffice): what the plan has to cover. */
+  billableUsers: number;
   excessActive: number;
   monthlyTotal: number;
   breakdown: string;
@@ -101,8 +108,12 @@ export default function BillingSettingsTab() {
   const shownSeats = pendingSeats ?? s?.seats ?? 1;
   const preview = useMemo(() => priceFor(shownSeats), [shownSeats]);
   const seatsDirty = s ? shownSeats !== s.seats : false;
-  // Paying for fewer users than are active means choosing who comes off.
-  const needed = s ? Math.max(0, s.activeDrivers - shownSeats) : 0;
+  // Paying for fewer users than are billable means choosing who comes off.
+  const needed = s ? Math.max(0, s.billableUsers - shownSeats) : 0;
+  // Once there's an extra office user, the people who come off may be office
+  // staff too, so say "users" rather than the field-staff noun.
+  const extraOffice = s ? Math.max(0, s.activeOffice - s.includedOffice) : 0;
+  const who = (n: number) => (extraOffice > 0 ? (n === 1 ? "user" : "users") : (n === 1 ? noun : nounPlural).toLowerCase());
 
   const inTrial = s?.status === "trialing";
   const ended = s?.status === "canceled";
@@ -194,8 +205,16 @@ export default function BillingSettingsTab() {
               <div className="rounded-xl border border-white/5 bg-ink p-4">
                 <p className="text-sm font-semibold text-white">Change how many users you pay for</p>
                 <p className="mt-0.5 text-xs text-white/50">
-                  One user per {nounPlural.toLowerCase().replace(/s$/, "")} who uses the app. You currently have {s.activeDrivers} active. Changes
-                  take effect on your next bill; nothing is charged in between.
+                  One user per {noun.toLowerCase()} who uses the app. One dispatcher license is included; each extra dispatcher or manager is one
+                  more user, priced like a {noun.toLowerCase()}. You have {s.activeDrivers} active{" "}
+                  {(s.activeDrivers === 1 ? noun : nounPlural).toLowerCase()}
+                  {s.activeOffice > 0 && (
+                    <>
+                      {" "}
+                      and {s.activeOffice} office {s.activeOffice === 1 ? "user" : "users"} ({s.includedOffice} included)
+                    </>
+                  )}
+                  . Changes take effect on your next bill; nothing is charged in between.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <div className="inline-flex items-center rounded-lg border border-white/10 bg-ink-2">
@@ -244,14 +263,14 @@ export default function BillingSettingsTab() {
                       onClick={() => setPicker(true)}
                       className="nvc-btn-primary flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white"
                     >
-                      <UserMinus className="h-4 w-4" /> Choose {needed} {needed === 1 ? noun.toLowerCase() : nounPlural.toLowerCase()} to deactivate
+                      <UserMinus className="h-4 w-4" /> Choose {needed} {who(needed)} to deactivate
                     </button>
                   )}
                 </div>
                 {needed > 0 && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-300" /> You have {s.activeDrivers} active {nounPlural.toLowerCase()}. To pay for {shownSeats}, choose
-                    which {needed} to deactivate; they keep their history and can be reactivated later.
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-300" /> {s.billableUsers} {s.billableUsers === 1 ? "user counts" : "users count"} towards
+                    your plan. To pay for {shownSeats}, choose which {needed} to deactivate; they keep their history and can be reactivated later.
                   </p>
                 )}
               </div>
@@ -337,6 +356,9 @@ export default function BillingSettingsTab() {
         <DownsizePicker
           targetSeats={shownSeats}
           activeDrivers={s.activeDrivers}
+          activeOffice={s.activeOffice}
+          includedOffice={s.includedOffice}
+          billableUsers={s.billableUsers}
           nextInvoiceAt={s.cancelAtPeriodEnd ? null : inTrial ? s.trialEndsAt : s.nextInvoiceAt}
           monthlyTotal={money(preview.total)}
           noun={noun}

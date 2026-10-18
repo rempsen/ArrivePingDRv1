@@ -20,7 +20,8 @@ const schema = await import("../../api/database/schema");
 const { getTableConfig } = await import("drizzle-orm/pg-core");
 const { eq, and } = await import("drizzle-orm");
 const { openJobsFor, seatCandidates, deactivateUser, reactivateUser, downsize, AccessError, deps } = await import("../user-access");
-const { driverSeatCount } = await import("../billing-subscription");
+const { driverSeatCount, billableSeatCounts } = await import("../billing-subscription");
+const { monthlyPrice } = await import("../../web/site/config");
 
 function ddlFor(table: any): string {
   const cfg = getTableConfig(table);
@@ -128,17 +129,37 @@ describe("openJobsFor", () => {
 });
 
 describe("seatCandidates", () => {
-  it("lists field staff only, least recently active first", async () => {
-    const list = await seatCandidates(CO);
-    expect(list.map((c) => c.userId)).toEqual(["ua-r2", "ua-r1", "ua-r3"]);
+  it("lists field staff least recently active first, then extra office users; never admins or the actor", async () => {
+    const list = await seatCandidates(CO, ADMIN);
+    expect(list.map((c) => c.userId)).toEqual(["ua-r2", "ua-r1", "ua-r3", "ua-disp"]);
     expect(list.find((c) => c.userId === "ua-r1")!.openJobs).toBe(2);
     expect(list[0]!.lastActiveAt).toBeNull();
+    expect(list.find((c) => c.userId === "ua-disp")).toMatchObject({ staffType: "office", roleLabel: "Dispatcher", riderId: "rd-disp", openJobs: 1 });
+    expect(list.find((c) => c.userId === "ua-r1")).toMatchObject({ staffType: "technician", roleLabel: null });
+  });
+
+  it("leaves out sample-day techs (they are never billed)", async () => {
+    await (db as any).$client.execute(`UPDATE riders SET is_sample = TRUE WHERE id = 'rd-r3'`);
+    expect((await seatCandidates(CO, ADMIN)).map((c) => c.userId)).toEqual(["ua-r2", "ua-r1", "ua-disp"]);
+  });
+
+  it("lists an office user with no rider profile with riderId null", async () => {
+    await (db as any).$client.execute(`DELETE FROM bookings WHERE id = 'bk-4'`);
+    await (db as any).$client.execute(`DELETE FROM riders WHERE id = 'rd-disp'`);
+    expect((await seatCandidates(CO, ADMIN)).find((c) => c.userId === "ua-disp")).toMatchObject({ riderId: null, openJobs: 0, lastActiveAt: null });
   });
 });
 
 describe("driverSeatCount", () => {
   it("excludes office staff", async () => {
     expect(await driverSeatCount(CO)).toBe(3);
+  });
+});
+
+describe("billableSeatCounts (seeded team)", () => {
+  it("bills field staff plus every office user after the first; a dispatcher with a rider profile counts once, as office", async () => {
+    // 3 field (r1-r3) + 3 office (2 admins, 1 dispatcher who also has a rider profile).
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 3, billable: 5 });
   });
 });
 
@@ -231,6 +252,59 @@ describe("reactivateUser", () => {
     expect(await seats()).toBe(3);
   });
 
+  it("a field user needs a seat when extra office users already fill the plan", async () => {
+    // r2 off: 2 field + 3 office = 4 billable. On 4 seats the plan is full,
+    // although only 2 drivers are active (the old driver-only rule said yes).
+    await deactivateUser(CO, ADMIN, "ua-r2", {});
+    await (db as any).$client.execute(`UPDATE companies SET billing_seats = 4 WHERE id = '${CO}'`);
+    expect((await billableSeatCounts(CO)).billable).toBe(4);
+    await expectAccessError(reactivateUser(CO, ADMIN, "ua-r2", {}), 409, "seat_required");
+    expect((await membership("ua-r2")).status).toBe("disabled");
+  });
+
+  it("reactivating a second office user at full seats returns seat_required, then adds a seat", async () => {
+    await deactivateUser(CO, ADMIN, "ua-disp", { reassignTo: null });
+    // 3 field + 2 office (admins) = 4 billable, on 4 seats.
+    await (db as any).$client.execute(`UPDATE companies SET billing_seats = 4 WHERE id = '${CO}'`);
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 2, billable: 4 });
+    const err = await expectAccessError(reactivateUser(CO, ADMIN, "ua-disp", {}), 409, "seat_required");
+    expect(err.meta).toEqual({ seatsNeeded: 1, monthlyDelta: monthlyPrice(5).total - monthlyPrice(4).total, office: true });
+    expect((await membership("ua-disp")).status).toBe("disabled");
+    const r = await reactivateUser(CO, ADMIN, "ua-disp", { addSeat: true });
+    expect(r.seats).toBe(5);
+    expect(await seats()).toBe(5);
+    expect((await membership("ua-disp")).status).toBe("active");
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 3, billable: 5 });
+  });
+
+  it("reactivating the only office user needs no seat (it's the included dispatcher license)", async () => {
+    await deactivateUser(CO, ADMIN, "ua-disp", { reassignTo: null });
+    await (db as any).$client.execute(`UPDATE memberships SET status = 'disabled' WHERE company_id = '${CO}' AND user_id IN ('ua-admin', 'ua-admin2')`);
+    await (db as any).$client.execute(`UPDATE companies SET billing_seats = 3 WHERE id = '${CO}'`);
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 0, billable: 3 });
+    const r = await reactivateUser(CO, ADMIN, "ua-disp", {});
+    expect(r.seats).toBe(3);
+    expect(await seats()).toBe(3);
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 1, billable: 3 });
+  });
+
+  it("an office user whose user is platform staff needs no seat", async () => {
+    await deactivateUser(CO, ADMIN, "ua-disp", { reassignTo: null });
+    await (db as any).$client.execute(`UPDATE "user" SET role = 'superadmin' WHERE id = 'ua-disp'`);
+    await (db as any).$client.execute(`UPDATE companies SET billing_seats = 1 WHERE id = '${CO}'`);
+    await reactivateUser(CO, ADMIN, "ua-disp", {});
+    expect(await seats()).toBe(1);
+  });
+
+  it("a sample-day tech needs no seat", async () => {
+    await (db as any).$client.execute(`UPDATE riders SET is_sample = TRUE WHERE id = 'rd-r2'`);
+    await deactivateUser(CO, ADMIN, "ua-r2", {});
+    await (db as any).$client.execute(`UPDATE companies SET billing_seats = 1 WHERE id = '${CO}'`);
+    await reactivateUser(CO, ADMIN, "ua-r2", {});
+    expect((await membership("ua-r2")).status).toBe("active");
+    expect(await seats()).toBe(1);
+  });
+
   it("admin-tier target needs a superadmin actor", async () => {
     await deactivateUser(CO, { id: "ua-super", role: "superadmin" }, "ua-admin2", {});
     await expectAccessError(reactivateUser(CO, ADMIN, "ua-admin2", {}), 403, "superadmin_required");
@@ -250,25 +324,63 @@ describe("reactivateUser", () => {
 });
 
 describe("downsize", () => {
+  // Seeded team: 3 field + 3 office (2 admins, 1 dispatcher) = 5 billable.
   it("is atomic", async () => {
-    const r = await downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
-    expect(r).toEqual({ seats: 1, deactivated: ["ua-r1", "ua-r2"] });
+    // 2 field off: 1 field + 3 office = 3 licenses.
+    const r = await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
+    expect(r).toEqual({ seats: 3, deactivated: ["ua-r1", "ua-r2"] });
     expect((await membership("ua-r1")).status).toBe("disabled");
     expect((await membership("ua-r2")).status).toBe("disabled");
     expect((await booking("bk-1")).riderId).toBe("rd-r3");
-    expect(await seats()).toBe(1);
+    expect(await seats()).toBe(3);
   });
 
   it("rejects reassignment to a user in the deactivate list", async () => {
-    await expectAccessError(downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r1", "ua-r3"], reassign: { "ua-r1": "ua-r3" } }), 400, "reassign_target_deactivated");
+    await expectAccessError(downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r3"], reassign: { "ua-r1": "ua-r3" } }), 400, "reassign_target_deactivated");
     expect((await membership("ua-r1")).status).toBe("active");
     expect((await booking("bk-1")).riderId).toBe("rd-r1");
     expect(await seats()).toBe(10);
   });
 
-  it("rejects ids that are not seat candidates", async () => {
-    await expectAccessError(downsize(CO, ADMIN, { seats: 2, deactivate: ["ua-disp"], reassign: {} }), 400, "not_a_seat");
+  it("rejects ids that are not seat candidates (admins, the actor)", async () => {
+    await expectAccessError(downsize(CO, ADMIN, { seats: 4, deactivate: ["ua-admin2"], reassign: {} }), 400, "not_a_seat");
+    await expectAccessError(downsize(CO, ADMIN, { seats: 4, deactivate: ["ua-admin"], reassign: {} }), 400, "not_a_seat");
+    expect((await membership("ua-admin2")).status).toBe("active");
+  });
+
+  it("an extra office user comes off one license, with their jobs handled like a tech's", async () => {
+    // 3 field + 2 office = 4.
+    const r = await downsize(CO, ADMIN, { seats: 4, deactivate: ["ua-disp"], reassign: { "ua-disp": null } });
+    expect(r).toEqual({ seats: 4, deactivated: ["ua-disp"] });
+    expect((await membership("ua-disp")).status).toBe("disabled");
+    expect((await rider("rd-disp")).approval).toBe("suspended");
+    expect((await booking("bk-4")).riderId).toBeNull();
+    expect(await seats()).toBe(4);
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 2, billable: 4 });
+  });
+
+  it("office and field users together", async () => {
+    // 2 field + 2 office = 3.
+    await expectAccessError(downsize(CO, ADMIN, { seats: 2, deactivate: ["ua-r2", "ua-disp"], reassign: { "ua-disp": null } }), 409, "stale");
+    const r = await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r2", "ua-disp"], reassign: { "ua-disp": null } });
+    expect(r.seats).toBe(3);
+  });
+
+  it("an office user with open jobs still needs them handled", async () => {
+    await expectAccessError(downsize(CO, ADMIN, { seats: 4, deactivate: ["ua-disp"], reassign: {} }), 409, "has_open_jobs");
+    expect(await seats()).toBe(10);
+  });
+
+  it("never takes the included dispatcher license off", async () => {
+    // The admins are platform staff here, so the dispatcher is the only office
+    // user who counts: removing them would not lower the bill.
+    await (db as any).$client.execute(`UPDATE "user" SET role = 'superadmin' WHERE id IN ('ua-admin', 'ua-admin2')`);
+    expect(await billableSeatCounts(CO)).toEqual({ field: 3, office: 1, billable: 3 });
+    expect((await seatCandidates(CO, { id: "ua-super" })).map((c) => c.userId)).toContain("ua-disp");
+    const err = await expectAccessError(downsize(CO, { id: "ua-super", role: "superadmin" }, { seats: 3, deactivate: ["ua-disp"], reassign: { "ua-disp": null } }), 400, "office_included");
+    expect(err.meta).toEqual({ activeOffice: 1, officeRemovable: 0 });
     expect((await membership("ua-disp")).status).toBe("active");
+    expect(await seats()).toBe(10);
   });
 
   it("leaves everything unchanged when the seat update fails", async () => {
@@ -277,7 +389,7 @@ describe("downsize", () => {
       throw new Error("stripe down");
     };
     try {
-      await expect(downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } })).rejects.toThrow("stripe down");
+      await expect(downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } })).rejects.toThrow("stripe down");
     } finally {
       deps.setSeats = real;
     }
@@ -288,8 +400,10 @@ describe("downsize", () => {
     expect(await seats()).toBe(10);
   });
 
-  it("rejects stale seats", async () => {
-    await expectAccessError(downsize(CO, ADMIN, { seats: 5, deactivate: ["ua-r2", "ua-r3"], reassign: {} }), 409, "stale");
+  it("rejects stale seats, reporting the billable numbers", async () => {
+    // The old driver-only maths: 3 drivers - 2 = 1. Under the license rule it's 1 + 2 = 3.
+    const err = await expectAccessError(downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r2", "ua-r3"], reassign: {} }), 409, "stale");
+    expect(err.meta).toEqual({ activeDrivers: 3, activeOffice: 3, billableUsers: 5, expectedSeats: 3 });
     expect(await seats()).toBe(10);
   });
 });

@@ -13,7 +13,7 @@ const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
 const sd = await import("../sample-day");
 const { fireEvent } = await import("../dispatch");
-const { driverSeatCount } = await import("../billing-subscription");
+const { driverSeatCount, billableSeatCounts } = await import("../billing-subscription");
 const { loadDataset } = await import("../../api/routes/export");
 const { tdb } = await import("../../api/database/tenant");
 const { isFictionalPhone, isUndeliverableEmail } = await import("../../shared/sample-contact");
@@ -116,6 +116,8 @@ describe("safety", () => {
 
   it("sample technicians are never billed seats", async () => {
     expect(await driverSeatCount(CO)).toBe(0);
+    // The sample day adds no office users either, so nothing it creates is a license.
+    expect(await billableSeatCounts(CO)).toEqual({ field: 0, office: 0, billable: 0 });
   });
 
   it("payroll never pays a sample job", async () => {

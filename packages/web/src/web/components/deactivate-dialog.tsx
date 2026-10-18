@@ -16,7 +16,7 @@ import { useWorkerNoun } from "../lib/use-brand";
 
 type OpenJob = { id: string; title: string; scheduledAt: string; status: string };
 type Teammate = { userId: string; name: string };
-type ApiError = { code?: string; message?: string; meta?: { seatsNeeded?: number; monthlyDelta?: number } | null };
+type ApiError = { code?: string; message?: string; meta?: { seatsNeeded?: number; monthlyDelta?: number; office?: boolean } | null };
 
 async function postJson(path: string, body: unknown): Promise<{ res: Response; data: ApiError & Record<string, unknown> }> {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", ...apiHeaders() }, body: JSON.stringify(body) });
@@ -155,7 +155,8 @@ export function DeactivateDialog({
 export function ReactivateDialog({ userId, name, onClose, onDone }: { userId: string | null; name: string; onClose: () => void; onDone?: () => void }) {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
-  const [seatPrompt, setSeatPrompt] = useState<{ seatsNeeded: number; monthlyDelta: number } | null>(null);
+  // office = they'd be a second office user: the included dispatcher license is taken.
+  const [seatPrompt, setSeatPrompt] = useState<{ seatsNeeded: number; monthlyDelta: number; office: boolean } | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
     setSeatPrompt(null);
@@ -166,7 +167,7 @@ export function ReactivateDialog({ userId, name, onClose, onDone }: { userId: st
     mutationFn: async (addSeat: boolean) => {
       const { res, data } = await postJson(`/api/team/${userId}/reactivate`, addSeat ? { addSeat: true } : {});
       if (res.status === 409 && data.code === "seat_required") {
-        setSeatPrompt({ seatsNeeded: data.meta?.seatsNeeded ?? 1, monthlyDelta: data.meta?.monthlyDelta ?? 0 });
+        setSeatPrompt({ seatsNeeded: data.meta?.seatsNeeded ?? 1, monthlyDelta: data.meta?.monthlyDelta ?? 0, office: data.meta?.office === true });
         return "seat_required" as const;
       }
       if (!res.ok) throw new Error(data.message || "Something went wrong");
@@ -197,17 +198,24 @@ export function ReactivateDialog({ userId, name, onClose, onDone }: { userId: st
             className="nvc-btn-primary flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             {run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
-            {seatPrompt ? `Add a ${noun.toLowerCase()} and reactivate` : "Reactivate"}
+            {seatPrompt ? `Add a ${seatPrompt.office ? "user" : noun.toLowerCase()} and reactivate` : "Reactivate"}
           </button>
         </>
       }
     >
       <div className="space-y-3 text-sm text-slate-300">
         {!seatPrompt && <p>{name} will be able to sign in and take jobs again.</p>}
-        {seatPrompt && (
+        {seatPrompt && !seatPrompt.office && (
           <p>
             Reactivating <span className="font-semibold text-white">{name}</span> needs {seatPrompt.seatsNeeded} more {noun.toLowerCase()} on your plan,{" "}
             <span className="font-semibold text-white">${seatPrompt.monthlyDelta}/month</span> from your next bill. Add a {noun.toLowerCase()} and reactivate?
+          </p>
+        )}
+        {seatPrompt?.office && (
+          <p>
+            Reactivating <span className="font-semibold text-white">{name}</span> needs {seatPrompt.seatsNeeded} more {seatPrompt.seatsNeeded === 1 ? "user" : "users"} on
+            your plan, <span className="font-semibold text-white">${seatPrompt.monthlyDelta}/month</span> from your next bill. One dispatcher license is included;
+            each extra dispatcher or manager is priced like a {noun.toLowerCase()}. Add a user and reactivate?
           </p>
         )}
         {err && (

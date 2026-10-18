@@ -1272,8 +1272,9 @@ export const companies = pgTable("companies", {
   stripeUsePlatform: boolean("stripe_use_platform").notNull().default(false),
   // ArrivePing's OWN subscription billing (platform Stripe account), for
   // self-serve tenants: one Customer + one Subscription per company, started
-  // at signup with a 30-day trial and the card on file. Seats = active
-  // drivers, re-counted before each invoice (services/billing-subscription.ts).
+  // at signup with a 30-day trial and the card on file. Seats = licenses:
+  // active field staff plus each office user after the included dispatcher,
+  // re-counted before each invoice (services/billing-subscription.ts).
   // NULL customer/subscription = not self-serve billed (invoiced by hand).
   billingCustomerId: text("billing_customer_id"),
   billingSubscriptionId: text("billing_subscription_id"),
