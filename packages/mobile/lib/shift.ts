@@ -37,21 +37,20 @@ export function useShift() {
       if (!res.ok) throw new Error("Failed");
       return (await res.json()).rider;
     },
-    // Show the new colour straight away; put it back if the server says no.
-    onMutate: async (status) => {
-      await qc.cancelQueries({ queryKey: ["me"] });
-      const prev = qc.getQueryData<Me | null>(["me"]);
-      if (prev) qc.setQueryData<Me>(["me"], { ...prev, status });
-      return { prev };
-    },
-    onError: (_e, status, ctx) => {
-      if (ctx?.prev !== undefined) qc.setQueryData(["me"], ctx.prev);
+    // The shared ["me"] status changes only once the server has accepted it:
+    // the tab layout stops GPS and ends Live Activities when it reads
+    // "offline", and a slow or failed sign-out mustn't do that while the
+    // server still has them on shift. The button shows the new colour from
+    // the pending request instead (see `status` below).
+    onError: (_e, status) => {
       Alert.alert(
         status === "offline" ? "Couldn't sign out" : "Couldn't sign in",
         "Check your connection and try again.",
       );
     },
-    onSuccess: (_rider, status) => {
+    onSuccess: (rider, status) => {
+      const prev = qc.getQueryData<Me | null>(["me"]);
+      qc.setQueryData<Me | null>(["me"], (rider as Me | null) ?? (prev ? { ...prev, status } : prev));
       // Off the clock: stop background GPS now rather than on the layout's next
       // refetch, and end any Live Activity (iOS keeps one until the app ends it).
       if (status === "offline") {
@@ -59,10 +58,15 @@ export function useShift() {
         endAllLiveActivities().catch(() => {});
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    // Not awaited: returning the refetch would keep the request "pending"
+    // (and the rejected colour showing) until it and its retries finish.
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["me"] });
+    },
   });
 
-  const status = me.data?.status ?? null;
+  // While a change is on its way, show where it's going (this button only).
+  const status = (set.isPending ? set.variables : null) ?? me.data?.status ?? null;
   const known = status != null || me.isSuccess;
   const onShift = status != null && status !== "offline";
   const busy = status === "busy" || status === "enroute" || status === "onsite";
