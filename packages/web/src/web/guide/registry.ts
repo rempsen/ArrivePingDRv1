@@ -85,7 +85,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "guide.button",
         placement: "right",
         title: "Help is always here",
-        body: "Open the Guide any time to replay a chapter, search help articles or ask a question.",
+        body: "Open the Guide any time to replay a chapter, search the help articles or get in touch with us.",
       },
     ],
   },

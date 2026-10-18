@@ -69,6 +69,7 @@ import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qu
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
 import { inviteStaffMember, kindToRole, type StaffInviteResult } from "../lib/staff-invite";
 import { pushSignupStarted } from "../../services/hubspot-leads";
+import { computeLaunchChecklist } from "../../services/launch-checklist";
 import {
   getIndustryPreset,
   industryLabel,
@@ -469,6 +470,12 @@ export const onboardingRoutes = new Hono<AppEnv>()
   .get("/status", requireAdmin, async (c) => {
     const snap = await buildOnboardingSnapshot(tenantId(c));
     return c.json(snap, 200);
+  })
+
+  // GET /onboarding/checklist — the Launch checklist (services/launch-checklist.ts),
+  // recomputed from real data on every read.
+  .get("/checklist", requireAdmin, async (c) => {
+    return c.json(await computeLaunchChecklist(tenantId(c)), 200);
   })
 
   // POST /onboarding/complete — "I'll finish this later" skip button. The

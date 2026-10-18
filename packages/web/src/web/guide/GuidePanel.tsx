@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Compass, ExternalLink, FlaskConical, LifeBuoy, PlayCircle, Search, X } from "lucide-react";
+import { ArrowLeft, Check, CircleHelp, ExternalLink, FlaskConical, LifeBuoy, PlayCircle, Search, X } from "lucide-react";
 import { useAuth } from "../hooks/use-auth";
 import { useAddSampleDay, useSampleDay } from "./SampleDayBanner";
+import { Link } from "wouter";
+import { ProgressRing, useLaunchChecklist } from "./launch";
 import { DialogPanel } from "../components/dialog-panel";
 import { dismiss } from "../lib/utils";
 import { articleBySlug, categoryById, popularSlugs, support, type ArticleBlock } from "../site/support/articles";
@@ -43,6 +45,8 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
   const addSample = useAddSampleDay();
   // Admins can bring back a sample day after clearing it (services/sample-day.ts).
   const canAddSample = (role === "admin" || role === "superadmin") && sample.data && !sample.data.active;
+  const launch = useLaunchChecklist();
+  const launchDone = launch.data?.items.filter((i) => i.done).length ?? 0;
   const [q, setQ] = useState("");
   const [slug, setSlug] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -83,7 +87,7 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
         className="relative flex h-full w-full max-w-md flex-col border-l border-white/10 bg-ink-2 shadow-2xl"
       >
         <header className="flex items-center gap-2.5 border-b border-white/5 px-5 pb-3 pt-4">
-          <Compass className="h-5 w-5 text-brand" aria-hidden="true" />
+          <CircleHelp className="h-5 w-5 text-brand" aria-hidden="true" />
           <h2 className="flex-1 text-base font-bold text-white">Guide &amp; help</h2>
           <button
             type="button"
@@ -145,6 +149,22 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
             </section>
           ) : (
             <>
+              {launch.data && (
+                <Link
+                  href="/admin/getting-started"
+                  onClick={onClose}
+                  className="mb-5 flex items-center gap-3 rounded-[0.75rem] bg-white/[0.03] px-3 py-2.5 ring-1 ring-white/[0.06] hover:bg-white/[0.06]"
+                >
+                  <ProgressRing done={launchDone} total={launch.data.items.length} size={32} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-100">Launch checklist</span>
+                    <span className="block text-xs text-slate-500">
+                      {launch.data.complete ? "All done. You're ready to go live." : `${launchDone} of ${launch.data.items.length} steps done`}
+                    </span>
+                  </span>
+                </Link>
+              )}
+
               <section aria-labelledby="guide-tours-h">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h3 id="guide-tours-h" className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">

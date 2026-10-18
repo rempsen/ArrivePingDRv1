@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Compass } from "lucide-react";
+import { CircleHelp } from "lucide-react";
 import { tourAttr } from "./anchors";
 import { useGuide } from "./GuideProvider";
 
@@ -31,7 +31,7 @@ export function GuideButton({ variant }: { variant: "sidebar" | "icon" }) {
             : "grid h-9 w-9 place-items-center rounded-lg text-slate-300 hover:bg-white/5"
         }
       >
-        <Compass className="h-[17px] w-[17px] shrink-0 text-brand" aria-hidden="true" />
+        <CircleHelp className="h-[17px] w-[17px] shrink-0 text-brand" aria-hidden="true" />
         {variant === "sidebar" && (
           <>
             <span className="flex-1 text-left">Guide &amp; help</span>
