@@ -231,6 +231,16 @@ describe("the set-password link", () => {
     expect((await tokensFor("wl-tech")).sort()).toEqual([t2, t3].sort());
   });
 
+  it("a link made in the same millisecond as an older one still retires it (Codex on #63)", async () => {
+    await db.delete(schema.verification).where(eq(schema.verification.value, "wl-tech"));
+    const at = new Date("2026-10-18T05:00:00Z");
+    const first = await w.setPasswordLink("wl-tech", "field", at);
+    const second = await w.setPasswordLink("wl-tech", "field", at);
+    expect(second.createdAt.getTime()).toBeGreaterThan(first.createdAt.getTime());
+    await w.keepOnlyLink("wl-tech", second);
+    expect(await tokensFor("wl-tech")).toEqual([new URL(second.url).searchParams.get("token")!]);
+  });
+
   it("is redeemed by the normal reset-password endpoint", async () => {
     const { auth } = await import("../../api/auth");
     const token = new URL((await w.setPasswordLink("wl-disp", "office")).url).searchParams.get("token")!;
