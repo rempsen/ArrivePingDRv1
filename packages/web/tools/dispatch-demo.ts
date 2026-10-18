@@ -10,6 +10,7 @@
  *   bun run tools/dispatch-demo.ts                 # 12 technicians, 40 jobs
  *   bun run tools/dispatch-demo.ts --size large    # 200 technicians, 2,000 jobs
  *   bun run tools/dispatch-demo.ts --port 4400 --no-move
+ *   bun run tools/dispatch-demo.ts --showcase      # + one finished job for the /features screenshots
  *
  * Prints the sign-in email and password. Every few seconds it moves the
  * technicians who are on the road, so the live stream has something to send.
@@ -24,6 +25,7 @@ const arg = (name: string) => {
 const SIZE = arg("--size") === "large" ? "large" : "small";
 const PORT = Number(arg("--port") ?? 4300);
 const MOVE = !argv.includes("--no-move");
+const SHOWCASE = argv.includes("--showcase"); // features-page screenshots (tools/features-showcase.ts)
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -252,6 +254,11 @@ const rows = jobSeeds.map((j, i) => ({
 }));
 for (let i = 0; i < rows.length; i += 400) await db.insert(schema.bookings).values(rows.slice(i, i + 400));
 
+if (SHOWCASE) {
+  const { seedShowcase } = await import("./features-showcase");
+  console.log("showcase:", JSON.stringify(await seedShowcase({ db, schema, CO, adminId: admin.id, customers })));
+}
+
 // ── serve ─────────────────────────────────────────────────────────────────
 const { default: app } = await import("../src/api/index");
 const { serveSite } = await import("../src/site-server");
@@ -261,6 +268,9 @@ const server = Bun.serve({
   fetch(request) {
     const url = new URL(request.url);
     if (url.pathname.startsWith("/api")) return app.fetch(request);
+    if (SHOWCASE && url.pathname === "/demo-assets/voice-note.mp3") {
+      return new Response(Bun.file(new URL("./fixtures/voice-note.mp3", import.meta.url)), { headers: { "content-type": "audio/mpeg" } });
+    }
     return serveSite(request, url);
   },
 });

@@ -1873,7 +1873,7 @@ function FieldRecordPanel({ bookingId }: { bookingId: string }) {
           </div>
           <p className="mt-1.5 text-xs text-slate-500">
             {sig.name}
-            {sig.at ? ` · ${new Date(Number(sig.at)).toLocaleString()}` : ""}
+            {sig.at ? ` · ${new Date(/^\d+$/.test(String(sig.at)) ? Number(sig.at) : String(sig.at)).toLocaleString()}` : ""}
           </p>
         </div>
       )}

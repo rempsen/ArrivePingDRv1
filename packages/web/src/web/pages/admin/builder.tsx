@@ -75,6 +75,10 @@ export default function BuilderPage() {
   const [category, setCategory] = useState(defaultCategory);
   const [estimatedMins, setEstimatedMins] = useState(60);
   const [rateModel, setRateModel] = useState<RateModel>({ ...EMPTY_RATE_MODEL });
+  // Bumped whenever a different template (or a blank form) loads, so the rate
+  // editor re-reads which pricing mode the loaded model uses instead of keeping
+  // the mode of whatever was open before.
+  const [rateEditorKey, setRateEditorKey] = useState(0);
   const [fields, setFields] = useState<Field[]>([]);
   const [dragType, setDragType] = useState<FieldType | null>(null);
   const [over, setOver] = useState(false);
@@ -100,6 +104,7 @@ export default function BuilderPage() {
     setCategory(defaultCategory);
     setEstimatedMins(60);
     setRateModel({ ...EMPTY_RATE_MODEL });
+    setRateEditorKey((k) => k + 1);
     setFields([]);
   }
 
@@ -109,6 +114,7 @@ export default function BuilderPage() {
     setCategory(t.category || "General");
     setEstimatedMins(t.estimatedMins || 60);
     setRateModel(parseRateModel(t.rateModel) ?? { ...EMPTY_RATE_MODEL });
+    setRateEditorKey((k) => k + 1);
     let parsed: Field[] = [];
     try {
       parsed = (JSON.parse(t.fields || "[]") as any[]).map((f) => ({
@@ -299,7 +305,7 @@ export default function BuilderPage() {
             <p className="mb-3 mt-2 text-[11px] text-slate-500">
               Mix any components. Charged on completion using actual on-site time + tracked mileage.
             </p>
-            <RateModelEditor value={rateModel} onChange={setRateModel} />
+            <RateModelEditor key={rateEditorKey} value={rateModel} onChange={setRateModel} />
           </details>
 
           {fields.length === 0 ? (

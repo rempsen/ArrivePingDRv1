@@ -118,13 +118,93 @@ export const chapters: Chapter[] = [
   },
 ];
 
-export const milestones = [
-  { key: "booked", label: "Booked", when: "When the job is scheduled", text: "Hi Dana, your appointment with Prairie Heating & Cooling is confirmed for Tuesday between 9 and 11 am." },
-  { key: "route", label: "On the way", when: "When the technician heads out", text: "Jordan is on the way and will arrive in about 18 minutes. Follow along live:" },
-  { key: "near", label: "Almost there", when: "A few minutes out", text: "Jordan is 3 minutes away." },
-  { key: "done", label: "Complete", when: "When the job is closed", text: "All done. Thanks, Dana. Your job summary and receipt are here:" },
-] as const;
-
 export const exportFormats = ["CSV", "Excel", "PDF", "JSON"] as const;
 
-export const workflows = ["Emergency call-out", "Quote to booked job", "Seasonal service reminder", "Follow-up and review request"];
+/**
+ * Real screens from the ArrivePing app, captured from the demo company
+ * (tools/dispatch-demo.ts --showcase) at 2x: one finished rooftop AC call with
+ * its driven route, photos, signature, voice note, price and tech pay.
+ * `span` is the share of a 12-column row the screen takes on desktop.
+ */
+export type Screen = {
+  src: string;
+  w: number;
+  h: number;
+  alt: string;
+  caption: string;
+  span: 4 | 5 | 6 | 7 | 8 | 12;
+  phone?: boolean;
+};
+
+const S = (name: string) => `/img/site/features/app-${name}.webp`;
+
+export const screens: Record<string, Screen[]> = {
+  create: [
+    { src: S("create-materials"), w: 1800, h: 410, span: 12, alt: "Products and materials on an ArrivePing work order: a condenser fan motor, a run capacitor and 2 lb of R-410A refrigerant, priced from the catalog with the margin shown.", caption: "Work order: parts and materials added from the catalog, with cost and margin." },
+    { src: S("create-catalog"), w: 1800, h: 866, span: 12, alt: "The ArrivePing catalog with 36 services, products and assemblies, grouped by category, each with cost, price and margin.", caption: "Catalog: pre-filled for HVAC, with services, products and assemblies you can edit, add or remove." },
+  ],
+  track: [
+    { src: S("track-report"), w: 1520, h: 1216, span: 7, alt: "An ArrivePing job report showing the timeline, a 14 minute drive, 1 hour 25 minutes on site, 10.7 km of mileage and the road-matched route driven there and back on a map.", caption: "Job report: drive time, time on site, mileage and the route driven there and back." },
+    { src: S("track-geofence"), w: 1130, h: 644, span: 5, alt: "ArrivePing Geofencing settings with the auto-arrive radius set to 150 meters.", caption: "Settings: each company sets its own auto-arrive radius." },
+  ],
+  capture: [
+    { src: S("capture-signoff"), w: 1800, h: 505, span: 12, alt: "The job record showing the customer's drawn signature and a 12 second voice note from the technician with its transcript.", caption: "Job record: the customer's signature and the technician's voice note, transcribed." },
+  ],
+  inform: [
+    { src: S("inform-phone"), w: 1170, h: 1920, span: 4, phone: true, alt: "The ArrivePing customer tracking page on a phone: a live map, the technician's arrival countdown, and Call and Text buttons.", caption: "What your customer sees: live ETA, map, and Call or Text." },
+    { src: S("inform-rules"), w: 1800, h: 927, span: 8, alt: "ArrivePing notification rules: for each job event, toggles for in-app, email, text and webhook to the customer, technician and office.", caption: "Notification rules: choose which milestones text, email or notify whom." },
+  ],
+  price: [
+    { src: S("price-rate"), w: 1172, h: 670, span: 7, alt: "ArrivePing pricing and rate model set to per hour: first hour $150, each hour after $90.", caption: "Pricing rule: $150 covers the first hour, then $90 an hour." },
+    { src: S("price-job"), w: 744, h: 780, span: 5, alt: "The pricing on a finished ArrivePing job: parts, subtotal $570.90, GST and PST, total $639.41 paid, and technician pay of $53.96.", caption: "The finished job: billed from actual time and parts, paid, with tech pay." },
+    { src: S("price-payouts"), w: 1800, h: 802, span: 12, alt: "ArrivePing technician payouts for the week: each technician's jobs, time on site, hourly pay and total, with one job's breakdown expanded.", caption: "Payouts: every technician's time and pay, job by job." },
+  ],
+  start: [
+    { src: S("start-templates"), w: 560, h: 1056, span: 4, alt: "Saved work-order templates in ArrivePing: Residential Visit, Commercial Job, Service / Maintenance and Emergency / Rush Call.", caption: "Your first four workflows, created when you sign up." },
+  ],
+  own: [
+    { src: S("own-export"), w: 364, h: 460, span: 4, alt: "The ArrivePing reports Export menu: CSV, Excel, JSON and PDF.", caption: "Every report exports to CSV, Excel, JSON or PDF." },
+    { src: S("own-raw"), w: 1796, h: 438, span: 8, alt: "ArrivePing raw data exports for jobs, technicians, customers and invoices, each as CSV, XLSX, JSON or PDF.", caption: "Raw data: jobs, technicians, customers and invoices." },
+  ],
+};
+
+/**
+ * The finished call in the screens above, photographed at each stage. Real
+ * photographs from one rooftop AC shoot by José Andrés Pacheco Cortes on Pexels
+ * (Pexels License: free for commercial use, edits allowed; we credit anyway):
+ * before https://www.pexels.com/photo/5463587/, during /5463580/, after /5463579/.
+ * Cropped and graded like the trade photos; the unit's maker logo, a shop sign
+ * and the leak detector's brand are blurred so no brand appears to endorse us.
+ */
+export const jobPhotos = [
+  { stage: "Before", src: "/img/site/features/job-before", caption: "RTU-1 as found, access panel off", time: "9:38 AM" },
+  { stage: "During", src: "/img/site/features/job-during", caption: "Leak check on the condenser coil", time: "10:15 AM" },
+  { stage: "After", src: "/img/site/features/job-after", caption: "Pressures back in range after the recharge", time: "10:53 AM" },
+] as const;
+
+/**
+ * The 18 industries with researched best practices and pre-built workflows,
+ * mirrored from services/industry-presets.ts (core and specialty presets, not
+ * the alias rows). A test keeps the two in step.
+ */
+export type Industry = { id: string; label: string; group: string; workflows: string[] };
+export const industries: Industry[] = [
+  { id: "home-builder-developer", label: "Home Building & Development", group: "Building & Renovation", workflows: ["Selections & Options Sale", "Change Order", "Possession Walkthrough", "Warranty Service Call", "Milestone Update"] },
+  { id: "painting-decorating", label: "Painting & Decorating", group: "Building & Renovation", workflows: ["Residential Repaint Estimate", "Builder Production Job", "Colour Schedule Sign-Off", "Touch-Up / Punch List", "Warranty Check-In"] },
+  { id: "design-build", label: "Design-Build Renovations & Additions", group: "Building & Renovation", workflows: ["Design Agreement / Retainer", "Selections Board Update", "Change Order", "Draw Milestone Invoice", "Closeout & Warranty Survey"] },
+  { id: "renovation-contractor", label: "Home Renovation & General Contracting", group: "Building & Renovation", workflows: ["Fixed-Price Estimate with Allowances", "Change Order", "Draw Milestone Invoice", "Site-Ready-for-Trade Notice", "Punch List & Closeout"] },
+  { id: "flooring", label: "Flooring", group: "Building & Renovation", workflows: ["Flooring Estimate & Options Catalog", "Ready-to-Schedule Gate", "Builder Program Job", "Quote-to-PO"] },
+  { id: "concrete-foundation-repair", label: "Concrete & Foundation Repair", group: "Building & Renovation", workflows: ["Tiered Pier/Waterproofing Quote", "Structural Inspection Report", "Engineer Sign-Off Gate", "Flatwork Estimate"] },
+  { id: "garage-door", label: "Garage Doors", group: "Building & Renovation", workflows: ["Door Configurator Quote", "Emergency Repair Dispatch", "Annual Tune-Up", "Builder Site-Readiness Confirm"] },
+  { id: "electrical", label: "Electrical", group: "Mechanical & Electrical Trades", workflows: ["Service & Repair", "Builder Rough-In / Upgrade Catalogue", "Permit & Inspection", "Emergency Power Restore"] },
+  { id: "exteriors", label: "Roofing, Siding & Exteriors", group: "Mechanical & Electrical Trades", workflows: ["Three-Tier Material Proposal", "Storm Damage Inspection", "Weather-Hold Reschedule", "Production Board Job"] },
+  { id: "hvac-plumbing", label: "HVAC & Plumbing", group: "Mechanical & Electrical Trades", workflows: ["Emergency Dispatch", "Maintenance / Membership Visit", "Installation Work Order", "Builder Install Quote", "After-Hours Escalation"] },
+  { id: "landscaping-grounds-snow", label: "Landscaping & Snow Removal", group: "Grounds, Snow & Trees", workflows: ["Seasonal Maintenance Contract", "Storm/Snow Dispatch", "Proof-of-Service Visit", "Fence & Deck Estimate"] },
+  { id: "tree-care", label: "Tree Care & Arborist Services", group: "Grounds, Snow & Trees", workflows: ["Per-Tree Tiered Quote", "Compliance Calendar Job (Elm Ban / EAB)", "PHC Program Visit", "Storm Damage Response"] },
+  { id: "commercial-building-maintenance", label: "Commercial Building Maintenance Contractor", group: "Facilities & Property Management", workflows: ["SLA Work Order", "Recurring PM Generation", "NTE Approval Request", "QBR Client Report"] },
+  { id: "property-management-maintenance", label: "Property Manager \u2014 Maintenance Operations", group: "Facilities & Property Management", workflows: ["Work Order Intake & Triage", "Owner Approval (NTE)", "Unit Turn Checklist", "Vendor COI Compliance"] },
+  { id: "equipment-rental", label: "Equipment & Tool Rental", group: "Specialty services", workflows: ["Reservation & Quote", "Delivery/Pickup Dispatch", "Off-Rent Inspection"] },
+  { id: "restoration", label: "Fire & Flood Restoration", group: "Specialty services", workflows: ["Emergency Response", "Mitigation → Rebuild Handoff", "Drying Log", "Deductible / AR Chase"] },
+  { id: "sports-organization", label: "Sports Clubs & Academies", group: "Specialty services", workflows: ["Session Schedule", "Program Calendar", "Coach Certification Tracking"] },
+  { id: "childcare-babysitting", label: "Childcare & Babysitting", group: "Care & Family Services", workflows: ["Babysitting Booking", "Family Intake & Meet-and-Greet", "Care Notes & Handoff Report", "Recurring Care Schedule", "Incident / Health Report"] },
+];

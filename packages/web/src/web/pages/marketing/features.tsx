@@ -3,7 +3,7 @@ import { MarketingShell } from "../../site/components/MarketingShell";
 import { useAnchorNav } from "../../site/components/SiteHeader";
 import { ClosingCTA } from "../../site/sections";
 import { brand } from "../../site/config";
-import { chapters, exportFormats, featuresMeta, hero, milestones, workflows, type Chapter } from "../../site/content/features";
+import { chapters, featuresMeta, hero, industries, jobPhotos, screens, type Chapter, type Screen } from "../../site/content/features";
 import "../../site/site.css";
 import "../../site/landing.css";
 import "../../site/features.css";
@@ -42,325 +42,83 @@ function Icon({ name }: { name: string }) {
   );
 }
 
-/* ---------------- demos ---------------- */
+/* ---------------- real screens ---------------- */
 
-const FT_PER_M = 1 / 0.3048;
-
-/** Drag the technician in and out of the circle; the clock follows. */
-function GeofenceDemo() {
-  const [unit, setUnit] = useState<"ft" | "m">("ft");
-  const [radius, setRadius] = useState(300);
-  const [dist, setDist] = useState(700);
-  const cfg = unit === "ft" ? { min: 100, max: 1000, step: 50, dmax: 1200 } : { min: 30, max: 300, step: 10, dmax: 360 };
-  const toFt = (v: number) => (unit === "ft" ? v : v * FT_PER_M);
-  const inside = dist <= radius;
-  const rPx = (toFt(radius) / toFt(cfg.dmax)) * 250;
-  const dPx = (toFt(dist) / toFt(cfg.dmax)) * 250;
-  const switchUnit = (u: "ft" | "m") => {
-    if (u === unit) return;
-    const f = u === "m" ? 1 / FT_PER_M : FT_PER_M;
-    const next = u === "m" ? { min: 30, max: 300, step: 10, dmax: 360 } : { min: 100, max: 1000, step: 50, dmax: 1200 };
-    const snap = (v: number, c: { min: number; max: number; step: number }) => Math.min(c.max, Math.max(c.min, Math.round((v * f) / c.step) * c.step));
-    setRadius(snap(radius, next));
-    setDist(Math.min(next.dmax, Math.max(0, Math.round((dist * f) / next.step) * next.step)));
-    setUnit(u);
-  };
+/** One real screen from the app, framed like the product it came from. */
+function ScreenShot({ shot }: { shot: Screen }) {
   return (
-    <div className="ft-demo" aria-label="Geofence demo">
-      <div className="ft-demo__stage">
-        <svg viewBox="0 0 400 300">
-          <title>{inside ? "Technician inside the job geofence: the clock is running" : "Technician outside the job geofence: the clock is stopped"}</title>
-          <defs>
-            <pattern id="ft-grid" width="30" height="30" patternUnits="userSpaceOnUse">
-              <path d="M30 0H0V30" fill="none" stroke="rgb(255 255 255 / 6%)" />
-            </pattern>
-          </defs>
-          <rect width="400" height="300" fill="url(#ft-grid)" />
-          <circle cx="110" cy="150" r={rPx} className={inside ? "ft-fence ft-fence--on" : "ft-fence"} />
-          <circle cx="110" cy="150" r="7" className="ft-job" />
-          <text x="110" y={Math.max(rPx, 8) + 168} textAnchor="middle" className="ft-label">Job address</text>
-          <g style={{ transform: `translate(${110 + dPx}px, 150px)`, transition: "transform .25s var(--ease-out)" }}>
-            <circle r="9" className={inside ? "ft-tech ft-tech--on" : "ft-tech"} />
-            <text y="-16" textAnchor="middle" className="ft-label">Technician</text>
-          </g>
-        </svg>
-        <div className={inside ? "ft-clock ft-clock--on" : "ft-clock"} aria-live="polite">
-          <span className="ft-clock__dot" />
-          {inside ? "On site. Clock running" : "Not on site. Clock stopped"}
-        </div>
+    <figure className={`ft-screen ft-screen--${shot.span}${shot.phone ? " ft-screen--phone" : ""}`} data-reveal>
+      <div className="ft-screen__frame">
+        <img src={shot.src} width={shot.w} height={shot.h} alt={shot.alt} loading="lazy" decoding="async" />
       </div>
-      <div className="ft-demo__controls">
-        <fieldset className="ft-seg" aria-label="Units">
-          {(["ft", "m"] as const).map((u) => (
-            <button key={u} type="button" aria-pressed={unit === u} onClick={() => switchUnit(u)}>
-              {u === "ft" ? "Feet" : "Meters"}
-            </button>
+      <figcaption>{shot.caption}</figcaption>
+    </figure>
+  );
+}
+
+/** The real photos from the finished call, one stage at a time. */
+function JobPhotos() {
+  const [k, setK] = useState(0);
+  const p = jobPhotos[k];
+  return (
+    <figure className="ft-screen ft-screen--12 ft-photos" data-reveal>
+      <div className="ft-photos__bar">
+        <fieldset className="ft-seg" aria-label="Stage of the job">
+          {jobPhotos.map((x, i) => (
+            <button key={x.stage} type="button" aria-pressed={k === i} onClick={() => setK(i)}>{x.stage}</button>
           ))}
         </fieldset>
-        <label>
-          <span>Your range from the job address <b>{radius} {unit}</b></span>
-          <input type="range" aria-label="Range from the job address" min={cfg.min} max={cfg.max} step={cfg.step} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
-        </label>
-        <label>
-          <span>Technician is <b>{dist} {unit}</b> away</span>
-          <input type="range" aria-label="Technician distance from the job" min={0} max={cfg.dmax} step={cfg.step} value={dist} onChange={(e) => setDist(Number(e.target.value))} />
-        </label>
-        <p className="ft-note">Each company sets its own range. Arriving starts the clock and leaving stops it. Nobody has to remember.</p>
+        <span className="ft-photos__meta">Rooftop AC not cooling · Tom Rivera</span>
       </div>
-    </div>
+      <div className="ft-photos__stage">
+        {jobPhotos.map((x, i) => (
+          <picture key={x.stage} className={i === k ? "is-on" : undefined}>
+            <source srcSet={`${x.src}.webp`} type="image/webp" />
+            <img src={`${x.src}.jpg`} width={1200} height={900} alt={i === k ? `${x.stage} photo: ${x.caption}` : ""} loading="lazy" decoding="async" />
+          </picture>
+        ))}
+        <p className="ft-photos__cap" aria-live="polite"><b>{p.stage}</b> {p.caption}<span>{p.time}</span></p>
+      </div>
+      <figcaption>The photos the technician took on this call, filed under before, during and after.</figcaption>
+    </figure>
   );
 }
 
-const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
-
-/** A flat fee with the first hour included, then time on top. Example numbers; every company sets its own. */
-function PricingDemo() {
-  const [mins, setMins] = useState(95);
-  const [rate, setRate] = useState(90);
-  const extra = Math.max(0, mins - 60);
-  const extraCost = (extra / 60) * rate;
-  const total = 150 + extraCost;
+/** The 18 industries, and the workflows each one starts with. */
+function IndustryPicker() {
+  const [id, setId] = useState("hvac-plumbing");
+  const ind = industries.find((x) => x.id === id) ?? industries[0];
+  const groups = [...new Set(industries.map((x) => x.group))];
   return (
-    <div className="ft-demo ft-demo--pricing" aria-label="Pricing logic demo">
-      <div className="ft-receipt">
-        <p className="ft-receipt__kicker">Example rule</p>
-        <p className="ft-receipt__rule">$150 service fee, first 60 minutes included</p>
-        <dl>
-          <div><dt>Service fee</dt><dd>{usd(150)}</dd></div>
-          <div><dt>Time on site</dt><dd>{mins} min</dd></div>
-          <div><dt>Included</dt><dd>60 min</dd></div>
-          <div><dt>Extra time ({extra} min)</dt><dd>{usd(extraCost)}</dd></div>
-        </dl>
-        <p className="ft-receipt__total"><span>Total</span><b>{usd(total)}</b></p>
-      </div>
-      <div className="ft-demo__controls">
-        <label>
-          <span>Time on site <b>{mins} min</b></span>
-          <input type="range" aria-label="Time on site in minutes" min={0} max={180} step={5} value={mins} onChange={(e) => setMins(Number(e.target.value))} />
+    <div className="ft-screen ft-screen--8 ft-industry" data-reveal>
+      <div className="ft-industry__card">
+        <div className="ft-big"><b>{industries.length}</b><span>industries researched, each with its own best practices and pre-built workflows</span></div>
+        <label className="ft-industry__pick">
+          <span>Choose an industry</span>
+          <select value={id} onChange={(e) => setId(e.target.value)}>
+            {groups.map((g) => (
+              <optgroup key={g} label={g}>
+                {industries.filter((x) => x.group === g).map((x) => (
+                  <option key={x.id} value={x.id}>{x.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </label>
-        <label>
-          <span>Your rate after the first hour <b>{usd(rate)}/hr</b></span>
-          <input type="range" aria-label="Rate per hour after the first hour" min={40} max={200} step={5} value={rate} onChange={(e) => setRate(Number(e.target.value))} />
-        </label>
-        <p className="ft-note">Example numbers only. You set the fee, the included time and the rate that follows.</p>
-      </div>
-    </div>
-  );
-}
-
-/** The four texts a customer can get, and what a tracking link carries. */
-function MilestoneDemo() {
-  const [i, setI] = useState(1);
-  const m = milestones[i];
-  const link = i === 1 || i === 3;
-  return (
-    <div className="ft-demo ft-demo--sms" aria-label="Customer text demo">
-      <div className="ft-demo__controls">
-        <div className="ft-tabs" role="tablist" aria-label="Milestones">
-          {milestones.map((x, k) => (
-            <button key={x.key} type="button" role="tab" aria-selected={i === k} onClick={() => setI(k)}>
-              <b>{x.label}</b>
-              <span>{x.when}</span>
-            </button>
+        <p className="ft-receipt__kicker">Workflows ready for {ind.label}</p>
+        <ol className="ft-wf" aria-live="polite">
+          {ind.workflows.map((w, k) => (
+            <li key={w}><span>{k + 1}</span>{w}</li>
           ))}
-        </div>
-        <p className="ft-note">Pick the milestones that matter to your customers. The wording shown is a sample.</p>
-      </div>
-      <div className="ft-phone" aria-live="polite">
-        <div className="ft-phone__bar">Prairie Heating &amp; Cooling</div>
-        <div className="ft-bubble">
-          {m.text}
-          {link && <span className="ft-link">arriveping.com/t/your-job</span>}
-        </div>
-        {i === 1 && (
-          <div className="ft-track">
-            <div className="ft-track__eta"><b>18 min</b><span>Live arrival time</span></div>
-            <div className="ft-track__btns"><span>Text Jordan</span><span>Call Jordan</span></div>
-          </div>
-        )}
+        </ol>
       </div>
     </div>
   );
 }
 
-const SAMPLE_ROWS = [
-  ["Job", "Technician", "Travel (km)", "Travel (min)", "On site (min)"],
-  ["1042", "Jordan", "11.4", "18", "74"],
-  ["1043", "Priya", "6.2", "11", "52"],
-];
-
-function ExportDemo() {
-  const [fmt, setFmt] = useState<(typeof exportFormats)[number]>("CSV");
-  const csv = SAMPLE_ROWS.map((r) => r.join(",")).join("\n");
-  const json = JSON.stringify(
-    SAMPLE_ROWS.slice(1).map((r) => ({ job: r[0], technician: r[1], travelKm: Number(r[2]), travelMin: Number(r[3]), onSiteMin: Number(r[4]) })),
-    null,
-    2,
-  );
-  return (
-    <div className="ft-demo ft-demo--export" aria-label="Export demo">
-      <fieldset className="ft-seg ft-seg--wide" aria-label="Export format">
-        {exportFormats.map((f) => (
-          <button key={f} type="button" aria-pressed={fmt === f} onClick={() => setFmt(f)}>{f}</button>
-        ))}
-      </fieldset>
-      <div className={`ft-file ft-file--${fmt.toLowerCase()}`}>
-        <div className="ft-file__name">jobs-export.{fmt === "Excel" ? "xlsx" : fmt.toLowerCase()}</div>
-        {fmt === "CSV" && <pre>{csv}</pre>}
-        {fmt === "JSON" && <pre>{json}</pre>}
-        {(fmt === "Excel" || fmt === "PDF") && (
-          <table>
-            <tbody>
-              {SAMPLE_ROWS.map((r, k) => (
-                <tr key={r[0]}>{r.map((c, j) => (k === 0 ? <th key={j}>{c}</th> : <td key={j}>{c}</td>))}</tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-      <p className="ft-note">Sample data. Everything you collect can be exported, then imported into any of your other tools.</p>
-    </div>
-  );
-}
-
-const COMPANIES = [
-  { name: "Prairie Heating & Cooling", note: "Employee" },
-  { name: "Northern Plumbing Co.", note: "Subcontractor" },
-  { name: "Red River Electric", note: "Subcontractor" },
-];
-
-function CompanyDemo() {
-  const [c, setC] = useState(0);
-  return (
-    <div className="ft-demo ft-demo--co" aria-label="Company switcher demo">
-      <div className="ft-phone">
-        <div className="ft-phone__bar">Who are you working for?</div>
-        <ul className="ft-co">
-          {COMPANIES.map((x, k) => (
-            <li key={x.name}>
-              <button type="button" aria-pressed={c === k} onClick={() => setC(k)}>
-                <span>{x.name}<small>{x.note}</small></span>
-                <i aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="ft-co__now" aria-live="polite">Showing jobs for <b>{COMPANIES[c].name}</b></div>
-      </div>
-      <p className="ft-note">Sample companies. One technician can work for you and for other companies, and chooses at the start of each shift.</p>
-    </div>
-  );
-}
-
-function WorkflowsDemo() {
-  return (
-    <div className="ft-demo ft-demo--wf" aria-label="Workflows built from your website">
-      <p className="ft-receipt__kicker">Built from your website, ready on day one</p>
-      <ol className="ft-wf">
-        {workflows.map((w, k) => (
-          <li key={w}><span>{k + 1}</span>{w}</li>
-        ))}
-      </ol>
-      <div className="ft-big"><b>18</b><span>industries of best practices and workflows behind them</span></div>
-      <p className="ft-note">Example workflow names. Yours are generated from your own site.</p>
-    </div>
-  );
-}
-
-
-const CATALOG = [
-  { id: "call", name: "Service call, first hour included", price: 150 },
-  { id: "part", name: "Hot surface igniter (part)", price: 68 },
-  { id: "labour", name: "Extra labour, 1 hour", price: 90 },
-];
-
-/** Build a work order from catalog items and watch it price itself. */
-function CreateDemo() {
-  const [on, setOn] = useState<string[]>(["call"]);
-  const total = CATALOG.filter((c) => on.includes(c.id)).reduce((n, c) => n + c.price, 0);
-  const toggle = (id: string) => setOn((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
-  return (
-    <div className="ft-demo" aria-label="Work order demo">
-      <div className="ft-wo">
-        <div className="ft-wo__head"><b>Furnace not heating</b><span className="ft-pill">Urgent</span></div>
-        <dl className="ft-wo__facts">
-          <div><dt>Customer</dt><dd>Dana Reyes</dd></div>
-          <div><dt>Address</dt><dd>214 Waverley St</dd></div>
-          <div><dt>Skills needed</dt><dd>Gas fitter</dd></div>
-        </dl>
-        <p className="ft-receipt__kicker">Add from your catalog</p>
-        <ul className="ft-co">
-          {CATALOG.map((c) => (
-            <li key={c.id}>
-              <button type="button" aria-pressed={on.includes(c.id)} onClick={() => toggle(c.id)}>
-                <span>{c.name}<small>{usd(c.price)}</small></span>
-                <i aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="ft-receipt__total"><span>Work order total</span><b>{usd(total)}</b></p>
-      </div>
-      <p className="ft-note">Sample job and prices. Your catalog arrives pre-filled and is yours to edit.</p>
-    </div>
-  );
-}
-
-const STAGES = [
-  { key: "Before", cap: ["The unit as found", "Panel and wiring"] },
-  { key: "During", cap: ["Igniter removed", "Replacement fitted"] },
-  { key: "After", cap: ["Unit running", "Area left clean"] },
-];
-
-/** The job record as the technician builds it on site. */
-function CaptureDemo() {
-  const [k, setK] = useState(0);
-  const st = STAGES[k];
-  return (
-    <div className="ft-demo" aria-label="Job record demo">
-      <fieldset className="ft-seg ft-seg--wide" aria-label="Stage of the job">
-        {STAGES.map((x, i) => (
-          <button key={x.key} type="button" aria-pressed={k === i} onClick={() => setK(i)}>{x.key}</button>
-        ))}
-      </fieldset>
-      <div className="ft-shots">
-        {st.cap.map((c, i) => (
-          <figure key={c} className={`ft-shot ft-shot--${i}`}>
-            <Icon name="camera" />
-            <figcaption>{c}</figcaption>
-          </figure>
-        ))}
-      </div>
-      <div className="ft-voice">
-        <span className="ft-voice__btn"><Icon name="mic" /></span>
-        <span className="ft-voice__bars" aria-hidden="true">{Array.from({ length: 28 }, (_, i) => <i key={i} style={{ height: `${30 + ((i * 37) % 60)}%` }} />)}</span>
-        <small>Voice note, 0:24, added to the record</small>
-      </div>
-      {k === 2 && (
-        <div className="ft-close" aria-live="polite">
-          <svg viewBox="0 0 240 60" aria-hidden="true"><path d="M8 44c20 0 22-30 40-30s6 30 26 30 14-18 40-18 20 16 44 4 22-4 40-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          <span>Customer signature</span>
-          <span className="ft-pay">Charge card with Stripe</span>
-        </div>
-      )}
-      <p className="ft-note">Sample job record. Which steps a technician sees follows your workflow.</p>
-    </div>
-  );
-}
-
-const DEMOS: Partial<Record<string, ComponentType>> = {
-  create: CreateDemo,
-  capture: CaptureDemo,
-  track: GeofenceDemo,
-  inform: MilestoneDemo,
-  price: PricingDemo,
-  start: WorkflowsDemo,
-  own: () => (
-    <div className="ft-pair">
-      <ExportDemo />
-      <CompanyDemo />
-    </div>
-  ),
+const EXTRA: Partial<Record<string, ComponentType>> = {
+  capture: JobPhotos,
+  start: IndustryPicker,
 };
 
 /* ---------------- page ---------------- */
@@ -395,7 +153,8 @@ function useActiveChapter() {
 }
 
 function ChapterView({ c }: { c: Chapter }) {
-  const Demo = DEMOS[c.id];
+  const shots = screens[c.id] ?? [];
+  const Extra = EXTRA[c.id];
   return (
     <section id={`ft-${c.id}`} className="ft-chapter" aria-labelledby={`ft-${c.id}-h`}>
       <div className="container">
@@ -406,22 +165,30 @@ function ChapterView({ c }: { c: Chapter }) {
             <p className="lede">{c.promise}</p>
           </div>
         </header>
-        <div className={Demo ? "ft-chapter__body ft-chapter__body--demo" : "ft-chapter__body"}>
-          <ul className="ft-tiles">
-            {c.tiles.map((t, k) => (
-              <li key={t.title} className="ft-tile" data-reveal data-reveal-delay={String(Math.min(k, 3))}>
-                <span className="ft-tile__icon"><Icon name={t.icon} /></span>
-                <h3>{t.title}</h3>
-                <p>{t.text}</p>
-              </li>
-            ))}
-          </ul>
-          {Demo && (
-            <div className="ft-chapter__demo" data-reveal>
-              <Demo />
-            </div>
-          )}
-        </div>
+        <ul className="ft-tiles">
+          {c.tiles.map((t, k) => (
+            <li key={t.title} className="ft-tile" data-reveal data-reveal-delay={String(Math.min(k, 3))}>
+              <span className="ft-tile__icon"><Icon name={t.icon} /></span>
+              <h3>{t.title}</h3>
+              <p>{t.text}</p>
+            </li>
+          ))}
+        </ul>
+        {(shots.length > 0 || Extra) && (
+          <div className="ft-screens">
+            {c.id === "start" ? (
+              <>
+                {shots.map((x) => <ScreenShot key={x.src} shot={x} />)}
+                {Extra && <Extra />}
+              </>
+            ) : (
+              <>
+                {Extra && <Extra />}
+                {shots.map((x) => <ScreenShot key={x.src} shot={x} />)}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

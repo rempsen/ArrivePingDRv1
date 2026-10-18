@@ -234,7 +234,7 @@ function SignOff({ signature }: { signature: any }) {
       </div>
       <p className="mt-2 text-xs text-slate-500">
         Signed by <span className="font-semibold text-slate-300">{signature.name}</span>
-        {signature.at ? ` · ${new Date(Number(signature.at)).toLocaleString()}` : ""}
+        {signature.at ? ` · ${new Date(/^\d+$/.test(String(signature.at)) ? Number(signature.at) : String(signature.at)).toLocaleString()}` : ""}
       </p>
     </div>
   );
