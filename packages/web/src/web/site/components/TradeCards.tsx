@@ -1,12 +1,14 @@
-import { useRef, useState } from "react";
 import { trades, tradeMedia } from "../config";
-import { usePlayback } from "../motion/playback";
 
 /**
- * One card per trade, linking to that trade's page. The still is a generated
- * scene of the trade; on hover or keyboard focus (and only when motion is
- * allowed) its short silent loop plays in place. The video loads on first
- * hover, so the cards cost nothing extra on page load.
+ * One card per trade, linking to that trade's page. Each is a real photograph
+ * of the work (see tradeMedia in config.ts), and over it, the one thing
+ * ArrivePing adds to that moment: the text the trade's customer gets ("Jordan
+ * is on the way…"). The text slides in as the card scrolls into view (plain
+ * CSS off the shared reveal; static with reduced motion).
+ *
+ * On phones the six become a swipeable row, one card at a time with the next
+ * peeking in, so the photo and the message both stay readable.
  */
 export function TradeCards({ exclude }: { exclude?: string }) {
   return (
@@ -22,27 +24,22 @@ export function TradeCards({ exclude }: { exclude?: string }) {
 
 function TradeCard({ trade, delay }: { trade: (typeof trades)[number]; delay: number }) {
   const m = tradeMedia(trade.key);
-  const { reduced, paused } = usePlayback();
-  const [armed, setArmed] = useState(false);
-  const video = useRef<HTMLVideoElement>(null);
-  const motion = !reduced && !paused;
-
-  const start = () => {
-    if (!motion) return;
-    setArmed(true);
-    requestAnimationFrame(() => video.current?.play().catch(() => {}));
-  };
-  const stop = () => video.current?.pause();
-
   return (
     <li className="trade-card" data-reveal="" data-reveal-delay={String(delay)}>
-      <a href={trade.href} onMouseEnter={start} onMouseLeave={stop} onFocus={start} onBlur={stop}>
+      <a href={trade.href} aria-label={`${trade.label}: ${trade.line} See how it works`}>
         <span className="trade-card__media">
           <picture>
             <source type="image/webp" srcSet={m.card} />
             <img src={m.cardJpg} alt="" loading="lazy" decoding="async" width={800} height={600} />
           </picture>
-          {armed ? <video ref={video} src={m.film} muted loop playsInline preload="auto" aria-hidden="true" tabIndex={-1} /> : null}
+          {/* Illustration of the customer's text; the link's label carries the meaning. */}
+          <span className="trade-ping" aria-hidden="true">
+            <span className="trade-ping__meta">
+              <span className="trade-ping__dot" aria-hidden="true" />
+              Text message · now
+            </span>
+            <span className="trade-ping__text">{trade.ping}</span>
+          </span>
         </span>
         <span className="trade-card__copy">
           <span className="trade-card__label">{trade.label}</span>
