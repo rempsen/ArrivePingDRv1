@@ -20,6 +20,8 @@ import { authHeaders } from "../../lib/auth";
 import { useCustomerNoun } from "../../lib/use-brand";
 import { useNotifySummary, NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { companyAlertText } from "../../components/company-alert";
+import { CoachAnchor } from "../../components/coach-tour";
+import { isPracticeJob, isSampleJob } from "../../lib/practice";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -129,6 +131,17 @@ export default function Jobs() {
   const inflight = active.filter((b) => b.status !== "assigned").sort(byScheduledAtAsc);
 
   const stats = todayStats ?? { jobsDone: 0, earnings: 0, activeJobs: 0, totalToday: 0 };
+  // Where the first coach mark points: the practice job if there is one,
+  // otherwise whatever is at the top of the list.
+  const tipAt = upcoming.some(isPracticeJob)
+    ? "practice"
+    : offered.length
+      ? "offers"
+      : inflight.length
+        ? "inflight"
+        : upcoming.length
+          ? "upcoming"
+          : "empty";
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
@@ -215,6 +228,7 @@ export default function Jobs() {
         showsVerticalScrollIndicator={false}
       >
         {offered.length > 0 && (
+          <Anchored on={tipAt === "offers"}>
           <Section title="New offers" accent>
             {offered.map((b) => (
               <Card key={b.id} style={{ borderColor: C.brand, borderWidth: 1.5 }}>
@@ -240,9 +254,11 @@ export default function Jobs() {
               </Card>
             ))}
           </Section>
+          </Anchored>
         )}
 
         {inflight.length > 0 && (
+          <Anchored on={tipAt === "inflight"}>
           <Section title="In progress">
             {inflight.map((b) => (
               <Card
@@ -254,28 +270,39 @@ export default function Jobs() {
               </Card>
             ))}
           </Section>
+          </Anchored>
         )}
 
         {upcoming.length > 0 && (
           <Section title="Up next">
-            {upcoming.map((b) => (
-              <Card
-                key={b.id}
-                onPress={() => router.push(`/job/${b.id}`)}
-                accessibilityLabel={`${b.service?.name || b.title || "Job"} for ${b.customer?.name || "customer"}, up next. Opens job details.`}
-              >
-                <JobHead b={b} chevron />
-              </Card>
-            ))}
+            {upcoming.map((b, i) => {
+              const card = (
+                <Card
+                  key={b.id}
+                  onPress={() => router.push(`/job/${b.id}`)}
+                  accessibilityLabel={`${jobTitle(b)} for ${b.customer?.name || "customer"}, up next. Opens job details.`}
+                >
+                  <JobHead b={b} chevron />
+                </Card>
+              );
+              const here = tipAt === "practice" ? isPracticeJob(b) : tipAt === "upcoming" && i === 0;
+              return (
+                <Anchored key={b.id} on={here}>
+                  {card}
+                </Anchored>
+              );
+            })}
           </Section>
         )}
 
         {offered.length === 0 && active.length === 0 && (
-          <Empty
-            icon={<Clock color={C.muted} size={44} />}
-            text="No active jobs"
-            sub="New offers will appear here automatically."
-          />
+          <Anchored on={tipAt === "empty"}>
+            <Empty
+              icon={<Clock color={C.muted} size={44} />}
+              text="No active jobs"
+              sub="New offers will appear here automatically."
+            />
+          </Anchored>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -291,13 +318,29 @@ function Section({ title, accent, children }: { title: string; accent?: boolean;
   );
 }
 
+/** Wraps the one element the "Your jobs land here" tip points at. */
+function Anchored({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return on ? <CoachAnchor id="jobs.list">{children}</CoachAnchor> : <>{children}</>;
+}
+
+/** A practice job reads as one wherever it's listed; a real job shows its service. */
+function jobTitle(b: Booking): string {
+  if (isPracticeJob(b)) return "Practice job";
+  return b.service?.name || b.title || "Service";
+}
+
 function JobHead({ b, chevron }: { b: Booking; chevron?: boolean }) {
   const { noun: customerNoun } = useCustomerNoun();
   return (
     <>
+      {isSampleJob(b) && (
+        <Text style={s.practiceTag} accessibilityLabel="Practice job: nobody is texted and it isn't paid">
+          {isPracticeJob(b) ? "PRACTICE · NOBODY IS TEXTED" : "SAMPLE · NOBODY IS TEXTED"}
+        </Text>
+      )}
       <View style={s.jobTop}>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={s.svc}>{b.service?.name || b.title || "Service"}</Text>
+          <Text style={s.svc}>{jobTitle(b)}</Text>
           <Text style={s.cust}>{b.customer?.name || customerNoun}</Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 6 }}>
@@ -393,5 +436,6 @@ const s = StyleSheet.create({
   metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10 },
   meta: { color: C.sub, fontSize: 13, flex: 1 },
   price: { color: C.green, fontSize: 14, fontWeight: "800" },
+  practiceTag: { color: C.amber, fontSize: 11, fontWeight: "800", letterSpacing: 0.8, marginBottom: 8 },
   actions: { flexDirection: "row", gap: 10, marginTop: 16 },
 });

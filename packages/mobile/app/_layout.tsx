@@ -9,6 +9,7 @@ import { OneDollarStatsProvider } from "../lib/analytics";
 import { setupNetworkIntegration } from "../lib/network";
 import { setupSentry, Sentry } from "../lib/sentry";
 import { C } from "../lib/theme";
+import { CoachProvider } from "../components/coach-tour";
 import appJson from "../app.json";
 
 // Initialize as early as possible (module scope, before any component
@@ -56,6 +57,9 @@ function RootLayout() {
                 status row unreadable on some testers' phones. */}
             <StatusBar style="light" backgroundColor={C.bg} />
             <OfflineBanner />
+            {/* Technician coach marks: above every screen, so a tip can point
+                at a control on a tab or on the job screen. */}
+            <CoachProvider>
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -69,6 +73,7 @@ function RootLayout() {
               <Stack.Screen name="(rider)" />
               <Stack.Screen name="job/[id]" options={{ animation: "slide_from_right" }} />
             </Stack>
+            </CoachProvider>
           </QueryClientProvider>
         </SafeAreaProvider>
       </OneDollarStatsProvider>

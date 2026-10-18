@@ -1,0 +1,450 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  AccessibilityInfo,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import * as SecureStore from "expo-secure-store";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
+import { C, R } from "../lib/theme";
+
+/**
+ * Technician coach marks (blueprint 2026-10-17, Phase 5).
+ *
+ * Four tips, one per screen, shown once to a new technician after the
+ * permissions primer: their jobs, the "On the clock" switch, "Start Driving"
+ * on their practice job, and Messages. Each tip dims the screen around one
+ * real control and says what it does in two short lines. "Skip tour" ends it
+ * at any step; Profile → "Show me around again" replays it.
+ *
+ * Built without a tour library on purpose: it's plain React Native (Modal,
+ * measureInWindow), so it needs no native module, ships over the air, and runs
+ * the same on iPhone, iPad, Android and the web build used for testing.
+ *
+ * Seen-state: SecureStore `tour_seen_v1` on the device, plus `tours["tech-app"]`
+ * on the membership (PATCH /api/me/onboarding), so a new phone doesn't repeat it.
+ */
+const SEEN_KEY = "tour_seen_v1";
+const TOUR_ID = "tech-app";
+const MISSING_ANCHOR_MS = 4000;
+
+type AnchorId = "jobs.list" | "profile.clock" | "job.primary" | "messages.header";
+
+interface Step {
+  id: "jobs" | "clock" | "drive" | "messages";
+  anchor: AnchorId;
+  route: (practiceJobId: string | null) => string;
+  title: string;
+  body: string;
+}
+
+const STEPS: Step[] = [
+  {
+    id: "jobs",
+    anchor: "jobs.list",
+    route: () => "/(rider)",
+    title: "Your jobs land here",
+    body: "New offers show up at the top with Accept and Decline. Tap a job to open it.",
+  },
+  {
+    id: "clock",
+    anchor: "profile.clock",
+    route: () => "/(rider)/profile",
+    title: "Go on the clock",
+    body: "Turn this on when you start work. You get offers, and the office sees where you are, only while it's on.",
+  },
+  {
+    id: "drive",
+    anchor: "job.primary",
+    route: (id) => `/job/${id}`,
+    title: "Tap when you leave",
+    body: "Start Driving texts the customer a live tracking link. This is your practice job, so nobody is texted.",
+  },
+  {
+    id: "messages",
+    anchor: "messages.header",
+    route: () => "/(rider)/messages",
+    title: "Talk to the office",
+    body: "Dispatch messages you here. Your practice job is on the Jobs tab whenever you want to try it.",
+  },
+];
+
+async function readSeen(): Promise<boolean> {
+  try {
+    if (Platform.OS === "web") return localStorage.getItem(SEEN_KEY) === "1";
+    return (await SecureStore.getItemAsync(SEEN_KEY)) === "1";
+  } catch {
+    return false;
+  }
+}
+async function writeSeen() {
+  try {
+    if (Platform.OS === "web") localStorage.setItem(SEEN_KEY, "1");
+    else await SecureStore.setItemAsync(SEEN_KEY, "1");
+  } catch {
+    /* best effort: the server copy still stops a repeat */
+  }
+}
+
+type Rect = { x: number; y: number; w: number; h: number };
+interface Run {
+  steps: Step[];
+  i: number;
+  practiceJobId: string | null;
+}
+
+interface CoachApi {
+  register: (id: AnchorId, node: View | null) => void;
+  /** First run: shows the tour if this technician hasn't seen it. */
+  maybeStart: () => void;
+  /** Profile → "Show me around again". */
+  replay: () => void;
+  active: boolean;
+}
+
+const CoachCtx = createContext<CoachApi | null>(null);
+
+export function useCoach(): CoachApi {
+  return (
+    useContext(CoachCtx) ?? {
+      register: () => {},
+      maybeStart: () => {},
+      replay: () => {},
+      active: false,
+    }
+  );
+}
+
+/** Wrap the control a tip points at. Renders a plain View, so layout is unchanged. */
+export function CoachAnchor({ id, children, style }: { id: AnchorId; children: ReactNode; style?: object }) {
+  const { register } = useCoach();
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    register(id, ref.current);
+    return () => register(id, null);
+  }, [id, register]);
+  return (
+    <View ref={ref} collapsable={false} style={style}>
+      {children}
+    </View>
+  );
+}
+
+export function CoachProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const anchors = useRef(new Map<AnchorId, View>());
+  const [run, setRun] = useState<Run | null>(null);
+  const [rect, setRect] = useState<Rect | null>(null);
+  const [cardH, setCardH] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const startedRef = useRef(false);
+  const { width, height } = useWindowDimensions();
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => {});
+  }, []);
+
+  const register = useCallback((id: AnchorId, node: View | null) => {
+    if (node) anchors.current.set(id, node);
+    else anchors.current.delete(id);
+  }, []);
+
+  const finish = useCallback(
+    (status: "completed" | "skipped") => {
+      setRun(null);
+      setRect(null);
+      void writeSeen();
+      api.me.onboarding
+        .$patch({ json: { tours: { [TOUR_ID]: { status, at: new Date().toISOString() } } } })
+        .catch(() => {});
+      router.navigate("/(rider)");
+    },
+    [router],
+  );
+
+  const runRef = useRef(run);
+  runRef.current = run;
+  const go = useCallback(
+    (delta: 1 | -1) => {
+      const r = runRef.current;
+      if (!r) return;
+      const i = r.i + delta;
+      if (i < 0) return;
+      if (i >= r.steps.length) return finish("completed");
+      setRun({ ...r, i });
+    },
+    [finish],
+  );
+
+  const begin = useCallback(
+    async (replay: boolean) => {
+      let practiceJobId: string | null = null;
+      try {
+        const res = await api.me["practice-job"].$post();
+        const out = (await res.json()) as { jobId: string | null; reason?: string };
+        practiceJobId = out.jobId;
+        // A technician who has already done real work here doesn't need the
+        // first-run tour; they can still replay it from Profile.
+        if (!replay && !out.jobId && out.reason === "experienced") {
+          await writeSeen();
+          return;
+        }
+      } catch {
+        /* offline or older server: tour without the practice step */
+      }
+      if (practiceJobId) await qc.invalidateQueries({ queryKey: ["bookings"] });
+      const steps = STEPS.filter((s) => s.id !== "drive" || practiceJobId);
+      setRun({ steps, i: 0, practiceJobId });
+    },
+    [qc],
+  );
+
+  const maybeStart = useCallback(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    (async () => {
+      if (await readSeen()) return;
+      try {
+        const res = await api.me.onboarding.$get();
+        const body = (await res.json()) as { state?: { tours?: Record<string, unknown> } };
+        if (body.state?.tours?.[TOUR_ID]) {
+          await writeSeen();
+          return;
+        }
+      } catch {
+        /* can't tell: show it; finishing records it */
+      }
+      await begin(false);
+    })();
+  }, [begin]);
+
+  const replay = useCallback(() => {
+    void begin(true);
+  }, [begin]);
+
+  // Each step: go to its screen, then find the control (it may still be loading).
+  const step = run ? run.steps[run.i] : null;
+  useEffect(() => {
+    if (!run || !step) return;
+    setRect(null);
+    router.navigate(step.route(run.practiceJobId) as never);
+    let cancelled = false;
+    const startedAt = Date.now();
+    let timer: ReturnType<typeof setTimeout>;
+    const retry = () => {
+      if (cancelled) return;
+      if (Date.now() - startedAt > MISSING_ANCHOR_MS) {
+        // Never strand anyone on a tip whose control isn't there: show it
+        // without a spotlight instead.
+        setRect({ x: 0, y: 0, w: 0, h: 0 });
+        return;
+      }
+      timer = setTimeout(measure, 150);
+    };
+    const measure = () => {
+      if (cancelled) return;
+      const node = anchors.current.get(step.anchor);
+      if (!node) return retry();
+      node.measureInWindow((x, y, w, h) => {
+        if (cancelled) return;
+        if (w > 0 && h > 0 && y < height && y + h > 0) setRect({ x, y, w, h });
+        else retry();
+      });
+    };
+    timer = setTimeout(measure, 350);
+    AccessibilityInfo.announceForAccessibility?.(`Tip ${run.i + 1} of ${run.steps.length}. ${step.title}. ${step.body}`);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // Re-measure when the screen rotates (iPad) or resizes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run?.i, run?.steps, width, height]);
+
+  const api_ = useMemo<CoachApi>(() => ({ register, maybeStart, replay, active: Boolean(run) }), [register, maybeStart, replay, run]);
+
+  return (
+    <CoachCtx.Provider value={api_}>
+      {children}
+      <Modal
+        visible={Boolean(run && step)}
+        transparent
+        animationType={reduceMotion ? "none" : "fade"}
+        statusBarTranslucent
+        navigationBarTranslucent
+        supportedOrientations={["portrait", "portrait-upside-down", "landscape", "landscape-left", "landscape-right"]}
+        onRequestClose={() => finish("skipped")}
+      >
+        {run && step && !rect && <View style={[st.dim, StyleSheet.absoluteFill]} />}
+        {run && step && rect && (
+          <Overlay
+            rect={rect}
+            width={width}
+            height={height}
+            cardH={cardH}
+            onCardLayout={(e) => setCardH(e.nativeEvent.layout.height)}
+            n={run.i + 1}
+            total={run.steps.length}
+            title={step.title}
+            body={step.body}
+            onNext={() => {
+              Haptics.selectionAsync().catch(() => {});
+              go(1);
+            }}
+            onBack={run.i > 0 ? () => go(-1) : undefined}
+            onSkip={() => finish("skipped")}
+          />
+        )}
+      </Modal>
+    </CoachCtx.Provider>
+  );
+}
+
+const PAD = 6;
+const GAP = 14;
+const EDGE = 16;
+const DIM = "rgba(3,7,14,0.78)";
+
+function Overlay({
+  rect,
+  width,
+  height,
+  cardH,
+  onCardLayout,
+  n,
+  total,
+  title,
+  body,
+  onNext,
+  onBack,
+  onSkip,
+}: {
+  rect: Rect;
+  width: number;
+  height: number;
+  cardH: number;
+  onCardLayout: (e: LayoutChangeEvent) => void;
+  n: number;
+  total: number;
+  title: string;
+  body: string;
+  onNext: () => void;
+  onBack?: () => void;
+  onSkip: () => void;
+}) {
+  const spot = rect.w > 0 && rect.h > 0;
+  const hole = spot
+    ? {
+        x: Math.max(0, rect.x - PAD),
+        y: Math.max(0, rect.y - PAD),
+        w: Math.min(width, rect.w + PAD * 2),
+        h: rect.h + PAD * 2,
+      }
+    : null;
+  const cardW = Math.min(360, width - EDGE * 2);
+  const estH = cardH || 190;
+
+  // Below the control if it fits, else above it, else centred.
+  let pos: { left: number; top?: number; bottom?: number };
+  if (!hole) {
+    pos = { left: (width - cardW) / 2, top: Math.max(EDGE, (height - estH) / 2) };
+  } else {
+    const left = Math.min(Math.max(EDGE, hole.x + hole.w / 2 - cardW / 2), width - cardW - EDGE);
+    const below = hole.y + hole.h + GAP;
+    if (below + estH <= height - EDGE) pos = { left, top: below };
+    else if (hole.y - GAP - estH >= EDGE) pos = { left, bottom: height - hole.y + GAP };
+    else pos = { left, top: Math.max(EDGE, height - estH - EDGE * 2) };
+  }
+  const last = n === total;
+
+  return (
+    <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
+      {hole ? (
+        <>
+          <View style={[st.dim, { left: 0, top: 0, width, height: hole.y }]} />
+          <View style={[st.dim, { left: 0, top: hole.y + hole.h, width, height: Math.max(0, height - hole.y - hole.h) }]} />
+          <View style={[st.dim, { left: 0, top: hole.y, width: hole.x, height: hole.h }]} />
+          <View style={[st.dim, { left: hole.x + hole.w, top: hole.y, width: Math.max(0, width - hole.x - hole.w), height: hole.h }]} />
+          <View pointerEvents="none" testID="coach-ring" style={[st.ring, { left: hole.x, top: hole.y, width: hole.w, height: hole.h }]} />
+        </>
+      ) : (
+        <View style={[st.dim, StyleSheet.absoluteFill]} />
+      )}
+
+      <View style={[st.card, { width: cardW }, pos]} onLayout={onCardLayout} testID="coach-card">
+        <Text style={st.count} accessibilityLabel={`Tip ${n} of ${total}`}>
+          {n} of {total}
+        </Text>
+        <Text style={st.title} accessibilityRole="header">
+          {title}
+        </Text>
+        <Text style={st.body}>{body}</Text>
+        <View style={st.progress} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          {Array.from({ length: total }, (_, k) => (
+            <View key={k} style={[st.dot, k < n && st.dotOn]} />
+          ))}
+        </View>
+        <View style={st.row}>
+          <Pressable onPress={onSkip} hitSlop={8} accessibilityRole="button" accessibilityLabel="Skip tour" style={st.ghost}>
+            <Text style={st.ghostTxt}>Skip tour</Text>
+          </Pressable>
+          <View style={{ flex: 1 }} />
+          {onBack && (
+            <Pressable onPress={onBack} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back" style={st.ghost}>
+              <Text style={st.ghostTxt}>Back</Text>
+            </Pressable>
+          )}
+          <Pressable
+            onPress={onNext}
+            accessibilityRole="button"
+            accessibilityLabel={last ? "Done" : "Next tip"}
+            style={({ pressed }) => [st.next, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={st.nextTxt}>{last ? "Done" : "Next"}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const st = StyleSheet.create({
+  dim: { position: "absolute", backgroundColor: DIM },
+  ring: { position: "absolute", borderRadius: R.card, borderWidth: 2, borderColor: C.brand },
+  card: {
+    position: "absolute",
+    backgroundColor: C.bg3,
+    borderRadius: R.card,
+    borderWidth: 1,
+    borderColor: C.borderHi,
+    padding: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  count: { color: C.brand, fontSize: 12, fontWeight: "800", letterSpacing: 0.5, marginBottom: 4 },
+  title: { color: C.text, fontSize: 18, fontWeight: "800", marginBottom: 6 },
+  body: { color: C.sub, fontSize: 14, lineHeight: 20 },
+  progress: { flexDirection: "row", gap: 6, marginTop: 14 },
+  dot: { width: 18, height: 4, borderRadius: R.pill, backgroundColor: C.border },
+  dotOn: { backgroundColor: C.brand },
+  row: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
+  ghost: { minHeight: 44, justifyContent: "center", paddingHorizontal: 10 },
+  ghostTxt: { color: C.sub, fontSize: 14, fontWeight: "700" },
+  next: { minHeight: 44, minWidth: 88, borderRadius: R.control, backgroundColor: C.brand, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 },
+  nextTxt: { color: "#04121c", fontSize: 15, fontWeight: "800" },
+});
