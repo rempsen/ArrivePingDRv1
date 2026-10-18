@@ -11,7 +11,7 @@ import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types"
 import { useBrand } from "../../../lib/use-brand";
 import { tourAttr } from "../../../guide/anchors";
 import type { ConfirmFn } from "../../../lib/force-confirm";
-import { addDays, bookedMinutes, clampStart, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
+import { addDays, bookedMinutes, clampStart, DEFAULT_RANGE, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
 import { safeTimeZone, zonedDayKey, zonedMinutesOfDay } from "../../../../shared/tz";
 import { isTerminalStatus } from "../../../../shared/job-status";
 import { STALE_LOCATION_MS } from "../../../../shared/board-patch";
@@ -114,7 +114,7 @@ export function DispatchCalendar(p: {
         const fresh = !!t.locationAt && now.getTime() - new Date(t.locationAt).getTime() <= STALE_LOCATION_MS;
         const live = day === today && fresh && t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null;
         const startPoint = live ?? office;
-        const atMin = day !== today ? range.startMin : free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz);
+        const atMin = day !== today ? DEFAULT_RANGE.startMin : free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz);
         const origin = startPoint ? { ...startPoint, atMin } : undefined;
         return {
           id: t.id,
@@ -130,9 +130,11 @@ export function DispatchCalendar(p: {
         };
       }),
       earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,
-      range,
+      // The working day suggestions are made in. The timeline may be wider (it
+      // grows to show an early or late job), but that's display, not hours.
+      range: DEFAULT_RANGE,
     });
-  }, [placing, view, day, today, techs, jobsByTech, tz, now, range, offToday, sb.board]);
+  }, [placing, view, day, today, techs, jobsByTech, tz, now, offToday, sb.board]);
   const dimmed = useMemo(() => new Set(placing ? techs.filter((t) => !qualifiedFor(t, placing)).map((t) => t.id) : []), [placing, techs]);
 
   // ---- drag and drop ----

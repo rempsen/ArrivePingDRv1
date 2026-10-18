@@ -148,7 +148,7 @@ export const dispatchRoutes = new Hono<AppEnv>()
     if (!allowed) return forbidden(c);
     const r = await undoAny(tenantId(c), token, u.name);
     if (!r.ok) return c.json({ message: r.message }, r.status);
-    return c.json({ job: r.job }, 200);
+    return c.json({ job: r.job, notified: r.notified }, 200);
   })
 
   .get("/stream", requireAdmin, async (c) => {

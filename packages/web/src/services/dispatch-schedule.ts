@@ -234,7 +234,8 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
     customerVisible: false,
   });
   void publishDispatch(companyId, { kind: "job", jobId: c.b });
-  return { ok: true, job: { id: b.id, status: b.status, assignStatus: b.assignStatus, riderId: b.riderId } };
+  // No waiting notice means the move had already been announced.
+  return { ok: true, job: { id: b.id, status: b.status, assignStatus: b.assignStatus, riderId: b.riderId }, notified: !told };
 }
 
 /** Undo either kind of token. */

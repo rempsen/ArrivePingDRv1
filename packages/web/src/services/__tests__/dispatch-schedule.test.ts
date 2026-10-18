@@ -126,7 +126,7 @@ describe("dispatchSchedule + undo", () => {
     expect((await tasks(id)).map((t) => t.status)).toEqual(["pending"]);
 
     const u = await ds.undoAny(CO, r.undo, "Dana", NOW.getTime() + 3_000);
-    expect(u.ok).toBe(true);
+    expect(u).toMatchObject({ ok: true, notified: false });
     expect((await row(id)).scheduledAt.toISOString()).toBe(before.toISOString());
     expect((await tasks(id)).map((t) => t.status)).toEqual(["cancelled"]);
     await flushNotices();
@@ -195,7 +195,8 @@ describe("dispatchSchedule + undo", () => {
     const r = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 45), by: "Dana" }, NOW.getTime());
     await flushNotices();
     expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(1);
-    expect((await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    // too late to keep it quiet, and the Undo says so
+    expect(await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: true, notified: true });
     await flushNotices();
     expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(2);
   });

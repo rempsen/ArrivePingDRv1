@@ -54,7 +54,8 @@ export type AssignOutcome =
   | { ok: true; job: JobPatch; undo: string | null }
   | { ok: false; status: 404 | 409; message: string; forceable: boolean; reason?: string };
 
-export type UndoOutcome = { ok: true; job: JobPatch } | { ok: false; status: 400 | 404 | 409 | 410; message: string };
+/** `notified`: the notice had already gone out before the Undo, so people heard about the change. */
+export type UndoOutcome = { ok: true; job: JobPatch; notified: boolean } | { ok: false; status: 400 | 404 | 409 | 410; message: string };
 
 interface UndoClaims {
   v: 1;
@@ -349,7 +350,8 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
     return { ok: false, status: 409, message: "This job changed since you assigned it — open it to see where it is now." };
   }
 
-  await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK });
+  // Nothing left to cancel: the notice already went (or is going) out.
+  const notified = (await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK })) === 0;
   // The assignment's notice would have given the time. With it gone, a move
   // notice waits instead: from what people were last told (a move notice the
   // assignment had replaced, else the time when it was assigned). It says
@@ -375,5 +377,5 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   });
   void publishDispatch(companyId, { kind: "job", jobId: c.b });
   void publishDispatch(companyId, { kind: "tech", techId: c.r });
-  return { ok: true, job: patchOf(b) };
+  return { ok: true, job: patchOf(b), notified };
 }

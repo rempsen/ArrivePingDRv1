@@ -228,8 +228,9 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
     async (t: ScheduleToast) => {
       dismiss(t.id);
       try {
-        for (const tok of [...t.undo].reverse()) await postUndo(tok);
-        toast("Undone. Nobody was notified.");
+        let notified = false;
+        for (const tok of [...t.undo].reverse()) notified = (await postUndo(tok)).notified === true || notified;
+        toast(notified ? "Undone. The notice had already gone out before you undid it." : "Undone. Nobody was notified.");
       } catch (e) {
         toast((e as Error).message || "Couldn't undo that.", [], "warn");
       } finally {

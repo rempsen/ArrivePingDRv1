@@ -120,7 +120,7 @@ describe("dispatchAssign + undoAssign", () => {
     expect((await tasks(id)).map((t) => t.status)).toEqual(["pending"]);
 
     const u = await da.undoAssign(CO, r.undo, "Dana", NOW.getTime() + 3_000);
-    expect(u).toEqual({ ok: true, job: { id, status: "pending", assignStatus: "none", riderId: null } });
+    expect(u).toEqual({ ok: true, job: { id, status: "pending", assignStatus: "none", riderId: null }, notified: false });
     const after = await row(id);
     expect(after).toMatchObject({ riderId: null, status: "pending", assignStatus: "none", assignedAt: null });
     expect((await tasks(id)).map((t) => t.status)).toEqual(["cancelled"]);

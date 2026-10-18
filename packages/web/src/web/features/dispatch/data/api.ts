@@ -71,7 +71,8 @@ export interface ScheduleResponse {
   undo: string | null;
 }
 export const postSchedule = (input: ScheduleInput) => call<ScheduleResponse>("/schedule", { method: "POST", body: JSON.stringify(input) });
-export const postUndo = (token: string) => call<{ job: JobPatch }>("/undo", { method: "POST", body: JSON.stringify({ token }) });
+/** `notified`: the notice had already gone out, so people heard about the change before it was undone. */
+export const postUndo = (token: string) => call<{ job: JobPatch; notified?: boolean }>("/undo", { method: "POST", body: JSON.stringify({ token }) });
 
 /** A 409 from /assign: the sentence to show, and whether "Assign anyway" may override it. */
 export interface Refusal {
