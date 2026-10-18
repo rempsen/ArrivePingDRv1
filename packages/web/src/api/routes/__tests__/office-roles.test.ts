@@ -16,6 +16,7 @@
 import { describe, it, expect, beforeAll } from "bun:test";
 import { Hono } from "hono";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 import type { AppEnv } from "../../env";
 
 process.env.DATABASE_URL = ":memory:";
@@ -28,6 +29,8 @@ const schema = await import("../../database/schema");
 const { bookingsRoutes } = await import("../bookings");
 const { teamRoutes } = await import("../team");
 const { adminRoutes } = await import("../admin");
+const { jobSearchRoutes } = await import("../job-search");
+const { calendarRoutes } = await import("../calendar");
 
 function colDdl(col: PgColumn, withPk: boolean): string {
   const parts = [`"${col.name}"`, col.getSQLType()];
@@ -55,6 +58,8 @@ const app = new Hono<AppEnv>().use("*", async (c, next) => {
 app.route("/api/bookings", bookingsRoutes);
 app.route("/api/team", teamRoutes);
 app.route("/api/admin", adminRoutes);
+app.route("/api/jobs", jobSearchRoutes);
+app.route("/api/calendar", calendarRoutes);
 app.onError((e, c) => c.json({ message: e.message }, ((e as { status?: number }).status ?? 500) as 400));
 
 const as = (role: string, id: string) => ({ "X-Role": role, "X-User": id, "content-type": "application/json" });
@@ -101,6 +106,33 @@ describe("jobs", () => {
   it("a dispatcher can edit a job; a technician can't", async () => {
     expect((await req("PATCH", "/api/bookings/or-job-1", as("dispatcher", "or-disp"), { notes: "Gate code 1234" })).status).toBe(200);
     expect((await req("PATCH", "/api/bookings/or-job-1", as("rider", "or-tech"), { notes: "x" })).status).toBe(403);
+  });
+});
+
+describe("archiving a job needs the delete permission (Codex on #62)", () => {
+  it("a manager (no delete by default) can't archive or restore; a dispatcher can", async () => {
+    expect((await req("DELETE", "/api/jobs/or-job-2", as("manager", "or-mgr"))).status).toBe(403);
+    expect((await req("POST", "/api/jobs/or-job-2/restore", as("manager", "or-mgr"))).status).toBe(403);
+    expect((await req("DELETE", "/api/jobs/or-job-2", as("dispatcher", "or-disp"))).status).toBe(200);
+    expect((await req("POST", "/api/jobs/or-job-2/restore", as("dispatcher", "or-disp"))).status).toBe(200);
+  });
+});
+
+describe("the calendar feed follows the person's own permissions (Codex on #62)", () => {
+  const feed = async (token: string) => (await app.request(`/api/calendar/${token}.ics`)).text();
+  it("a dispatcher's feed is the whole schedule…", async () => {
+    await db.update(schema.user).set({ calendarToken: "or-cal-token-disp" } as any).where(eq(schema.user.id, "or-disp2"));
+    const ics = await feed("or-cal-token-disp");
+    expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBe(2);
+  });
+  it("…unless their override at that company takes the scheduler away", async () => {
+    await db.update(schema.memberships).set({ permissions: JSON.stringify(["work_orders:view"]) }).where(eq(schema.memberships.id, "m-or-disp2"));
+    try {
+      const ics = await feed("or-cal-token-disp");
+      expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
+    } finally {
+      await db.update(schema.memberships).set({ permissions: null }).where(eq(schema.memberships.id, "m-or-disp2"));
+    }
   });
 });
 

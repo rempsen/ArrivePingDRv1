@@ -3,6 +3,7 @@ import { useAuth } from "../hooks/use-auth";
 import type { Role } from "../lib/auth";
 import { Loader } from "./loader";
 import { homeFor } from "../lib/home";
+import { useAccess } from "../hooks/use-access";
 
 export function ProtectedRoute({
   children,
@@ -11,9 +12,12 @@ export function ProtectedRoute({
   children: React.ReactNode;
   roles?: Role[];
 }) {
-  const { user, role, isPending, sessionError, refetchSession } = useAuth();
+  const { user, isPending, sessionError, refetchSession } = useAuth();
+  // Their role at the company they're acting as, not just their home one: a
+  // customer at one company can be a dispatcher at the one they switched to.
+  const { role, loading: accessLoading } = useAccess();
 
-  if (isPending)
+  if (isPending || (user && accessLoading))
     return (
       <div className="grid min-h-screen place-items-center">
         <Loader />
@@ -49,7 +53,7 @@ export function ProtectedRoute({
     );
 
   if (!user) return <Redirect to="/sign-in" />;
-  if (roles && !roles.includes(role)) {
+  if (roles && !roles.includes(role as Role)) {
     // send to the right home for the role
     return <Redirect to={homeFor(role)} />;
   }

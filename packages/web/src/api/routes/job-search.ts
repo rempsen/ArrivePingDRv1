@@ -15,8 +15,12 @@ import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
 
-/** Office staff who can see jobs (admins, and managers/dispatchers/PMs with jobs access). */
-const isStaff = (u: SessionUser) => officeCan(u as SessionUser & { permissions?: string | null }, "work_orders:view");
+/**
+ * Office staff with this jobs permission (admins always; managers,
+ * dispatchers and PMs per their role). Reading needs view; bulk export needs
+ * the export permission; archiving and restoring need delete.
+ */
+const isStaff = (u: SessionUser, perm = "work_orders:view") => officeCan(u as SessionUser & { permissions?: string | null }, perm);
 
 /* -------------------------------------------------------------------------- */
 /*  Column catalog — every field a dispatcher can export, summary + detail.   */
@@ -365,7 +369,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // export filtered results: ?format=csv|json|pdf&columns=a,b,c (omit columns = summary set)
   .get("/export", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u, "reports:export"))) return c.json({ message: "Forbidden" }, 403);
     const f = parseFilters(c);
     const format = (c.req.query("format") || "csv").toLowerCase();
     const colsParam = c.req.query("columns");
@@ -602,7 +606,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // soft-delete (archive) a job — never lose data
   .delete("/:id", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u, "work_orders:delete"))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const t = tx(c);
     await t.update(schema.bookings, { deletedAt: new Date() }, eq(schema.bookings.id, id));
@@ -617,7 +621,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // restore a soft-deleted job
   .post("/:id/restore", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u, "work_orders:delete"))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const t = tx(c);
     await t.update(schema.bookings, { deletedAt: null }, eq(schema.bookings.id, id));

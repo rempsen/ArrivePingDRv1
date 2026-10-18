@@ -220,6 +220,7 @@ export const meRoutes = new Hono<AppEnv>()
     return c.json({
       role: me.role ?? "customer",
       admin: isAdminRole(me.role),
+      superadmin: isSuperadmin(me.role),
       office: isOfficeRole(me.role),
       permissions: [...perms].sort(),
     });
