@@ -114,10 +114,66 @@ export function stickyRailExtra(el: Element): number {
   return rail.getBoundingClientRect().height;
 }
 
+/**
+ * Gap left under the header when a section marked `.anchor--content` is
+ * scrolled to: its own top padding is skipped, so the heading sits just
+ * below the header instead of a band of empty space (Pricing).
+ */
+export const CONTENT_ANCHOR_GAP = 16;
+
 export function scrollToAnchor(id: string, reduced: boolean, extra?: number) {
   const el = document.getElementById(id);
   if (!el) return;
-  const gap = extra ?? 24 + stickyRailExtra(el);
-  const top = el.getBoundingClientRect().top + window.scrollY - readHeaderOffset() - gap;
-  window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
+  const base = el.classList.contains("anchor--content")
+    ? CONTENT_ANCHOR_GAP - (parseFloat(getComputedStyle(el).paddingTop) || 0)
+    : 24;
+  const gap = extra ?? base + stickyRailExtra(el);
+  const target = () => el.getBoundingClientRect().top + window.scrollY - readHeaderOffset() - gap;
+  window.scrollTo({ top: target(), behavior: reduced ? "auto" : "smooth" });
+  settleOn(target);
+}
+
+/**
+ * Content above a section can still change height during a long smooth
+ * scroll (images and demos loading as they come into view). On a phone that
+ * left Pricing's heading under the header on the first tap. Once the scroll
+ * comes to rest, re-measure and correct; stop if the person scrolls themselves.
+ */
+let settling = 0;
+function settleOn(target: () => number) {
+  // A newer anchor click takes over from this one.
+  const run = ++settling;
+  let last = Number.NaN;
+  let still = 0;
+  let frames = 0;
+  let cancelled = false;
+  const cancel = () => {
+    cancelled = true;
+  };
+  const opts: AddEventListenerOptions = { once: true, passive: true };
+  window.addEventListener("wheel", cancel, opts);
+  window.addEventListener("touchstart", cancel, opts);
+  window.addEventListener("keydown", cancel, opts);
+  window.addEventListener("pointerdown", cancel, opts);
+  const done = () => {
+    window.removeEventListener("wheel", cancel);
+    window.removeEventListener("touchstart", cancel);
+    window.removeEventListener("keydown", cancel);
+    window.removeEventListener("pointerdown", cancel);
+  };
+  const tick = () => {
+    if (cancelled || run !== settling || ++frames > 240) return done();
+    const y = window.scrollY;
+    still = y === last ? still + 1 : 0;
+    last = y;
+    if (still < 6) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    done();
+    const want = Math.round(target());
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    if (Math.abs(Math.min(want, max) - y) > 3) window.scrollTo({ top: want, behavior: "auto" });
+  };
+  requestAnimationFrame(tick);
 }
