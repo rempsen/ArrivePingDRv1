@@ -266,6 +266,27 @@ describe("claims", () => {
     await cm.deleteMilestone(CO, m.id);
   });
 
+  it("a failure before the first message lets the claim go, even with recipients lined up", async () => {
+    const m = await cm.createMilestone(CO, { name: "Insert fails", trigger: "stage", triggerEvent: "arrived" }, {
+      office: { on: true, text: "Office alert" },
+    });
+    await job("cm-insert-fails");
+    const sql = (q: string) => (db as any).$client.execute(q);
+    // The office alert can't be written: nothing has gone out yet.
+    await sql(`ALTER TABLE notifications RENAME TO notifications_hold`);
+    try {
+      expect(await cm.fireMilestone(m, "cm-insert-fails")).toBe(false);
+    } finally {
+      await sql(`ALTER TABLE notifications_hold RENAME TO notifications`);
+    }
+    expect((await fires(m.id)).length).toBe(0);
+    expect((await milestoneEvents("cm-insert-fails")).length).toBe(0);
+    // Next time it goes, once.
+    expect(await cm.fireMilestone(m, "cm-insert-fails")).toBe(true);
+    expect((await deliveries(m.id, "cm-insert-fails")).map((d) => d.channel)).toEqual(["in_app"]);
+    await cm.deleteMilestone(CO, m.id);
+  });
+
   it("a paused reminder is reset by a reschedule too, so switching it back on still sends", async () => {
     const m = await cm.createMilestone(CO, { name: "Paused reminder", trigger: "before_start", offsetMinutes: 60 }, toCustomer("Soon"));
     const JOB = "cm-paused-resched";
