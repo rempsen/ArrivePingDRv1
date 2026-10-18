@@ -26,6 +26,8 @@ type ImportResult = {
   invited: number;
   /** New technicians / office staff being emailed a set-password link (services/welcome.ts). */
   welcoming?: number;
+  /** What was imported (kept with the result so its note can't drift). */
+  type?: ImportType;
   failedCount: number;
   failed: { row: number; email: string; reason: string }[];
 };
@@ -110,7 +112,7 @@ export function ImportMenu({
       const res = await fetch(`/api/import/${type}`, { method: "POST", headers: apiHeaders(), body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Import failed");
-      setResult(data as ImportResult);
+      setResult({ ...(data as ImportResult), type });
       onDone?.();
     } catch (err: any) {
       setError(err.message || "Import failed");
@@ -233,9 +235,13 @@ export function ImportMenu({
               </div>
             )}
             <p className="text-xs text-slate-500">
-              {result.welcoming
-                ? `We're emailing ${result.welcoming === 1 ? "the new person" : `the ${result.welcoming} new people`} a link to set a password, one after another over the next few minutes. Rows imported without an email address can't sign in until you add one on their profile.`
-                : "Customers aren't emailed: they first hear from you when a job is booked."}
+              {result.type === "customer"
+                ? "Customers aren't emailed: they first hear from you when a job is booked."
+                : result.welcoming
+                  ? `We're emailing ${result.welcoming === 1 ? "the new person" : `the ${result.welcoming} new people`} a link to set a password, one after another over the next few minutes. Rows imported without an email address can't sign in until you add one on their profile.`
+                  : result.created
+                    ? "Nobody was emailed: the new rows had no email address, so they can't sign in yet. Add an email on each profile, then use “Email a sign-in link”."
+                    : "Nobody new was added, so nobody was emailed."}
             </p>
           </div>
         )}
