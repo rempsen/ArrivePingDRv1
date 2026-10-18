@@ -1,150 +1,23 @@
-import { useEffect, useRef, useState } from "react";
-import { audiences, brand, chapters, closing, faqs, monthlyPrice, pricing, stats, stories, story } from "../config";
-import { MediaSlot } from "../components/MediaSlot";
+import { useState } from "react";
+import { brand, closing, faqs, monthlyPrice, pricing, stats, story } from "../config";
+import { TradeCards } from "../components/TradeCards";
 import { ContactAsk } from "../components/ContactAsk";
 import { useAnchorNav } from "../components/SiteHeader";
-import { usePlayback } from "../motion/playback";
-import { scrollToAnchor, useScrollspy } from "../motion/use-scrollspy";
 import { CountUp, handleSpotlight } from "../motion/effects";
 
-/* ---------------- Showcase (sticky rail) ---------------- */
-export function Showcase() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const ids = chapters.map((c) => c.id);
-  const active = useScrollspy(containerRef, ids);
-  const { paused, toggle, reduced } = usePlayback();
-
-  const railRef = useRef<HTMLElement>(null);
-
-  const onRail = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
-    e.preventDefault();
-    // scrollToAnchor adds the sticky chip strip's height on narrow screens.
-    scrollToAnchor(id, reduced);
-    history.replaceState(null, "", `#${id}`);
-  };
-
-  // Keep the active chip visible inside the horizontal strip.
-  useEffect(() => {
-    const rail = railRef.current;
-    if (!rail) return;
-    const inner = rail.querySelector<HTMLElement>(".showcase-rail-inner");
-    const link = rail.querySelector<HTMLElement>(`.rail__link[aria-current="location"]`);
-    if (!inner || !link || inner.scrollWidth <= inner.clientWidth) return;
-    const left = link.offsetLeft - 16;
-    inner.scrollTo({ left, behavior: reduced ? "auto" : "smooth" });
-  }, [active, reduced]);
-
-  return (
-    <section id="product" className="section anchor">
-      <div className="container">
-        <div className="showcase__head" data-reveal="">
-          <div className="intro">
-            <span className="eyebrow">Product</span>
-            <h2 className="h-section">One appointment record. <span className="h-muted">Three people who can see it.</span></h2>
-            <p className="lede">The office, the technician and the customer each get the view they need — and every view updates from the same place.</p>
-          </div>
-        </div>
-
-        <div className="showcase" ref={containerRef}>
-          <aside className="showcase-rail" ref={railRef}>
-            <nav className="showcase-rail-inner" aria-label="Product chapters">
-              <div className="rail__label">In this section</div>
-              {chapters.map((c, i) => (
-                <a key={c.id} href={`#${c.id}`} className="rail__link" aria-current={active === c.id ? "location" : undefined} onClick={(e) => onRail(e, c.id)}>
-                  <span className="rail__num">0{i + 1}</span>
-                  {c.rail}
-                </a>
-              ))}
-              <div className="rail__foot">
-                <button type="button" className="btn btn--ghost btn--sm" onClick={toggle} aria-pressed={paused}>
-                  {paused ? "Resume animations" : "Pause animations"}
-                </button>
-              </div>
-            </nav>
-          </aside>
-
-          <div className="showcase-chapters">
-            {chapters.map((c) => (
-              <article key={c.id} id={c.id} className="showcase-chapter">
-                <div className="chapter__intro" data-reveal="">
-                  <h3>{c.title} <span className="h-muted">{c.titleMuted}</span></h3>
-                  <p>{c.body}</p>
-                </div>
-                <div data-reveal="" data-reveal-delay="1">
-                  <MediaSlot id={c.scene} />
-                </div>
-                <div className="showcase-support">
-                  {c.support.map((sp, i) => (
-                    <div key={sp.title} className="support" data-reveal="" data-reveal-delay={String(i + 1)}>
-                      <h4>{sp.title}</h4>
-                      <p>{sp.body}</p>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Outcome stories ---------------- */
-export function OutcomeStories() {
-  return (
-    <section className="section section--divided">
-      <div className="container">
-        <div className="intro" data-reveal="">
-          <span className="eyebrow">In practice</span>
-          <h2 className="h-section">Two questions. <span className="h-muted">Answered before anyone calls.</span></h2>
-        </div>
-        {stories.map((st, i) => (
-          <div key={st.question} className={`story${i % 2 ? " story--flip" : ""}`}>
-            <div className="story__copy" data-reveal="">
-              <h3 className="story__q">{st.question}</h3>
-              <p className="story__a">{st.answer}</p>
-            </div>
-            <div className="story__media" data-reveal="" data-reveal-delay="1">
-              <picture>
-                <source type="image/webp" srcSet={st.image.src.replace(/\.jpg$/, ".webp")} />
-                <img className="story__photo" src={st.image.src} alt={st.image.alt} loading="lazy" width={1200} height={800} />
-              </picture>
-              <div className="story__card">
-                <MediaSlot id={st.scene} raised />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Audiences ---------------- */
+/* ---------------- Who it's for: one card per trade ---------------- */
 export function Audiences() {
   return (
     <section id="who-its-for" className="section section--divided anchor">
       <div className="container">
         <div className="intro intro--center" data-reveal="">
           <span className="eyebrow">Who it's for</span>
-          <h2 className="h-section">Built for teams that show up at the customer's door</h2>
-          <p className="lede">If your day is a list of appointments at other people's addresses, ArrivePing fits.</p>
+          <h2 className="h-section">
+            Built for teams that work <span className="h-muted">at the customer's door.</span>
+          </h2>
+          <p className="lede">Pick your trade to see how ArrivePing runs a real day of it.</p>
         </div>
-        <div className="audiences">
-          {audiences.map((a, i) => (
-            <div key={a.label} className="audience" data-reveal="" data-reveal-delay={String(Math.min(3, i))}>
-              <picture>
-                <source type="image/webp" srcSet={a.image.replace(/\.jpg$/, ".webp")} />
-                <img src={a.image} alt="" loading="lazy" width={900} height={600} />
-              </picture>
-              <div className="audience__copy">
-                <span className="audience__label">{a.label}</span>
-                <p className="audience__body">{a.body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+        <TradeCards />
       </div>
     </section>
   );
@@ -170,6 +43,16 @@ export function Pricing() {
           </h2>
           <p className="lede">{pricing.body}</p>
         </div>
+        <ul className="pricing__assure" data-reveal="">
+          {pricing.assurances.map((x) => (
+            <li key={x}>
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3.5 8.4l2.8 2.7 6.2-6.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {x}
+            </li>
+          ))}
+        </ul>
         <div className="tiers" onMouseMove={handleSpotlight}>
           {pricing.tiers.map((t, i) => {
             const featured = "featured" in t && t.featured;
@@ -242,6 +125,12 @@ export function Pricing() {
           </div>
         </div>
 
+        <p className="pricing__int" data-reveal="">
+          {pricing.integrationsNote.text}{" "}
+          <a href={pricing.integrationsNote.link.href} onClick={(e) => nav(e, pricing.integrationsNote.link.href)}>
+            {pricing.integrationsNote.link.label}
+          </a>
+        </p>
         <p className="pricing__note" data-reveal="">
           {pricing.note}
         </p>
@@ -306,10 +195,6 @@ export function OurStory() {
           </div>
         </div>
 
-        <div className="ourstory__guarantee" data-reveal="">
-          <h3>{story.guarantee.title}</h3>
-          <p>{story.guarantee.body}</p>
-        </div>
       </div>
     </section>
   );
@@ -328,11 +213,21 @@ export function ClosingCTA() {
           </span>
           <h2>{closing.title}</h2>
           <p className="closing__body">{closing.body}</p>
-          <div className="closing__motif">
-            <MediaSlot id="closing-motif" className="slot--dark" />
-          </div>
+          <ol className="closing__steps">
+            {closing.steps.map((st, i) => (
+              <li key={st.title}>
+                <span className="closing__n tnum" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <span>
+                  <strong>{st.title}</strong>
+                  <span>{st.body}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
           <p className="closing__contact">
-            Questions first? <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
+            {closing.help} <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
           </p>
         </div>
         <div data-reveal="" data-reveal-delay="1">

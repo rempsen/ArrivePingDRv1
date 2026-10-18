@@ -6,12 +6,17 @@ import { useHeaderOffset } from "../../site/motion/use-scrollspy";
 import { SiteHeader } from "../../site/components/SiteHeader";
 import { SiteFooter } from "../../site/components/SiteFooter";
 import { ClosingCTA, OurStory, Pricing } from "../../site/sections";
-import { audiences, brand } from "../../site/config";
+import { brand } from "../../site/config";
+import { TradeCards } from "../../site/components/TradeCards";
+import { TradeDay, TradeFeatures, TradeHero, TradeStats } from "../../site/live/TradeParts";
 import { landingByPath, type Cell, type LandingPage, type Section } from "../../site/content/landing";
 import { seoByPath } from "../../site/seo/pages";
 import { usePageMeta } from "../../site/seo/head";
 import "../../site/site.css";
 import "../../site/landing.css";
+import "../../site/live/live.css";
+import "../../site/live/opening.css";
+import "../../site/live/trade.css";
 
 /**
  * Public solution, pricing, about and comparison pages. Content lives in
@@ -59,94 +64,133 @@ function Landing({ page }: { page: LandingPage }) {
       </a>
       <SiteHeader ref={headerRef} dashboardHref={dashboardHref} />
       <main id="main" tabIndex={-1}>
-        <header className="lp-hero">
-          <div className="container">
-            <Breadcrumbs page={page} />
-            <span className="eyebrow">{page.eyebrow}</span>
-            <h1 className="lp-hero__title">{page.h1}</h1>
-            <p className="lede lp-hero__lede">{page.lede}</p>
-            <div className="lp-hero__cta">
-              <a href={brand.urls.signUp} className="btn btn--primary">
-                Sign up free
-              </a>
-              <a href={brand.urls.how} className="btn btn--secondary">
-                See how it works
-              </a>
-            </div>
-            <p className="lp-hero__fine">{brand.launch} · From $49 USD a month · No app for customers</p>
-          </div>
-        </header>
-
-        <section className="section--tight lp-answer-wrap" aria-labelledby="lp-answer">
-          <div className="container">
-            <div className="lp-answer" data-reveal="">
-              <h2 id="lp-answer" className="lp-answer__q">
-                {page.answer.q}
-              </h2>
-              <p className="lp-answer__a">{page.answer.a}</p>
-            </div>
-          </div>
-        </section>
-
-        {page.sections.map((s, i) => (
-          <SectionBlock key={i} section={s} page={page} />
-        ))}
-
-        {page.sources && (
-          <section className="section--tight lp-sources-wrap" aria-labelledby="lp-sources">
-            <div className="container">
-              <h2 id="lp-sources" className="lp-sources__title">
-                Sources
-              </h2>
-              <p className="small">
-                Competitor details are from each company's public website, checked {page.verified}. Features and prices change;
-                check the source before deciding. Tell us at <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a> if
-                anything here is out of date.
-              </p>
-              <ul className="lp-sources">
-                {page.sources.map((s) => (
-                  <li key={s.href}>
-                    <a href={s.href} rel="nofollow noopener" target="_blank">
-                      {s.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        )}
-
-        {page.faqs.length > 0 && (
-          <section id="faqs" className="section section--divided anchor" aria-labelledby="lp-faqs">
-            <div className="container">
-              <div className="intro intro--center" data-reveal="">
-                <span className="eyebrow">FAQs</span>
-                <h2 id="lp-faqs" className="h-section">
-                  Common questions
-                </h2>
-              </div>
-              <div className="faq" data-reveal="">
-                {page.faqs.map((f) => (
-                  <details key={f.q}>
-                    <summary>
-                      <h3 className="lp-faq__q">{f.q}</h3>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                      </svg>
-                    </summary>
-                    <p className="faq__a">{f.a}</p>
-                  </details>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
+        {page.trade ? <TradeBody page={page} /> : <GenericBody page={page} />}
         <Related page={page} />
         <ClosingCTA />
       </main>
       <SiteFooter />
     </div>
+  );
+}
+
+/** Trade pages: the homepage's design language, led by the trade's own film. */
+function TradeBody({ page }: { page: LandingPage }) {
+  const t = page.trade!;
+  return (
+    <>
+      <TradeHero page={page} crumbs={<Breadcrumbs page={page} />} />
+      <section className="section--tight lp-answer-wrap tr-answer" aria-labelledby="lp-answer">
+        <div className="container">
+          <div className="lp-answer" data-reveal="">
+            <h2 id="lp-answer" className="lp-answer__q">
+              {page.answer.q}
+            </h2>
+            <p className="lp-answer__a">{page.answer.a}</p>
+          </div>
+        </div>
+      </section>
+      <TradeStats t={t} />
+      <TradeDay t={t} />
+      <TradeFeatures t={t} />
+      {page.sections.map((s, i) => (
+        <SectionBlock key={i} section={s} page={page} />
+      ))}
+      <Faqs page={page} />
+    </>
+  );
+}
+
+function GenericBody({ page }: { page: LandingPage }) {
+  return (
+    <>
+      <header className="lp-hero">
+        <div className="container">
+          <Breadcrumbs page={page} />
+          <span className="eyebrow">{page.eyebrow}</span>
+          <h1 className="lp-hero__title">{page.h1}</h1>
+          <p className="lede lp-hero__lede">{page.lede}</p>
+          <div className="lp-hero__cta">
+            <a href={brand.urls.signUp} className="btn btn--primary">
+              Sign up free
+            </a>
+            <a href={brand.urls.how} className="btn btn--secondary">
+              See how it works
+            </a>
+          </div>
+          <p className="lp-hero__fine">Free for 30 days · Then from US$49 a month · No setup fee, no contract</p>
+        </div>
+      </header>
+
+      <section className="section--tight lp-answer-wrap" aria-labelledby="lp-answer">
+        <div className="container">
+          <div className="lp-answer" data-reveal="">
+            <h2 id="lp-answer" className="lp-answer__q">
+              {page.answer.q}
+            </h2>
+            <p className="lp-answer__a">{page.answer.a}</p>
+          </div>
+        </div>
+      </section>
+
+      {page.sections.map((s, i) => (
+        <SectionBlock key={i} section={s} page={page} />
+      ))}
+
+      {page.sources && (
+        <section className="section--tight lp-sources-wrap" aria-labelledby="lp-sources">
+          <div className="container">
+            <h2 id="lp-sources" className="lp-sources__title">
+              Sources
+            </h2>
+            <p className="small">
+              Competitor details are from each company's public website, checked {page.verified}. Features and prices change;
+              check the source before deciding. Tell us at <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a> if
+              anything here is out of date.
+            </p>
+            <ul className="lp-sources">
+              {page.sources.map((s) => (
+                <li key={s.href}>
+                  <a href={s.href} rel="nofollow noopener" target="_blank">
+                    {s.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      <Faqs page={page} />
+    </>
+  );
+}
+
+function Faqs({ page }: { page: LandingPage }) {
+  if (!page.faqs.length) return null;
+  return (
+    <section id="faqs" className="section section--divided anchor" aria-labelledby="lp-faqs">
+      <div className="container">
+        <div className="intro intro--center" data-reveal="">
+          <span className="eyebrow">FAQs</span>
+          <h2 id="lp-faqs" className="h-section">
+            Common questions
+          </h2>
+        </div>
+        <div className="faq" data-reveal="">
+          {page.faqs.map((f) => (
+            <details key={f.q}>
+              <summary>
+                <h3 className="lp-faq__q">{f.q}</h3>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </summary>
+              <p className="faq__a">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -313,14 +357,7 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
         <section className="section section--divided">
           <div className="container">
             <Head title={s.title} body={s.body} />
-            <dl className="lp-trades">
-              {audiences.map((a) => (
-                <div key={a.label} className="lp-trades__item" data-reveal="">
-                  <dt>{a.label}</dt>
-                  <dd>{a.body}</dd>
-                </div>
-              ))}
-            </dl>
+            <TradeCards exclude={page.path} />
           </div>
         </section>
       );

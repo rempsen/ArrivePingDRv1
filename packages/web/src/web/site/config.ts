@@ -1,11 +1,10 @@
 /**
- * Marketing-site configuration — the single place for brand, navigation, copy
- * and the illustrative demo fixture used by every animated scene.
+ * Marketing-site configuration — the single place for brand, navigation and copy.
  *
  * Rules (from the design brief):
  *  - Every claim here must be verified. Unverified items live in
  *    `contentNeeds`, not in public copy.
- *  - Demo data is fictional and is always labelled "Illustrative demo".
+ *  - App screens are real ArrivePing screens with sample data, and say so.
  */
 
 export const brand = {
@@ -42,50 +41,6 @@ export const nav = [
   { label: "Blog", href: "/blog" },
   { label: "Support", href: "/support" },
 ] as const;
-
-/* ------------------------------------------------------------------ */
-/* Illustrative demo fixture (fictional; shared by every scene)        */
-/* ------------------------------------------------------------------ */
-
-export type ApptStatus = "scheduled" | "assigned" | "on_the_way" | "arriving" | "arrived";
-
-export const statusLabel: Record<ApptStatus, string> = {
-  scheduled: "Scheduled",
-  assigned: "Assigned",
-  on_the_way: "On the way",
-  arriving: "Arriving soon",
-  arrived: "Arrived",
-};
-
-export const fixture = {
-  company: "Northside Shade Co.",
-  technician: { name: "Alex Rivera", short: "Alex R.", initials: "AR" },
-  technician2: { name: "Sam Kaur", short: "Sam K.", initials: "SK" },
-  customer: { name: "Morgan Lee", short: "Morgan", initials: "ML" },
-  appointment: {
-    id: "ap-1041",
-    title: "Window shade installation",
-    address: "42 Birch Lane",
-    window: "10:40–10:55",
-    windowLate: "10:50–11:05",
-    scheduledFor: "10:30",
-  },
-  list: [
-    { id: "ap-1041", who: "Morgan Lee", what: "Window shade installation", time: "10:30", tech: "Alex R.", status: "assigned" as ApptStatus },
-    { id: "ap-1042", who: "Priya Natarajan", what: "Blind repair", time: "12:15", tech: "Sam K.", status: "assigned" as ApptStatus },
-    { id: "ap-1043", who: "The Harbour Café", what: "Motorized shade service", time: "2:00", tech: "", status: "scheduled" as ApptStatus },
-    { id: "ap-1044", who: "Devon Adeyemi", what: "Site measure", time: "3:30", tech: "Alex R.", status: "assigned" as ApptStatus },
-  ],
-  messages: {
-    onTheWay: "Alex is on the way. Expected arrival 10:40–10:55.",
-    delay: "Running about 10 minutes behind — new arrival window 10:50–11:05.",
-    arrived: "Alex has arrived.",
-  },
-} as const;
-
-export const illustrativeLabel = "Illustrative demo";
-/** Label on slots that play real app footage (the demo company is fictional). */
-export const footageLabel = "ArrivePing app"; // screen-reader text; the visible chip is the ArrivePing logo
 
 /* ------------------------------------------------------------------ */
 /* Copy                                                                 */
@@ -302,18 +257,10 @@ export const firstHour = {
     body: "Type any website and run it. This is a labelled sample; your workspace is built from your own site.",
   },
   cta: {
-    label: "Start your 30-day free trial",
+    label: "Sign up free",
     href: brand.urls.signUp,
     price: "30 days free, then from US$49 a month",
     detail: "1 dispatcher + 2 drivers · each added driver is US$30 a month, less from driver 30",
-  },
-  tools: {
-    title: "Keep the tools you already use",
-    body: "ArrivePing runs scheduling, work order assignment, tracking and customer updates. It doesn't ask you to replace your accounting, payroll or CRM.",
-  },
-  formats: {
-    title: "Your data, in the format you need",
-    items: ["CSV", "Excel", "PDF", "JSON", "Calendar feeds", "Webhooks · Zapier, Make", "MCP for AI agents", "Google Drive backup"],
   },
   note: "Typical first hour. Times vary with team size and how much data you bring.",
 };
@@ -334,92 +281,170 @@ export const dispatchStory = {
   ],
 } as const;
 
-export const chapters = [
-  {
-    id: "coordinate",
-    rail: "Coordinate appointments",
-    title: "Assign the work.",
-    titleMuted: "Keep the board honest.",
-    body:
-      "Every appointment, its technician and its status sit in one list. Select a row to see the detail, assign a technician and the status updates everywhere at once.",
-    scene: "chapter-dispatch",
-    support: [
-      { title: "One status, every screen", body: "Business view, technician app and customer page read from the same appointment record." },
-      { title: "Fewer check-in calls", body: "Dispatchers see assignment and travel status without calling the technician." },
-    ],
-  },
-  {
-    id: "arrivals",
-    rail: "Follow arrivals",
-    title: "Watch the arrival window",
-    titleMuted: "move with the technician.",
-    body:
-      "When the technician heads out, the arrival window is recalculated and the customer's page updates with it. No four-hour window, no guessing.",
-    scene: "chapter-arrival",
-    support: [
-      { title: "Location only while travelling", body: "Technician location is shared with the customer during travel to that appointment, not all day." },
-      { title: "Arrival confirmed on site", body: "A geofence marks the technician as arrived, with a manual tap as the fallback." },
-    ],
-  },
-  {
-    id: "inform",
-    rail: "Keep customers informed",
-    title: "Send the update",
-    titleMuted: "before the customer has to ask.",
-    body:
-      "Running late? Send a short update from the appointment and the customer's arrival page and notification change together.",
-    scene: "chapter-communication",
-    support: [
-      { title: "Plain-language updates", body: "Short messages written by your team, delivered by text or email with the live link." },
-      { title: "A record of what was said", body: "Every update stays attached to the appointment for the office to see later." },
-    ],
-  },
-] as const;
+/** For the office: the dispatcher's day, grouped by the three value propositions. Every line is in the product today. */
+export const officeView = {
+  eyebrow: "For your office",
+  title: "Run the whole day from one board.",
+  titleMuted: "Plan, assign, track and communicate.",
+  body:
+    "The office sees every job, every technician and every customer update in one place, and the board keeps itself current as technicians tap through their day.",
+  pillars: [
+    {
+      title: "Plan with visibility.",
+      items: [
+        "Scheduler with day, week and month views",
+        "A work queue of unassigned jobs to drag onto a technician",
+        "Online booking forms that land as jobs",
+        "Job templates with checklist items you can make required",
+      ],
+    },
+    {
+      title: "Assign and track.",
+      items: [
+        "Best-technician suggestions by distance, skills, availability and workload",
+        "Auto-assign rules when you want them: nearest, least busy or by zone",
+        "A live map of who's on the way and who's on site",
+        "Arrival logged automatically at the address",
+      ],
+    },
+    {
+      title: "Communicate.",
+      items: [
+        "On-the-way texts with a live tracking link",
+        "Running-late notices that go out if a job slips",
+        "Customers reschedule online, within the cutoff you set",
+        "One inbox for customer and technician messages, kept with each job",
+      ],
+    },
+  ],
+  fit: "Your words and your fields: call them jobs, visits or deliveries, add the fields you track, and give admins, dispatchers and field staff the access they need.",
+  /** Real ArrivePing office screens, captured from a local instance with sample data. */
+  shots: [
+    {
+      label: "Schedule",
+      url: "arriveping.com/admin/scheduler",
+      src: "/img/site/app/office-schedule.webp",
+      width: 1920,
+      height: 1200,
+      alt: "The ArrivePing scheduler in day view: a work queue of 11 unassigned jobs on the left and the day's jobs for four technicians on the right, each marked completed, in progress, en route or assigned, with a red line at the current time.",
+      caption: "The day at a glance, with unassigned jobs waiting in the queue.",
+    },
+    {
+      label: "Assign",
+      url: "arriveping.com/admin/scheduler",
+      src: "/img/site/app/office-board.webp",
+      width: 1920,
+      height: 1200,
+      alt: "The ArrivePing dispatch board: unassigned jobs with Assign and AI suggest buttons, four technicians with their job counts, and one technician's 17 jobs with their statuses.",
+      caption: "Assign by hand, or let ArrivePing suggest the best technician.",
+    },
+    {
+      label: "Work order",
+      url: "arriveping.com/admin/scheduler",
+      src: "/img/site/app/office-job.webp",
+      width: 1920,
+      height: 1200,
+      alt: "An urgent ArrivePing work order for a no-heat call: customer, service and price, priority, address, required skill, the technician picker with each technician's live status, and notes for the customer and for the technician.",
+      caption: "Priority, required skills, access notes and every technician's live status.",
+    },
+    {
+      label: "Price catalog",
+      url: "arriveping.com/admin/catalog",
+      src: "/img/site/app/office-catalog.webp",
+      width: 1920,
+      height: 1200,
+      alt: "The ArrivePing catalog: HVAC consumables, controls and equipment, each with its cost, price and margin.",
+      caption: "Your services and parts, with cost, price and margin.",
+    },
+  ],
+  shotsNote: "Real ArrivePing screens · sample company and data",
+};
 
-export const stories = [
-  {
-    question: "Who is heading to the next appointment?",
-    answer:
-      "The dispatch board lists the day's appointments with their technician and live status. Unassigned work stands out, and a change of technician is one selection — not a round of phone calls.",
-    image: { src: "/img/site/dispatch-desk.jpg", alt: "A dispatcher at a desk reviewing the day's appointments on a large screen." },
-    scene: "detail-visibility",
+/**
+ * Integrations: only what works today. The connect-only OAuth cards in the
+ * admin (QuickBooks, Xero, Outlook…) move no data yet, so they are not listed
+ * as integrations; accounting is described as on the roadmap, as the Help Center says.
+ */
+export const integrations = {
+  eyebrow: "Integrations",
+  title: "Keep the tools you use.",
+  titleMuted: "We'll connect the rest.",
+  body:
+    "ArrivePing runs scheduling, dispatch, tracking and customer updates. Your accounting, payroll and CRM stay where they are, and your data moves in and out whenever you need it.",
+  works: [
+    { icon: "zap", title: "Zapier and Make", body: "Send job events (created, assigned, on the way, arrived, completed and more) on to thousands of apps." },
+    { icon: "hook", title: "Webhooks", body: "Post the same events to your own systems, with a shared-secret header and a test ping." },
+    { icon: "calendar", title: "Calendar feeds", body: "Subscribe in Google Calendar, Outlook or Apple Calendar. Technicians see only their own jobs." },
+    { icon: "card", title: "Stripe payments", body: "Connect your own Stripe account and customers pay their invoices by card. ArrivePing takes no cut." },
+    { icon: "sheet", title: "Spreadsheets in and out", body: "Import customers and technicians from CSV or Excel. Export jobs, customers and invoices to CSV, Excel or PDF." },
+    { icon: "ai", title: "AI agents (MCP)", body: "Let an AI assistant look up, create and assign jobs through ArrivePing's MCP server. Keys from our team on request." },
+  ],
+  custom: {
+    title: "Custom integrations are welcome.",
+    body:
+      "Running something we don't connect to yet, like an ERP, a CRM, telematics or your own software? Tell us, and we'll scope the integration with you.",
+    points: ["Available on every plan", "Included with Fleet (30+ drivers)", "QuickBooks and Xero are on our roadmap"],
+    cta: {
+      label: "Tell us what you use",
+      href: "mailto:contact@nvc360.com?subject=Custom%20integration%20for%20ArrivePing&body=We%20use%3A%20%0AWhat%20we%27d%20like%20to%20sync%3A%20%0ATeam%20size%3A%20",
+    },
+    secondary: { label: "Or ask to be contacted", href: "/#free-trial" },
   },
-  {
-    question: "What does the customer see when the arrival time changes?",
-    answer:
-      "Their arrival page shows the new window and the technician's status, and a short notification tells them why. They do not need an app or an account.",
-    image: { src: "/img/site/customer-eta.jpg", alt: "A customer at her front door checking an arrival update on her phone as a technician approaches." },
-    scene: "detail-customer",
-  },
-] as const;
+};
 
-export const audiences = [
+/**
+ * Who it's for: one card per trade, each linking to that trade's page.
+ * Images are generated stills of the trade (no real customers); `film` plays
+ * on hover where the visitor allows motion.
+ */
+export const trades = [
   {
+    key: "hvac",
     label: "HVAC & mechanical",
-    body: "Send live ETAs and close more calls per day — no more holding the whole afternoon open for one visit.",
-    image: "/img/site/industry-hvac.jpg",
+    line: "No-heat calls to a licensed tech, with a live ETA.",
+    href: "/hvac-dispatch-software",
   },
   {
-    label: "Plumbing & electrical",
-    body: "Dispatch the nearest qualified tech to urgent calls and keep the customer posted without a round of phone tag.",
-    image: "/img/site/industry-plumbing.jpg",
+    key: "plumbing",
+    label: "Plumbing",
+    line: "Burst pipes to the nearest qualified plumber.",
+    href: "/plumbing-dispatch-software",
   },
   {
+    key: "electrical",
+    label: "Electrical",
+    line: "No-power calls to the right license level.",
+    href: "/electrical-dispatch-software",
+  },
+  {
+    key: "construction",
     label: "Installers & construction",
-    body: "Coordinate crews across multiple sites from one board, with live status instead of check-in calls.",
-    image: "/img/site/industry-construction.jpg",
+    line: "The right installer at every site, with proof at close-out.",
+    href: "/construction-trades",
   },
   {
+    key: "property",
     label: "Property maintenance",
-    body: "Track every contractor and maintenance visit across your portfolio from a single dashboard.",
-    image: "/img/site/industry-property-management.jpg",
+    line: "Residents know exactly when maintenance is coming.",
+    href: "/property-maintenance-software",
   },
   {
-    label: "Delivery & logistics",
-    body: "Give customers a live arrival window for their delivery instead of a daylong \"sometime today\" wait.",
-    image: "/img/site/industry-delivery-logistics.jpg",
+    key: "delivery",
+    label: "Delivery & installation",
+    line: "Every customer knows when your truck arrives.",
+    href: "/delivery-dispatch-software",
   },
 ] as const;
+
+/** Generated stills and loops for each trade (see public/img/site/trades and public/media/trades). */
+export const tradeMedia = (key: string) => ({
+  card: `/img/site/trades/${key}-card.webp`,
+  cardJpg: `/img/site/trades/${key}-card.jpg`,
+  poster: `/img/site/trades/${key}-hero.jpg`,
+  posterWebp: `/img/site/trades/${key}-hero.webp`,
+  film: `/media/trades/${key}-960.mp4`,
+  filmLarge: `/media/trades/${key}-1600.mp4`,
+});
 
 /* ------------------------------------------------------------------ */
 /* Proof points & founder story                                        */
@@ -428,10 +453,14 @@ export const audiences = [
 export const stats = [
   {
     value: "1B+",
-    label: "Hours lost each year to inefficient service appointment windows",
-    source: "U.S. Bureau of Labor Statistics",
+    label: "Hours lost each year to appointment waits, repeat trips, rework and phone tag",
+    source: "ArrivePing research estimate",
   },
-  { value: "20%", label: "Average reduction in field labour costs for ArrivePing teams" },
+  {
+    value: "20%",
+    label: "Lower field labour costs at National Interiors with the system ArrivePing grew from",
+    source: "National Interiors, early 2020s",
+  },
   { value: "800+", label: "Field technicians run by our team before ArrivePing was built" },
 ] as const;
 
@@ -443,11 +472,6 @@ export const story = {
     "ArrivePing began as software built for National Interiors, a specialty subcontracting operation that ran more than 800 field technicians. We lived the friction firsthand — dispatchers tied to the phone, customers demanding updates, routes that didn't add up, margin lost in every communication gap. We looked for a platform that fixed it. It didn't exist, so we built one. After National Interiors was sold in 2021, we founded NVC360 to rebuild that tool as a multi-tenant platform. ArrivePing is the result, and we're making it available to every field service team facing the same problem.",
   quote: "800+ technicians. One lesson learned: your customers' time is your reputation.",
   quoteAttribution: "ArrivePing / NVC360 founding team, Winnipeg, MB",
-  guarantee: {
-    title: "A guarantee, not just a pitch.",
-    body:
-      "No large upfront cost, no ripping out the tools you already use, onboarding built around how your team actually works. If ArrivePing doesn't make your dispatch day calmer within the first month, we'll refund it — no questions asked.",
-  },
 } as const;
 
 /**
@@ -467,10 +491,13 @@ export const STARTER_PRICE = 49;
 export const STARTER_DRIVERS = 2;
 
 export const pricing = {
-  title: "Start for $49.",
-  titleMuted: "Each driver costs less as you grow.",
-  body: "Every plan includes the dispatch board, the technician app and live customer arrival pages. Each rate applies only to the drivers in its band, so your bill never jumps when you grow into the next tier.",
-  note: "All prices in US dollars, billed monthly.",
+  title: "Start free.",
+  titleMuted: "Then from US$49 a month.",
+  body: "Every plan includes the dispatch board, the technician app, live customer tracking and the AI setup. Add a driver and you pay for one more driver, nothing else.",
+  /** Risk removers, all verified: billing-subscription.ts (monthly, no setup fee, card held until day 30). */
+  assurances: ["$0 for 30 days, as many users as you like", "Cancel before day 30 and pay nothing", "No setup fee, no contract", "Billed monthly", "No GPS hardware to buy"],
+  integrationsNote: { text: "Need a custom integration on Starter or Growing team? It's welcome.", link: { label: "See integrations", href: "/#integrations" } },
+  note: "All prices in US dollars, billed monthly. Live tracking is in every plan, with no hardware and no upgrade.",
   tiers: [
     {
       name: "Starter",
@@ -494,7 +521,7 @@ export const pricing = {
       range: "30+ drivers",
       price: "$25",
       unit: "per driver / month from driver 30",
-      features: ["Everything in Growing team", "Dispatcher license included", "Custom integrations with your systems", "Live onboarding with our team"],
+      features: ["Everything in Growing team", "Dispatcher license included", "Custom integrations included", "Live onboarding with our team"],
       cta: { label: "Sign up free", href: brand.urls.signUp },
     },
   ],
@@ -521,43 +548,65 @@ export function monthlyPrice(n: number): { plan: string; total: number; breakdow
 export const faqs = [
   {
     q: "Do customers need to install an app?",
-    a: "No. Customers receive a link by text message or email that opens a live arrival page in their browser. There is no account to create.",
+    a: "No. When the technician starts driving, the customer gets a text with a link that opens a live page in their browser: who's coming, an ETA that updates as they drive, and buttons to call, text or message the technician. There's no account to create.",
   },
   {
     q: "What do technicians use?",
-    a: "The ArrivePing mobile app. Technicians see their appointments, tap to mark themselves on the way, and the app shares status while they travel. Arrival is confirmed automatically on site, with a manual tap as fallback.",
+    a: "The ArrivePing app on the phone they already carry. A job comes in as an offer they accept, then they tap Start Driving, I've Arrived and Complete Job. With the job open, arrival is logged automatically within 150 m of the address by default, and the button is the backup.",
   },
   {
     q: "What can customers see about a technician's location?",
-    a: "Only the technician's progress toward their own appointment, and only while the technician is travelling to it. Location sharing stops on arrival.",
+    a: "Only the technician's progress toward their own appointment, from the moment the technician starts driving to it. It disappears when they arrive. Technicians share their location only while they're on the clock.",
   },
   {
     q: "How long does setup take?",
-    a: "Most teams are up and running within hours. You create your company, invite technicians and add appointments. A guided onboarding walks you through each step, and our team is available during setup.",
+    a: "The setup agent reads your website and builds your workspace in minutes: your brand, services, a priced catalog, job templates, booking forms and customer texts. After a short setup chat you invite your team and import customers from a spreadsheet. A typical first hour ends with your first job dispatched.",
+  },
+  {
+    q: "Does it work with the software we already use?",
+    a: "Yes. Job events go to Zapier, Make or your own webhook; calendars subscribe in Google, Outlook or Apple; customers and technicians import from CSV or Excel; jobs, customers and invoices export to CSV, Excel or PDF; and payments run through your own Stripe account. Custom integrations are welcome on every plan and included with Fleet. QuickBooks and Xero are on our roadmap.",
   },
   {
     q: "Does it replace our scheduling or invoicing tools?",
-    a: "ArrivePing includes scheduling, dispatch, work orders and invoicing, but you can start with arrivals and customer updates alone. Your 30-day trial is the walkthrough: sign up, and the setup agent builds your workspace from your website in about an hour.",
+    a: "It can. ArrivePing includes scheduling, dispatch, work orders with your own fields, and an invoice for every job that customers can pay by card once you connect Stripe. Many teams keep their accounting and payroll software and use ArrivePing for the day's work and customer updates.",
   },
   {
     q: "How is it priced?",
-    a: "In US dollars, billed monthly, and graduated like tax brackets: Starter is $49 a month for one dispatch user and two drivers, with your workflow set up and catalog pre-loaded so you can operate the same day. Drivers 3–29 are $30 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never lowers or jumps your bill. The dispatcher license is included in every plan at no extra fee. Teams of 30 or more also get custom integrations and live onboarding.",
+    a: "In US dollars, billed monthly. Starter is $49 a month for one dispatcher and two drivers. Drivers 3–29 are $30 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never makes your bill jump. Live tracking, the technician app and the AI setup are in every plan.",
+  },
+  {
+    q: "Is there a contract, setup fee or hardware cost?",
+    a: "No. There's no setup fee, no contract and no GPS hardware; you're billed monthly and can cancel any time. The 30-day free trial needs a card on file, but nothing is charged until day 30, and if you cancel before then you pay nothing.",
+  },
+  {
+    q: "Can we use our own wording in texts and in the app?",
+    a: "Yes. Call your work jobs, visits or deliveries and your people technicians, crews or drivers, and ArrivePing uses your words everywhere, including customer texts. The setup agent drafts your messages in your voice, and you can edit any of them.",
+  },
+  {
+    q: "Is ArrivePing available in Canada?",
+    a: "Yes. ArrivePing is built in Winnipeg, Manitoba and is available in Canada and the United States. Prices are in US dollars.",
   },
 ] as const;
 
 export const closing = {
-  title: "Give your team clarity — and your customers a better arrival experience.",
-  body: "Sign up, give us your website, and the setup agent builds your workspace while you watch. Thirty days free, as many users as you like, and nothing charged until day 30.",
+  title: "Dispatch your first job today.",
+  body: "Sign up, paste your website and the setup agent builds your workspace while you watch. Free for 30 days, then from US$49 a month.",
+  steps: [
+    { title: "Sign up", body: "No sales call and no demo to book." },
+    { title: "Paste your website", body: "The agent builds your brand, services, catalog, job templates and customer texts." },
+    { title: "Invite your team", body: "Technicians join from a text on the phone they already carry." },
+  ],
+  help: "Moving from another system or need a custom integration?",
   trial: {
     title: "Start your 30-day free trial",
     points: [
       "As many users as you like, for the whole trial",
-      "Card on file, nothing charged for 30 days",
-      "Cancel any time before day 30 and you're never billed",
-      "After that, from $49 a month; drivers at the published rates",
+      "Card on file, $0 until day 30",
+      "Cancel before day 30 and you're never billed",
+      "Then from US$49 a month: 1 dispatcher + 2 drivers",
     ],
     cta: "Sign up free",
-    fine: "Set up in about an hour. No sales call needed.",
+    fine: "No setup fee, no contract, no GPS hardware.",
   },
   /** The "contact me" choice under the trial card (components/ContactAsk.tsx). */
   contact: {
@@ -589,11 +638,12 @@ export const footer = {
       // column 13 links tall. Same links, same SEO value, two tidy columns.
       heading: "Industries",
       links: [
-        { label: "Construction & trades", href: "/construction-trades" },
         { label: "HVAC dispatch", href: "/hvac-dispatch-software" },
         { label: "Plumbing dispatch", href: "/plumbing-dispatch-software" },
         { label: "Electrical dispatch", href: "/electrical-dispatch-software" },
-        { label: "Delivery dispatch", href: "/delivery-dispatch-software" },
+        { label: "Installers & construction", href: "/construction-trades" },
+        { label: "Property maintenance", href: "/property-maintenance-software" },
+        { label: "Delivery & installation", href: "/delivery-dispatch-software" },
         { label: "Canada", href: "/canada" },
       ],
     },

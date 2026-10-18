@@ -5,25 +5,19 @@ import { useReveal } from "../site/motion/use-reveal";
 import { scrollToAnchor, useHeaderOffset } from "../site/motion/use-scrollspy";
 import { SiteHeader } from "../site/components/SiteHeader";
 import { SiteFooter } from "../site/components/SiteFooter";
-import {
-  Showcase,
-  OutcomeStories,
-  Audiences,
-  Pricing,
-  FAQ,
-  OurStory,
-  ClosingCTA,
-} from "../site/sections";
+import { Audiences, Pricing, FAQ, OurStory, ClosingCTA } from "../site/sections";
 import { HeroFilm } from "../site/live/HeroFilm";
 import { CustomerView } from "../site/live/CustomerView";
 import { DispatchStory } from "../site/live/DispatchStory";
 import { TechApp } from "../site/live/TechApp";
 import { FirstHour } from "../site/live/FirstHour";
+import { OfficeView } from "../site/live/OfficeView";
+import { Integrations } from "../site/live/Integrations";
 import { usePageMeta } from "../site/seo/head";
 import "../site/site.css";
 import "../site/live/live.css";
 import "../site/live/opening.css";
-import "../site/scenes/scenes.css";
+import "../site/live/lower.css";
 
 /** Marketing landing page — Attio-inspired light design language, scoped under `.site`. */
 export default function Index() {
@@ -85,8 +79,8 @@ function Page() {
         <DispatchStory />
         <TechApp />
         <FirstHour />
-        <Showcase />
-        <OutcomeStories />
+        <OfficeView />
+        <Integrations />
         <Audiences />
         <Pricing />
         <FAQ />

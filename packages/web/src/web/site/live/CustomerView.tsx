@@ -82,13 +82,13 @@ export function CustomerView() {
 }
 
 /** iOS Messages, showing ArrivePing's default on-the-way text. */
-function SmsScreen({ from, body }: { from: string; body: string }) {
+export function SmsScreen({ from, body, time = "9:16", stamp = "Today 9:16 PM" }: { from: string; body: string; time?: string; stamp?: string }) {
   const url = body.match(/https?:\/\/\S+$/)?.[0] ?? "";
   const text = url ? body.slice(0, -url.length) : body;
   return (
     <div className="ap-sms">
       <div className="ap-sms__status" aria-hidden="true">
-        <span className="tnum">9:16</span>
+        <span className="tnum">{time}</span>
         <span className="ap-sms__island" />
         <span className="ap-sms__icons">
           <svg width="44" height="12" viewBox="0 0 44 12">
@@ -122,7 +122,7 @@ function SmsScreen({ from, body }: { from: string; body: string }) {
         <span className="ap-sms__meta" aria-hidden="true">
           Text Message
           <br />
-          Today 9:16 PM
+          {stamp}
         </span>
         <p className="ap-sms__bubble">
           <span className="visually-hidden">Text message from {from}: </span>
