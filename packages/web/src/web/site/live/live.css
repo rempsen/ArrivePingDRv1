@@ -170,6 +170,24 @@
     linear-gradient(90deg, rgb(5 8 15 / 96%) 0%, rgb(5 8 15 / 90%) 30%, rgb(5 8 15 / 52%) 50%, rgb(5 8 15 / 22%) 66%, rgb(5 8 15 / 50%) 100%),
     linear-gradient(0deg, rgb(5 8 15 / 88%) 0%, rgb(5 8 15 / 0%) 30%);
 }
+/* Home hero photo. The van and technician sit left of centre in the frame, so
+   on wide screens the photo fills only the right part of the hero (fading in
+   from the navy behind the copy) and puts the technician in the clear space
+   between the copy and the phones. Narrower screens keep it full-bleed under
+   the heavier single-column shade. */
+.site .lv-hero__film--photo img {
+  object-position: 27% 50%;
+}
+@media (min-width: 1121px) {
+  .site .lv-hero__film--photo {
+    left: 38%;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 26%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 26%);
+  }
+  .site .lv-hero__film--photo img {
+    object-position: 2% 42%;
+  }
+}
 .site .lv-hero__inner {
   width: 100%;
   display: grid;

@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState, type JSX } from "react";
+import type { JSX } from "react";
 import { hero } from "../config";
 import { useAnchorNav } from "../components/SiteHeader";
-import { usePlayback } from "../motion/playback";
 import { PauseButton, useLivePlay } from "./shared";
 
 /**
- * Hero. A film loop of a technician arriving at a home sits behind the copy;
- * in front, the same moment on real ArrivePing screens: Jordan's technician
+ * Hero. A real photo of a technician arriving at a customer's home sits
+ * behind the copy (it drifts slowly, paused with the rest of the page's
+ * motion); in front, the same moment on real ArrivePing screens: Jordan's technician
  * app on the way, and on Dana's phone the on-the-way text and her live ETA.
  *
  * The copy answers the four buyer objections (hardware, setup time, training,
@@ -43,42 +43,29 @@ const assuranceIcons: Record<AssuranceIcon, JSX.Element> = {
   ),
 };
 
-export function HeroFilm() {
+export function HomeHero() {
   const go = useAnchorNav();
   const { ref, play } = useLivePlay<HTMLElement>(0.1);
-  const { reduced } = usePlayback();
-  const video = useRef<HTMLVideoElement>(null);
-  const [src, setSrc] = useState<string | null>(null);
   const d = hero.device;
-
-  // Pick the cut after mount (small screens get the 960 px file).
-  useEffect(() => {
-    setSrc(window.innerWidth < 900 ? hero.film.small : hero.film.large);
-  }, []);
-
-  useEffect(() => {
-    const v = video.current;
-    if (!v) return;
-    if (play === "on" && !reduced) {
-      v.play().catch(() => {
-        /* autoplay refused: the poster stays */
-      });
-    } else {
-      v.pause();
-    }
-  }, [play, reduced, src]);
+  const ph = hero.photo;
 
   return (
     <section className="lv lv-hero" ref={ref} data-play={play} aria-labelledby="hero-title">
-      <div className="lv-hero__film" aria-hidden="true">
+      <div className="lv-hero__film lv-hero__film--photo" aria-hidden="true">
         <div className="lv-hero__kb">
           <picture>
-            <source type="image/webp" srcSet={hero.film.posterWebp} />
-            <img src={hero.film.poster} alt="" width={1600} height={1066} fetchPriority="high" decoding="async" />
+            <source type="image/webp" srcSet={`${ph.webp.small} 960w, ${ph.webp.large} 1920w`} sizes="(min-width: 1121px) 64vw, 100vw" />
+            <img
+              src={ph.jpg.large}
+              srcSet={`${ph.jpg.small} 960w, ${ph.jpg.large} 1920w`}
+              sizes="(min-width: 1121px) 64vw, 100vw"
+              alt=""
+              width={ph.width}
+              height={ph.height}
+              fetchPriority="high"
+              decoding="async"
+            />
           </picture>
-          {src && !reduced ? (
-            <video ref={video} aria-hidden="true" src={src} poster={hero.film.posterWebp} muted loop playsInline autoPlay preload="auto" disablePictureInPicture tabIndex={-1} />
-          ) : null}
         </div>
       </div>
       <div className="lv-hero__shade" aria-hidden="true" />

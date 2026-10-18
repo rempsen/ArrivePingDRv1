@@ -131,11 +131,19 @@ export const DispatchMap = forwardRef<DispatchMapHandle, Props>(function Dispatc
     }
   }, [props.board, props.showJob, props.selectedTech]);
 
-  useEffect(() => parts.current?.jobs.setSelected(props.selectedJob), [props.selectedJob]);
-  useEffect(() => parts.current?.jobs.setHover(props.hoverJob ?? null), [props.hoverJob]);
-  useEffect(() => parts.current?.ctl.setMode(props.mode), [props.mode]);
+  useEffect(() => {
+    parts.current?.jobs.setSelected(props.selectedJob);
+  }, [props.selectedJob]);
+  useEffect(() => {
+    parts.current?.jobs.setHover(props.hoverJob ?? null);
+  }, [props.hoverJob]);
+  useEffect(() => {
+    parts.current?.ctl.setMode(props.mode);
+  }, [props.mode]);
   const { top, right, bottom, left } = props.padding;
-  useEffect(() => parts.current?.ctl.setPadding({ top, right, bottom, left }), [top, right, bottom, left]);
+  useEffect(() => {
+    parts.current?.ctl.setPadding({ top, right, bottom, left });
+  }, [top, right, bottom, left]);
 
   return <div ref={host} className="ap-map" data-testid="dispatch-map" />;
 });

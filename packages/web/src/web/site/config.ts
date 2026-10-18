@@ -65,22 +65,27 @@ export const hero = {
   risk: "Free for 30 days with as many users as you like. Nothing is charged until day 30, and you can cancel any time.",
   primary: { label: "Sign up free", href: brand.urls.signUp },
   secondary: { label: "See what your customer sees", href: "/#customer-view" },
-  film: {
-    large: "/media/site-hero-film-1600.mp4",
-    small: "/media/site-hero-film-960.mp4",
-    poster: "/media/site-hero-film-poster.jpg",
-    posterWebp: "/media/site-hero-film-poster.webp",
+  /**
+   * A real photo (Pexels, free licence, no attribution required): a technician
+   * stepping out of his van at a customer's home. Photo by Tima Miroshnichenko,
+   * pexels.com/photo/6195893. Graded like the trade photos; number plate blurred.
+   */
+  photo: {
+    jpg: { small: "/media/site-hero-960.jpg", large: "/media/site-hero-1920.jpg" },
+    webp: { small: "/media/site-hero-960.webp", large: "/media/site-hero-1920.webp" },
+    width: 1920,
+    height: 1280,
   },
   /** Real ArrivePing screens (sample company, people and job). */
   device: {
     tech: {
-      src: "/img/site/app/tech-enroute.webp",
+      src: "/img/site/app/tech-enroute.webp?v=9f842a28",
       width: 680,
       height: 1478,
       alt: "The ArrivePing technician app on an iPhone: Jordan is on the way to Dana Reyes at 214 Waverley St, 3 minutes away, with Navigate, Text ETA and I've Arrived buttons.",
     },
     eta: {
-      src: "/img/site/app/crop-eta.webp",
+      src: "/img/site/app/crop-eta.webp?v=c999db18",
       width: 560,
       height: 128,
       alt: "Dana's tracking page: 3 min estimated arrival, 0.9 km away, live.",
@@ -118,7 +123,7 @@ export const customerView = {
       body: "Opens in any phone browser and updates as the technician drives.",
       screen: {
         kind: "img" as const,
-        src: "/img/site/app/cust-track.webp",
+        src: "/img/site/app/cust-track.webp?v=d7647a51",
         width: 680,
         height: 1478,
         alt: "The customer's live tracking page in a phone browser: 3 min estimated arrival, 0.9 km away, destination 214 Waverley St, and a job timeline showing the request received, the technician assigned and the technician on the way.",
@@ -130,7 +135,7 @@ export const customerView = {
       body: "One tap to call or text. Messages sent on the page stay with the job, so the office sees them too.",
       screen: {
         kind: "img" as const,
-        src: "/img/site/app/cust-contact.webp",
+        src: "/img/site/app/cust-contact.webp?v=daa2a05b",
         width: 680,
         height: 1478,
         alt: "The customer's page showing technician Jordan Park, rated 4.9, with Call and Text buttons, and a message thread: Jordan is about 3 minutes out and bringing a new igniter; the customer replies that the side door is open.",
@@ -173,21 +178,21 @@ export const techApp = {
     "The job lands on the phone your technician already carries, with the address, notes, time and price. There's nothing to install in the van.",
   taps: [
     {
-      button: { src: "/img/site/app/btn-accept.webp", width: 363, height: 96 },
+      button: { src: "/img/site/app/btn-accept.webp?v=961dde05", width: 363, height: 96 },
       screen: 0,
       spot: { x: 28.4, y: 53.7, w: 39.7, h: 4.7 },
       title: "Accept the job",
       body: "New work orders arrive as offers. One tap to take it, one to pass.",
     },
     {
-      button: { src: "/img/site/app/btn-start-driving.webp", width: 345, height: 96 },
+      button: { src: "/img/site/app/btn-start-driving.webp?v=130ce530", width: 345, height: 96 },
       screen: 1,
       spot: { x: 18.2, y: 17, w: 28.5, h: 3 },
       title: "Start Driving",
       body: "Your customer gets their text and live link, and the office sees the technician en route.",
     },
     {
-      button: { src: "/img/site/app/btn-arrived.webp", width: 668, height: 96 },
+      button: { src: "/img/site/app/btn-arrived.webp?v=e3915b84", width: 668, height: 96 },
       screen: 1,
       spot: { x: 49.9, y: 83, w: 91.6, h: 5.8 },
       title: "I've Arrived",
@@ -195,7 +200,7 @@ export const techApp = {
     },
     {
       /** No screenshot of this state: drawn from the app's own "success" button (C.green, #03130d label). */
-      button: { src: "/img/site/app/btn-complete.webp", width: 668, height: 96 },
+      button: { src: "/img/site/app/btn-complete.webp?v=b799df6f", width: 668, height: 96 },
       screen: 1,
       spot: null,
       title: "Complete Job",
@@ -208,13 +213,13 @@ export const techApp = {
   ],
   screens: [
     {
-      src: "/img/site/app/tech-offer.webp",
+      src: "/img/site/app/tech-offer.webp?v=5d1e9035",
       width: 680,
       height: 1478,
       alt: "The technician app's job list: a new offer for Dana Reyes at 214 Waverley St, tonight at 9:15 PM, $189, with Accept and Decline buttons.",
     },
     {
-      src: "/img/site/app/tech-enroute.webp",
+      src: "/img/site/app/tech-enroute.webp?v=9f842a28",
       width: 680,
       height: 1478,
       alt: "The technician app on the way to the job: Navigate, sharing live location with the customer, 3 minutes away, and the I've Arrived button.",
@@ -361,7 +366,7 @@ export const officeView = {
     {
       label: "Schedule",
       url: "arriveping.com/admin/scheduler",
-      src: "/img/site/app/office-schedule.webp",
+      src: "/img/site/app/office-schedule.webp?v=271dc411",
       width: 1920,
       height: 1200,
       alt: "The ArrivePing scheduler in day view: a work queue of 11 unassigned jobs on the left and the day's jobs for four technicians on the right, each marked completed, in progress, en route or assigned, with a red line at the current time.",
@@ -370,7 +375,7 @@ export const officeView = {
     {
       label: "Assign",
       url: "arriveping.com/admin/scheduler",
-      src: "/img/site/app/office-week.webp",
+      src: "/img/site/app/office-week.webp?v=bd83d4b7",
       width: 1920,
       height: 1200,
       alt: "The ArrivePing scheduler's calendar in Work Week view, Monday to Friday: each technician's jobs by day and time, marked with their initials, and a work queue of unassigned jobs beside it.",
@@ -379,7 +384,7 @@ export const officeView = {
     {
       label: "Work order",
       url: "arriveping.com/admin/scheduler",
-      src: "/img/site/app/office-job.webp",
+      src: "/img/site/app/office-job.webp?v=9859501a",
       width: 1920,
       height: 1200,
       alt: "An urgent ArrivePing work order for a no-heat call: customer, service and price, priority, address, required skill, the technician picker with each technician's live status, and notes for the customer and for the technician.",
@@ -388,7 +393,7 @@ export const officeView = {
     {
       label: "Price catalog",
       url: "arriveping.com/admin/catalog",
-      src: "/img/site/app/office-catalog.webp",
+      src: "/img/site/app/office-catalog.webp?v=bb43d79b",
       width: 1920,
       height: 1200,
       alt: "The ArrivePing catalog: HVAC consumables, controls and equipment, each with its cost, price and margin.",
@@ -438,22 +443,22 @@ export const integrations = {
     useWith: "Open them in Excel or Google Sheets, or load them into your accounting, payroll or BI tools.",
     url: "arriveping.com/admin/reports",
     main: {
-      src: "/img/site/app/reports-main.webp",
-      src1200: "/img/site/app/reports-main-1200.webp",
-      phone: "/img/site/app/reports-export-phone.webp",
+      src: "/img/site/app/reports-main.webp?v=6cd1c655",
+      src1200: "/img/site/app/reports-main-1200.webp?v=ea9b3585",
+      phone: "/img/site/app/reports-export-phone.webp?v=3f29f245",
       width: 2368,
       height: 1460,
       alt: "The ArrivePing Reports & Analytics screen showing Revenue & Sales for the last 90 days: date, technician and status filters; revenue, jobs, average order value and gross margin; revenue by day and by service; and the Export menu open on CSV, Excel (.xlsx), JSON and PDF.",
     },
     sort: {
-      src: "/img/site/app/reports-sort.webp",
+      src: "/img/site/app/reports-sort.webp?v=f199edfc",
       width: 1016,
       height: 588,
       label: "Detail table, sorted by revenue",
       alt: "The report's detail table sorted by revenue, highest first: a down arrow on the Revenue heading, sort arrows on Jobs and Avg / job, and revenue running from $79,212.00 down to $19,395.60.",
     },
     raw: {
-      src: "/img/site/app/reports-raw.webp",
+      src: "/img/site/app/reports-raw.webp?v=30b26ccb",
       width: 880,
       height: 400,
       label: "Full records, in four formats",
