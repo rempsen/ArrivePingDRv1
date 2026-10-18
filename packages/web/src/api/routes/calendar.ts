@@ -3,8 +3,8 @@ import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { requireAuth, loadMemberships } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { officeCan, requireAuth, loadMemberships } from "../middleware/auth";
+import { isOfficeRole } from "../lib/office-access";
 import { buildCalendar, type CalEvent } from "../../services/ics";
 import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
@@ -27,9 +27,11 @@ function ensureToken(existing: string | null): string {
 const baseUrl = publicOrigin;
 
 /** Resolve the set of bookings a given user should see on their calendar. */
-async function bookingsForUser(u: { id: string; role: string | null; companyId: string }) {
+async function bookingsForUser(u: { id: string; role: string | null; permissions?: string | null; companyId: string }) {
   const t = tdb(u.companyId);
-  if (isAdminRole(u.role)) {
+  // The office's feed is the whole schedule — if their role (or their own
+  // override at that company) lets them see the scheduler.
+  if (await officeCan({ role: u.role, permissions: u.permissions ?? null }, "scheduler:view")) {
     return t.select(schema.bookings);
   }
   if (u.role === "rider") {
@@ -148,12 +150,12 @@ export const calendarRoutes = new Hono<AppEnv>()
     // u.companyId hid every job from their non-home companies.
     const memberships = await loadMemberships(u.id);
     const scopes = memberships.length
-      ? memberships.map((m) => ({ companyId: m.companyId, role: m.role }))
-      : [{ companyId: (u as any).companyId || "default", role: u.role }];
+      ? memberships.map((m) => ({ companyId: m.companyId, role: m.role, permissions: m.permissions }))
+      : [{ companyId: (u as any).companyId || "default", role: u.role, permissions: (u as { permissions?: string | null }).permissions ?? null }];
 
     const perCompany = await Promise.all(
       scopes.map(async (s) => {
-        const rows = await bookingsForUser({ id: u.id, role: s.role, companyId: s.companyId });
+        const rows = await bookingsForUser({ id: u.id, role: s.role, permissions: s.permissions, companyId: s.companyId });
         return rows
           .filter((b) => {
             const t = new Date(b.scheduledAt).getTime();
@@ -167,7 +169,7 @@ export const calendarRoutes = new Hono<AppEnv>()
     const base = baseUrl(c);
     const events = await Promise.all(scoped.map((x) => eventFor(x.booking, base, x.companyId)));
     const calName =
-      isAdminRole(u.role)
+      isOfficeRole(u.role)
         ? "ArrivePing — Dispatch Schedule"
         : u.role === "rider"
           ? `ArrivePing — ${u.name}'s Jobs`

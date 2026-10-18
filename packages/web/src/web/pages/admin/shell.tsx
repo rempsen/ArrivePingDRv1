@@ -12,6 +12,8 @@ import { LaunchChecklistCard } from "../../guide/launch";
 import { GuideButton } from "../../guide/GuideButton";
 import { groupAnchor, navAnchor } from "../../guide/anchors";
 import { useAuth } from "../../hooks/use-auth";
+import { useAccess } from "../../hooks/use-access";
+import { Loader } from "../../components/loader";
 import { useWorkerNoun, useCustomerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
 import { authClient, clearToken } from "../../lib/auth";
 import { cn } from "../../lib/utils";
@@ -148,7 +150,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   // Super admins get their cross-tenant tools in their own section, right
   // under Operations, so it's clear these act on every company, not this one.
-  const groups: NavGroup[] =
+  const allGroups: NavGroup[] =
     role === "superadmin"
       ? [
           NAV_GROUPS[0]!,
@@ -163,6 +165,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ...NAV_GROUPS.slice(1),
         ]
       : NAV_GROUPS;
+
+  // Managers, dispatchers and project managers see the sections their role
+  // includes (shared/office-pages.ts); admins see everything.
+  const { access, loading: accessLoading, canOpen } = useAccess();
+  const groups: NavGroup[] = access
+    ? allGroups.map((g) => ({ ...g, items: g.items.filter((n) => canOpen(n.to)) })).filter((g) => g.items.length > 0)
+    : [];
+  const firstPage = groups[0]?.items[0]?.to ?? "/admin";
+  const blocked = Boolean(access) && !canOpen(loc);
 
   // close the mobile drawer whenever the route changes
   useEffect(() => {
@@ -401,7 +412,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <main className="md:pl-[228px]">
         <SampleDayBanner />
-        {children}
+        {accessLoading ? (
+          <div className="grid min-h-[60vh] place-items-center">
+            <Loader />
+          </div>
+        ) : blocked ? (
+          <NoAccess home={firstPage} />
+        ) : (
+          children
+        )}
       </main>
 
       {/* persistent dispatch messaging — available on every admin screen */}
@@ -412,6 +431,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <OnboardingChat />
     </div>
     </GuideProvider>
+  );
+}
+
+/** Shown instead of a page that isn't part of this person's role. */
+function NoAccess({ home }: { home: string }) {
+  return (
+    <div className="grid min-h-[60vh] place-items-center px-6">
+      <div className="max-w-sm text-center">
+        <h1 className="text-lg font-semibold text-white">This page isn't part of your role</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Your company's admin decides what each role can open. Ask them if you need this page.
+        </p>
+        <Link to={home} className="mt-5 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+          Back to your work
+        </Link>
+      </div>
+    </div>
   );
 }
 

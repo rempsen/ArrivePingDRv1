@@ -4,8 +4,7 @@ import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, isNull, and, inArray, desc, sql, type SQL } from "drizzle-orm";
-import { requireAuth, tenantId, tx } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { officeCan, requireAuth, tenantId, tx } from "../middleware/auth";
 import { Err } from "../lib/errors";
 import { publicFieldData, mergeInternalFieldData } from "../lib/field-data";
 import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } from "../lib/memberships";
@@ -452,7 +451,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
 
     // Build the same visibility predicate the old code expressed with branches.
     let where: SQL | undefined;
-    if (isAdminRole(u.role)) {
+    if (await officeCan(u, "work_orders:view")) {
       where = isNull(schema.bookings.deletedAt);
     } else if (u.role === "rider") {
       const rp = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
@@ -650,7 +649,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // admin creates a work order on behalf of a client
   .post("/admin", requireAuth, jsonBody(BookingAdminCreate), async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "work_orders:create"))) return c.json({ message: "Forbidden" }, 403);
     const body = c.req.valid("json");
 
     const co = tenantId(c);
@@ -834,7 +833,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // reschedule a work order (admin) -> set scheduledAt (drag onto a calendar day)
   .post("/:id/schedule", requireAuth, jsonBody(ScheduleBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "scheduler:edit"))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const { scheduledAt, force } = c.req.valid("json");
     const t = tx(c);
@@ -880,7 +879,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // admin edits any field on a work order (address, schedule, service, pricing, etc.)
   .patch("/:id", requireAuth, jsonBody(BookingPatch), async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const co = tenantId(c);
     const t = tx(c);
@@ -1047,7 +1046,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // Dispatching work is an office action. This route was open to any signed-in
     // user in the tenant, so a technician could hand themselves (or a coworker)
     // any job on the board.
-    if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
     const { riderId, force } = c.req.valid("json");
     const id = c.req.param("id");
     // Every guard (tenant check on the tech, terminal/in-flight protection,
@@ -1123,7 +1122,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // on-site clock, and no "your technician is here" for the customer.
     let b;
     try {
-      b = await applyBookingStatus(co, id, status, { force: isAdminRole(u.role) });
+      b = await applyBookingStatus(co, id, status, { force: await officeCan(u, "work_orders:edit") });
     } catch (e) {
       if (e instanceof StatusTransitionError)
         return c.json({ message: e.message, from: e.from, to: e.to }, 409);
@@ -1152,7 +1151,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       ? await t.selectOne(schema.riders, eq(schema.riders.id, cur.riderId))
       : null;
     const isHolder = !!holder && holder.userId === u.id;
-    if (!isHolder && !isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!isHolder && !(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
     if (cur.status !== "arrived" && cur.status !== "in_progress")
       throw Err.conflict("This job's clock can't be resumed right now.");
     if (cur.clockState !== "paused")
@@ -1181,7 +1180,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       ? await t.selectOne(schema.riders, eq(schema.riders.id, cur.riderId))
       : null;
     const isHolder = !!holder && holder.userId === u.id;
-    if (!isHolder && !isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!isHolder && !(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
     if (!cur.riderId) throw Err.conflict("This job isn't assigned to anyone.");
     if (cur.assignStatus === "offered")
       throw Err.conflict("You haven't accepted this job yet — decline it instead.");
@@ -1246,14 +1245,15 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // route used to be guarded by requireAuth alone, so ANY signed-in user in
     // the tenant — including a tech, or a customer poking at another
     // customer's booking id — could kill someone else's work order.
-    if (!isAdminRole(u.role) && prev.customerId !== u.id)
+    const office = await officeCan(u, "work_orders:edit");
+    if (!office && prev.customerId !== u.id)
       return c.json({ message: "Forbidden" }, 403);
     // A CUSTOMER can no longer hard-cancel their own job here, which is what
     // this endpoint allowed: a job could leave the dispatch board with nobody at
     // the company deciding it should, and no reason recorded. Customer-side
     // cancellation is a request the office approves
     // (POST /:id/cancel-request). Office cancellation is unchanged.
-    if (!isAdminRole(u.role))
+    if (!office)
       return c.json(
         {
           message:
@@ -1281,7 +1281,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
-    if (!isAdminRole(u.role) && b.customerId !== u.id)
+    if (b.customerId !== u.id && !(await officeCan(u, "work_orders:view")))
       return c.json({ message: "Forbidden" }, 403);
     const state = await changeStateFor(co, b);
     return c.json(serializeState(state), 200);
@@ -1298,7 +1298,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const body = c.req.valid("json");
     const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
-    if (!isAdminRole(u.role) && b.customerId !== u.id)
+    if (b.customerId !== u.id && !(await officeCan(u, "work_orders:edit")))
       return c.json({ message: "Forbidden" }, 403);
     const r = await requestReschedule({
       companyId: co,
@@ -1331,7 +1331,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const body = c.req.valid("json");
     const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
-    if (!isAdminRole(u.role) && b.customerId !== u.id)
+    if (b.customerId !== u.id && !(await officeCan(u, "work_orders:edit")))
       return c.json({ message: "Forbidden" }, 403);
     const r = await requestCancel({
       companyId: co,

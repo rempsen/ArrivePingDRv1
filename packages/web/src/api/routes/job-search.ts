@@ -4,8 +4,7 @@ import * as schema from "../database/schema";
 import {
   eq, and, or, like, gte, lte, isNull, isNotNull, inArray, desc, asc, sql,
 } from "drizzle-orm";
-import { requireAuth, tenantId, tx } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { officeCan, requireAuth, tenantId, tx } from "../middleware/auth";
 import { toCsv, toPdf, buildJobPdf, fileResponse, tenantFilePrefix, type JobUnitLine, type JobPhoto } from "./export";
 import { companyTimeZone } from "../../services/company-tz";
 import { ensureSnappedRoute } from "../../services/route-snap";
@@ -16,7 +15,12 @@ import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
 
-const isStaff = (u: SessionUser) => isAdminRole(u?.role) || u?.role === "dispatcher";
+/**
+ * Office staff with this jobs permission (admins always; managers,
+ * dispatchers and PMs per their role). Reading needs view; bulk export needs
+ * the export permission; archiving and restoring need delete.
+ */
+const isStaff = (u: SessionUser, perm = "work_orders:view") => officeCan(u as SessionUser & { permissions?: string | null }, perm);
 
 /* -------------------------------------------------------------------------- */
 /*  Column catalog — every field a dispatcher can export, summary + detail.   */
@@ -280,7 +284,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // facet options for the filter UI (services, technicians, statuses, regions, tags)
   .get("/facets", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
     const t = tx(c);
     const { services, technicians, tags, regions } = await t.transaction(async (txn) => {
       const svcRows = await txn.select().from(schema.services).where(t.scope(schema.services) as any);
@@ -321,7 +325,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // paginated, filtered search
   .get("/search", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
     const f = parseFilters(c);
     const page = Math.max(1, Number(c.req.query("page")) || 1);
     const pageSize = Math.min(200, Math.max(5, Number(c.req.query("pageSize")) || 25));
@@ -365,7 +369,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // export filtered results: ?format=csv|json|pdf&columns=a,b,c (omit columns = summary set)
   .get("/export", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u, "reports:export"))) return c.json({ message: "Forbidden" }, 403);
     const f = parseFilters(c);
     const format = (c.req.query("format") || "csv").toLowerCase();
     const colsParam = c.req.query("columns");
@@ -427,7 +431,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // single-job full detail export (all fields) — for the per-job detail option
   .get("/:id/export", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const format = (c.req.query("format") || "pdf").toLowerCase();
     const cid = tenantId(c);
@@ -503,7 +507,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // stitching together several separate requests.
   .get("/:id/report", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const t = tx(c);
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
@@ -602,7 +606,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // soft-delete (archive) a job — never lose data
   .delete("/:id", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u, "work_orders:delete"))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const t = tx(c);
     await t.update(schema.bookings, { deletedAt: new Date() }, eq(schema.bookings.id, id));
@@ -617,7 +621,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
   // restore a soft-deleted job
   .post("/:id/restore", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isStaff(u)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await isStaff(u, "work_orders:delete"))) return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const t = tx(c);
     await t.update(schema.bookings, { deletedAt: null }, eq(schema.bookings.id, id));

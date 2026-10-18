@@ -4,6 +4,7 @@ import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { and, eq } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
+import { isAdminRole } from "../lib/permissions";
 import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
 import { publishDispatch } from "../../services/realtime";
@@ -379,6 +380,14 @@ export const ridersRoutes = new Hono<AppEnv>()
 
     const existing = await tx(c).selectOne(schema.riders, eq(schema.riders.id, id));
     if (!existing) return c.json({ message: "Not found" }, 404);
+
+    // A technician's sign-in email is their account: only an admin changes it
+    // (a manager who could would be able to take the account over).
+    if (b.email && !isAdminRole((c.get("user") as { role?: string } | null)?.role)) {
+      const [cur] = await sdb.select({ email: schema.user.email }).from(schema.user).where(eq(schema.user.id, existing.userId));
+      if (cur && cur.email.toLowerCase() !== b.email.toLowerCase())
+        return c.json({ message: "Only an admin can change someone's sign-in email" }, 403);
+    }
 
     // Reject a duplicate email BEFORE writing anything, or the unique index on
     // user.email throws and the client gets a bare 500.

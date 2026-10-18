@@ -19,6 +19,7 @@ import "../site/live/live.css";
 import "../site/live/opening.css";
 import "../site/live/lower.css";
 import "../site/live/setup-film.css";
+import { homeFor } from "../lib/home";
 
 /** Marketing landing page — Attio-inspired light design language, scoped under `.site`. */
 export default function Index() {
@@ -35,13 +36,7 @@ function Page() {
   const { isAuthed, role } = useAuth();
   const { reduced } = usePlayback();
 
-  const dashboardHref = isAuthed
-    ? role === "admin"
-      ? "/admin"
-      : role === "rider"
-        ? "/rider"
-        : "/app"
-    : undefined;
+  const dashboardHref = isAuthed ? homeFor(role) : undefined;
 
   useReveal(rootRef);
   useHeaderOffset(headerRef, rootRef);

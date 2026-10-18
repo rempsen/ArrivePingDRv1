@@ -11,6 +11,7 @@ import {
   isSuperadmin,
 } from "../lib/permissions";
 import { tdb } from "../database/tenant";
+import { STAFF_OFFICE_ROLES, permissionFor } from "../lib/office-access";
 
 /** Load all role defaults from DB (falling back to seed). Cached briefly. */
 let _roleCache: { at: number; map: Record<string, string[]> } | null = null;
@@ -319,13 +320,42 @@ export const requireAuth = createMiddleware(async (c, next) => {
   return next();
 });
 
-export const requireAdmin = createMiddleware(async (c, next) => {
-  const user = c.get("user");
+/**
+ * May this signed-in person use this office (dashboard) permission? Admins
+ * always; managers, dispatchers and project managers when their role (or
+ * their own override under Roles & Permissions) grants it; nobody else.
+ */
+export async function officeCan(
+  user: { role?: string | null; permissions?: string | null } | null | undefined,
+  perm: string,
+): Promise<boolean> {
+  if (!user) return false;
+  if (isAdminRole(user.role)) return true;
+  if (!STAFF_OFFICE_ROLES.has(user.role ?? "")) return false;
+  return permAllows(resolvePerms(user, await loadRoleDefaults()), perm);
+}
+
+/**
+ * The dispatch dashboard's API guard (lib/office-access.ts). Admins pass.
+ * Managers, dispatchers and project managers pass when they hold the
+ * permission this path and method map to; billing, payment setup, API keys,
+ * other people's passwords and anything unmapped stay admin-only. Field
+ * staff and customers never pass.
+ */
+export const requireOffice = createMiddleware(async (c, next) => {
+  const user = c.get("user") as { role?: string; permissions?: string | null } | null;
   if (!user) return c.json({ message: "Unauthorized" }, 401);
-  if (!isAdminRole((user as { role?: string }).role))
-    return c.json({ message: "Forbidden" }, 403);
+  if (isAdminRole(user.role)) return next();
+  if (!STAFF_OFFICE_ROLES.has(user.role ?? "")) return c.json({ message: "Forbidden" }, 403);
+  const need = permissionFor(c.req.method, c.req.path);
+  if (need === "self") return next();
+  if (!need || !permAllows(resolvePerms(user, await loadRoleDefaults()), need))
+    return c.json({ message: "Your role doesn't include this. Ask an admin on your account." }, 403);
   return next();
 });
+
+/** The office guard under its historic name; see requireOffice. */
+export const requireAdmin = requireOffice;
 
 /** Top-tier guard: only `superadmin` passes. Used for admin-management routes. */
 export const requireSuperadmin = createMiddleware(async (c, next) => {

@@ -35,6 +35,7 @@ import {
 import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 import { tourAttr } from "../../guide/anchors";
+import { groupTechJobs, type ListJob } from "../../lib/tech-job-groups";
 
 type CalView = "day" | "week" | "workweek" | "month";
 
@@ -1676,42 +1677,15 @@ export default function SchedulerPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {jobs.length === 0 ? (
-                    <div className="flex w-full items-center gap-2 rounded-md border border-dashed border-white/10 px-3 py-2.5 text-[11px] text-slate-500">
-                      <Plus className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
-                      <span className="hidden lg:inline">Free — drag a {jobLower} onto the tile to dispatch</span>
-                      <span className="lg:hidden">Free — tap Assign on an unassigned job to dispatch</span>
-                    </div>
-                  ) : (
-                    jobs.map((b) => (
-                      <div
-                        key={b.id}
-                        className="group/chip flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink-3/60 pl-2.5 pr-1.5 py-1.5 text-xs transition hover:border-brand/50 hover:bg-ink-3"
-                      >
-                        <button
-                          onClick={() => openJob(b)}
-                          title="Click to edit"
-                          className="flex min-h-8 items-center gap-2"
-                        >
-                          <span className="font-medium text-slate-200">
-                            {b.title || b.service?.name}
-                          </span>
-                          <StatusBadge status={b.status} />
-                          <AutoBadge booking={b} />
-                        </button>
-                        <button
-                          onClick={() => removeJob(b)}
-                          aria-label={`Delete ${jobLower}`}
-                          title={`Delete ${jobLower}`}
-                          className="grid h-8 w-8 place-items-center rounded text-slate-600 transition hover:bg-rose-500/10 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
+                {jobs.length === 0 ? (
+                  <div className="flex w-full items-center gap-2 rounded-md border border-dashed border-white/10 px-3 py-2.5 text-[11px] text-slate-500">
+                    <Plus className="h-3.5 w-3.5 shrink-0 text-slate-600" aria-hidden="true" />
+                    <span className="hidden lg:inline">Free — drag a {jobLower} onto the tile to dispatch</span>
+                    <span className="lg:hidden">Free — tap Assign on an unassigned job to dispatch</span>
+                  </div>
+                ) : (
+                  <TechJobList jobs={jobs} onOpen={openJob} onRemove={removeJob} jobLower={jobLower} />
+                )}
               </div>
             );
           })()}
@@ -1719,5 +1693,69 @@ export default function SchedulerPage() {
       </div>
       )}
     </PageWrap>
+  );
+}
+
+/* ---------- selected technician's jobs: one aligned row each, grouped by when ---------- */
+
+export function TechJobList<T extends ListJob>({
+  jobs,
+  onOpen,
+  onRemove,
+  jobLower,
+}: {
+  jobs: T[];
+  onOpen: (b: T) => void;
+  onRemove: (b: T) => void;
+  jobLower: string;
+}) {
+  const groups = groupTechJobs(jobs);
+  return (
+    <div>
+      {groups.map((g) => (
+        <section key={g.label} className="mt-3 first:mt-1" aria-label={g.label}>
+          <h4 className="mb-1 flex items-center gap-2 px-1 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
+            {g.label}
+            <span className="rounded-full bg-white/5 px-1.5 py-px text-[10px] font-medium tabular-nums text-slate-400">{g.jobs.length}</span>
+          </h4>
+          <ul className="divide-y divide-white/5 overflow-hidden rounded-lg border border-white/10 bg-ink-3/40">
+            {g.jobs.map((b) => {
+              const t = b.scheduledAt ? new Date(b.scheduledAt as string) : null;
+              return (
+                <li key={b.id} className="group/row flex items-center transition hover:bg-white/[0.03]">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(b)}
+                    title="Open"
+                    className="grid min-h-11 flex-1 grid-cols-[4.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left"
+                  >
+                    <span className="text-xs font-semibold tabular-nums text-cyan-glow">
+                      {t ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-medium text-slate-100">{b.title || b.service?.name}</span>
+                      {b.address ? <span className="block truncate text-[11px] text-slate-500">{b.address}</span> : null}
+                    </span>
+                    <span className="flex items-center gap-1.5 justify-self-end">
+                      <AutoBadge booking={b as any} />
+                      <StatusBadge status={b.status} />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRemove(b)}
+                    aria-label={`Delete ${jobLower}`}
+                    title={`Delete ${jobLower}`}
+                    className="mr-1.5 grid h-8 w-8 shrink-0 place-items-center rounded text-slate-600 opacity-60 transition hover:bg-rose-500/10 hover:text-rose-400 group-hover/row:opacity-100 focus-visible:opacity-100"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }

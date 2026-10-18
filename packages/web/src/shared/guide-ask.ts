@@ -14,11 +14,12 @@ export interface AskPage {
   route: string;
   /** Where it lives in the menu, using {jobs}/{workers} tokens. */
   label: string;
-  /** The page's data is admin-only on the server, so only admins are sent there. */
-  adminOnly?: boolean;
 }
 
-/** Pages Ask may open. Anything else is refused by the tool's schema. */
+/**
+ * Pages Ask may open. Anything else is refused by the tool's schema, and each
+ * person is only offered the ones their role can open (shared/office-pages.ts).
+ */
 export const ASK_PAGES: AskPage[] = [
   { route: "/admin", label: "Operations → Dashboard" },
   { route: "/admin/scheduler", label: "Operations → Scheduler (Board and Calendar views, Work Queue)" },
@@ -26,16 +27,15 @@ export const ASK_PAGES: AskPage[] = [
   { route: "/admin/work-orders", label: "Operations → {jobs} (every {job}: search, filter, export, New {job})" },
   { route: "/admin/inbox", label: "Operations → Inbox" },
   { route: "/admin/automation", label: "Automation (custom rules; opened from the Milestones tour, not in the sidebar)" },
-  { route: "/admin/techs", label: "People → {workers} & Managers (Add {worker}, Internal Team)", adminOnly: true },
-  { route: "/admin/clients", label: "People → People (the directory of {customers} and staff, Import)", adminOnly: true },
+  { route: "/admin/techs", label: "People → {workers} & Managers (Add {worker}, Internal Team)" },
+  { route: "/admin/clients", label: "People → People (the directory of {customers} and staff, Import)" },
   {
     route: "/admin/notifications",
     label: "Setup → Notifications (milestone messages, Channels: sender, reply-to, quiet hours; Delivery Log)",
-    adminOnly: true,
   },
-  { route: "/admin/reports", label: "Money → Reports (reports and exports)", adminOnly: true },
-  { route: "/admin/settings", label: "Setup → Settings (Company tab: details, running late, Calendar Sync feed; API & MCP tab: keys)", adminOnly: true },
-  { route: "/admin/getting-started", label: "Getting started (the launch checklist)", adminOnly: true },
+  { route: "/admin/reports", label: "Money → Reports (reports and exports)" },
+  { route: "/admin/settings", label: "Setup → Settings (Company tab: details, running late, Calendar Sync feed; API & MCP tab: keys)" },
+  { route: "/admin/getting-started", label: "Getting started (the launch checklist)" },
 ];
 
 export const ASK_LIMITS = {

@@ -18,7 +18,7 @@
  * too, but skipping here keeps the token table clean.
  */
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, eq, like, ne } from "drizzle-orm";
+import { and, desc, eq, like, lt, ne } from "drizzle-orm";
 import { sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
@@ -53,9 +53,18 @@ export function welcomeKind(role: string | null | undefined): "field" | "office"
  * happens only once the email carrying the new one has gone out
  * (keepOnlyLink), so a failed resend never breaks the link they already have.
  */
-export async function setPasswordLink(userId: string, kind: "field" | "office", now = new Date()): Promise<{ url: string; identifier: string }> {
+export async function setPasswordLink(userId: string, kind: "field" | "office", at = new Date()): Promise<{ url: string; identifier: string; createdAt: Date }> {
   const token = randomBytes(24).toString("base64url");
   const identifier = `reset-password:${token}`;
+  // Strictly newer than any link they already have, even one made in the same
+  // millisecond, so keepOnlyLink's "older than this one" retires all of them.
+  const [prev] = await sdb
+    .select({ createdAt: schema.verification.createdAt })
+    .from(schema.verification)
+    .where(and(eq(schema.verification.value, userId), like(schema.verification.identifier, "reset-password:%")))
+    .orderBy(desc(schema.verification.createdAt))
+    .limit(1);
+  const now = prev && prev.createdAt.getTime() >= at.getTime() ? new Date(prev.createdAt.getTime() + 1) : at;
   await sdb.insert(schema.verification).values({
     id: randomUUID(),
     identifier,
@@ -64,14 +73,25 @@ export async function setPasswordLink(userId: string, kind: "field" | "office", 
     createdAt: now,
     updatedAt: now,
   });
-  return { url: `${SITE()}/reset-password?token=${encodeURIComponent(token)}&welcome=${kind}`, identifier };
+  return { url: `${SITE()}/reset-password?token=${encodeURIComponent(token)}&welcome=${kind}`, identifier, createdAt: now };
 }
 
-/** After a successful send: the new link is the only one that works. */
-export async function keepOnlyLink(userId: string, identifier: string): Promise<void> {
+/**
+ * After a successful send: links older than the one just sent stop working.
+ * Newer ones are left alone, so a Forgot password request or another welcome
+ * made while this email was going out keeps its link.
+ */
+export async function keepOnlyLink(userId: string, link: { identifier: string; createdAt: Date }): Promise<void> {
   await sdb
     .delete(schema.verification)
-    .where(and(eq(schema.verification.value, userId), like(schema.verification.identifier, "reset-password:%"), ne(schema.verification.identifier, identifier)));
+    .where(
+      and(
+        eq(schema.verification.value, userId),
+        like(schema.verification.identifier, "reset-password:%"),
+        ne(schema.verification.identifier, link.identifier),
+        lt(schema.verification.createdAt, link.createdAt),
+      ),
+    );
 }
 
 /** After a failed send: drop the link nobody received. */
@@ -153,7 +173,7 @@ export async function sendWelcome(
       await dropLink(link.identifier);
       return { sent: false, reason: "send failed" };
     }
-    await keepOnlyLink(a.userId, link.identifier);
+    await keepOnlyLink(a.userId, link);
     await markWelcomeSent(membership.id, new Date());
     return { sent: true };
   } catch (e) {

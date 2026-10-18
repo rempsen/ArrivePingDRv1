@@ -3,7 +3,7 @@ import { launchTipsRoutes } from "./routes/launch-tips";
 import { queueCompanySync } from "../services/hubspot-sync";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
-import { authMiddleware } from "./middleware/auth";
+import { authMiddleware, requireOffice } from "./middleware/auth";
 import { AppError } from "./lib/errors";
 import { captureException, requestLogger } from "./lib/logger";
 import type { Variables } from "./env";
@@ -358,6 +358,17 @@ const app = new Hono<{ Variables: Variables }>()
     const result = await seed();
     return c.json(result, 200);
   })
+  // Dashboard-only groups whose handlers only checked for a signed-in user:
+  // a technician or a customer of the company could change its automation
+  // rules or form templates, or download its customer list. Now office staff
+  // with the matching permission only (lib/office-access.ts). The OAuth
+  // callback is a browser redirect from the provider and checks its own state.
+  .use("/automation/*", requireOffice)
+  .use("/maintenance/*", requireOffice)
+  .use("/export/*", requireOffice)
+  .use("/templates/*", requireOffice)
+  .use("/ai/*", requireOffice)
+  .use("/integrations/*", async (c, next) => (c.req.path.startsWith("/api/integrations/oauth/callback/") ? next() : requireOffice(c, next)))
   .route("/services", servicesRoutes)
   .route("/catalog", catalogRoutes)
   .route("/bookings", bookingsRoutes)

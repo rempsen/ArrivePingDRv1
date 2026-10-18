@@ -3,7 +3,7 @@ import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { Hono } from "hono";
 import { db, sdb } from "../database";
 import * as schema from "../database/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireAdmin, tenantId, tx } from "../middleware/auth";
 import { auth } from "../auth";
 import { isAdminRole, isSuperadmin, canBeSuperadmin, SUPERADMIN_DOMAINS } from "../lib/permissions";
@@ -133,6 +133,15 @@ const ChangePassword = z.object({
   currentPassword: z.string({ message: "Current password is required" }).min(1, "Current password is required").max(200),
   newPassword: password,
 });
+
+/** Their role at this company (the membership), or null if they aren't on it. */
+async function roleHere(userId: string, companyId: string): Promise<string | null> {
+  const [m] = await sdb
+    .select({ role: schema.memberships.role })
+    .from(schema.memberships)
+    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.companyId, companyId)));
+  return m?.role ?? null;
+}
 
 export const adminRoutes = new Hono<AppEnv>()
   .get("/stats", requireAdmin, async (c) => {
@@ -370,6 +379,11 @@ export const adminRoutes = new Hono<AppEnv>()
     // Editing an admin-tier account requires superadmin.
     if (isAdminRole(target.role) && !isSuperadmin(me.role))
       return c.json({ message: "Only a superadmin can modify admin-level accounts" }, 403);
+    // Managers and dispatchers edit customers here, not staff: a staff
+    // member's sign-in email is their account, and changing it is how you'd
+    // take it over (lib/office-access.ts).
+    if (!isAdminRole(me.role) && (await roleHere(id, cid)) !== "customer")
+      return c.json({ message: "Only an admin can edit a team member's account" }, 403);
 
     // Taking an email that already belongs to somebody else used to hit the
     // unique index and surface as a bare 500. Email uniqueness is GLOBAL
@@ -495,6 +509,8 @@ export const adminRoutes = new Hono<AppEnv>()
     // Deleting an admin-tier account requires superadmin.
     if (isAdminRole(target.role) && !isSuperadmin(me.role))
       return c.json({ message: "Only a superadmin can delete admin-level accounts" }, 403);
+    if (!isAdminRole(me.role) && (await roleHere(id, cid)) !== "customer")
+      return c.json({ message: "Only an admin can remove a team member here" }, 403);
     // clean up rider profile if any
     await tx(c).delete(schema.riders, eq(schema.riders.userId, id));
 

@@ -1025,7 +1025,7 @@
 }
 .site .bs-hero img {
   height: 220px;
-  filter: brightness(1.4) saturate(1.1) contrast(0.95);
+  filter: brightness(1.08) saturate(1.05);
   object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 12px 26px -10px rgb(15 39 71 / 45%);

@@ -13,7 +13,8 @@ import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { requireAuth } from "../middleware/auth";
+import { loadRoleDefaults, requireAuth } from "../middleware/auth";
+import { resolvePerms } from "../lib/permissions";
 import { rateLimit, keyByUser } from "../lib/rate-limit";
 import { jsonBody } from "../lib/validate";
 import type { Role } from "../../web/guide/registry";
@@ -57,7 +58,9 @@ export const guideAskRoutes = new Hono<AppEnv>()
     for (const [k, v] of Object.entries(b.terms ?? {}) as [keyof typeof terms, string | undefined][]) {
       if (k in terms && v && LABEL.test(v.trim())) terms[k] = v.trim();
     }
-    const result = streamAsk({ role, terms, question: b.question, history: b.history, abortSignal: c.req.raw.signal });
+    // Their own permissions (any per-person override included) decide which pages Ask may offer.
+    const permissions = [...resolvePerms(c.get("user") as { role?: string; permissions?: string | null }, await loadRoleDefaults())];
+    const result = streamAsk({ role, permissions, terms, question: b.question, history: b.history, abortSignal: c.req.raw.signal });
 
     return streamSSE(c, async (stream) => {
       const send = (event: string, data: unknown) => stream.writeSSE({ event, data: JSON.stringify(data) });
@@ -72,7 +75,7 @@ export const guideAskRoutes = new Hono<AppEnv>()
             await send("delta", { text: part.text });
           } else if (part.type === "tool-call") {
             if ((part as { invalid?: boolean }).invalid) continue;
-            const action = toAction(role, part.toolName, part.input);
+            const action = toAction(role, part.toolName, part.input, permissions);
             if (!action || offered.length >= 2 || offered.some((a) => JSON.stringify(a) === JSON.stringify(action))) continue;
             offered.push(action);
             await send("action", action);

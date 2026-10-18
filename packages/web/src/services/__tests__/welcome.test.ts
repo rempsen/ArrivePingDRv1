@@ -206,7 +206,9 @@ describe("a spreadsheet roster", () => {
 });
 
 describe("the set-password link", () => {
-  it("lasts 7 days; once the new one is out, it's the only one", async () => {
+  it("lasts 7 days; once the new one is out, older ones stop working", async () => {
+    // Start clean: earlier tests in this file left links of their own.
+    await db.delete(schema.verification).where(eq(schema.verification.value, "wl-tech"));
     const now = new Date("2026-10-18T03:00:00Z");
     const firstLink = await w.setPasswordLink("wl-tech", "field", now);
     const first = new URL(firstLink.url);
@@ -216,14 +218,27 @@ describe("the set-password link", () => {
     const [row] = await db.select().from(schema.verification).where(eq(schema.verification.identifier, `reset-password:${t1}`));
     expect(row!.expiresAt.getTime() - now.getTime()).toBe(7 * 86_400_000);
 
-    const second = await w.setPasswordLink("wl-tech", "field", now);
+    const second = await w.setPasswordLink("wl-tech", "field", new Date(now.getTime() + 500));
     const t2 = new URL(second.url).searchParams.get("token")!;
     expect(t2).not.toBe(t1);
     // Both work until the email with the new one has gone out…
     expect(await tokensFor("wl-tech")).toContain(t1);
-    await w.keepOnlyLink("wl-tech", second.identifier);
-    // …then only the new one.
-    expect(await tokensFor("wl-tech")).toEqual([t2]);
+    // (a Forgot password request made while it was sending)
+    const later = await w.setPasswordLink("wl-tech", "field", new Date(now.getTime() + 1000));
+    const t3 = new URL(later.url).searchParams.get("token")!;
+    await w.keepOnlyLink("wl-tech", second);
+    // …then the older one stops working; the newer request keeps its link.
+    expect((await tokensFor("wl-tech")).sort()).toEqual([t2, t3].sort());
+  });
+
+  it("a link made in the same millisecond as an older one still retires it (Codex on #63)", async () => {
+    await db.delete(schema.verification).where(eq(schema.verification.value, "wl-tech"));
+    const at = new Date("2026-10-18T05:00:00Z");
+    const first = await w.setPasswordLink("wl-tech", "field", at);
+    const second = await w.setPasswordLink("wl-tech", "field", at);
+    expect(second.createdAt.getTime()).toBeGreaterThan(first.createdAt.getTime());
+    await w.keepOnlyLink("wl-tech", second);
+    expect(await tokensFor("wl-tech")).toEqual([new URL(second.url).searchParams.get("token")!]);
   });
 
   it("is redeemed by the normal reset-password endpoint", async () => {
