@@ -61,7 +61,8 @@ describe("stage and nudge rules", () => {
   it("day 1 / 3 / 7 windows, once each, no catch-up burst", () => {
     const p = { v: 1 as const, done: {} };
     const c = list({});
-    expect(lp.dueNudge(p, ago(10), NOW, c)).toBeNull();
+    expect(lp.dueNudge(p, ago(1.5), NOW, c)).toBeNull();
+    expect(lp.dueNudge(p, ago(2.2), NOW, c)).toBe("d1");
     expect(lp.dueNudge(p, ago(25), NOW, c)).toBe("d1");
     expect(lp.dueNudge({ ...p, nudges: { d1: "x" } }, ago(25), NOW, c)).toBeNull();
     // Down for days: at day 4 only day 3's tip is due, never day 1's too.

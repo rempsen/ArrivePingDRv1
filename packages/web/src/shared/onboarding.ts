@@ -28,6 +28,8 @@ export interface OnboardingState {
   practiceJobAt?: string;
   /** Admins: stop the day 1 / 3 / 7 launch tip emails (set from the email's unsubscribe link). */
   nudgesOff?: boolean;
+  /** When their welcome email (set-password link) last went out (set by the server only; services/welcome.ts). */
+  welcomeSentAt?: string;
 }
 
 export type OnboardingPatch = Partial<Omit<OnboardingState, "v">>;

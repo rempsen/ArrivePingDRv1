@@ -7,9 +7,9 @@
  * admin (or this server) knows a stranger's password. So every brand-new row
  * gets an unguessable, never-surfaced random password — the record exists and
  * is fully usable (job history, invoices, assignment) but nobody can sign in
- * with it. The admin invites them individually later the same way they already
- * do for a single hand-added person: Directory → the person → Reset password,
- * or Technicians → Resend invite. An email row that already has an ArrivePing
+ * with it. New technicians and office staff are then emailed a welcome with a
+ * link to set their own password (services/welcome.ts), as a hand-added
+ * person is; customers get nothing until their first job. An email row that already has an ArrivePing
  * login elsewhere is never touched here either — same "invited" flow as the
  * single Add form and POST /riders use.
  */
@@ -25,6 +25,7 @@ import { auth } from "../auth";
 import { isSuperadmin } from "../lib/permissions";
 import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { queueWelcomes } from "../../services/welcome";
 import { email as emailField } from "../lib/validate";
 import { toCsv, toXlsx, fileResponse } from "./export";
 import type { AppEnv } from "../env";
@@ -213,7 +214,7 @@ async function parseUpload(file: File): Promise<Record<string, string>[]> {
 
 /* -------------------------------- rows -> accounts ------------------------ */
 
-type RowResult = { ok: true; status: "created" | "invited" } | { ok: false; reason: string };
+type RowResult = { ok: true; status: "created"; userId: string } | { ok: true; status: "invited" } | { ok: false; reason: string };
 
 const PALETTE = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
 const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -291,7 +292,7 @@ async function importPersonRow(
     })
     .where(eq(schema.user.id, u.id));
   await attachMembership({ userId: u.id, companyId: cid, role, status: "active", invitedBy: opts.invitedBy });
-  return { ok: true, status: "created" };
+  return { ok: true, status: "created", userId: u.id };
 }
 
 /** technician row */
@@ -363,7 +364,7 @@ async function importRiderRow(
     userId: u.id, phone, skillClass, vehicle, color: randomColor(), licensePlate, licenseNumber, address,
     notes: "", skills, payRatePerHour, status: "available",
   });
-  return { ok: true, status: "created" };
+  return { ok: true, status: "created", userId: u.id };
 }
 
 /* --------------------------------- routes --------------------------------- */
@@ -409,12 +410,14 @@ export const importRoutes = new Hono<AppEnv>()
 
     const cid = tenantId(c);
     const results: { row: number; email: string; ok: boolean; status?: string; reason?: string }[] = [];
+    const newPeople: string[] = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
       const result =
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })
           : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id });
+      if (result.ok && result.status === "created") newPeople.push(result.userId);
       results.push({
         row: i + 2, // header is row 1
         email: row.email || "",
@@ -426,11 +429,16 @@ export const importRoutes = new Hono<AppEnv>()
     const created = results.filter((r) => r.ok && r.status === "created").length;
     const invited = results.filter((r) => r.ok && r.status === "invited").length;
     const failed = results.filter((r) => !r.ok);
+    // New technicians and office staff get their welcome email (set-password
+    // link) one by one in the background; customers get nothing until a job.
+    const welcoming = type === "customer" ? 0 : newPeople.length;
+    if (welcoming) queueWelcomes(cid, newPeople, me.id);
     return c.json(
       {
         total: rows.length,
         created,
         invited,
+        welcoming,
         failedCount: failed.length,
         failed: failed.map((r) => ({ row: r.row, email: r.email, reason: r.reason })),
       },

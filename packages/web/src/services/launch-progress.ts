@@ -7,9 +7,11 @@
  *   2. works out the activation stage that HubSpot shows on the company
  *      (`arriveping_activation_stage`): signed_up → set_up → first_job →
  *      activated (steps 1–3) → live (all five);
- *   3. sends the admins a short tip email on day 1, 3 and 7 listing what's
- *      left, only while something is left, at most once each, with a
- *      one-click unsubscribe (LAUNCH_NUDGES=on to enable);
+ *   3. sends the admins a short tip email listing what's left: the first a
+ *      couple of hours after signup, then on day 3 and day 7; only while
+ *      something is left, at most once each, with a one-click unsubscribe
+ *      (LAUNCH_NUDGES=on to enable). Everyone else they add gets a welcome
+ *      email the moment they're added instead (services/welcome.ts);
  *   4. tells #onboarding in Slack once if a company has no real job after
  *      48 hours (needs SLACK_ONBOARDING_WEBHOOK_URL).
  *
@@ -76,7 +78,10 @@ export function activationStage(c: LaunchChecklist, setupFinished: boolean): Act
  * sends day 1 and day 3 back to back.
  */
 export const NUDGE_WINDOWS: { key: NudgeKey; from: number; to: number }[] = [
-  { key: "d1", from: 1 * DAY, to: 3 * DAY },
+  // The first one "within a few hours" of signup (Dan, 2026-10-17): two hours
+  // gives them time to look around first, and the 30-minute sweep sends it
+  // between 2 and 2½ hours in.
+  { key: "d1", from: 2 * HOUR, to: 3 * DAY },
   { key: "d3", from: 3 * DAY, to: 7 * DAY },
   { key: "d7", from: 7 * DAY, to: WATCH_DAYS * DAY },
 ];

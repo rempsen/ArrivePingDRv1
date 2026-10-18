@@ -128,14 +128,24 @@ export function InternalTeamTab() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const res = await api.team.$post({ json: form as any });
+      // No password: they choose their own from the welcome email.
+      const res = await api.team.$post({ json: { ...form, password: form.password || undefined } as any });
       const data = await res.json();
       if (!res.ok) throw new Error((data as any).message || "Failed");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["team"] });
       qc.invalidateQueries({ queryKey: ["riders"] });
+      const who = form.name.trim().split(" ")[0] || "them";
+      setInviteMsg(
+        data?.status === "invited"
+          ? data.message
+          : data?.welcomeSent
+            ? `Added. We've emailed ${who} a link to set a password and sign in.`
+            : `Added, but the welcome email didn't go out. Open ${who}'s profile and use “Email a sign-in link”.`,
+      );
+      setTimeout(() => setInviteMsg(""), 8000);
       setShowAdd(false);
       setForm({ name: "", email: "", password: "", phone: "", role: "dispatcher", staffType: "technician" });
       setErr("");
@@ -189,6 +199,22 @@ export function InternalTeamTab() {
     onSuccess: (d) => {
       setInviteMsg(`Invite re-sent to ${d?.email ?? "them"}.`);
       setTimeout(() => setInviteMsg(""), 4000);
+    },
+    onError: (e: any) => setErr(e.message),
+  });
+
+  // A fresh welcome email with a set-password link (services/welcome.ts).
+  const sendLink = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await (api as any).team[":id"]["send-welcome"].$post({ param: { id } });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as any).message || "Couldn't send");
+      return data;
+    },
+    onSuccess: () => {
+      setErr("");
+      setPwMsg("Sent. They can set a password from the email.");
+      setTimeout(() => setPwMsg(""), 6000);
     },
     onError: (e: any) => setErr(e.message),
   });
@@ -386,7 +412,7 @@ export function InternalTeamTab() {
             <Field label="Full name"><input aria-label="Jane Doe" className={inputCls} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Jane Doe" /></Field>
             <Field label="Email"><input aria-label="jane@company.com" className={inputCls} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="jane@company.com" /></Field>
             <Field label="Phone"><input aria-label="+1 555 000 0000" className={inputCls} value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+1 555 000 0000" /></Field>
-            <Field label="Temporary password"><input aria-label="At least 8 characters" className={inputCls} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="At least 8 characters" /></Field>
+            <Field label="Password (optional)" hint="Leave blank: we'll email them a link to set their own"><input aria-label="Password (optional)" className={inputCls} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="Leave blank" /></Field>
             {err && <p className="text-sm text-red-400">{err}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <BtnGhost onClick={() => setShowAdd(false)}>Cancel</BtnGhost>
@@ -421,8 +447,15 @@ export function InternalTeamTab() {
             {/* Reset password */}
             <div className="rounded-lg border border-white/10 bg-ink-2/60 p-3">
               <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-white/70">
-                <KeyRound className="h-3.5 w-3.5" /> Reset password
+                <KeyRound className="h-3.5 w-3.5" /> Sign-in help
               </p>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <BtnGhost onClick={() => { setErr(""); sendLink.mutate(editEmp.id); }} disabled={sendLink.isPending}>
+                  {sendLink.isPending ? "Sending…" : "Email a sign-in link"}
+                </BtnGhost>
+                <span className="text-[11px] text-white/40">They set their own password from the email.</span>
+              </div>
+              <p className="mb-1.5 text-[11px] text-white/50">Or set a temporary password:</p>
               <div className="flex gap-2">
                 <input
                   aria-label="New password"

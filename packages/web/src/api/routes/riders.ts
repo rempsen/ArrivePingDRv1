@@ -8,6 +8,7 @@ import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
 import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { sendWelcome, unguessablePassword } from "../../services/welcome";
 import { putObject, deleteObject } from "../lib/storage";
 import { z } from "zod";
 import { jsonBody,
@@ -76,7 +77,8 @@ const RiderProfileFields = {
 const RiderCreate = z.object({
   name: shortText("Name", 120),
   email: emailField(),
-  password: z.string({ message: "Password is required" }).min(8, "Password must be at least 8 characters").max(200, "Password is too long"),
+  // Optional: without one, they choose their own from the welcome email.
+  password: z.string().min(8, "Password must be at least 8 characters").max(200, "Password is too long").optional(),
   ...RiderProfileFields,
   tags: z.array(z.union([idField("Tag"), z.object({ id: idField("Tag") }).passthrough()])).max(50).optional(),
 });
@@ -309,7 +311,7 @@ export const ridersRoutes = new Hono<AppEnv>()
 
     try {
       await auth.api.signUpEmail({
-        body: { name, email, password, role: "rider", phone: phone ?? "" } as any,
+        body: { name, email, password: password || unguessablePassword(), role: "rider", phone: phone ?? "" } as any,
       });
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
@@ -355,7 +357,9 @@ export const ridersRoutes = new Hono<AppEnv>()
         .map((tagId: string) => ({ tagId, entityId: r!.id, entityType: "tech" as const }));
       if (rows.length) await t.insert(schema.entityTags, rows);
     }
-    return c.json({ rider: { ...r, name, email, phone } }, 201);
+    // Their set-password link and where to get the app, right away.
+    const welcome = await sendWelcome({ companyId: cid, userId: u.id, inviterId: (c.get("user") as { id: string } | null)?.id ?? null });
+    return c.json({ rider: { ...r, name, email, phone }, welcomeSent: welcome.sent }, 201);
   })
   // update a technician's profile (admin)
   .patch("/:id", requireAdmin, jsonBody(RiderPatch), async (c) => {
