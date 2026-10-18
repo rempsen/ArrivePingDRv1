@@ -772,6 +772,8 @@
 }
 .site .sf-stage.is-live .sf-say__a {
   animation: sf-say 480ms var(--ease-out) both;
+}
+.site .sf-stage.is-live .sf-say__q ~ .sf-say__a {
   animation-delay: 550ms;
 }
 .site .sf-stage.is-live .sf-say__spark {
