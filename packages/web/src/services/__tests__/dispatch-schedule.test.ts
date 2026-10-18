@@ -136,6 +136,60 @@ describe("dispatchSchedule + undo", () => {
     expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(1);
   });
 
+  it("undoing the second of two quick moves still announces the first", async () => {
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const base = (await row(id)).scheduledAt;
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 30), by: "Dana" }, NOW.getTime());
+    const second = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 60), by: "Dana" }, NOW.getTime());
+    const u = await ds.undoAny(CO, second.ok ? second.undo : "", "Dana", NOW.getTime());
+    expect(u.ok).toBe(true);
+    expect((await row(id)).scheduledAt.toISOString()).toBe(minutesLater(base, 30));
+    await flushNotices();
+    expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(1);
+  });
+
+  it("two moves undone back to the start tell nobody", async () => {
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const base = (await row(id)).scheduledAt;
+    const first = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 30), by: "Dana" }, NOW.getTime());
+    const second = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 60), by: "Dana" }, NOW.getTime());
+    expect((await ds.undoAny(CO, second.ok ? second.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    expect((await ds.undoAny(CO, first.ok ? first.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    await flushNotices();
+    expect(await events(id)).not.toContain("rescheduled");
+  });
+
+  it("an Undo after the move was announced announces the time it went back to", async () => {
+    const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const r = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 45), by: "Dana" }, NOW.getTime());
+    await flushNotices();
+    expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(1);
+    expect((await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    await flushNotices();
+    expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(2);
+  });
+
+  it("a job placed from the queue gets one notice, not assigned and rescheduled", async () => {
+    const id = await job(CO, { status: "pending", assignStatus: "none" });
+    const a = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect(a.ok).toBe(true);
+    const m = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
+    expect(m.ok).toBe(true);
+    expect(await tasks(id)).toHaveLength(0);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("assigned");
+    expect(kinds).not.toContain("rescheduled");
+  });
+
+  it("checks the time against the technician the job is about to go to", async () => {
+    const theirs = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const mine = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const target = (await row(theirs)).scheduledAt.toISOString();
+    const r = await ds.dispatchSchedule(CO, { bookingId: mine, scheduledAt: target, forTechId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect(r).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
+  });
+
   it("won't undo a job that has moved again since", async () => {
     const id = await job(CO);
     const base = (await row(id)).scheduledAt;

@@ -18,6 +18,9 @@ import { ApiError } from "./api-error";
  * clearing drive time and on-site clocks, which is nonsense for "Mike is already
  * booked at 2:00 PM".
  *
+ * `busyConfirmed` says the dispatcher already agreed to the double booking (the
+ * calendar asks about the time before it reassigns), so that one isn't asked twice.
+ *
  * Returns `{ cancelled: true }` when the dispatcher backs out of the
  * confirmation, so the caller can close quietly instead of showing an error for
  * something the user chose not to do.
@@ -36,6 +39,7 @@ export async function assignJob(opts: {
   riderId: string;
   techName?: string;
   confirm: ConfirmFn;
+  busyConfirmed?: boolean;
 }): Promise<AssignResult> {
   const post = async (force?: boolean) =>
     ok(
@@ -56,6 +60,10 @@ export async function assignJob(opts: {
     if (!(e instanceof ApiError) || e.status !== 409 || !body?.forceable) throw e;
 
     const busy = body.reason === "overlap" || body.reason === "timeoff";
+    if (busy && opts.busyConfirmed) {
+      await post(true);
+      return { cancelled: false };
+    }
     const yes = await opts.confirm({
       title: busy
         ? "Send them anyway?"

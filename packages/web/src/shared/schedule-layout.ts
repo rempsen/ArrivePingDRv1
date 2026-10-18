@@ -135,7 +135,8 @@ export interface Slot {
 
 /**
  * The best open slots for a waiting job: each qualified technician's first gap
- * long enough for it (plus drive in and 10 minutes of slack), ranked by how
+ * long enough for it (plus the drive in, and the drive on to their next job or
+ * 10 minutes of slack, whichever is longer), ranked by how
  * soon it starts, how far they'd drive, and how full their day already is.
  */
 export function rankSlots(input: {
@@ -158,7 +159,8 @@ export function rankSlots(input: {
       const drive = driveMinutes(prev, job);
       const from = Math.max(input.earliestMin, range.startMin, prev ? prev.endMin + (drive ?? 15) : 0);
       const startMin = Math.ceil(from / 15) * 15;
-      const limit = next ? next.startMin - SLACK_MINS : range.endMin;
+      // They have to get from this job to the next one in time, too.
+      const limit = next ? next.startMin - Math.max(SLACK_MINS, driveMinutes(job, next) ?? SLACK_MINS) : range.endMin;
       if (startMin + dur <= limit && startMin + dur <= range.endMin) {
         const driveMins = prev ? drive : null;
         found.push({

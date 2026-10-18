@@ -60,6 +60,8 @@ export interface ScheduleInput {
   /** ISO instant */
   scheduledAt: string;
   force?: boolean;
+  /** Check the time against this technician: the job is about to be reassigned to them. */
+  forTechId?: string;
 }
 export interface ScheduleResponse {
   job: JobPatch & { scheduledAt: string };

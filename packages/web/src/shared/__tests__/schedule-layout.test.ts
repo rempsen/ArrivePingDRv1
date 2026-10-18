@@ -137,6 +137,18 @@ describe("rankSlots", () => {
     expect(s.startMin).toBeGreaterThanOrEqual(600);
   });
 
+  it("leaves time to drive on to the next job", () => {
+    // 555–615 here would leave 25 minutes to reach a job ~25 km away at 640.
+    const r = rankSlots({
+      job: { durationMins: 60, ...here },
+      techs: [{ id: "a", qualified: true, available: true, dayJobs: [{ startMin: 480, endMin: 540, ...here }, { startMin: 640, endMin: 700, ...far }] }],
+      earliestMin: 480,
+      range,
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0]!.startMin).toBeGreaterThanOrEqual(700);
+  });
+
   it("puts the closer, emptier technician first", () => {
     const r = rankSlots({
       job: { durationMins: 60, ...here },
