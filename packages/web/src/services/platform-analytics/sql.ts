@@ -27,6 +27,7 @@
  */
 import { sql, type SQL } from "drizzle-orm";
 import { pricingBands, STARTER_PRICE, STARTER_DRIVERS } from "../../web/site/config";
+import { INDUSTRY_LABELS, industryLabel } from "../industry-presets";
 
 export const TZ = "America/Winnipeg";
 
@@ -124,6 +125,20 @@ export function planPriceSql(seats: string): string {
     .join("");
   void STARTER_DRIVERS; // Starter's included drivers are the gap before the first band.
   return `(${STARTER_PRICE}${bands})`;
+}
+
+/* ---------------------------------------------------------- industries -- */
+
+/**
+ * An industry id's display name, as SQL, built from the presets the app
+ * labels industries with (services/industry-presets.ts), so the dashboard
+ * and the Analytics tab name them the same way. Unknown ids show as is.
+ */
+export function industryLabelSql(col: string): string {
+  const q = (s: string) => `'${s.replace(/'/g, "''")}'`;
+  const ids = [...new Set(INDUSTRY_LABELS.map((x) => x.id))].filter((id) => id && id !== "other");
+  const cases = ids.map((id) => `WHEN ${q(id)} THEN ${q(industryLabel(id) || id)}`).join(" ");
+  return `(CASE COALESCE(${col}, '') WHEN '' THEN 'Not set' WHEN 'other' THEN 'Other' ${cases} ELSE ${col} END)`;
 }
 
 /* -------------------------------------------------------------- shared -- */
@@ -303,7 +318,8 @@ h AS (
   FROM rng
 )
 SELECT k.metric, k.label, k.value, k.previous,
-  CASE WHEN k.previous > 0 THEN ((k.value - k.previous) / k.previous)::float8 END AS change
+  CASE WHEN k.previous > 0 THEN ((k.value - k.previous) / k.previous)::float8 END AS change,
+  CASE WHEN k.previous > 0 THEN (k.value / k.previous)::float8 END AS ratio
 FROM h, LATERAL (VALUES
 ${KPI_METRICS.map(([m, label]) => `  ('${m}', '${label}', h.${m}::float8, h.${m}_prev::float8)`).join(",\n")}
 ) AS k(metric, label, value, previous)`;
@@ -398,7 +414,8 @@ t AS (
   LEFT JOIN tm ON tm.company_id = co.id
   LEFT JOIN up ON up.company_id = co.id
 )
-SELECT t.id, t.name, t.industry, t.status, t.billing_status, t.is_internal AS internal,
+SELECT t.id, t.name, t.industry, ${industryLabelSql("t.industry")} AS industry_label,
+  t.status, t.billing_status, t.is_internal AS internal,
   to_char(${local("t.created_at")}, 'YYYY-MM-DD') AS created,
   to_char(${local("t.billing_trial_ends_at")}, 'YYYY-MM-DD') AS trial_ends,
   (t.onboarding_completed_at IS NOT NULL) AS onboarded,
@@ -479,8 +496,7 @@ SELECT 'fastest_first_job', 'Fastest signup to first job (hours)', ROUND(fast.n:
 
 /* ------------------------------------------------------------- funnel -- */
 
-/** How far every company in scope has got (all time). */
-export const FUNNEL = `WITH ${PRELUDE},
+const FUNNEL_CTES = `${PRELUDE},
 ${BK},
 ${TECHS},
 f AS (
@@ -490,17 +506,50 @@ f AS (
     (SELECT MIN(bk.done_at) FROM bk WHERE bk.company_id = co.id) AS first_done
   FROM co LEFT JOIN rd ON rd.company_id = co.id
   WHERE co.status <> 'closed'
-)
-SELECT
-  COUNT(*)::int AS signed_up,
-  COUNT(*) FILTER (WHERE f.onboarding_completed_at IS NOT NULL)::int AS onboarded,
-  COUNT(*) FILTER (WHERE f.techs > 0)::int AS added_team,
-  COUNT(*) FILTER (WHERE f.first_job IS NOT NULL)::int AS first_job,
-  COUNT(*) FILTER (WHERE f.first_done IS NOT NULL)::int AS first_completed,
-  COUNT(*) FILTER (WHERE f.billing_status IN ('active', 'past_due'))::int AS paying,
-  (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (f.first_job - f.created_at)) / 86400.0)
-     FILTER (WHERE f.first_job >= f.created_at))::float8 AS median_days_to_first_job
-FROM f`;
+),
+fs AS (
+  SELECT
+    COUNT(*)::int AS signed_up,
+    COUNT(*) FILTER (WHERE f.onboarding_completed_at IS NOT NULL)::int AS onboarded,
+    COUNT(*) FILTER (WHERE f.techs > 0)::int AS added_team,
+    COUNT(*) FILTER (WHERE f.first_job IS NOT NULL)::int AS first_job,
+    COUNT(*) FILTER (WHERE f.first_done IS NOT NULL)::int AS first_completed,
+    COUNT(*) FILTER (WHERE f.billing_status IN ('active', 'past_due'))::int AS paying,
+    (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (f.first_job - f.created_at)) / 86400.0)
+       FILTER (WHERE f.first_job >= f.created_at))::float8 AS median_days_to_first_job
+  FROM f
+)`;
+
+/** How far every company in scope has got (all time), as one row. */
+export const FUNNEL = `WITH ${FUNNEL_CTES}
+SELECT fs.* FROM fs`;
+
+/**
+ * The same milestones one row each, for the dashboard: how many companies
+ * reached it and their share of every company that signed up. The steps
+ * aren't strictly in order (a company can create a job before adding a
+ * technician), so each share is of signups, not of the step before.
+ */
+export const FUNNEL_STEPS = `WITH ${FUNNEL_CTES}
+SELECT k.step, k.label, k.companies,
+  (k.companies::float8 / NULLIF(fs.signed_up, 0))::float8 AS share,
+  CASE WHEN k.step = 'first_job' THEN fs.median_days_to_first_job END AS median_days
+FROM fs, LATERAL (VALUES
+  (1, 'signed_up', 'Signed up', fs.signed_up),
+  (2, 'onboarded', 'Finished setup', fs.onboarded),
+  (3, 'added_team', 'Added a technician', fs.added_team),
+  (4, 'first_job', 'Created a job', fs.first_job),
+  (5, 'first_completed', 'Completed a job', fs.first_completed),
+  (6, 'paying', 'Paying', fs.paying)
+) AS k(pos, step, label, companies)
+ORDER BY k.pos`;
+
+/** The industries companies have chosen, for the dashboard's industry filter. */
+export const INDUSTRIES = `SELECT COALESCE(c.industry, '') AS industry, ${industryLabelSql("c.industry")} AS label, COUNT(*)::int AS companies
+FROM companies c
+WHERE (COALESCE(${P("include_test")}, FALSE) OR NOT c.is_internal) AND c.status <> 'closed'
+GROUP BY 1, 2
+ORDER BY 2`;
 
 /* ----------------------------------------------------------- explorer -- */
 
@@ -709,12 +758,14 @@ export const FIRST_DAY = `SELECT to_char(LEAST(
     (SELECT MIN(b.created_at) FROM bookings b)
   ) AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS first_day`;
 
-/** Every query the Claude dashboard runs, by dataset id. */
+/** Every query the Claude dashboard runs, by dataset id (see ./dashboard.ts). */
 export const DASHBOARD_QUERIES = {
   headline: HEADLINE,
   kpis: KPIS,
   series: SERIES,
   tenants: TENANTS,
   records: RECORDS,
-  funnel: FUNNEL,
+  funnel_steps: FUNNEL_STEPS,
+  industries: INDUSTRIES,
+  first_day: FIRST_DAY,
 } as const;
