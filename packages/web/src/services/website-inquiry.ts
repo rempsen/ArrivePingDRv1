@@ -82,9 +82,10 @@ async function pushContactToHubspot(i: WebsiteInquiry, at: Date): Promise<{ stat
   if (!hubspotEnabled()) return { status: "skipped" };
   try {
     const { contactId } = await findOrCreateLeadContact({ name: i.name, email: i.email, company: i.company, source: INQUIRY_SOURCES.contact });
-    // The note carries the message; without it the lead is still there, so it's best effort.
-    await addContactNote(contactId, inquiryNote(i), at, "website-inquiry");
-    return { status: "synced", contactId };
+    // The message itself lives only in the note: without it HubSpot has a
+    // contact but not what they asked, so it doesn't count as delivered.
+    const noted = await addContactNote(contactId, inquiryNote(i), at, "website-inquiry");
+    return { status: noted ? "synced" : "failed", contactId };
   } catch (e) {
     log.error("website-inquiry: HubSpot push failed", { err: (e as Error).message.slice(0, 300) });
     return { status: "failed" };

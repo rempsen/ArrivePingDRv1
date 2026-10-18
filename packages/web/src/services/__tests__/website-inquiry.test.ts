@@ -34,6 +34,7 @@ let calls: Call[] = [];
 let slackPosts: any[] = [];
 let searchHits: Record<string, any[]> = {};
 let hubspotDown = false;
+let failNotes = false;
 let nextId = 7000;
 
 function stubFetch(url: string, init?: RequestInit): Promise<Response> {
@@ -47,6 +48,7 @@ function stubFetch(url: string, init?: RequestInit): Promise<Response> {
   const body = init?.body ? JSON.parse(String(init.body)) : undefined;
   calls.push({ method, path, body });
   if (hubspotDown) return json(503, { message: "down" });
+  if (failNotes && path === "/crm/v3/objects/notes") return json(403, { message: "no notes scope" });
   if (/^\/crm\/v3\/properties\/\w+\/groups$/.test(path)) return json(201, {});
   if (/^\/crm\/v3\/properties\/\w+/.test(path)) return method === "GET" ? json(200, { results: [] }) : json(201, body);
   const s = /^\/crm\/v3\/objects\/(\w+)\/search$/.exec(path);
@@ -74,6 +76,7 @@ beforeEach(() => {
   slackPosts = [];
   searchHits = {};
   hubspotDown = false;
+  failNotes = false;
   emailResult = { ok: true };
   nextId = 7000;
   process.env.HUBSPOT_ACCESS_TOKEN = "pat-test";
@@ -133,6 +136,15 @@ describe("contact form", () => {
     expect(await deliverWebsiteInquiry(contact)).toMatchObject({ delivered: true, hubspot: "failed", email: "sent" });
     emailResult = { ok: false };
     expect((await deliverWebsiteInquiry(contact)).delivered).toBe(false);
+  });
+
+  it("doesn't count HubSpot as delivered when the note with the message fails", async () => {
+    searchHits["contacts:email=priya@northlinelogistics.ca"] = [{ id: "55" }];
+    failNotes = true;
+    emailResult = { ok: false };
+    expect(await deliverWebsiteInquiry(contact)).toMatchObject({ delivered: false, hubspot: "failed", contactId: "55" });
+    emailResult = { ok: true };
+    expect(await deliverWebsiteInquiry(contact)).toMatchObject({ delivered: true, hubspot: "failed", email: "sent" });
   });
 
   it("note escapes HTML", () => {

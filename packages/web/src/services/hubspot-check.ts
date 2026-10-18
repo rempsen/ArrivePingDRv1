@@ -178,6 +178,11 @@ export async function checkHubspot(): Promise<HubspotCheck> {
     });
   }
 
-  const ok = checks.every((c) => c.status !== "fail");
+  // Without token details the account and scopes are unconfirmed, so the key
+  // can't be called right even when the reads below work.
+  if (matches == null && !next.some((n) => n.startsWith("The key is invalid"))) {
+    next.push(`Couldn't confirm which HubSpot account the key belongs to. In HubSpot account ${expected}: Settings → Integrations → Private Apps → check the app is there and its token matches HUBSPOT_ACCESS_TOKEN.`);
+  }
+  const ok = matches === true && checks.every((c) => c.status !== "fail");
   return { configured: true, ok, portal: { tokenHubId: hubId, expected, matches }, scopes: granted ? { granted, missing } : undefined, checks, nextSteps: next };
 }
