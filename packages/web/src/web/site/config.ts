@@ -444,7 +444,7 @@ export const trades = [
   {
     key: "delivery",
     /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
-    ping: "Luis is 3 stops away with your washer. Track it live.",
+    ping: "Luis is on the way with your washer. ETA 17 min.",
     label: "Delivery & installation",
     line: "Every customer knows when your truck arrives.",
     href: "/delivery-dispatch-software",

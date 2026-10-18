@@ -1,4 +1,5 @@
 import { trades, tradeMedia } from "../config";
+import { usePlayback } from "../motion/playback";
 
 /**
  * One card per trade, linking to that trade's page. Each is a real photograph
@@ -11,8 +12,10 @@ import { trades, tradeMedia } from "../config";
  * peeking in, so the photo and the message both stay readable.
  */
 export function TradeCards({ exclude }: { exclude?: string }) {
+  // Honour the site's Pause motion control (and a hidden tab) like the live sections do.
+  const { paused, hidden } = usePlayback();
   return (
-    <ul className="trade-cards">
+    <ul className="trade-cards" data-play={paused || hidden ? "off" : "on"}>
       {trades
         .filter((t) => t.href !== exclude)
         .map((t, i) => (
