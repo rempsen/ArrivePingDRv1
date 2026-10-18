@@ -280,20 +280,22 @@ export const articles: Article[] = [
   {
     slug: "scheduler-views",
     title: "Plan the day in the Scheduler",
-    summary: "Board shows a lane per technician; Calendar shows the day, week or month. The Work Queue holds jobs nobody has yet.",
+    summary: "Calendar puts every technician on a row with the day's hours across; Week and Month show how full the days are. To schedule holds jobs nobody has yet.",
     category: "dispatch",
     updated: U2,
-    keywords: ["calendar", "week view", "month view", "board", "work queue", "unassigned", "drag"],
+    keywords: ["calendar", "day view", "week view", "month view", "board", "work queue", "to schedule", "unassigned", "drag", "undo", "find a slot"],
     blocks: [
       { type: "p", text: "Open **Operations → Scheduler**. Two switches at the top change how you see the same jobs:" },
       {
         type: "ul",
         items: [
-          "**Board or Calendar.** Board gives each technician a lane for the day. Calendar lays jobs out on a grid.",
-          "**Day, Week, Work Week or Month.** Work Week is Monday to Friday.",
+          "**Board or Calendar.** Board gives each technician a lane of their open jobs. Calendar puts every technician on a row with the day's hours across.",
+          "**Day, Week or Month.** Day shows each technician's jobs, the drive between them, and any overlaps. Week shows how full each technician's days are. Month shows how busy the whole team is each day; click a day to open its week.",
         ],
       },
-      { type: "p", text: "The **Work Queue** lists every job still waiting for a technician. Open one to give it a time and a technician. **New Job** opens the booking form with the date already filled in." },
+      { type: "p", text: "**To schedule** lists every job still waiting for a technician. Drag one onto a technician's row at the time you want, or press **Find a slot**: the best three fits light up in green, ranked by skill, drive time and how full each day is. Click one to book it." },
+      { type: "p", text: "Drag a booked job along its row to change the time, or onto another row to give it to someone else. After a change you have a few seconds to press **Undo**; the customer and technician are only told once the change sticks. Moving a job to a different technician asks first and tells them straight away." },
+      { type: "p", text: "**New Job** opens the booking form with the date already filled in." },
     ],
   },
   {
