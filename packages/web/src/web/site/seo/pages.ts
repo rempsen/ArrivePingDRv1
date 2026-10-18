@@ -10,6 +10,7 @@ import { faqs as homeFaqs } from "../config";
 import { blogCategories, categoryBySlug } from "../blog/categories";
 import { authorFor } from "../blog/meta";
 import { landingPages, type LandingPage } from "../content/landing";
+import { featuresMeta } from "../content/features";
 import { articles } from "../support/articles";
 import { absolute, breadcrumbs, faqPage, graph, ORG_ID, organization, SITE_ID, SITE_URL, softwareApplication, webPage, website, type JsonLd } from "./schema";
 
@@ -85,6 +86,26 @@ function fromLanding(p: LandingPage): SeoPage {
     jsonLd: graph(nodes),
   };
 }
+
+const features: SeoPage = {
+  path: featuresMeta.path,
+  label: "Features",
+  title: featuresMeta.title,
+  description: featuresMeta.description,
+  summary: featuresMeta.summary,
+  section: "Product",
+  priority: 0.9,
+  changefreq: "monthly",
+  ogType: "website",
+  jsonLd: graph([
+    webPage(featuresMeta.path, featuresMeta.title, featuresMeta.description),
+    breadcrumbs([
+      { name: "ArrivePing", path: "/" },
+      { name: "Features", path: featuresMeta.path },
+    ]),
+    softwareApplication(),
+  ]),
+};
 
 const legal = (path: string, label: string, summary: string): SeoPage => ({
   path,
@@ -244,6 +265,7 @@ const supportArticlePages: SeoPage[] = articles.map((a) => ({
 
 export const seoPages: SeoPage[] = [
   home,
+  features,
   ...landingPages.map(fromLanding),
   blogIndex,
   ...blogCategoryPages,

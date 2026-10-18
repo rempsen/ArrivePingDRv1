@@ -35,6 +35,7 @@ export const brand = {
 
 export const nav = [
   { label: "Product", href: brand.urls.product },
+  { label: "Features", href: "/features" },
   { label: "How it works", href: brand.urls.how },
   { label: "Who it's for", href: brand.urls.who },
   { label: "Pricing", href: brand.urls.pricing },
@@ -737,6 +738,7 @@ export const footer = {
     {
       heading: "Product",
       links: [
+        { label: "Features", href: "/features" },
         { label: "How it works", href: brand.urls.how },
         { label: "Pricing", href: "/pricing" },
         { label: "Field service software", href: "/field-service-software" },
