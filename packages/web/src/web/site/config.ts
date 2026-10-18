@@ -375,10 +375,10 @@ export const officeView = {
     {
       label: "Assign",
       url: "arriveping.com/admin/scheduler",
-      src: "/img/site/app/office-board.webp?v=07dee3e1",
+      src: "/img/site/app/office-board.webp?v=b29b753f",
       width: 1920,
       height: 1200,
-      alt: "The ArrivePing dispatch board: unassigned jobs with Assign and AI suggest buttons, four technicians with their job counts, and one technician's 17 jobs with their statuses.",
+      alt: "The ArrivePing dispatch board: unassigned jobs with Assign and AI suggest buttons, four technicians with their job counts, and one technician's 17 jobs grouped into Now, Today, Tomorrow and the days ahead, each with its time, address and status.",
       caption: "Assign by hand, or let ArrivePing suggest the best technician.",
     },
     {

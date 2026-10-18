@@ -54,11 +54,11 @@ export function HomeHero() {
       <div className="lv-hero__film lv-hero__film--photo" aria-hidden="true">
         <div className="lv-hero__kb">
           <picture>
-            <source type="image/webp" srcSet={`${ph.webp.small} 960w, ${ph.webp.large} 1920w`} sizes="(min-width: 900px) 64vw, 100vw" />
+            <source type="image/webp" srcSet={`${ph.webp.small} 960w, ${ph.webp.large} 1920w`} sizes="(min-width: 1121px) 64vw, 100vw" />
             <img
               src={ph.jpg.large}
               srcSet={`${ph.jpg.small} 960w, ${ph.jpg.large} 1920w`}
-              sizes="(min-width: 900px) 64vw, 100vw"
+              sizes="(min-width: 1121px) 64vw, 100vw"
               alt=""
               width={ph.width}
               height={ph.height}

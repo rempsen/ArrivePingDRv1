@@ -273,14 +273,21 @@ export async function retryContactRequests(now = new Date()): Promise<{ checked:
   let retried = 0;
   let gaveUp = 0;
   for (const r of rows) {
-    // Claiming bumps the counter, so two sweeps can't both take the same row.
-    // The final attempt is counted as MAX_ATTEMPTS while it runs and as
-    // FINISHED once it's done, which is how an interrupted one is told apart.
-    const next = r.attempts < MAX_ATTEMPTS ? r.attempts + 1 : FINISHED;
+    // Claim the row so two sweeps can't both take it. A normal retry bumps the
+    // counter. The final attempt stays at MAX_ATTEMPTS while it runs (resuming
+    // an interrupted one just restamps lastAttemptAt) and becomes FINISHED only
+    // after it completes, so a crash at any point leaves it resumable.
+    const resuming = r.attempts >= MAX_ATTEMPTS;
+    const next = resuming ? MAX_ATTEMPTS : r.attempts + 1;
     const claimed = await sdb
       .update(t)
       .set({ attempts: next, lastAttemptAt: now })
-      .where(and(eq(t.id, r.id), eq(t.attempts, r.attempts)))
+      .where(
+        and(
+          eq(t.id, r.id),
+          resuming ? and(eq(t.attempts, MAX_ATTEMPTS), lt(t.lastAttemptAt, new Date(now.getTime() - STUCK_MS))) : eq(t.attempts, r.attempts),
+        ),
+      )
       .returning({ id: t.id });
     if (!claimed.length) continue; // another instance took it
 
@@ -297,13 +304,13 @@ export async function retryContactRequests(now = new Date()): Promise<{ checked:
     if (next === MAX_ATTEMPTS) await sdb.update(t).set({ attempts: FINISHED }).where(and(eq(t.id, r.id), eq(t.attempts, MAX_ATTEMPTS)));
 
     const stillOpen = (todo.hubspot && out.hubspot?.status === "failed") || (todo.email && out.email === "failed");
-    if (stillOpen && next >= MAX_ATTEMPTS) {
+    if (stillOpen && next === MAX_ATTEMPTS) {
       gaveUp++;
       log.error("contact-request: giving up after retries — follow up by hand", {
         id: r.id,
         hubspot: out.hubspot?.status ?? r.hubspotStatus,
         email: out.email ?? r.emailStatus,
-        ...(next === FINISHED && { resumed: true }),
+        ...(resuming && { resumed: true }),
       });
     }
   }
