@@ -206,6 +206,17 @@ describe("dispatchSchedule + undo", () => {
     await flushNotices();
   });
 
+  it("won't undo into a slot someone else has taken since", async () => {
+    const a = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const base = (await row(a)).scheduledAt;
+    const r = await ds.dispatchSchedule(CO, { bookingId: a, scheduledAt: minutesLater(base, 180), by: "Dana" }, NOW.getTime());
+    await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: base });
+    const u = await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime());
+    expect(u).toMatchObject({ ok: false, status: 409 });
+    expect((await row(a)).scheduledAt.toISOString()).toBe(minutesLater(base, 180));
+    await flushNotices();
+  });
+
   it("won't undo a job that has moved again since", async () => {
     const id = await job(CO);
     const base = (await row(id)).scheduledAt;

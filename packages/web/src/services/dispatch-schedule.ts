@@ -159,6 +159,13 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
 
   const t = tdb(companyId);
   const B = schema.bookings;
+  // The old slot may have been filled since: don't put the job back into a
+  // double booking or a day off without asking (open the job to force it).
+  const cur = await t.selectOne(B, eq(B.id, c.b));
+  if (cur && !cur.deletedAt) {
+    const busy = await findAvailabilityBlock(companyId, { riderId: cur.riderId, scheduledAt: new Date(c.f), bookingId: cur.id, serviceId: cur.serviceId });
+    if (busy) return { ok: false, status: 409, message: `Can't put it back: ${busy.message} Open the job to move it.` };
+  }
   // Only if the job is still where this move put it, with the same technician
   // (their availability was what the move checked), and still open.
   const [b] = await t.update(
