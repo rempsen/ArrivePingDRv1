@@ -425,7 +425,7 @@ export const articles: Article[] = [
   {
     slug: "pricing-and-seats",
     title: "How ArrivePing is priced",
-    summary: "US dollars, billed monthly, graduated by driver count. The dispatcher licence is included on every plan.",
+    summary: "US dollars, billed monthly, graduated by licence count. One dispatcher licence is included on every plan; extra office users are priced like a driver.",
     category: "billing",
     updated: U,
     keywords: ["cost", "price", "per driver", "seat", "plan", "usd", "cad"],
@@ -439,7 +439,7 @@ export const articles: Article[] = [
           "**Fleet:** every driver from 30 on is $25 per month. Teams of 30 or more also get custom integrations and live onboarding.",
         ],
       },
-      { type: "p", text: "A driver is a field team member who uses the technician app to receive jobs and share their status — a technician, installer or delivery driver. Dispatchers and office users are not drivers; the dispatcher licence is included at no extra fee. There are no setup fees or contracts, and you can add or remove drivers month to month. Current prices are always on the [pricing page](/pricing)." },
+      { type: "p", text: "A driver is a field team member who uses the technician app to receive jobs and share their status — a technician, installer or delivery driver. Every company gets the same Starter package: one dispatcher licence and two driver licences. Need a second dispatcher or a manager? Each extra office user is a licence priced exactly like a driver, and you choose whether it has dispatch or manager permissions. There are no setup fees or contracts, and you can add or remove licences month to month. Current prices are always on the [pricing page](/pricing)." },
     ],
   },
   {

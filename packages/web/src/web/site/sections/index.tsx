@@ -29,7 +29,10 @@ const PRESETS = [2, 5, 10, 20, 29, 30, 50, 100];
 export function Pricing() {
   const go = useAnchorNav();
   const [drivers, setDrivers] = useState(10);
-  const est = monthlyPrice(drivers);
+  // One dispatcher licence comes with every plan; each extra office user
+  // (a second dispatcher or a manager) is a licence priced like a driver.
+  const [office, setOffice] = useState(0);
+  const est = monthlyPrice(drivers + office);
   const nav = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     if (href.startsWith("#") || href.startsWith("/#")) go(e, href);
   };
@@ -116,12 +119,34 @@ export function Pricing() {
               ))}
             </div>
           </div>
+          <div className="estimator__office">
+            <span className="estimator__officelabel" id="estimator-office-label">
+              Extra dispatchers or managers
+              <small>1 dispatcher is included; each extra is priced like a driver</small>
+            </span>
+            <div className="estimator__stepper">
+              <button type="button" onClick={() => setOffice((n) => Math.max(0, n - 1))} disabled={office === 0} aria-label="Remove an extra dispatcher or manager">
+                −
+              </button>
+              <output className="tnum" aria-live="polite" aria-label={`${office} extra dispatchers or managers`}>
+                {office}
+              </output>
+              <button type="button" onClick={() => setOffice((n) => Math.min(20, n + 1))} disabled={office === 20} aria-label="Add an extra dispatcher or manager">
+                +
+              </button>
+            </div>
+          </div>
           <div className="estimator__result" aria-live="polite">
             <span className="estimator__plan">Your plan · {est.plan}</span>
             <span className="estimator__total tnum">
               ${est.total.toLocaleString("en-US")} <span>USD / month</span>
             </span>
             <span className="estimator__breakdown">{est.breakdown}</span>
+            {office > 0 ? (
+              <span className="estimator__breakdown">
+                {drivers} {drivers === 1 ? "driver" : "drivers"} + {office} extra office {office === 1 ? "user" : "users"}, each priced like a driver
+              </span>
+            ) : null}
           </div>
         </div>
 

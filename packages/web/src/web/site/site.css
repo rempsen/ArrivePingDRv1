@@ -1069,6 +1069,64 @@
   flex-direction: column;
   gap: 6px;
 }
+.site .estimator__result {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.site .estimator__office {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.site .estimator__officelabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .estimator__officelabel small {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.site .estimator__stepper {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+.site .estimator__stepper button {
+  width: 40px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 600 18px/1 var(--font-body);
+  cursor: pointer;
+}
+.site .estimator__stepper button:disabled {
+  color: var(--ink-muted);
+  opacity: 0.5;
+  cursor: default;
+}
+.site .estimator__stepper button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: 999px;
+}
+.site .estimator__stepper output {
+  min-width: 28px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--ink);
+}
 .site .estimator__plan {
   font-size: 14px;
   color: var(--ink-muted);
@@ -1096,6 +1154,11 @@
   .site .estimator {
     grid-template-columns: minmax(0, 1fr);
     gap: 20px;
+  }
+  .site .estimator__result,
+  .site .estimator__office {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 @media (max-width: 1023px) {
