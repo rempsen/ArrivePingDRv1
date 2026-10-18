@@ -1,13 +1,14 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { techApp } from "../config";
 import { usePlayback } from "../motion/playback";
-import { useLivePlay } from "./shared";
+import { PauseButton, useLivePlay } from "./shared";
 
 /**
  * "Three taps. That's the training." The technician side, shown with the
  * app's real buttons and two real screens. Selecting a tap brings the screen
  * where it happens to the front and marks the spot. While the section is on
- * screen the taps step through on their own, until the visitor picks one.
+ * screen the taps step through on their own, until the visitor picks one or
+ * pauses motion (the pause button under the phones).
  */
 
 const STEP_MS = 3800;
@@ -102,9 +103,12 @@ export function TechApp() {
               </div>
             ))}
           </div>
-          <figcaption id="tech-cap" className="ap-tech__cap">
-            {techApp.caption}
-          </figcaption>
+          <div className="ap-tech__foot">
+            <figcaption id="tech-cap" className="ap-tech__cap">
+              {techApp.caption}
+            </figcaption>
+            <PauseButton />
+          </div>
         </figure>
       </div>
     </section>
