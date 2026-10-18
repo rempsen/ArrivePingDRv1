@@ -314,6 +314,17 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
   });
 
+  it("undoing an assign-and-move after its notice went out tells them the time went back", async () => {
+    const id = await job(CO);
+    const to = new Date((await row(id)).scheduledAt.getTime() + 2 * HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: to, by: "Dana" }, NOW.getTime());
+    await flushNotices(); // the "assigned" notice goes out with the new time
+    expect(await events(id)).toContain("assigned");
+    expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: true, notified: true });
+    await flushNotices();
+    expect(await events(id)).toContain("rescheduled");
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

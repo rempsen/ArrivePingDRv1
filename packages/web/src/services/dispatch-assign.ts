@@ -358,7 +358,9 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   // notice waits instead: from what people were last told (a move notice the
   // assignment had replaced, else the time when it was assigned). It says
   // something only if the job is somewhere else now, e.g. moved meanwhile.
-  const told = c.n ?? c.w;
+  // If the assignment's notice already went out, it announced the time this
+  // drop set (c.t when it moved the job), so that is what to correct from.
+  const told = notified ? (c.t ?? c.w) : (c.n ?? c.w);
   if (told)
     await holdNotice(companyId, {
       kind: RESCHEDULED_NOTICE_TASK,
