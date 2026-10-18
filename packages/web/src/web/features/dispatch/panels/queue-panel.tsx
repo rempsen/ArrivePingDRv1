@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { BoardJob, DispatchCandidate } from "../data/types";
 import { jobKind } from "../../../../shared/job-kind";
 import { firstName, jobSub, jobTitle, PRIORITY_COLOR } from "./format";
@@ -15,8 +16,12 @@ interface Props {
   onHover(id: string | null): void;
 }
 
+const SHOW = 80;
+
 export function QueuePanel({ jobs, tz, noun, nounPlural, workerNoun, selectedId, candidates, techName, onSelect, onHover }: Props) {
   const now = Date.now();
+  const [all, setAll] = useState(false);
+  const shown = all ? jobs : jobs.slice(0, SHOW);
   return (
     <section className="ap-panel ap-queue ap-glass" aria-label={`Unassigned ${nounPlural.toLowerCase()}`}>
       <header className="ap-panel__head">
@@ -27,7 +32,7 @@ export function QueuePanel({ jobs, tz, noun, nounPlural, workerNoun, selectedId,
         <p className="ap-empty">Everything is assigned.</p>
       ) : (
         <ul className="ap-queue__list">
-          {jobs.map((j) => {
+          {shown.map((j) => {
             const best = candidates[j.id]?.find((c) => c.best);
             const late = jobKind(j, now) === "late";
             return (
@@ -64,6 +69,11 @@ export function QueuePanel({ jobs, tz, noun, nounPlural, workerNoun, selectedId,
             );
           })}
         </ul>
+      )}
+      {!all && jobs.length > SHOW && (
+        <button type="button" className="ap-btn ap-more" onClick={() => setAll(true)}>
+          Show all {jobs.length}
+        </button>
       )}
     </section>
   );

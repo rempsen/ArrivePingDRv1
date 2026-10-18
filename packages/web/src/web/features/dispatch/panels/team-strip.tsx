@@ -13,12 +13,16 @@ interface Props {
   onSelect(id: string): void;
 }
 
+const MAX = 60;
+
 const initials = (n: string) => n.trim().split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 
 export const TeamStrip = forwardRef<HTMLUListElement, Props>(function TeamStrip({ techs, selectedId, fits, targetId, jobNoun, onSelect }, ref) {
+  // A long roster: keep the strip light. The rest is one Find away.
+  const strip = techs.length > MAX ? [...techs.slice(0, MAX - 1), ...techs.filter((t) => t.id === selectedId && !techs.slice(0, MAX - 1).includes(t))] : techs;
   return (
     <ul ref={ref} className="ap-strip ap-glass" aria-label="Team">
-      {techs.map((t) => {
+      {strip.map((t) => {
         const f = fits?.[t.id];
         return (
           <li key={t.id}>

@@ -126,7 +126,8 @@ with sync_playwright() as p:
     # Drag to a technician who can't do it: the clash card asks first.
     seen_clash = False
     for i in range(chips):
-        card = pg.locator(".ap-card").first
+        # A job due today: the demo seeds time off and skills that clash with it.
+        card = pg.locator(".ap-card", has_text="Today").first
         mouse_drag(pg, card, pg.locator(".ap-chipbtn").nth(i))
         pg.wait_for_timeout(900)
         if pg.locator(".ap-clash").count():
@@ -162,6 +163,25 @@ with sync_playwright() as p:
     pg.get_by_role("button", name="Satellite").click()
     pg.wait_for_timeout(500)
     check("desktop: satellite toggle", pg.get_by_role("button", name="Satellite").get_attribute("aria-pressed") == "true")
+    # Find: "/" opens the palette, typing narrows, Enter opens the technician.
+    pg.keyboard.press("/")
+    pg.wait_for_timeout(300)
+    pg.keyboard.type("diego")
+    pg.wait_for_timeout(200)
+    pg.keyboard.press("Enter")
+    pg.wait_for_timeout(600)
+    check("desktop: '/' finds a technician and opens their panel", pg.locator(".ap-inspector[data-tech]").count() == 1)
+    pg.keyboard.press("Escape")
+
+    # Installable app: manifest and service worker.
+    mf = pg.request.get(BASE + "/admin/manifest.webmanifest")
+    ok_mf = mf.ok and mf.json().get("scope") == "/admin/" and len(mf.json().get("icons", [])) >= 3
+    check("desktop: web app manifest is served with scope /admin/", ok_mf)
+    sw = pg.request.get(BASE + "/admin/sw.js")
+    check("desktop: service worker is served and never cached", sw.ok and "no-cache" in (sw.headers.get("cache-control") or ""), sw.headers.get("cache-control", ""))
+    pg.wait_for_timeout(1500)
+    reg = pg.evaluate("navigator.serviceWorker.getRegistration('/admin/').then(r => !!r)")
+    check("desktop: service worker registers under /admin/", reg is True)
     ctx.close()
 
     # ---------- iPad (touch) ----------

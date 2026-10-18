@@ -11,6 +11,7 @@ import { useJobNoun, useWorkerNoun } from "../../lib/use-brand";
 import { queueOrder } from "../../../shared/job-kind";
 import { Announcer, ClashCard, UndoToast } from "./assign/assign-feedback";
 import { useAssign } from "./assign/use-assign";
+import { canInstall, needsManualInstall, onInstallChange, promptInstall, setBadge } from "./pwa/pwa";
 import { setMapV2 } from "./map-switch";
 import { useBoard } from "./data/use-board";
 import { useCandidates } from "./data/use-candidates";
@@ -20,6 +21,7 @@ import { DispatchMap, type DispatchMapHandle } from "./map/dispatch-map";
 import type { DragFit } from "./map/tech-markers";
 import { FIT_LABEL, firstName, jobSub, jobTitle } from "./panels/format";
 import { JobInspector, TechInspector } from "./panels/inspector";
+import { CommandPalette } from "./panels/command-palette";
 import { QueuePanel } from "./panels/queue-panel";
 import { TeamStrip } from "./panels/team-strip";
 import "./dispatch.css";
@@ -45,6 +47,7 @@ export function DispatchPage() {
   const [sel, setSel] = useState(readSel);
   const [satellite, setSatellite] = useState(false);
   const [hoverJob, setHoverJob] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
   const [sheet, setSheet] = useState<"peek" | "half" | "full">("peek");
   const [dragJob, setDragJob] = useState<string | null>(null);
   const [overTech, setOverTech] = useState<string | null>(null);
@@ -215,12 +218,26 @@ export function DispatchPage() {
         if (engine.current?.active()) engine.current.cancel();
         else if (assigner.clash) assigner.dismissClash();
         else select({ tech: null, job: null });
+      } else if (e.key === "/") {
+        e.preventDefault();
+        setFinding(true);
       } else if (e.key === "f" || e.key === "F") mapRef.current?.fitAll();
       else if (e.key === "s" || e.key === "S") setSatellite((v) => !v);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [assigner, select]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setFinding(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const bookingQ = useQuery({
     queryKey: ["dispatch-open-booking", openJobId],
@@ -243,6 +260,16 @@ export function DispatchPage() {
     },
     [refetch],
   );
+
+  // App icon badge: how many jobs wait for a technician.
+  useEffect(() => {
+    if (board) setBadge(queue.length);
+  }, [board, queue.length]);
+  useEffect(() => () => setBadge(0), []);
+
+  const [installable, setInstallable] = useState(canInstall);
+  useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
+  const [iosHint, setIosHint] = useState(false);
 
   const showJob = useCallback(() => true, []);
   const holder = job?.riderId ? techById.get(job.riderId) ?? null : null;
@@ -323,12 +350,25 @@ export function DispatchPage() {
         <strong className="ap-toolbar__title">Dispatch</strong>
         <span className="ap-muted tnum">{counts}</span>
         <span className="ap-live" data-on={connected ? "" : undefined} title={connected ? "Live" : "Reconnecting"} />
+        <button type="button" className="ap-btn" onClick={() => setFinding(true)} aria-keyshortcuts="/">
+          Find
+        </button>
         <button type="button" className="ap-btn" onClick={() => mapRef.current?.fitAll()} aria-keyshortcuts="F">
           Fit all
         </button>
         <button type="button" className="ap-btn" aria-pressed={satellite} onClick={() => setSatellite((v) => !v)} aria-keyshortcuts="S">
           Satellite
         </button>
+        {installable && (
+          <button type="button" className="ap-btn" onClick={() => void promptInstall()}>
+            Install app
+          </button>
+        )}
+        {!installable && needsManualInstall() && (
+          <button type="button" className="ap-btn" onClick={() => setIosHint((v) => !v)} aria-expanded={iosHint}>
+            Install app
+          </button>
+        )}
         <button type="button" className="ap-btn ap-btn--link" onClick={() => setMapV2(false)}>
           Classic map
         </button>
@@ -371,8 +411,32 @@ export function DispatchPage() {
       {isLoading && <p className="ap-loading ap-glass">Loading the map…</p>}
       {error && !board && <p className="ap-loading ap-glass">Couldn't load the board. Retrying…</p>}
 
+      {iosHint && (
+        <p className="ap-firsthint ap-glass ap-ioshint" style={{ pointerEvents: "auto" }}>
+          Tap Share, then Add to Home Screen.
+        </p>
+      )}
       {assigner.clash && <ClashCard clash={assigner.clash} onConfirm={assigner.confirmClash} onCancel={assigner.dismissClash} />}
       {assigner.toast && <UndoToast toast={assigner.toast} onUndo={() => void assigner.undo()} onClose={assigner.dismissToast} />}
+      <CommandPalette
+        open={finding}
+        techs={techs}
+        jobs={jobs}
+        noun={jobNoun}
+        workerNoun={workerNoun}
+        onClose={() => setFinding(false)}
+        onPick={(kind, id) => {
+          if (kind === "tech") {
+            select({ tech: id });
+            const p = mapRef.current?.techs()?.positionOf(id);
+            if (p) mapRef.current?.focus(p, 14);
+          } else {
+            select({ job: id });
+            const p = mapRef.current?.jobs()?.positionOf(id);
+            if (p) mapRef.current?.focus(p, 14);
+          }
+        }}
+      />
       <Announcer text={assigner.announce} />
 
       <WorkOrderModal open={!!openJobId} editBooking={bookingQ.data?.booking} onClose={() => setOpenJobId(null)} />

@@ -1,0 +1,21 @@
+{
+  "id": "/admin/",
+  "name": "ArrivePing",
+  "short_name": "ArrivePing",
+  "description": "Dispatch: see your team, assign work, keep customers informed.",
+  "start_url": "/admin/fleet",
+  "scope": "/admin/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#070b12",
+  "theme_color": "#070b12",
+  "icons": [
+    { "src": "/admin/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Map", "url": "/admin/fleet", "icons": [{ "src": "/admin/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

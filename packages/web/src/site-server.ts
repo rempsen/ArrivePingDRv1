@@ -179,6 +179,11 @@ function cacheControlFor(pathname: string): string {
   if (pathname === "/" || pathname === "" || pathname.endsWith(".html")) {
     return "no-store, no-cache, max-age=0, must-revalidate";
   }
+  // The admin service worker must be re-checked on every load, or a fixed
+  // worker can't reach people who already have the old one.
+  if (pathname === "/admin/sw.js") {
+    return "no-cache, max-age=0, must-revalidate";
+  }
   // Other static files (favicon, manifest, etc.) — short cache, revalidate.
   return "public, max-age=3600, must-revalidate";
 }

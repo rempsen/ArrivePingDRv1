@@ -471,3 +471,15 @@ body.ap-dragging * {
 .dispatch-v2 .ap-strip > li { flex: 0 0 auto; display: flex; }
 .dispatch-v2 output.ap-toast { display: flex; }
 .dispatch-v2:not([data-layout="wide"]) .ap-firsthint { display: none; }
+.dispatch-v2 .ap-firsthint[style] { display: block; top: 64px; }
+
+/* Command palette */
+.dispatch-v2 .ap-palette { margin: 12vh auto 0; width: min(520px, calc(100% - 24px)); padding: 10px; border-radius: 16px; color: var(--text); border: 1px solid var(--line-strong); }
+.dispatch-v2 .ap-palette::backdrop { background: rgba(3, 6, 12, 0.5); backdrop-filter: blur(2px); }
+.dispatch-v2 .ap-palette__input { width: 100%; box-sizing: border-box; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--ink-2); color: var(--text); font: inherit; font-size: 15px; }
+.dispatch-v2 .ap-palette__input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.dispatch-v2 .ap-palette__list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 50vh; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.dispatch-v2 .ap-row[data-active] { border-color: var(--brand); background: rgba(14, 165, 233, 0.12); }
+.dispatch-v2 .ap-palette__keys { text-align: center; }
+.dispatch-v2 .ap-card { content-visibility: auto; contain-intrinsic-size: auto 92px; }
+.dispatch-v2 .ap-more { margin-top: 8px; align-self: stretch; }

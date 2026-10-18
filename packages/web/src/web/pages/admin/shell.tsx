@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { initPwa } from "../../features/dispatch/pwa/pwa";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { Link, useLocation } from "wouter";
@@ -137,6 +138,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { nounPlural: jobPlural } = useJobNoun();
   const brand = useBrand();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Installable app: manifest link and service worker (scoped to /admin/).
+  useEffect(() => {
+    initPwa();
+  }, []);
   // The Guide opens/closes the mobile drawer so sidebar items can be
   // spotlighted on phones too (guide/TourRunner.tsx dispatches this).
   useEffect(() => {
