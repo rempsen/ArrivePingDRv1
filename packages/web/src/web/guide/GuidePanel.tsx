@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, CircleHelp, ExternalLink, FlaskConical, LifeBuoy, PlayCircle, Search, X } from "lucide-react";
+import { ArrowLeft, Check, CircleHelp, CornerDownLeft, ExternalLink, FlaskConical, LifeBuoy, PlayCircle, Search, Sparkles, X } from "lucide-react";
 import { useAuth } from "../hooks/use-auth";
 import { useAddSampleDay, useSampleDay } from "./SampleDayBanner";
 import { Link } from "wouter";
@@ -10,11 +10,14 @@ import { articleBySlug, categoryById, popularSlugs, support, type ArticleBlock }
 import { searchArticles } from "../site/support/search";
 import { useGuide } from "./GuideProvider";
 import { interpolate } from "./registry";
+import { AskConversation, useAsk, useAskAvailable } from "./ask";
 
 /**
  * The Guide panel: the one permanent place to relearn ArrivePing.
  *
  *  - Guided tours: every chapter this person's role can open, with progress.
+ *  - Ask ArrivePing: type a question, press Enter, get a short answer from the
+ *    help articles with buttons to the right tour, page or article (ask.tsx).
  *  - Help Center search, reading articles in place (no new tab), with
  *    "Show me in ArrivePing" when an article has a matching tour.
  *  - A clear path to a person.
@@ -36,6 +39,10 @@ const ARTICLE_TOUR: Record<string, string> = {
   "running-late": "milestones",
   "set-your-reply-to-email": "reply-to",
   "exports-and-integrations": "export",
+  "scheduler-views": "scheduler",
+  "run-a-report": "reports",
+  "check-what-was-sent": "notifications",
+  "quiet-hours": "notifications",
 };
 
 export default function GuidePanel({ onClose }: { onClose: () => void }) {
@@ -51,6 +58,9 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
   const [slug, setSlug] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const canAsk = useAskAvailable();
+  const asking = useAsk(terms);
+  const inChat = asking.turns.length > 0;
 
   // useDialog focuses the first control; the search box is the better start.
   useEffect(() => {
@@ -58,8 +68,8 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
   }, []);
   // Each new view starts at the top.
   useEffect(() => {
-    bodyRef.current?.scrollTo({ top: 0 });
-  }, [slug, q]);
+    if (!inChat) bodyRef.current?.scrollTo({ top: 0 });
+  }, [slug, q, inChat]);
 
   const results = useMemo(() => searchArticles(q, 8), [q]);
   const article = slug ? articleBySlug[slug] : undefined;
@@ -72,6 +82,12 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
   const start = (id: string) => {
     onClose();
     startChapter(id);
+  };
+  const submitAsk = () => {
+    if (!canAsk || !q.trim() || asking.busy) return;
+    void asking.ask(q);
+    setQ("");
+    setSlug(null);
   };
 
   return (
@@ -99,23 +115,35 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        <div className="border-b border-white/5 px-5 py-3">
+        <form
+          className="border-b border-white/5 px-5 py-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitAsk();
+          }}
+        >
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+            {canAsk ? (
+              <Sparkles className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand" aria-hidden="true" />
+            ) : (
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+            )}
             <input
               ref={searchRef}
               type="search"
-              aria-label="Search help articles"
+              enterKeyHint={canAsk ? "send" : "search"}
+              aria-label={canAsk ? (inChat ? "Ask a follow-up question" : "Ask a question or search help articles") : "Search help articles"}
               value={q}
+              maxLength={500}
               onChange={(e) => {
                 setQ(e.target.value);
                 setSlug(null);
               }}
-              placeholder="Search help: reply-to, invite, export…"
+              placeholder={canAsk ? (inChat ? "Ask a follow-up…" : "Ask a question or search help") : "Search help: reply-to, invite, export…"}
               className="h-10 w-full rounded-lg border border-white/10 bg-ink pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-brand/60 focus:outline-none"
             />
           </div>
-        </div>
+        </form>
 
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {article ? (
@@ -130,8 +158,37 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
               onStart={start}
               onOpenArticle={setSlug}
             />
+          ) : inChat ? (
+            <AskConversation
+              turns={asking.turns}
+              chapters={chapters}
+              terms={terms}
+              onReset={() => {
+                asking.reset();
+                searchRef.current?.focus({ preventScroll: true });
+              }}
+              onStartTour={start}
+              onOpenArticle={setSlug}
+              onNavigate={onClose}
+            />
           ) : q.trim() ? (
             <section aria-label="Search results">
+              {canAsk && (
+                <button
+                  type="button"
+                  onClick={submitAsk}
+                  data-tour="guide.ask.start"
+                  className="mb-3 flex w-full items-center gap-3 rounded-[0.5rem] bg-brand/10 px-2.5 py-2.5 text-left ring-1 ring-brand/25 hover:bg-brand/15"
+                >
+                  <Sparkles className="h-4 w-4 shrink-0 text-brand" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-100">Ask ArrivePing</span>
+                    <span className="block truncate text-xs text-slate-400">&ldquo;{q.trim()}&rdquo;</span>
+                  </span>
+                  <CornerDownLeft className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                  <span className="sr-only">(Enter)</span>
+                </button>
+              )}
               <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500" aria-live="polite">
                 {results.length ? `${results.length} article${results.length === 1 ? "" : "s"}` : "No articles match"}
               </p>
