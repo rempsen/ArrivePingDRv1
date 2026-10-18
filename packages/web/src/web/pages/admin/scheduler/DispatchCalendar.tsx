@@ -14,6 +14,7 @@ import type { ConfirmFn } from "../../../lib/force-confirm";
 import { addDays, bookedMinutes, clampStart, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
 import { safeTimeZone, zonedDayKey, zonedMinutesOfDay } from "../../../../shared/tz";
 import { isTerminalStatus } from "../../../../shared/job-status";
+import { STALE_LOCATION_MS } from "../../../../shared/board-patch";
 import { Agenda } from "./Agenda";
 import { DayTimeline, type DropPreview } from "./DayTimeline";
 import { MonthLoad } from "./MonthLoad";
@@ -110,7 +111,8 @@ export function DispatchCalendar(p: {
         // reported recently (from when they're free), else the office; another
         // day, the office at the start of the day.
         const office = sb.board?.office ?? null;
-        const live = day === today && !t.stale && t.locationAt && t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null;
+        const fresh = !!t.locationAt && now.getTime() - new Date(t.locationAt).getTime() <= STALE_LOCATION_MS;
+        const live = day === today && fresh && t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null;
         const startPoint = live ?? office;
         const atMin = day !== today ? range.startMin : free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz);
         const origin = startPoint ? { ...startPoint, atMin } : undefined;

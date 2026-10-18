@@ -24,10 +24,10 @@ import { IN_FLIGHT_STATUSES, TERMINAL_STATUSES } from "../shared/job-status";
 import { jobMinutes } from "../shared/availability";
 import { parseSkills } from "../shared/qualify";
 import { addDays } from "../shared/schedule-layout";
+import { STALE_LOCATION_MS } from "../shared/board-patch";
 
 export const BOARD_JOB_LIMIT = 3000;
-/** A location older than this greys the technician's pin ("last seen 12 min ago"). */
-export const STALE_LOCATION_MS = 10 * 60_000;
+export { STALE_LOCATION_MS } from "../shared/board-patch";
 
 /** bookings.lat/lng default to downtown Toronto when an address never geocoded. */
 const DEFAULT_JOB_POINT = { lat: 43.6532, lng: -79.3832 };

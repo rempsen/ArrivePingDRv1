@@ -26,6 +26,7 @@ import { fetchBoard, fetchLoad, postAssign, postSchedule, postUndo } from "../..
 import { openDispatchStream } from "../../../features/dispatch/data/stream";
 import type { Board, BoardJob } from "../../../features/dispatch/data/types";
 import { instantFor } from "../../../../shared/schedule-layout";
+import { applyLocations } from "../../../../shared/board-patch";
 
 export interface ScheduleToast {
   id: number;
@@ -61,8 +62,10 @@ export function useScheduleBoard(day: string, days: 1 | 7) {
     queryFn: ({ signal }) => fetchBoard(day, signal, days),
     staleTime: 5_000,
     placeholderData: keepPreviousData,
-    // The stream says when something changed; poll only while it's down.
-    refetchInterval: connected ? false : 30_000,
+    // The stream says when jobs change; poll fast only while it's down. Time
+    // off and technicians' details don't come down the stream, so a slow
+    // refresh keeps those current while it's up.
+    refetchInterval: connected ? 120_000 : 30_000,
   });
 
   useEffect(() => {
@@ -80,6 +83,8 @@ export function useScheduleBoard(day: string, days: 1 | 7) {
         if (again) refetchSoon();
       },
       onChanged: refetchSoon,
+      // Positions move the "Find a slot" starting points; patch them in place.
+      onLocations: (frames) => qc.setQueriesData<Board>({ queryKey: ["schedule-board", company] }, (b) => (b ? applyLocations(b, frames) : b)),
     });
     return () => {
       close();
