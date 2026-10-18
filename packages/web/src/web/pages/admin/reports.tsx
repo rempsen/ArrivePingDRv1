@@ -9,10 +9,11 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import {
-  Download, FileText, FileSpreadsheet, FileType2, ChevronDown,
+  Download, FileText, FileSpreadsheet, FileType2, FileBraces, ChevronDown,
   DollarSign, Wrench, ClipboardList, Wallet, Boxes, Users, Receipt, Map,
-  Database, Table as TableIcon,
+  Database, Table as TableIcon, ArrowUp, ArrowDown, ChevronsUpDown,
 } from "lucide-react";
+import { firstSortDir, sortReportRows, type SortDir } from "../../../shared/report-sort";
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
 
 /** Pull the filename the server chose out of Content-Disposition. Exports are
@@ -76,6 +77,9 @@ export default function ReportsPage() {
   const [status, setStatus] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Column sort for the detail table; remembered per report, so switching
+  // reports shows each one in its own (server) order until a header is clicked.
+  const [sort, setSort] = useState<{ report: ReportId; key: string; dir: SortDir } | null>(null);
 
   const filters = useQuery({
     queryKey: ["report-filters"],
@@ -100,7 +104,7 @@ export default function ReportsPage() {
     setFrom(f); setTo(t);
   };
 
-  async function exportAs(format: "csv" | "xlsx" | "pdf") {
+  async function exportAs(format: "csv" | "xlsx" | "json" | "pdf") {
     if (!data.data) return;
     setMenuOpen(false);
     setDownloading(format);
@@ -112,7 +116,8 @@ export default function ReportsPage() {
         body: JSON.stringify({
           title: meta.label,
           subtitle: `${from} → ${to}`,
-          rows: (data.data as any).rows,
+          // exactly what's on screen: current filters and column sort
+          rows,
           columns: (data.data as any).columns,
         }),
       });
@@ -131,6 +136,18 @@ export default function ReportsPage() {
 
   const d = data.data as any;
   const activeMeta = REPORTS.find((r) => r.id === report)!;
+  const activeSort = sort && sort.report === report ? sort : null;
+  const sortCol = activeSort ? (d?.columns ?? []).find((c: any) => c.key === activeSort.key) : null;
+  const rows: any[] = useMemo(
+    () => (!d?.rows ? [] : sortCol ? sortReportRows(d.rows, sortCol, activeSort!.dir) : d.rows),
+    [d, sortCol, activeSort],
+  );
+  const sortBy = (c: { key: string; kind?: string }) =>
+    setSort((cur) =>
+      cur && cur.report === report && cur.key === c.key
+        ? { ...cur, dir: cur.dir === "asc" ? "desc" : "asc" }
+        : { report, key: c.key, dir: firstSortDir(c.kind) },
+    );
   const f = filters.data as any;
 
   return (
@@ -151,6 +168,7 @@ export default function ReportsPage() {
               <div className="absolute right-0 z-30 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-ink-2 shadow-2xl">
                 <ExportItem icon={FileText} label="CSV" onClick={() => exportAs("csv")} />
                 <ExportItem icon={FileSpreadsheet} label="Excel (.xlsx)" onClick={() => exportAs("xlsx")} />
+                <ExportItem icon={FileBraces} label="JSON" onClick={() => exportAs("json")} />
                 <ExportItem icon={FileType2} label="PDF" onClick={() => exportAs("pdf")} />
               </div>
             )}
@@ -244,12 +262,27 @@ export default function ReportsPage() {
                   ) : (
                     <table className="w-full text-xs sm:text-sm">
                       <thead className="sticky top-0 bg-ink-2 text-left text-xs uppercase tracking-wide text-slate-500">
-                        <tr>{d.columns.map((c: any) => (
-                          <th key={c.key} className={`px-2 py-2.5 font-semibold sm:px-4 ${c.kind === "money" || c.kind === "num" || c.kind === "pct" ? "text-right" : ""}`}>{c.label}</th>
-                        ))}</tr>
+                        <tr>{d.columns.map((c: any) => {
+                          const right = c.kind === "money" || c.kind === "num" || c.kind === "pct";
+                          const on = activeSort && activeSort.key === c.key ? activeSort.dir : null;
+                          const Arrow = on === "asc" ? ArrowUp : on === "desc" ? ArrowDown : ChevronsUpDown;
+                          return (
+                            <th key={c.key} aria-sort={on === "asc" ? "ascending" : on === "desc" ? "descending" : "none"} className={`px-2 py-1.5 font-semibold sm:px-4 ${right ? "text-right" : ""}`}>
+                              <button
+                                type="button"
+                                onClick={() => sortBy(c)}
+                                title={`Sort by ${c.label}`}
+                                className={`group inline-flex items-center gap-1 rounded-md py-1 uppercase tracking-wide hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-glow ${right ? "flex-row-reverse" : ""} ${on ? "text-cyan-glow" : ""}`}
+                              >
+                                {c.label}
+                                <Arrow className={`h-3.5 w-3.5 shrink-0 ${on ? "" : "opacity-40 group-hover:opacity-80"}`} aria-hidden="true" />
+                              </button>
+                            </th>
+                          );
+                        })}</tr>
                       </thead>
                       <tbody>
-                        {d.rows.map((row: any, ri: number) => (
+                        {rows.map((row: any, ri: number) => (
                           <tr key={ri} className="border-t border-white/5 hover:bg-white/5">
                             {d.columns.map((c: any) => (
                               <td key={c.key} className={`px-2 py-2.5 sm:px-4 ${c.kind === "money" || c.kind === "num" || c.kind === "pct" ? "text-right tabular-nums text-slate-200" : "text-slate-300"}`}>
@@ -357,7 +390,7 @@ function ExportItem({ icon: Icon, label, onClick }: { icon: any; label: string; 
   );
 }
 
-/* --------------------- raw dataset exports (CSV/XLSX/PDF) --------------------- */
+/* ------------------- raw dataset exports (CSV/XLSX/JSON/PDF) ------------------- */
 const RAW_DATASETS = [
   { id: "work-orders", label: "Work Orders", icon: ClipboardList },
   { id: "technicians", label: "Technicians", icon: Wrench },
@@ -393,7 +426,7 @@ function RawExports() {
             <d.icon className="h-5 w-5 shrink-0 text-slate-400" />
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-200">{d.id === "technicians" ? nounPlural : d.id === "clients" ? customerNounPlural : d.id === "work-orders" ? jobNounPlural : d.label}</span>
             <div className="flex shrink-0 items-center gap-2">
-              {["csv", "xlsx", "pdf"].map((fmt) => (
+              {["csv", "xlsx", "json", "pdf"].map((fmt) => (
                 <button key={fmt} onClick={() => dl(d.id, fmt)} disabled={busy === `${d.id}-${fmt}`}
                   className="min-w-11 justify-center rounded-lg bg-white/5 px-2.5 py-1.5 text-[11px] font-bold uppercase text-slate-300 hover:bg-brand hover:text-white disabled:opacity-50">
                   {busy === `${d.id}-${fmt}` ? "…" : fmt}

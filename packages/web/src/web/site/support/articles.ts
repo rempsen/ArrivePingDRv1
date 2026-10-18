@@ -631,7 +631,7 @@ export const articles: Article[] = [
   {
     slug: "run-a-report",
     title: "Run and export a report",
-    summary: "Money → Reports: pick a report, choose the period, then export it as CSV, Excel or PDF.",
+    summary: "Money → Reports: pick a report, choose the period, sort it, then export it as CSV, Excel, JSON or PDF.",
     category: "integrations",
     updated: U2,
     keywords: ["revenue", "sales", "payroll", "performance", "accountant", "analytics", "numbers"],
@@ -642,10 +642,11 @@ export const articles: Article[] = [
           "Open **Money → Reports**.",
           "Pick a report: Revenue & Sales, Tech Performance, Job Status, Payroll & Payouts, Catalog Margin, Client Activity, Invoices / AR or Zone Breakdown.",
           "Choose the period: 7 days, 30 days, 90 days, year to date or 12 months, or set exact dates. You can also filter by technician or status.",
-          "Use **Export** to download the report on screen as CSV, Excel (.xlsx) or PDF.",
+          "Click a column heading in the detail table to sort by it; click again to reverse.",
+          "Use **Export** to download the report on screen, with your filters and sort, as CSV, Excel (.xlsx), JSON or PDF.",
         ],
       },
-      { type: "p", text: "Need everything, not a summary? The same page downloads every job, technician, client or invoice as a spreadsheet. See [Exports and integrations](/support/exports-and-integrations)." },
+      { type: "p", text: "Need everything, not a summary? The same page downloads every job, technician, client or invoice as CSV, Excel, JSON or PDF. See [Exports and integrations](/support/exports-and-integrations)." },
     ],
   },
   {

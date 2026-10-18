@@ -412,7 +412,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "reports.export",
         placement: "bottom",
         title: "Take any report with you",
-        body: "Export the report on screen as CSV, Excel or PDF, ready for your accountant.",
+        body: "Export the report on screen, sorted and filtered, as CSV, Excel, JSON or PDF, ready for your accountant.",
       },
       {
         id: "raw",
