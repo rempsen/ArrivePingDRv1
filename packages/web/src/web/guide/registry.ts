@@ -272,7 +272,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "notif.masters",
         placement: "top",
         title: "Master switches",
-        body: "Turn email or text off for the whole company in one tap. Quiet hours, below, hold messages overnight.",
+        body: "Turn email or text off for the whole company in one tap. Quiet hours, below, skip texts or emails overnight; they aren't sent later.",
       },
       {
         id: "log",
