@@ -106,15 +106,14 @@ export function DispatchCalendar(p: {
         // Today, someone on a job that's running long is free when it really ends.
         const free = day === today && t.freeAt ? new Date(t.freeAt) : null;
         const freeLater = free != null && zonedDayKey(free, tz) > day;
-        // Where they set out from: today, where they are now (from when they're
-        // free); another day, the office at the start of the day.
+        // Where they set out from: today, where they are now if their phone has
+        // reported recently (from when they're free), else the office; another
+        // day, the office at the start of the day.
         const office = sb.board?.office ?? null;
-        const origin =
-          day === today && t.lat != null && t.lng != null
-            ? { lat: t.lat, lng: t.lng, atMin: free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz) }
-            : day !== today && office
-              ? { ...office, atMin: range.startMin }
-              : undefined;
+        const live = day === today && !t.stale && t.locationAt && t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null;
+        const startPoint = live ?? office;
+        const atMin = day !== today ? range.startMin : free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz);
+        const origin = startPoint ? { ...startPoint, atMin } : undefined;
         return {
           id: t.id,
           qualified: qualifiedFor(t, placing),
