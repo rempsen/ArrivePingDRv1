@@ -73,6 +73,7 @@
   --gutter: 24px;
   --pad: clamp(16px, 4vw, 48px);
   --header-offset: 72px;
+  --section-pad-y: clamp(56px, 8vw, 104px);
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -169,7 +170,7 @@
   padding-inline: var(--pad);
 }
 .site .section {
-  padding-block: clamp(56px, 8vw, 104px);
+  padding-block: var(--section-pad-y);
 }
 .site .section--tight {
   padding-block: clamp(40px, 6vw, 72px);
@@ -179,6 +180,10 @@
 }
 .site .anchor {
   scroll-margin-top: calc(var(--header-offset) + 24px);
+}
+/* Land on the section's heading, not its top padding (see scrollToAnchor). */
+.site .anchor--content {
+  scroll-margin-top: calc(var(--header-offset) + 16px - var(--section-pad-y));
 }
 
 .site .intro {

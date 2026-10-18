@@ -37,7 +37,7 @@ export function Pricing() {
     if (href.startsWith("#") || href.startsWith("/#")) go(e, href);
   };
   return (
-    <section id="pricing" className="section section--divided anchor">
+    <section id="pricing" className="section section--divided anchor anchor--content">
       <div className="container">
         <div className="intro intro--center" data-reveal="">
           <span className="eyebrow">Pricing</span>
