@@ -216,30 +216,38 @@ export async function dispatchAssign(
   // Undo is for taking a job back off the board's queue. Moving a job from one
   // technician to another is a deliberate reassignment, notified at once.
   const undoable = !prev.riderId;
-  const from = new Date(prev.scheduledAt);
   const to = input.scheduledAt ? new Date(input.scheduledAt) : null;
-  const moves = !!to && to.getTime() !== from.getTime();
   const r = await assignJob(companyId, input.bookingId, input.riderId, {
     force: input.force,
     by: { kind: "dispatcher", name: input.by },
     deferEvent: undoable,
-    ...(moves && to ? { scheduledAt: to } : {}),
+    ...(to ? { scheduledAt: to } : {}),
   });
   if (!r.ok) {
     if (r.code === "tech_not_found" || r.code === "job_not_found") return { ok: false, status: 404, message: r.message, forceable: false };
     return { ok: false, status: 409, message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) };
   }
 
+  // The token restores exactly what this write replaced (assignJob's own read),
+  // not this function's earlier look at the job.
+  const was = r.previous;
+  if (undoable && was.riderId) {
+    // Someone else assigned it in between: this was a reassignment after all.
+    await fireEvent("assigned", input.bookingId);
+    return { ok: true, job: patchOf(r.booking), undo: null };
+  }
   let undo: string | null = null;
   if (undoable) {
+    const from = new Date(was.scheduledAt);
+    const moved = new Date(r.booking.scheduledAt).getTime() !== from.getTime();
     undo = signUndo({
       v: 1,
       c: companyId,
       b: input.bookingId,
       r: input.riderId,
-      s: prev.status,
-      a: prev.assignStatus,
-      ...(moves && to ? { f: from.toISOString(), t: to.toISOString() } : {}),
+      s: was.status,
+      a: was.assignStatus,
+      ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     await deferAssignedNotice(companyId, input.bookingId, input.riderId);

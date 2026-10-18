@@ -44,7 +44,8 @@ export interface AssignOptions {
 }
 
 export type AssignResult =
-  | { ok: true; booking: Booking }
+  /** `previous` is the row as checked and replaced by this write. */
+  | { ok: true; booking: Booking; previous: Booking }
   | {
       ok: false;
       code: "tech_not_found" | "job_not_found" | "blocked" | "already_accepted" | "unavailable" | "raced";
@@ -172,5 +173,5 @@ export async function assignJob(
     await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
     await fireEvent("assigned", bookingId);
   }
-  return { ok: true, booking: b };
+  return { ok: true, booking: b, previous: prev };
 }
