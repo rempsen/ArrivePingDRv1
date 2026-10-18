@@ -19,6 +19,7 @@ const { tdb } = await import("../../api/database/tenant");
 const { isFictionalPhone, isUndeliverableEmail } = await import("../../shared/sample-contact");
 const { Hono } = await import("hono");
 const { payoutsRoutes } = await import("../../api/routes/payouts");
+const { TOOLS: MCP_TOOLS } = await import("../../api/routes/mcp");
 
 const CO = "sample-day-co";
 const OTHER = "sample-day-other";
@@ -136,6 +137,42 @@ describe("safety", () => {
     expect(await count(schema.payouts, eq(schema.payouts.companyId, CO))).toBe(0);
     const jobs = await db.select().from(schema.bookings).where(eq(schema.bookings.companyId, CO));
     expect(jobs.every((b) => !b.payoutId)).toBe(true);
+  });
+
+  it("payroll never pays a sample technician, even for a real job", async () => {
+    const { riders, bookings } = await sd.sampleRows(CO);
+    await db.insert(schema.user).values({ id: "pay-real-cust", companyId: CO, name: "Real", email: "pay-real@real.test", role: "customer" } as any);
+    await db.insert(schema.bookings).values({
+      id: "pay-own-job", companyId: CO, customerId: "pay-real-cust", serviceId: bookings[0]!.serviceId,
+      riderId: riders[0]!.id, status: "completed", scheduledAt: NOW, address: "9 Real St", onSiteMinutes: 60,
+    });
+    const app = new Hono<any>().use("*", async (c, next) => {
+      c.set("companyId", CO);
+      c.set("user", { id: "real-admin", role: "admin", name: "Admin" });
+      return next();
+    });
+    app.route("/payouts", payoutsRoutes);
+    const res = await app.request("/payouts/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ periodStart: "2026-10-01", periodEnd: "2026-10-31" }),
+    });
+    expect(res.status).toBeLessThan(500);
+    expect(await count(schema.payouts, eq(schema.payouts.companyId, CO))).toBe(0);
+    // Leave the company as the later tests expect it.
+    await db.delete(schema.bookings).where(eq(schema.bookings.id, "pay-own-job"));
+    await db.delete(schema.user).where(eq(schema.user.id, "pay-real-cust"));
+  });
+
+  it("the AI connector's reports and exports leave sample rows out", async () => {
+    const t = tdb(CO);
+    const tool = (name: string) => MCP_TOOLS.find((x) => x.name === name)!;
+    const rev = (await tool("get_revenue_report").handler({}, t)) as { totalJobs: number; revenue: number };
+    expect([rev.totalJobs, rev.revenue]).toEqual([0, 0]);
+    for (const entity of ["work_orders", "clients", "technicians", "invoices", "reviews", "job_photos"]) {
+      const out = (await tool("export_data").handler({ entity }, t)) as { count: number };
+      expect({ entity, count: out.count }).toEqual({ entity, count: 0 });
+    }
   });
 
   it("exports leave every sample row out", async () => {
