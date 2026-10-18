@@ -256,7 +256,9 @@ export function DispatchCalendar(p: {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {skills.length > 0 && (
+        {/* Month adds up the whole team; trade and search filters don't apply there. */}
+        {view === "month" && <span className="text-xs text-slate-500">Whole team, all trades</span>}
+        {view !== "month" && skills.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             {["", ...skills].map((s) => (
               <button
@@ -271,7 +273,7 @@ export function DispatchCalendar(p: {
             ))}
           </div>
         )}
-        <label className="flex h-9 min-w-[14rem] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-ink-2 px-3 text-slate-500 sm:max-w-xs">
+        <label className={`h-9 min-w-[14rem] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-ink-2 px-3 text-slate-500 sm:max-w-xs ${view === "month" ? "hidden" : "flex"}`}>
           <Search className="h-4 w-4 shrink-0" />
           <span className="sr-only">Find a job, customer or technician</span>
           <input
