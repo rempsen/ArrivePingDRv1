@@ -19,6 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
+import { overrideAt } from "./permissions";
 
 export type MembershipRole = string;
 
@@ -189,7 +190,8 @@ export async function usersForCompany(companyId: string) {
       return {
         ...u,
         role: m.role ?? u.role,
-        permissions: m.permissions ?? u.permissions,
+        // Same rule as authMiddleware, so the list shows what's enforced.
+        permissions: overrideAt({ membership: m.permissions, user: u.permissions, companyId, homeCompany: u.companyId }),
         staffType: m.staffType ?? u.staffType,
         managerId: m.managerId ?? u.managerId,
         membershipStatus: m.status,

@@ -676,6 +676,7 @@ function PermissionMatrixSingle({
 export function RolesPermissionsTab() {
   const qc = useQueryClient();
   const cat = useCatalog();
+  const canEditDefaults = Boolean(useAccess().access?.superadmin);
   const [activeRole, setActiveRole] = useState<string>("manager");
   const [draft, setDraft] = useState<Record<string, Set<string>>>({});
 
@@ -710,6 +711,9 @@ export function RolesPermissionsTab() {
   const activeMeta = ROLE_META[activeRole]!;
   const isAdmin = activeRole === "admin" || activeRole === "superadmin";
   const dirty = !!draft[activeRole];
+  // Role defaults are one set for the whole platform (the API refuses anyone
+  // else), so companies see them read-only and tailor people one at a time.
+  const editable = canEditDefaults && !isAdmin;
 
   function setCurrent(next: Set<string>) {
     setDraft((d) => ({ ...d, [activeRole]: next }));
@@ -762,12 +766,23 @@ export function RolesPermissionsTab() {
             <h3 className="flex items-center gap-2 font-bold text-white">{activeMeta.label} permissions</h3>
             <p className="text-xs text-slate-500">{activeMeta.desc}</p>
           </div>
-          {!isAdmin && (
+          {editable && (
             <BtnPrimary onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
               <Save className="h-4 w-4" /> {save.isPending ? "Saving…" : dirty ? "Save changes" : "Saved"}
             </BtnPrimary>
           )}
         </div>
+
+        {!isAdmin && !canEditDefaults && (
+          <p className="mb-3 rounded-lg border border-white/10 bg-ink-2 px-3 py-2.5 text-xs leading-relaxed text-slate-400">
+            These are ArrivePing&apos;s standard roles, so they look the same for every company. To give one
+            person more or less, open <span className="font-semibold text-slate-200">Internal Team</span> and
+            use <span className="font-semibold text-slate-200">Permissions</span> on their row.
+          </p>
+        )}
+        {save.isError && (
+          <p className="mb-3 text-xs text-rose-400">{(save.error as Error).message}</p>
+        )}
 
         {isAdmin ? (
           <div className="nvc-card flex items-center gap-3 border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -795,8 +810,9 @@ export function RolesPermissionsTab() {
                             const key = `${m.key}:${a}`;
                             const on = current.has(key);
                             return (
-                              <button key={a} type="button" onClick={() => toggle(key)}
-                                className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${on ? "bg-brand text-white" : "bg-ink text-slate-500 hover:bg-white/5"}`}>
+                              <button key={a} type="button" onClick={() => toggle(key)} disabled={!editable}
+                                aria-pressed={on}
+                                className={`rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:cursor-default ${on ? "bg-brand text-white" : `bg-ink text-slate-500 ${editable ? "hover:bg-white/5" : ""}`}`}>
                                 {ACTION_LABEL[a] ?? a}
                               </button>
                             );
@@ -804,7 +820,7 @@ export function RolesPermissionsTab() {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        <input aria-label="All On" type="checkbox" checked={allOn} onChange={(e) => toggleModuleAll(m, e.target.checked)} className="h-4 w-4 accent-cyan-500" />
+                        <input aria-label="All On" type="checkbox" checked={allOn} disabled={!editable} onChange={(e) => toggleModuleAll(m, e.target.checked)} className="h-4 w-4 accent-cyan-500 disabled:opacity-60" />
                       </td>
                     </tr>
                   );
@@ -813,7 +829,7 @@ export function RolesPermissionsTab() {
             </table>
           </div>
         )}
-        {!isAdmin && dirty && (
+        {editable && dirty && (
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-warn">
             <RotateCcw className="h-3 w-3" /> Unsaved changes
           </p>

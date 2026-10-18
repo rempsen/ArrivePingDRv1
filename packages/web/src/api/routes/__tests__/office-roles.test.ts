@@ -153,6 +153,57 @@ describe("the team", () => {
   });
 });
 
+describe("per-person permissions are saved where they're enforced", () => {
+  const membership = async () =>
+    (await db.select().from(schema.memberships).where(eq(schema.memberships.id, "m-or-disp2")))[0]!.permissions;
+  const userRow = async () =>
+    (await db.select().from(schema.user).where(eq(schema.user.id, "or-disp2")))[0]!.permissions;
+
+  it("an admin's change lands on the person's membership here (what every request reads)", async () => {
+    const r = await req("PUT", "/api/team/or-disp2/permissions", as("admin", "or-admin"), { permissions: ["work_orders:view", "work_orders:edit"] });
+    expect(r.status).toBe(200);
+    expect(JSON.parse((await membership())!)).toEqual(["work_orders:view", "work_orders:edit"]);
+    // home company: the user row's copy is kept in step
+    expect(JSON.parse((await userRow())!)).toEqual(["work_orders:view", "work_orders:edit"]);
+  });
+
+  it("clearing goes back to the role's defaults in both places", async () => {
+    const r = await req("PUT", "/api/team/or-disp2/permissions", as("admin", "or-admin"), { permissions: null });
+    expect(r.status).toBe(200);
+    expect(await membership()).toBeNull();
+    expect(await userRow()).toBeNull();
+  });
+
+  it("someone who isn't on this company's roster is not found", async () => {
+    await db.insert(schema.user).values({ id: "or-elsewhere", name: "x", email: "or-elsewhere@or.test", role: "dispatcher", companyId: "or-co-2" } as any);
+    const r = await req("PUT", "/api/team/or-elsewhere/permissions", as("admin", "or-admin"), { permissions: ["work_orders:view"] });
+    expect(r.status).toBe(404);
+  });
+});
+
+describe("role defaults are one set for the whole platform", () => {
+  it("a company admin can't change them (it would change every other company's roles)", async () => {
+    const before = await db.select().from(schema.rolePermissions);
+    const r = await req("PUT", "/api/team/roles/dispatcher/permissions", as("admin", "or-admin"), { permissions: ["work_orders:view"] });
+    expect(r.status).toBe(403);
+    expect(((await r.json()) as any).message).toContain("Permissions on their row");
+    expect(await db.select().from(schema.rolePermissions)).toEqual(before);
+  });
+
+  it("ArrivePing (superadmin) still can", async () => {
+    const { invalidateRoleCache } = await import("../../middleware/auth");
+    const before = await db.select().from(schema.rolePermissions).where(eq(schema.rolePermissions.role, "project_manager"));
+    try {
+      const r = await req("PUT", "/api/team/roles/project_manager/permissions", as("superadmin", "or-sa"), { permissions: ["work_orders:view"] });
+      expect(r.status).toBe(200);
+    } finally {
+      await db.delete(schema.rolePermissions).where(eq(schema.rolePermissions.role, "project_manager"));
+      if (before[0]) await db.insert(schema.rolePermissions).values(before[0]);
+      invalidateRoleCache();
+    }
+  });
+});
+
 describe("People (customers)", () => {
   it("a dispatcher edits a customer's details", async () => {
     const r = await req("PATCH", "/api/admin/users/or-cust", as("dispatcher", "or-disp"), { phone: "+12045550111" });

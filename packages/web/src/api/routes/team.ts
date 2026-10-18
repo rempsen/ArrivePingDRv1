@@ -636,28 +636,45 @@ export const teamRoutes = new Hono<AppEnv>()
   })
 
   // ---- per-person permission override -----------------------------------
+  // Stored on the person's membership HERE, which is what every request reads
+  // (authMiddleware overlays the acting company's membership onto the user).
+  // Writing only user.permissions, as this used to, showed the change in the
+  // list but never enforced it, and couldn't express "more here, less there"
+  // for someone on two companies.
   .put("/:id/permissions", requirePermission("permissions:manage"), jsonBody(PermissionsBody), async (c) => {
     const id = c.req.param("id");
     const b = c.req.valid("json");
+    const cid = tenantId(c);
     const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
     if (!target) return c.json({ message: "Not found" }, 404);
-    if (target.companyId !== tenantId(c)) return c.json({ message: "Not found" }, 404);
+    // tx() is scoped to this company, so this only finds a membership here.
+    const membership = await tx(c).selectOne(schema.memberships, eq(schema.memberships.userId, id));
+    if (!membership) return c.json({ message: "Not found" }, 404);
     // null/undefined => clear override (revert to role defaults)
-    if (b.permissions == null) {
-      await tx(c).update(schema.user, { permissions: null }, eq(schema.user.id, id));
-      return c.json({ ok: true, cleared: true });
-    }
-    const perms = sanitizePerms(b.permissions);
-    await tx(c).update(
-      schema.user,
-      { permissions: JSON.stringify(perms) },
-      eq(schema.user.id, id),
-    );
-    return c.json({ ok: true, permissions: perms });
+    const perms = b.permissions == null ? null : sanitizePerms(b.permissions);
+    const value = perms ? JSON.stringify(perms) : null;
+    await tx(c).update(schema.memberships, { permissions: value }, eq(schema.memberships.id, membership.id));
+    // The user row still carries the home company's copy (older rows and
+    // readers use it); keep it in step so clearing here really clears.
+    if (target.companyId === cid)
+      await tx(c).update(schema.user, { permissions: value }, eq(schema.user.id, id));
+    return perms ? c.json({ ok: true, permissions: perms }) : c.json({ ok: true, cleared: true });
   })
 
   // ---- update ROLE default permissions ----------------------------------
   .put("/roles/:role/permissions", requirePermission("permissions:manage"), jsonBody(PermissionsBody), async (c) => {
+    // role_permissions has one row per role for the WHOLE platform, so a
+    // company admin saving here would change every other company's
+    // dispatchers and managers too. Only ArrivePing (superadmin) may; a
+    // company tailors one person at a time with PUT /team/:id/permissions.
+    if (!isSuperadmin((c.get("user") as SessionUser | null)?.role))
+      return c.json(
+        {
+          message:
+            "Role defaults are the same for every company on ArrivePing, so they can't be changed here. To change what one person can do, use Permissions on their row.",
+        },
+        403,
+      );
     const role = c.req.param("role");
     if (!INTERNAL_ROLES.includes(role as any) || isAdminRole(role))
       return c.json({ message: "Cannot edit this role" }, 400);
