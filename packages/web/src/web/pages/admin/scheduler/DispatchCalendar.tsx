@@ -11,7 +11,7 @@ import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types"
 import { useBrand } from "../../../lib/use-brand";
 import { tourAttr } from "../../../guide/anchors";
 import type { ConfirmFn } from "../../../lib/force-confirm";
-import { addDays, clampStart, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
+import { addDays, bookedMinutes, clampStart, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
 import { safeTimeZone, zonedDayKey, zonedMinutesOfDay } from "../../../../shared/tz";
 import { isTerminalStatus } from "../../../../shared/job-status";
 import { Agenda } from "./Agenda";
@@ -122,8 +122,10 @@ export function DispatchCalendar(p: {
           available: !(day === today && (t.status === "offline" || t.status === "break")) && !offToday.has(t.id) && !freeLater,
           ...(free && !freeLater ? { earliestMin: Math.ceil((zonedMinutesOfDay(free, tz) + 15) / 15) * 15 } : {}),
           ...(origin ? { origin } : {}),
-          // Finished and cancelled jobs stay on the calendar but don't hold time.
+          // Finished and cancelled jobs stay on the calendar but don't hold time;
+          // finished work still counts toward how full their day is.
           dayJobs: (jobsByTech.get(t.id) ?? []).filter((j) => !isTerminalStatus(j.status)).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
+          doneMins: bookedMinutes((jobsByTech.get(t.id) ?? []).filter((j) => j.status === "completed")),
         };
       }),
       earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,

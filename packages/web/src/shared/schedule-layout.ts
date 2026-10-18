@@ -129,6 +129,8 @@ export interface SlotTech {
    * (minutes since midnight): their live position today, the office otherwise.
    */
   origin?: Point & { atMin: number };
+  /** Minutes of work already finished that day: counts toward how full the day is, holds no time. */
+  doneMins?: number;
   dayJobs: ReadonlyArray<{ startMin: number; endMin: number } & Point>;
 }
 
@@ -159,7 +161,7 @@ export function rankSlots(input: {
   for (const t of input.techs) {
     if (!t.qualified || !t.available) continue;
     const jobs = [...t.dayJobs].sort((a, b) => a.startMin - b.startMin);
-    const booked = jobs.reduce((s, j) => s + (j.endMin - j.startMin), 0);
+    const booked = jobs.reduce((s, j) => s + (j.endMin - j.startMin), 0) + (t.doneMins ?? 0);
     let prev: (typeof jobs)[number] | null = null;
     for (let i = 0; i <= jobs.length; i++) {
       const next = jobs[i] ?? null;

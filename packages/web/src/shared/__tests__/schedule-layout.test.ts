@@ -173,6 +173,20 @@ describe("rankSlots", () => {
     expect(f.startMin).toBeGreaterThanOrEqual(600 + f.driveMins!);
   });
 
+  it("counts finished work toward a full day without holding time", () => {
+    const r = rankSlots({
+      job: { durationMins: 60, ...here },
+      techs: [
+        { id: "worked", qualified: true, available: true, doneMins: 360, dayJobs: [] },
+        { id: "light", qualified: true, available: true, dayJobs: [{ startMin: 420, endMin: 480, ...here }] },
+      ],
+      earliestMin: 780,
+      range,
+    });
+    expect(r[0]!.techId).toBe("light");
+    expect(r.find((s) => s.techId === "worked")!.bookedAfter).toBe(420);
+  });
+
   it("leaves time to drive on to the next job", () => {
     // 555–615 here would leave 25 minutes to reach a job ~25 km away at 640.
     const r = rankSlots({
