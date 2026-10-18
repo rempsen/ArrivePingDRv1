@@ -45,7 +45,10 @@ export function IntegrationTrace({ play }: { play: "on" | "off" }) {
     }
     const id = window.setInterval(() => {
       const now = performance.now();
-      const dt = last.current == null ? 0 : Math.min(now - last.current, 100);
+      // Real elapsed time, so a main-thread stall doesn't put the readout behind
+      // the CSS packets. Pausing stops this interval and clears `last`, so a
+      // resume starts from zero rather than counting the pause.
+      const dt = last.current == null ? 0 : now - last.current;
       last.current = now;
       setState((s) => {
         const t = s.t + dt;
