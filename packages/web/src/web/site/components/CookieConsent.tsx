@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { getConsent, setConsent, type Consent } from "../lib/hubspot-tracking";
+import "../site.css";
 
 /**
- * The cookie notice on the marketing pages. Shown until the visitor chooses;
+ * The cookie notice on the marketing pages and signup, mounted once for the
+ * whole app on those routes (app.tsx). Shown until the visitor chooses;
  * "Accept" turns on HubSpot's analytics cookies (loaded at once), "Decline"
  * keeps them off. The footer's "Cookie preferences" brings it back. Renders
  * nothing during prerender, and nothing when the browser sends Global Privacy
@@ -31,7 +33,9 @@ export function CookieConsent() {
     setCurrent(c);
     setOpen(false);
   };
+  // Its own .site scope, so it's styled on pages outside the marketing shell too.
   return (
+    <div className="site consent-host">
     <section className="consent" aria-label="Cookie notice">
       <p className="consent__title">Cookies</p>
       <p className="consent__text">
@@ -60,5 +64,6 @@ export function CookieConsent() {
         )}
       </div>
     </section>
+    </div>
   );
 }

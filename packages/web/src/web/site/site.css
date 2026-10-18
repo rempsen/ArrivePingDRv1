@@ -2077,6 +2077,11 @@
 
 /* Cookie notice (components/CookieConsent.tsx): a small card in the corner,
    clear of the page's content and buttons. */
+.site.consent-host {
+  min-height: 0;
+  background: none;
+  position: static;
+}
 .site .consent {
   position: fixed;
   z-index: 60;
