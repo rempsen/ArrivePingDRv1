@@ -370,11 +370,11 @@ export const officeView = {
     {
       label: "Assign",
       url: "arriveping.com/admin/scheduler",
-      src: "/img/site/app/office-board.webp",
+      src: "/img/site/app/office-week.webp",
       width: 1920,
       height: 1200,
-      alt: "The ArrivePing dispatch board: unassigned jobs with Assign and AI suggest buttons, four technicians with their job counts, and one technician's 17 jobs with their statuses.",
-      caption: "Assign by hand, or let ArrivePing suggest the best technician.",
+      alt: "The ArrivePing scheduler's calendar in Work Week view, Monday to Friday: each technician's jobs by day and time, marked with their initials, and a work queue of unassigned jobs beside it.",
+      caption: "Monday to Friday at a glance. Click a job to assign or reassign it, or drag queued work onto a day.",
     },
     {
       label: "Work order",
@@ -414,9 +414,53 @@ export const integrations = {
     { icon: "hook", title: "Webhooks", body: "Post the same events to your own systems, with a shared-secret header and a test ping." },
     { icon: "calendar", title: "Calendar feeds", body: "Subscribe in Google Calendar, Outlook or Apple Calendar. Technicians see only their own jobs." },
     { icon: "card", title: "Stripe payments", body: "Connect your own Stripe account and customers pay their invoices by card. ArrivePing takes no cut." },
-    { icon: "sheet", title: "Spreadsheets in and out", body: "Import customers and technicians from CSV or Excel. Export jobs, customers and invoices to CSV, Excel or PDF." },
+    { icon: "sheet", title: "Spreadsheets in and out", body: "Import customers and technicians from CSV or Excel. Export jobs, customers and invoices to CSV, Excel, JSON or PDF." },
     { icon: "ai", title: "AI agents (MCP)", body: "Let an AI assistant look up, create and assign jobs through ArrivePing's MCP server. Keys from our team on request." },
   ],
+  /**
+   * Reports, built in: a real Reports screen (local instance, sample company
+   * and data) with its filters, column sort and exports called out. Every
+   * line matches web/pages/admin/reports.tsx and api/routes/export.ts.
+   */
+  reports: {
+    eyebrow: "Built in",
+    title: "Reporting is built in.",
+    titleMuted: "Filter it, sort it, take it anywhere.",
+    body: "Eight reports come with every plan: revenue, technician performance, job status, payroll, catalog margin, clients, invoices and zones. Download exactly what's on screen, or your full records, in a format your other tools already read.",
+    badge: "Included on every plan",
+    formats: ["CSV", "Excel (.xlsx)", "JSON", "PDF"],
+    points: [
+      { n: 1, title: "Filter", body: "Last 7, 30 or 90 days, year to date, 12 months or any dates you pick, by technician and by status." },
+      { n: 2, title: "Export", body: "Download the report on screen as CSV, Excel, JSON or PDF, with your filters and sort applied." },
+      { n: 3, title: "Sort", body: "Click any column heading to sort it, and click again to reverse. Exports keep the same order." },
+      { n: 4, title: "Raw data", body: "Download every job, technician, customer and invoice as CSV, Excel, JSON or PDF." },
+    ],
+    useWith: "Open them in Excel or Google Sheets, or load them into your accounting, payroll or BI tools.",
+    url: "arriveping.com/admin/reports",
+    main: {
+      src: "/img/site/app/reports-main.webp",
+      src1200: "/img/site/app/reports-main-1200.webp",
+      phone: "/img/site/app/reports-export-phone.webp",
+      width: 2368,
+      height: 1460,
+      alt: "The ArrivePing Reports & Analytics screen showing Revenue & Sales for the last 90 days: date, technician and status filters; revenue, jobs, average order value and gross margin; revenue by day and by service; and the Export menu open on CSV, Excel (.xlsx), JSON and PDF.",
+    },
+    sort: {
+      src: "/img/site/app/reports-sort.webp",
+      width: 1016,
+      height: 588,
+      label: "Detail table, sorted by revenue",
+      alt: "The report's detail table sorted by revenue, highest first: a down arrow on the Revenue heading, sort arrows on Jobs and Avg / job, and revenue running from $79,212.00 down to $19,395.60.",
+    },
+    raw: {
+      src: "/img/site/app/reports-raw.webp",
+      width: 880,
+      height: 400,
+      label: "Full records, in four formats",
+      alt: "Raw data exports: jobs and customers, each with CSV, XLSX, JSON and PDF buttons.",
+    },
+    note: "Real ArrivePing screen · sample company and data",
+  },
   custom: {
     title: "Custom integrations are welcome.",
     body:
