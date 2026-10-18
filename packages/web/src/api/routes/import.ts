@@ -24,7 +24,7 @@ import { requireAdmin, tenantId } from "../middleware/auth";
 import { auth } from "../auth";
 import { isSuperadmin } from "../lib/permissions";
 import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
-import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { trySendJoinCompanyInvite } from "../lib/join-invite";
 import { queueWelcomes } from "../../services/welcome";
 import { isUndeliverableEmail } from "../../shared/sample-contact";
 import { email as emailField } from "../lib/validate";
@@ -215,7 +215,11 @@ async function parseUpload(file: File): Promise<Record<string, string>[]> {
 
 /* -------------------------------- rows -> accounts ------------------------ */
 
-type RowResult = { ok: true; status: "created"; userId: string } | { ok: true; status: "invited" } | { ok: false; reason: string };
+type RowResult =
+  | { ok: true; status: "created"; userId: string }
+  /** Already had a login elsewhere; `emailed` = the invitation email actually went out. */
+  | { ok: true; status: "invited"; emailed: boolean }
+  | { ok: false; reason: string };
 
 const PALETTE = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
 const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -255,13 +259,13 @@ async function importPersonRow(
       status: "invited",
       invitedBy: opts.invitedBy,
     });
-    await sendJoinCompanyInvite({
+    const emailed = await trySendJoinCompanyInvite({
       email: existing.email,
       name: existing.name,
       companyId: cid,
       membershipId: membership!.id,
-    }).catch((e) => console.error("join-company invite failed", e));
-    return { ok: true, status: "invited" };
+    });
+    return { ok: true, status: "invited", emailed };
   }
 
   try {
@@ -335,19 +339,19 @@ async function importRiderRow(
       status: "invited",
       invitedBy: opts.invitedBy,
     });
-    await sendJoinCompanyInvite({
+    const emailed = await trySendJoinCompanyInvite({
       email: existing.email,
       name: existing.name,
       companyId: cid,
       membershipId: membership!.id,
-    }).catch((e) => console.error("join-company invite failed", e));
+    });
     await t.insert(schema.riders, {
       userId: existing.id,
       phone: phone || existing.phone || "",
       skillClass, vehicle, color: randomColor(), licensePlate, licenseNumber, address,
       notes: "", skills, payRatePerHour, status: "available",
     });
-    return { ok: true, status: "invited" };
+    return { ok: true, status: "invited", emailed };
   }
 
   try {
@@ -410,7 +414,7 @@ export const importRoutes = new Hono<AppEnv>()
     if (rows.length > 500) return c.json({ message: "Import is limited to 500 rows at a time" }, 400);
 
     const cid = tenantId(c);
-    const results: { row: number; email: string; ok: boolean; status?: string; reason?: string }[] = [];
+    const results: { row: number; email: string; ok: boolean; status?: string; reason?: string; emailed?: boolean }[] = [];
     const newPeople: string[] = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
@@ -425,11 +429,15 @@ export const importRoutes = new Hono<AppEnv>()
         email: row.email || "",
         ok: result.ok,
         ...(result.ok ? { status: result.status } : { reason: result.reason }),
+        ...(result.ok && result.status === "invited" ? { emailed: result.emailed } : {}),
       });
     }
 
     const created = results.filter((r) => r.ok && r.status === "created").length;
     const invited = results.filter((r) => r.ok && r.status === "invited").length;
+    // Added as invited, but the invitation email didn't go out (no email
+    // provider, or it failed): the admin needs to resend those.
+    const invitesNotEmailed = results.filter((r) => r.ok && r.status === "invited" && !r.emailed).length;
     const failed = results.filter((r) => !r.ok);
     // New technicians and office staff get their welcome email (set-password
     // link) one by one in the background; customers get nothing until a job.
@@ -440,6 +448,7 @@ export const importRoutes = new Hono<AppEnv>()
         total: rows.length,
         created,
         invited,
+        invitesNotEmailed,
         welcoming,
         failedCount: failed.length,
         failed: failed.map((r) => ({ row: r.row, email: r.email, reason: r.reason })),

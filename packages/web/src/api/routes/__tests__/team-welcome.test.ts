@@ -143,3 +143,24 @@ describe("Email a sign-in link", () => {
     expect((await personByEmail("sid@tw.test")).links).toHaveLength(0);
   });
 });
+
+describe("inviting someone who already has a login only says 'emailed' when it was (Codex on #66)", () => {
+  // No RESEND_API_KEY here, so every email is skipped: sendEmail reports
+  // { ok: false } instead of throwing, which callers used to ignore.
+  it("adding them says the invitation didn't go out, and how to resend", async () => {
+    const res = await post("/team", { name: "Sid Stranger", email: "sid@tw.test", role: "dispatcher" });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.status).toBe("invited");
+    expect(body.inviteEmailed).toBe(false);
+    expect(body.message).toContain("didn't go out");
+    expect(body.message).toContain("Resend invite");
+    expect((await personByEmail("sid@tw.test")).membership?.status).toBe("invited");
+  });
+
+  it("Resend invite reports the failure instead of 'sent'", async () => {
+    const res = await post("/team/tw-stranger/resend-invite");
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as any).message).toBe("Couldn't send the email. Try again shortly.");
+  });
+});

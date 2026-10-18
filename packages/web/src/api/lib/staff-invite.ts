@@ -28,7 +28,7 @@ import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { tdb } from "../database/tenant";
 import { attachMembership, findUserByEmail, isMember } from "./memberships";
-import { sendJoinCompanyInvite } from "./join-invite";
+import { trySendJoinCompanyInvite } from "./join-invite";
 import { formatPhone } from "./validate";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
 import { logoDims, contrastText } from "../../services/email-render";
@@ -155,17 +155,18 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
         riderId = r.id;
       }
     }
-    if (!a.silent)
-      await sendJoinCompanyInvite({ email: existing.email, name: existing.name, companyId: a.companyId, membershipId: membership!.id }).catch(
-        (e) => console.error("[staff-invite] join-company email failed", e),
-      );
+    const emailed = a.silent
+      ? true // nothing was meant to be sent
+      : await trySendJoinCompanyInvite({ email: existing.email, name: existing.name, companyId: a.companyId, membershipId: membership!.id });
     return {
       ...base,
       ok: true,
       status: "joined",
       userId: existing.id,
       riderId,
-      message: "Already has an ArrivePing login — invited to join your company with their existing password.",
+      message: emailed
+        ? "Already has an ArrivePing login — invited to join your company with their existing password."
+        : "Already has an ArrivePing login — added as invited, but the invitation email didn't go out. Use “Resend invite” next to their name.",
     };
   }
 

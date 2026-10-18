@@ -9,7 +9,7 @@ import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
 import { publishDispatch } from "../../services/realtime";
 import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
-import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { joinInviteMessage, trySendJoinCompanyInvite } from "../lib/join-invite";
 import { sendWelcome, unguessablePassword } from "../../services/welcome";
 import { putObject, deleteObject } from "../lib/storage";
 import { z } from "zod";
@@ -280,12 +280,12 @@ export const ridersRoutes = new Hono<AppEnv>()
         status: "invited",
         invitedBy: (c.get("user") as { id: string } | null)?.id ?? null,
       });
-      await sendJoinCompanyInvite({
+      const inviteEmailed = await trySendJoinCompanyInvite({
         email: existing.email,
         name: existing.name,
         companyId: cid,
         membershipId: membership!.id,
-      }).catch((e) => console.error("join-company invite failed", e));
+      });
 
       const t0 = tx(c);
       const palette0 = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
@@ -309,8 +309,8 @@ export const ridersRoutes = new Hono<AppEnv>()
           rider: r0,
           existingAccount: true,
           status: "invited",
-          message:
-            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
+          message: joinInviteMessage(inviteEmailed),
+          inviteEmailed,
         },
         201,
       );

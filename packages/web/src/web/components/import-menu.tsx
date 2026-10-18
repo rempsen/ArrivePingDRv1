@@ -24,6 +24,8 @@ type ImportResult = {
   total: number;
   created: number;
   invited: number;
+  /** Of `invited`, how many invitation emails didn't go out (they need a resend). */
+  invitesNotEmailed?: number;
   /** New technicians / office staff being emailed a set-password link (services/welcome.ts). */
   welcoming?: number;
   /** What was imported (kept with the result so its note can't drift). */
@@ -256,10 +258,20 @@ function importNote(r: ImportResult): string {
   } else if (r.created) {
     parts.push("Nobody new was emailed: the new rows had no email address, so they can't sign in yet. Add an email on each profile, then use “Email a sign-in link”.");
   }
-  if (r.invited)
+  if (r.invited) {
+    const missed = Math.min(r.invitesNotEmailed ?? 0, r.invited);
+    const sent = r.invited - missed;
     parts.push(
-      `${r.invited === 1 ? "One person" : `${r.invited} people`} already had an ArrivePing login, so ${r.invited === 1 ? "they were" : "they were each"} emailed an invitation to join instead.`,
+      `${r.invited === 1 ? "One person" : `${r.invited} people`} already had an ArrivePing login, so they were added as invited instead of getting a new account.`,
     );
+    if (sent) parts.push(missed ? `${sent} of those invitations were emailed.` : sent === 1 ? "Their invitation was emailed." : "Their invitations were emailed.");
+    if (missed)
+      parts.push(
+        `${missed === 1 ? "One invitation" : `${missed} invitations`} couldn't be emailed${
+          r.type === "customer" ? "." : ", so use “Resend invite” next to their name under People → Technicians & Managers."
+        }`,
+      );
+  }
   return parts.join(" ") || "Nobody new was added, so nobody was emailed.";
 }
 

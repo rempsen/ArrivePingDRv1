@@ -28,12 +28,26 @@ async function companyDisplayName(companyId: string): Promise<string> {
   return reg?.name || "ArrivePing";
 }
 
+/** What to tell the admin after inviting someone who already has a login. */
+export function joinInviteMessage(emailed: boolean, opts: { canResend?: boolean } = {}): string {
+  if (emailed)
+    return "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.";
+  return `That email already has an ArrivePing login, so they're on your list as invited, but the invitation email didn't go out.${
+    opts.canResend === false ? "" : " Use “Resend invite” next to their name to try again."
+  }`;
+}
+
+/**
+ * Email the invitation. Resolves true only when the email was handed to the
+ * provider: sendEmail() reports a skipped or failed send as `{ ok: false }`
+ * rather than throwing, and callers tell the admin what actually happened.
+ */
 export async function sendJoinCompanyInvite(a: {
   email: string;
   name?: string | null;
   companyId: string;
   membershipId: string;
-}) {
+}): Promise<boolean> {
   const company = await companyDisplayName(a.companyId);
   const brand = await loadEmailBrand(a.companyId);
   const accent = brand.brandColor || "#06B6D4";
@@ -47,7 +61,7 @@ export async function sendJoinCompanyInvite(a: {
        <div style="color:${headerText};font-size:15px;font-weight:700;text-align:center">${company}</div>`
     : `<div style="color:${headerText};font-size:18px;font-weight:800;text-align:center">${company}</div>`;
 
-  await sendEmail({
+  const sent = await sendEmail({
     to: a.email,
     subject: `${company} would like to add you to their team`,
     html: `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px">
@@ -74,5 +88,14 @@ export async function sendJoinCompanyInvite(a: {
         <p style="margin-top:10px;font-size:12px;color:#94a3b8">If the button doesn't work, paste this link: ${link}</p>
       </div>
     </div>`,
+  });
+  return Boolean(sent?.ok);
+}
+
+/** Same, for callers that must not fail the request when email fails. */
+export function trySendJoinCompanyInvite(a: Parameters<typeof sendJoinCompanyInvite>[0]): Promise<boolean> {
+  return sendJoinCompanyInvite(a).catch((e) => {
+    console.error("join-company invite failed", e);
+    return false;
   });
 }

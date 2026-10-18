@@ -1,5 +1,5 @@
 import { usersForCompany, attachMembership, isMember, findUserByEmail, detachMembership } from "../lib/memberships";
-import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { joinInviteMessage, trySendJoinCompanyInvite } from "../lib/join-invite";
 import { Hono } from "hono";
 import { db, sdb } from "../database";
 import * as schema from "../database/schema";
@@ -295,12 +295,12 @@ export const adminRoutes = new Hono<AppEnv>()
         status: "invited",
         invitedBy: me.id,
       });
-      await sendJoinCompanyInvite({
+      const inviteEmailed = await trySendJoinCompanyInvite({
         email: existing.email,
         name: existing.name,
         companyId: cid,
         membershipId: membership!.id,
-      }).catch((e) => console.error("join-company invite failed", e));
+      });
       return c.json(
         {
           user: {
@@ -312,8 +312,8 @@ export const adminRoutes = new Hono<AppEnv>()
           },
           existingAccount: true,
           status: "invited",
-          message:
-            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
+          message: joinInviteMessage(inviteEmailed, { canResend: r !== "customer" }),
+          inviteEmailed,
         },
         201,
       );
