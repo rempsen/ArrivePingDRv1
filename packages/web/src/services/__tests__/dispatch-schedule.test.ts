@@ -93,8 +93,14 @@ async function flushNotices() {
   for (let round = 0; round < 8 && pending.length > 0; round++) {
     const runs = pending.splice(0);
     for (const r of runs) r();
-    // runTaskNow is async inside the timer callback; give it a moment.
-    await new Promise((r) => setTimeout(r, 150));
+    // runTaskNow is async inside the timer callback: wait until every notice
+    // that started has finished (a slow CI box can take a while).
+    await new Promise((r) => setTimeout(r, 50));
+    for (let i = 0; i < 100; i++) {
+      const running = await db.select().from(schema.scheduledTasks).where(eq(schema.scheduledTasks.status, "running"));
+      if (running.length === 0) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
   }
 }
 

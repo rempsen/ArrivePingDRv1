@@ -92,8 +92,14 @@ async function flushNotices() {
   for (let round = 0; round < 8 && pending.length > 0; round++) {
     const runs = pending.splice(0);
     for (const r of runs) r();
-    // runTaskNow is async inside the timer callback; give it a moment.
-    await new Promise((r) => setTimeout(r, 150));
+    // runTaskNow is async inside the timer callback: wait until every notice
+    // that started has finished (a slow CI box can take a while).
+    await new Promise((r) => setTimeout(r, 50));
+    for (let i = 0; i < 100; i++) {
+      const running = await db.select().from(schema.scheduledTasks).where(eq(schema.scheduledTasks.status, "running"));
+      if (running.length === 0) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
   }
 }
 
@@ -293,6 +299,16 @@ describe("dispatchAssign + undoAssign", () => {
     const kinds = await events(id);
     expect(kinds).toContain("rescheduled");
     expect(kinds).not.toContain("assigned");
+  });
+
+  it("won't take back a later offer to the same technician", async () => {
+    const id = await job(CO);
+    const first = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    // given to someone else, then offered to the same technician again
+    await db.update(schema.bookings).set({ assignedAt: new Date(Date.now() + 60_000) }).where(eq(schema.bookings.id, id));
+    expect(await da.undoAssign(CO, first.ok ? first.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
+    await flushNotices();
   });
 
   it("won't put the time back on its own once the technician accepted", async () => {

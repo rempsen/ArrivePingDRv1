@@ -80,6 +80,8 @@ interface UndoClaims {
   n?: string;
   /** The job's time when it was assigned (ISO): if it has moved since, Undo announces where it is now. */
   w?: string;
+  /** This offer's assignedAt (ISO): Undo takes back this offer, not a later one to the same technician. */
+  g?: string;
   /** expiry, ms */
   exp: number;
 }
@@ -141,7 +143,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
-  if (c.k !== "time" && [c.d, c.o, c.n, c.w].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
+  if (c.k !== "time" && [c.d, c.o, c.n, c.w, c.g].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (c.k === "time" && c.r !== undefined && typeof c.r !== "string") return "invalid";
   if (now > c.exp) return "expired";
   return c;
@@ -290,6 +292,7 @@ export async function dispatchAssign(
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
       ...(toldFrom ? { n: toldFrom } : {}),
       w: from.toISOString(),
+      ...(r.booking.assignedAt ? { g: new Date(r.booking.assignedAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     // Already announced (the notice couldn't be held): no Undo to offer.
@@ -332,6 +335,8 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
       isNull(B.deletedAt),
       // A drop that also moved the time puts both back, or neither.
       ...(c.t ? [eq(B.scheduledAt, new Date(c.t))] : []),
+      // This offer, not a later one to the same technician.
+      ...(c.g ? [eq(B.assignedAt, new Date(c.g))] : []),
     ),
   );
   if (!b) {
