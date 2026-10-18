@@ -120,7 +120,9 @@ export const reportsRoutes = new Hono<AppEnv>()
     // ---- shared dataset: bookings in range (+ filters) ----
     const loadBookings = async () => {
       let bs = await t.select(schema.bookings);
-      bs = bs.filter((b) => !b.isSample && inRange(b.scheduledAt));
+      // Archived (soft-deleted) jobs don't count, matching the Jobs list,
+      // the scheduler and payouts (bookings.ts, payouts.ts).
+      bs = bs.filter((b) => !b.isSample && !b.deletedAt && inRange(b.scheduledAt));
       if (fStatus) bs = bs.filter((b) => b.status === fStatus);
       if (fTech) bs = bs.filter((b) => b.riderId === fTech);
       return bs;

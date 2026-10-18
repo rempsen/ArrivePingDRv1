@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
 
-const { toJson, tidyNumbers, roundHalfUp } = await import("../export");
+const { toJson, tidyNumbers, roundHalfUp, toCsv } = await import("../export");
 
 describe("toJson", () => {
   test("keeps the chosen columns in order and nulls what's missing", () => {
@@ -58,5 +58,21 @@ describe("tidyNumbers", () => {
     expect(roundHalfUp(33.33333, 1)).toBe(33.3);
     expect(roundHalfUp(1e-7, 2)).toBe(0);
     expect(roundHalfUp(123456789.125, 2)).toBe(123456789.13);
+  });
+});
+
+describe("toCsv headers", () => {
+  test("report exports can label the header row while reading values by key", () => {
+    const csv = toCsv([{ service: "Furnace Repair", avg: 656.66 }], ["service", "avg"], ["Service", "Avg / job"]);
+    expect(csv).toBe("Service,Avg / job\nFurnace Repair,656.66");
+  });
+
+  test("labels with commas or quotes are escaped, and keys stay the default", () => {
+    expect(toCsv([{ a: 1 }], ["a"], ['Revenue, "net"'])).toBe('"Revenue, ""net"""\n1');
+    expect(toCsv([{ name: "Ann", email: "ann@x.co" }], ["name", "email"])).toBe("name,email\nAnn,ann@x.co");
+  });
+
+  test("an empty report still gets its header row", () => {
+    expect(toCsv([], ["service"], ["Service"])).toBe("Service\n");
   });
 });

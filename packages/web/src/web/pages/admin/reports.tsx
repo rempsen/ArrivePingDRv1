@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { firstSortDir, sortReportRows, type SortDir } from "../../../shared/report-sort";
 import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
+import { useAccess } from "../../hooks/use-access";
+import { toast } from "../../components/toast";
 
 /** Pull the filename the server chose out of Content-Disposition. Exports are
  *  named after the tenant (e.g. "bmd-materials-payroll-…"), so the browser must
@@ -23,6 +25,27 @@ function filenameFrom(res: Response): string {
   const cd = res.headers.get("content-disposition") || "";
   return /filename="?([^"]+)"?/.exec(cd)?.[1] || "";
 }
+
+/** Save an export response as a file, or throw the server's message. Without
+ *  the res.ok check a refused export (no `reports:export`) downloaded the
+ *  JSON error as if it were the report. */
+async function saveDownload(res: Response, fallbackName: string) {
+  if (!res.ok) {
+    const j: any = await res.json().catch(() => ({}));
+    throw new Error(j?.message || j?.error?.message || `Export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  // server names the file with the TENANT (e.g. bmd-materials-…) — honour it
+  a.download = filenameFrom(res) || fallbackName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const exportFailed = (e: unknown) =>
+  toast({ kind: "error", key: "report-export-failed", message: "Export failed. Please try again.", detail: e instanceof Error ? e.message : undefined });
 
 /* ------------------------------ config ------------------------------ */
 type ReportId =
@@ -77,6 +100,10 @@ export default function ReportsPage() {
   const [status, setStatus] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // The export API needs `reports:export`; people who can view reports
+  // without it get a disabled Export button instead of a broken download.
+  const { can } = useAccess();
+  const canExport = can("reports:export");
   // Column sort for the detail table; remembered per report, so switching
   // reports shows each one in its own (server) order until a header is clicked.
   const [sort, setSort] = useState<{ report: ReportId; key: string; dir: SortDir } | null>(null);
@@ -115,20 +142,16 @@ export default function ReportsPage() {
         headers: { ...apiHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           title: meta.label,
-          subtitle: `${from} → ${to}`,
+          // "to", not "→": the PDF's standard font can't draw an arrow
+          subtitle: `${from} to ${to}`,
           // exactly what's on screen: current filters and column sort
           rows,
           columns: (data.data as any).columns,
         }),
       });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      // server names the file with the TENANT (e.g. bmd-materials-…) — honour it
-      a.download = filenameFrom(res) || `${report}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveDownload(res, `${report}.${format}`);
+    } catch (e) {
+      exportFailed(e);
     } finally {
       setDownloading(null);
     }
@@ -159,7 +182,8 @@ export default function ReportsPage() {
           <div className="relative" data-tour="reports.export">
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              disabled={!d || !d.rows?.length}
+              disabled={!canExport || !d || !d.rows?.length}
+              title={canExport ? undefined : "Exporting needs the Export permission on Reports. Ask an admin."}
               className="flex items-center gap-2 rounded-xl bg-emerald-live px-4 py-2 text-sm font-semibold text-ink hover:opacity-90 disabled:opacity-50"
             >
               {downloading ? <span className="animate-pulse">Exporting…</span> : <><Download className="h-4 w-4" /> Export <ChevronDown className="h-3.5 w-3.5" /></>}
@@ -401,16 +425,16 @@ function RawExports() {
   const { nounPlural } = useWorkerNoun();
   const { nounPlural: customerNounPlural } = useCustomerNoun();
   const { nounPlural: jobNounPlural } = useJobNoun();
+  const { can } = useAccess();
+  const canExport = can("reports:export");
   const [busy, setBusy] = useState("");
   async function dl(ds: string, format: string) {
     setBusy(`${ds}-${format}`);
     try {
       const res = await fetch(`/api/export/${ds}?format=${format}`, { headers: apiHeaders() });
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filenameFrom(res) || `${ds}.${format}`; a.click();
-      URL.revokeObjectURL(url);
+      await saveDownload(res, `${ds}.${format}`);
+    } catch (e) {
+      exportFailed(e);
     } finally { setBusy(""); }
   }
   return (
@@ -427,7 +451,8 @@ function RawExports() {
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-200">{d.id === "technicians" ? nounPlural : d.id === "clients" ? customerNounPlural : d.id === "work-orders" ? jobNounPlural : d.label}</span>
             <div className="flex shrink-0 items-center gap-2">
               {["csv", "xlsx", "json", "pdf"].map((fmt) => (
-                <button key={fmt} onClick={() => dl(d.id, fmt)} disabled={busy === `${d.id}-${fmt}`}
+                <button key={fmt} onClick={() => dl(d.id, fmt)} disabled={!canExport || busy === `${d.id}-${fmt}`}
+                  title={canExport ? undefined : "Exporting needs the Export permission on Reports. Ask an admin."}
                   className="min-w-11 justify-center rounded-lg bg-white/5 px-2.5 py-1.5 text-[11px] font-bold uppercase text-slate-300 hover:bg-brand hover:text-white disabled:opacity-50">
                   {busy === `${d.id}-${fmt}` ? "…" : fmt}
                 </button>

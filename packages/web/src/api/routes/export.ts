@@ -16,16 +16,23 @@ export { slugifyName, fetchRouteBasemap, fetchSiteBasemap };
 export type { JobRoutePoint };
 
 /* ------------------------------- CSV -------------------------------- */
-export function toCsv(rows: Record<string, any>[], columns?: string[]): string {
-  if (!rows.length) return columns?.length ? columns.join(",") + "\n" : "";
-  const cols = columns?.length ? columns : Object.keys(rows[0]!);
+/**
+ * Rows as CSV. `columns` are the keys to read, in order; `headers` (optional,
+ * same order) is what the header row says instead. Report exports pass the
+ * column labels people see on screen; raw dataset exports and import
+ * templates keep the keys, which the importer reads back (api/routes/import.ts).
+ */
+export function toCsv(rows: Record<string, any>[], columns?: string[], headers?: string[]): string {
   const esc = (v: any) => {
     if (v == null) return "";
     if (v instanceof Date) return v.toISOString();
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const head = cols.join(",");
+  const headRow = (cols: string[]) => (headers?.length === cols.length ? headers : cols).map(esc).join(",");
+  if (!rows.length) return columns?.length ? headRow(columns) + "\n" : "";
+  const cols = columns?.length ? columns : Object.keys(rows[0]!);
+  const head = headRow(cols);
   const body = rows.map((r) => cols.map((c) => esc(r[c])).join(",")).join("\n");
   return head + "\n" + body;
 }
@@ -755,7 +762,8 @@ export async function loadDataset(dataset: string, t: TenantDb): Promise<Record<
   const cid = t.companyId;
   // Sample-day rows (services/sample-day.ts) are never exported.
   if (dataset === "work-orders") {
-    const bs = (await t.select(schema.bookings)).filter((b) => !b.isSample);
+    // Archived (soft-deleted) jobs are left out, as on the Jobs list and in payouts.
+    const bs = (await t.select(schema.bookings)).filter((b) => !b.isSample && !b.deletedAt);
     return Promise.all(bs.map(async (b) => {
       const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
       const [cu] = await sdb.select().from(schema.user).where(eq(schema.user.id, b.customerId));
@@ -834,7 +842,7 @@ export const exportRoutes = new Hono<AppEnv>()
     if (format === "json") {
       return fileResponse(toJson(tidyNumbers(rows, columns), columns.map((c: any) => c.key)), `${pre}-${slug}-${stamp}.json`, "application/json; charset=utf-8");
     }
-    const csv = toCsv(tidyNumbers(rows, columns), columns.map((c: any) => c.key));
+    const csv = toCsv(tidyNumbers(rows, columns), columns.map((c: any) => c.key), columns.map((c: any) => String(c.label ?? c.key)));
     return fileResponse(csv, `${pre}-${slug}-${stamp}.csv`, "text/csv; charset=utf-8");
   })
   // GET /api/export/:dataset?columns=a,b,c&format=csv|xlsx|json|pdf
