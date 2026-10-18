@@ -3,18 +3,16 @@
  * traffic source and the `hubspotutk` cookie that ties a visitor's browsing to
  * their HubSpot contact once they sign up or ask to be contacted.
  *
- * Loaded ONLY after the visitor accepts analytics cookies (the privacy policy
- * promises consent), only on marketing pages (never inside the product, the
- * customer tracking links or tenant booking forms), and never when the browser
- * sends Global Privacy Control.
+ * Loaded only after the visitor accepts the cookie notice
+ * (components/CookieConsent.tsx; the privacy policy promises consent), and
+ * never when the browser sends Global Privacy Control. The footer's "Cookie
+ * preferences" reopens the notice to change the choice.
  *
- * PAUSED while the cookie banner is being redesigned: with no way to give or
- * withdraw consent on the site, nobody counts as consenting, so the tracker
- * never loads (including for visitors who accepted the old banner). Leads still
- * reach HubSpot server-side from the forms. To restore, add the new banner,
- * call setConsent() from it, and set TRACKING_PAUSED to false.
+ * Only on the marketing pages (isTrackedPath): never inside the product, on
+ * sign-in, the customer tracking links, or tenant booking and intake forms. If
+ * someone moves from a marketing page into one of those within the app, the
+ * page reloads so the tracker isn't carried along (see trackRoute).
  */
-export const TRACKING_PAUSED = true;
 
 export const HUBSPOT_PORTAL_ID = "342390247";
 const KEY = "ap_cookie_consent";
@@ -38,16 +36,21 @@ function storage(): Storage | null {
   }
 }
 
-/** The visitor's saved choice; GPC counts as "denied" without asking. */
+/** The visitor's saved choice (null until they make one); GPC counts as "denied" without asking. */
 export function getConsent(): Consent | null {
   if (typeof window === "undefined") return null;
-  if (TRACKING_PAUSED || navigator.globalPrivacyControl) return "denied";
+  if (navigator.globalPrivacyControl) return "denied";
   try {
     const v = storage()?.getItem(KEY);
     return v === "granted" || v === "denied" ? v : null;
   } catch {
     return null;
   }
+}
+
+/** Reopen the cookie notice (the footer's "Cookie preferences"). */
+export function openConsent(): void {
+  window.dispatchEvent(new Event("ap-open-consent"));
 }
 
 const HUBSPOT_COOKIES = ["hubspotutk", "__hstc", "__hssc", "__hssrc", "messagesUtk"];
@@ -88,19 +91,47 @@ export function loadHubspotTracking(): void {
   s.id = "hs-script-loader";
   s.async = true;
   s.defer = true;
-  s.src = `https://js.hs-scripts.com/${HUBSPOT_PORTAL_ID}.js`;
+  s.src = `https://js-na3.hs-scripts.com/${HUBSPOT_PORTAL_ID}.js`;
   document.head.appendChild(s);
+  lastPath = location.pathname;
+}
+
+/** Marketing pages: the homepage, landing pages, blog, pricing, support and legal pages, and signup. */
+const UNTRACKED = /^\/(admin|app|rider|t|s|p|f|join|join-company|sign-in|sign-up|forgot-password|reset-password)(\/|$)/;
+export function isTrackedPath(path: string): boolean {
+  return !UNTRACKED.test(path);
+}
+
+let lastPath = "";
+/**
+ * Call on every route change. On a marketing page: load the tracker, or count
+ * the page view when the visitor arrived by an in-app link. Anywhere else, if
+ * the tracker came along from a marketing page, reload so it's gone.
+ */
+export function trackRoute(path: string): void {
+  if (typeof window === "undefined") return;
+  if (!isTrackedPath(path)) {
+    if (loaded) location.reload();
+    return;
+  }
+  if (!loaded) return loadHubspotTracking();
+  if (path === lastPath) return;
+  lastPath = path;
+  const q = (window._hsq = window._hsq || []);
+  q.push(["setPath", path + location.search]);
+  q.push(["trackPageView"]);
 }
 
 /**
  * Tie this browser's visit history to a person in HubSpot (after signup or a
- * "contact me" request). A no-op without consent.
+ * "contact me" request). Email only: a public form never changes a contact's
+ * other details. A no-op without consent.
  */
-export function hubspotIdentify(email: string, props: Record<string, string> = {}): void {
+export function hubspotIdentify(email: string): void {
   if (typeof window === "undefined" || getConsent() !== "granted" || !email) return;
   loadHubspotTracking();
   const q = (window._hsq = window._hsq || []);
-  q.push(["identify", { email: email.trim().toLowerCase(), ...props }]);
+  q.push(["identify", { email: email.trim().toLowerCase() }]);
   // identify is sent with the next tracked event
   q.push(["trackPageView"]);
 }

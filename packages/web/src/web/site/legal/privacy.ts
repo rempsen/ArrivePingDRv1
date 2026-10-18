@@ -320,13 +320,17 @@ export const privacy: LegalDoc = {
           items: [
             "**Essential Cookies:** Required for the Services to function. Cannot be disabled.",
             "**Preference Cookies:** Used to remember your settings and preferences.",
-            "**Analytics Cookies:** Used to help us understand how visitors use the site (Google Analytics, anonymized IP). Requires your consent.",
-            "**Marketing Cookies:** Only used if you have provided consent."
+            "**Analytics Cookies:** HubSpot's cookies, used on our marketing website to understand how visitors find and use it (pages visited, how you arrived). Only with your consent; see below.",
+            "**Marketing Cookies:** The same HubSpot cookies also connect your visits to a sign-up or a request to be contacted, so we can follow up. They are covered by the same consent."
           ]
         },
         {
           type: "p",
-          text: "We don't set analytics or marketing cookies on our website at present; if we turn them on, we'll ask for your consent first. You can also manage cookies by adjusting your browser settings. Note that disabling essential cookies may affect platform functionality."
+          text: "We use these analytics and marketing cookies only on our marketing website (the homepage, product, pricing, blog, support and sign-up pages). We don't use them inside the ArrivePing app, on job tracking links sent to your customers, or on booking and intake forms."
+        },
+        {
+          type: "p",
+          text: "They're set only if you choose \"Accept\" in the cookie notice; until then, and if you choose \"Decline\", they're off. You can change your choice at any time with \"Cookie preferences\" in the website footer; turning them off removes HubSpot's cookies. If your browser sends a Global Privacy Control signal, we treat it as declining. You can also block or delete cookies in your browser settings. Note that disabling essential cookies may affect platform functionality."
         }
       ]
     },
