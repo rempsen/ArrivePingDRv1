@@ -36,16 +36,23 @@ function storage(): Storage | null {
   }
 }
 
-// The choice made on this page, for when the browser won't store it (private
-// mode, storage blocked): it then lasts until the visitor leaves the page.
+// The choice made on this page, kept only when the browser wouldn't store it
+// (private mode, storage blocked or full): it then lasts until the visitor
+// leaves the page. When storage works, storage is the truth, so a choice made
+// in another tab counts here too.
 let chosen: Consent | null = null;
+if (typeof window !== "undefined") {
+  // Another tab stored a choice: that's newer than anything held here.
+  window.addEventListener("storage", (e) => {
+    if (e.key === KEY || e.key === null) chosen = null;
+  });
+}
 
 /** The visitor's saved choice (null until they make one); GPC counts as "denied" without asking. */
 export function getConsent(): Consent | null {
   if (typeof window === "undefined") return null;
   if (navigator.globalPrivacyControl) return "denied";
-  // A choice made on this page wins, even if the browser couldn't store it
-  // over an older one.
+  // Set only when this page's choice couldn't be stored: it wins over an older stored one.
   if (chosen) return chosen;
   try {
     const v = storage()?.getItem(KEY);
@@ -73,19 +80,23 @@ function clearHubspotCookies(): void {
 
 export function setConsent(c: Consent): void {
   const was = getConsent();
-  chosen = c;
   let saved = true;
-  try {
-    storage()?.setItem(KEY, c);
-  } catch {
-    // Storage full or read-only: at least drop an older choice, so the next
-    // page asks again rather than going back to it.
+  const st = storage();
+  if (!st) chosen = c;
+  else
     try {
-      storage()?.removeItem(KEY);
+      st.setItem(KEY, c);
+      chosen = null;
     } catch {
-      saved = false;
+      chosen = c;
+      // Storage full or read-only: at least drop an older choice, so the next
+      // page asks again rather than going back to it.
+      try {
+        st.removeItem(KEY);
+      } catch {
+        saved = false;
+      }
     }
-  }
   if (c === "granted") loadHubspotTracking();
   window.dispatchEvent(new CustomEvent("ap-consent", { detail: c }));
   if (c === "denied" && (was === "granted" || loaded)) {
@@ -128,7 +139,9 @@ let lastPath = "";
  */
 export function trackRoute(path: string): void {
   if (typeof window === "undefined") return;
-  if (!isTrackedPath(path)) {
+  // Off the marketing pages, or turned off since (perhaps in another tab):
+  // reload so the tracker isn't carried along.
+  if (!isTrackedPath(path) || (loaded && getConsent() !== "granted")) {
     if (loaded) location.reload();
     return;
   }
