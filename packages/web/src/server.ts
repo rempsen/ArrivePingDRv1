@@ -13,6 +13,7 @@ import "./services/reviews";
 import "./services/maintenance";
 import { sweepTimeTriggers } from "./services/automation";
 import { sweepDelays } from "./services/delay-watch";
+import { sweepCustomMilestones } from "./services/custom-milestones";
 import { demoTick } from "./services/demo-refresh";
 import { sampleTick } from "./services/sample-day";
 import { log, captureException } from "./api/lib/logger";
@@ -102,6 +103,13 @@ setInterval(() => {
 // nobody acts within the tenant's grace period.
 setInterval(() => {
   void oncePerTick("delay-sweep", sweepDelays);
+}, 60 * 1000);
+
+// Custom milestones on a timer ("Day-before reminder", "Follow-up 3 days
+// after"): like running late, the moment passing is not an event anything
+// fires, so it is swept once a minute. Each fires once per job.
+setInterval(() => {
+  void oncePerTick("custom-milestone-sweep", () => sweepCustomMilestones());
 }, 60 * 1000);
 
 // Sales demo tenant (Prairie Comfort HVAC): keep its schedule filled from

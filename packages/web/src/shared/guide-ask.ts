@@ -31,7 +31,7 @@ export const ASK_PAGES: AskPage[] = [
   { route: "/admin/clients", label: "People → People (the directory of {customers} and staff, Import)" },
   {
     route: "/admin/notifications",
-    label: "Setup → Notifications (milestone messages, Channels: sender, reply-to, quiet hours; Delivery Log)",
+    label: "Setup → Notifications (milestone messages, New milestone for the company's own milestones, Channels: sender, reply-to, quiet hours; Delivery Log)",
   },
   { route: "/admin/reports", label: "Money → Reports (reports and exports)" },
   { route: "/admin/settings", label: "Setup → Settings (Company tab: details, running late, Calendar Sync feed; API & MCP tab: keys)" },

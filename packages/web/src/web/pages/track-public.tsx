@@ -43,6 +43,7 @@ import {
   X,
   FileText,
   ExternalLink,
+  Flag,
 } from "lucide-react";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -85,6 +86,8 @@ const EVENT_ICON: Record<string, typeof CheckCircle2> = {
   photo_added: Camera,
   signature_captured: FileText,
   checklist_completed: CheckCircle2,
+  // the company's own milestones ("Water restored")
+  milestone: Flag,
 };
 
 // ─── Job timeline ─────────────────────────────────────────────────────────────

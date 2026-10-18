@@ -289,7 +289,7 @@ export const CHAPTERS: Chapter[] = [
     id: "milestones",
     number: 6,
     title: "Milestones & messages",
-    summary: "Edit what {customers} are told at each step.",
+    summary: "Edit what {customers} are told at each step, or add your own.",
     roles: ADMINS,
     steps: [
       {
@@ -312,6 +312,15 @@ export const CHAPTERS: Chapter[] = [
         body: "Edit opens this milestone's message. Write it in your words and insert live details like the ETA link.",
       },
       {
+        id: "own",
+        route: "/admin/notifications",
+        open: "notif.tab.rules",
+        anchor: "notif.custom.new",
+        placement: "bottom",
+        title: "Add your own milestone",
+        body: "Name a moment, like Water restored or a day-before reminder. Pick what sets it off and who hears about it.",
+      },
+      {
         id: "late",
         route: "/admin/settings",
         open: "settings.section.company",
@@ -326,7 +335,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "auto.custom",
         placement: "bottom",
         title: "Need something more?",
-        body: "A custom rule adds your own step, like texting the office whenever an urgent {job} is booked.",
+        body: "Automation goes further: if-this-then-that rules, like texting the office whenever an urgent {job} is booked.",
       },
     ],
   },

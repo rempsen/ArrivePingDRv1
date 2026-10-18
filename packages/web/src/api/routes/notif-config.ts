@@ -11,6 +11,32 @@ import { resendAvailable, triggerVerify, removeDomain } from "../../services/ema
 import { isFreeMailboxDomain } from "../../services/sender";
 import { PLATFORM_FROM } from "../../services/email";
 import { z } from "zod";
+import {
+  MILESTONE_TRIGGERS,
+  MILESTONE_RECIPIENTS,
+  STAGE_OPTIONS,
+  MAX_MILESTONE_NAME,
+  MAX_MILESTONE_MESSAGE,
+  MAX_MILESTONES_PER_COMPANY,
+  MAX_OFFSET_MINUTES,
+  customEventKey,
+  customMilestoneId,
+  describeTrigger,
+  type MilestoneRecipient,
+} from "../../shared/custom-milestones";
+import {
+  MilestoneError,
+  checklistLabels,
+  createMilestone,
+  deleteMilestone,
+  fireMilestone,
+  getMilestone,
+  listMilestones,
+  milestoneMeta,
+  updateMilestone,
+  type CustomMilestone,
+  type MilestoneMessages,
+} from "../../services/custom-milestones";
 import { jsonBody,
   parseBody,
   shortText,
@@ -154,6 +180,77 @@ const WebhookPatch = z
 
 const TestEventBody = z.object({ bookingId: id("Work order id").optional() });
 
+const MilestoneMessage = z.object({
+  on: bool("Send"),
+  text: z.string().max(MAX_MILESTONE_MESSAGE, `Keep each message under ${MAX_MILESTONE_MESSAGE} characters`),
+});
+const MilestoneMessagesBody = z
+  .object({ client: MilestoneMessage, tech: MilestoneMessage, office: MilestoneMessage })
+  .partial();
+const MilestoneFieldsBody = {
+  name: shortText("Name", MAX_MILESTONE_NAME),
+  trigger: z.enum(MILESTONE_TRIGGERS, { error: "Pick what sets the milestone off" }),
+  triggerEvent: z.string().trim().max(40).optional(),
+  checklistLabel: z.string().trim().max(200, "That checklist item is too long").optional(),
+  offsetMinutes: z
+    .number({ error: "Set how long before or after" })
+    .int("Use whole minutes")
+    .min(0)
+    .max(MAX_OFFSET_MINUTES, "Keep it within 30 days")
+    .optional(),
+  customerTimeline: bool("Show on the customer's timeline").optional(),
+};
+const MilestoneCreate = z.object({ ...MilestoneFieldsBody, messages: MilestoneMessagesBody.optional() });
+const MilestonePatch = z
+  .object({ ...MilestoneFieldsBody, enabled: bool("Enabled"), messages: MilestoneMessagesBody })
+  .partial()
+  .refine((b) => Object.keys(b).length > 0, { error: "Nothing to update" });
+
+const RECIPIENT_WORD: Record<MilestoneRecipient, string> = {
+  client: "the customer",
+  tech: "the technician",
+  office: "the office",
+};
+
+/** A recipient ticked with nothing written is a mistake worth saying out loud. */
+function messagesProblem(messages: MilestoneMessages | undefined): string | null {
+  for (const r of MILESTONE_RECIPIENTS) {
+    const m = messages?.[r];
+    if (m?.on && !m.text.trim()) return `Write the message for ${RECIPIENT_WORD[r]}, or untick them.`;
+  }
+  return null;
+}
+
+/** A milestone as the Notifications page shows it: when it fires, and who gets what. */
+async function milestoneView(t: ReturnType<typeof tx>, m: CustomMilestone) {
+  const rules = await t.select(schema.notificationRules, eq(schema.notificationRules.event, customEventKey(m.id)));
+  const messages = Object.fromEntries(
+    MILESTONE_RECIPIENTS.map((r) => {
+      const rule = rules.find((x) => x.recipient === r);
+      return [
+        r,
+        {
+          on: !!rule && rule.enabled && (rule.inApp || rule.email || rule.sms || rule.webhook),
+          text: rule?.template ?? "",
+        },
+      ];
+    }),
+  );
+  return { ...m, event: customEventKey(m.id), summary: describeTrigger(m), messages };
+}
+
+/** A booking id from the request, only if it is this company's. */
+async function ownBookingId(c: any, bookingId: string | undefined): Promise<string | undefined> {
+  const t = tx(c);
+  if (bookingId) {
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
+    return b?.id;
+  }
+  const rows = await t.select(schema.bookings);
+  rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return rows[0]?.id;
+}
+
 /**
  * Resolve (creating if needed) the single notification_channels row for the
  * active company. Tenancy: one row per company, keyed by companyId. The legacy
@@ -173,16 +270,24 @@ async function getOrCreateChannels(c: any) {
   return row;
 }
 
+/** The name people know an event by: a built-in's label, or a custom milestone's own name. */
+async function eventLabel(companyId: string, event: string): Promise<string> {
+  const customId = customMilestoneId(event);
+  if (customId) return (await getMilestone(companyId, customId))?.name ?? "custom milestone";
+  return EVENT_META[event as NvcEvent]?.label ?? event;
+}
+
 export const notifConfigRoutes = new Hono<AppEnv>()
   // full rule matrix (seeds defaults on first call)
   .get("/rules", requireAdmin, async (c) => {
     await seedNotificationRules(tenantId(c));
     const t = tx(c);
     const rules = await t.select(schema.notificationRules);
+    const customs = await listMilestones(tenantId(c));
     // ensure a row exists for every event×recipient so the UI grid is complete
     const have = new Set(rules.map((r) => `${r.event}:${r.recipient}`));
     const toAdd: any[] = [];
-    for (const event of EVENTS)
+    for (const event of [...EVENTS, ...customs.map((m) => customEventKey(m.id))])
       for (const recipient of RECIPIENTS)
         if (!have.has(`${event}:${recipient}`))
           toAdd.push({ event, recipient, inApp: false, email: false, sms: false, webhook: false, enabled: true });
@@ -190,7 +295,18 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       await t.insert(schema.notificationRules, toAdd);
     }
     const all = await t.select(schema.notificationRules);
-    const meta = EVENTS.map((e) => ({ event: e, label: EVENT_META[e].label }));
+    // Built-in events first, then the company's own milestones (each row says
+    // when it goes off, so the table reads on its own).
+    const meta = [
+      ...EVENTS.map((e) => ({ event: e as string, label: EVENT_META[e].label })),
+      ...customs.map((m) => ({
+        event: customEventKey(m.id),
+        label: m.name,
+        custom: true as const,
+        summary: describeTrigger(m),
+        enabled: m.enabled,
+      })),
+    ];
     return c.json({ rules: all, events: meta, recipients: RECIPIENTS }, 200);
   })
   // update one rule (toggle a channel etc.)
@@ -219,7 +335,7 @@ export const notifConfigRoutes = new Hono<AppEnv>()
         action: "update",
         entityType: "notification_copy",
         entityId: ruleId,
-        summary: `Edited the ${EVENT_META[existing.event as NvcEvent]?.label ?? existing.event} message for ${existing.recipient}`,
+        summary: `Edited the ${await eventLabel(tenantId(c), existing.event)} message for ${existing.recipient}`,
       });
     }
     return c.json({ rule: r }, 200);
@@ -239,7 +355,10 @@ export const notifConfigRoutes = new Hono<AppEnv>()
   .get("/events/:event", requireAdmin, async (c) => {
     await seedNotificationRules(tenantId(c));
     const event = c.req.param("event") as NvcEvent;
-    if (!EVENT_META[event]) return c.json({ message: "unknown event" }, 404);
+    const customId = customMilestoneId(event);
+    const custom = customId ? await getMilestone(tenantId(c), customId) : undefined;
+    if (customId && !custom) return c.json({ message: "That milestone no longer exists" }, 404);
+    if (!custom && !EVENT_META[event]) return c.json({ message: "unknown event" }, 404);
     const t = tx(c);
     const rows = await t.select(schema.notificationRules, eq(schema.notificationRules.event, event));
     // make sure all 3 recipient rows exist
@@ -249,10 +368,12 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     const all = await t.select(schema.notificationRules, eq(schema.notificationRules.event, event));
     return c.json({
       event,
-      meta: EVENT_META[event],
+      meta: custom ? milestoneMeta(custom) : EVENT_META[event],
       rules: all,
-      defaults: Object.fromEntries(RECIPIENTS.map((r) => [r, defaultTemplateFor(event, r as any)])),
+      // A custom milestone has no built-in copy: what the company writes is all it sends.
+      defaults: Object.fromEntries(RECIPIENTS.map((r) => [r, custom ? "" : defaultTemplateFor(event, r as any)])),
       vars: TEMPLATE_VARS,
+      custom: custom ? { id: custom.id, summary: describeTrigger(custom) } : null,
     }, 200);
   })
 
@@ -417,23 +538,98 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       ? await t.select(schema.notificationDeliveries, eq(schema.notificationDeliveries.event, event))
       : await t.select(schema.notificationDeliveries);
     rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return c.json({ deliveries: rows.slice(0, 200) }, 200);
+    // The name people know each event by, so a custom milestone reads as
+    // "Water restored", not custom:<id>.
+    const names = new Map((await listMilestones(tenantId(c))).map((m) => [customEventKey(m.id), m.name]));
+    const label = (e: string) =>
+      names.get(e) ?? (customMilestoneId(e) ? "Deleted milestone" : (EVENT_META[e as NvcEvent]?.label ?? e));
+    return c.json({ deliveries: rows.slice(0, 200).map((r) => ({ ...r, eventLabel: label(r.event) })) }, 200);
   })
 
   // ---- fire a test event against a real booking ----
   .post("/test/:event", requireAdmin, jsonBody(TestEventBody), async (c) => {
     const event = c.req.param("event") as NvcEvent;
-    if (!EVENT_META[event]) return c.json({ message: "unknown event" }, 404);
+    const customId = customMilestoneId(event);
+    const custom = customId ? await getMilestone(tenantId(c), customId) : undefined;
+    if (customId && !custom) return c.json({ message: "That milestone no longer exists" }, 404);
+    if (!custom && !EVENT_META[event]) return c.json({ message: "unknown event" }, 404);
     const { bookingId } = c.req.valid("json");
-    let bid: string | undefined = bookingId;
-    if (!bid) {
-      const rows = await tx(c).select(schema.bookings);
-      rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      bid = rows[0]?.id;
-    }
+    // Only ever this company's own work order: the id in the body is checked,
+    // not trusted.
+    const bid = await ownBookingId(c, bookingId);
     if (!bid) return c.json({ message: "no booking to test with" }, 400);
-    await fireEvent(event, bid);
+    // A custom milestone's test sends its messages without marking the job as
+    // having had it, so the real one still goes out later.
+    if (custom) await fireMilestone(custom, bid, { test: true });
+    else await fireEvent(event, bid);
     return c.json({ ok: true, event, bookingId: bid }, 200);
+  })
+
+  // ---- custom milestones (services/custom-milestones.ts) ----
+  .get("/custom", requireAdmin, async (c) => {
+    const t = tx(c);
+    const ms = await listMilestones(tenantId(c));
+    const milestones = await Promise.all(ms.map((m) => milestoneView(t, m)));
+    return c.json(
+      { milestones, stages: STAGE_OPTIONS, checklistLabels: await checklistLabels(tenantId(c)), vars: TEMPLATE_VARS },
+      200,
+    );
+  })
+  .post("/custom", requireAdmin, jsonBody(MilestoneCreate), async (c) => {
+    const body = c.req.valid("json");
+    const problem = messagesProblem(body.messages);
+    if (problem) return c.json({ message: problem }, 400);
+    const existing = await listMilestones(tenantId(c));
+    if (existing.length >= MAX_MILESTONES_PER_COMPANY)
+      return c.json({ message: `You can have up to ${MAX_MILESTONES_PER_COMPANY} custom milestones.` }, 400);
+    try {
+      const { messages, ...fields } = body;
+      const m = await createMilestone(tenantId(c), fields, messages);
+      const me = c.get("user") as { id?: string; name?: string; email?: string } | undefined;
+      await audit({
+        companyId: tenantId(c),
+        actorId: me?.id ?? "",
+        actorName: me?.name ?? me?.email ?? "",
+        action: "create",
+        entityType: "custom_milestone",
+        entityId: m.id,
+        summary: `Created the milestone "${m.name}" (${describeTrigger(m)})`,
+      });
+      return c.json({ milestone: await milestoneView(tx(c), m) }, 201);
+    } catch (e) {
+      if (e instanceof MilestoneError) return c.json({ message: e.message }, 400);
+      throw e;
+    }
+  })
+  .patch("/custom/:id", requireAdmin, jsonBody(MilestonePatch), async (c) => {
+    const body = c.req.valid("json");
+    const problem = messagesProblem(body.messages);
+    if (problem) return c.json({ message: problem }, 400);
+    try {
+      const { messages, ...fields } = body;
+      const m = await updateMilestone(tenantId(c), c.req.param("id"), fields, messages);
+      if (!m) return c.json({ message: "That milestone no longer exists" }, 404);
+      return c.json({ milestone: await milestoneView(tx(c), m) }, 200);
+    } catch (e) {
+      if (e instanceof MilestoneError) return c.json({ message: e.message }, 400);
+      throw e;
+    }
+  })
+  .delete("/custom/:id", requireAdmin, async (c) => {
+    const m = await getMilestone(tenantId(c), c.req.param("id"));
+    if (!m) return c.json({ message: "That milestone no longer exists" }, 404);
+    await deleteMilestone(tenantId(c), m.id);
+    const me = c.get("user") as { id?: string; name?: string; email?: string } | undefined;
+    await audit({
+      companyId: tenantId(c),
+      actorId: me?.id ?? "",
+      actorName: me?.name ?? me?.email ?? "",
+      action: "delete",
+      entityType: "custom_milestone",
+      entityId: m.id,
+      summary: `Deleted the milestone "${m.name}"`,
+    });
+    return c.json({ ok: true }, 200);
   })
 
   // ---- email sending domains (tenant self-serve) ----

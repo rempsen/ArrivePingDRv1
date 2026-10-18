@@ -38,7 +38,10 @@ export type JobEventKind =
   | "voice_note"
   | "checklist_completed"
   | "message"
-  | "review_submitted";
+  | "review_submitted"
+  // a company-defined milestone (services/custom-milestones.ts); the label is
+  // the milestone's own name and visibility is the milestone's own setting
+  | "milestone";
 
 /**
  * Timeline policy. `visible` = shown to the customer on the public page.
@@ -74,6 +77,7 @@ const EVENT_POLICY: Record<JobEventKind, { visible: boolean; label: string }> = 
   // voice notes are the tech dictating for the office — never customer-facing
   voice_note: { visible: false, label: "Voice note recorded" },
   checklist_completed: { visible: true, label: "Checklist step completed" },
+  milestone: { visible: false, label: "Milestone reached" },
   message: { visible: false, label: "Message sent" },
   review_submitted: { visible: false, label: "Review submitted" },
 };

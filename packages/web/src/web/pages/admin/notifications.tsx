@@ -11,13 +11,14 @@ import {
   Bell, Webhook, ScrollText, Send, Plus, Trash2, Check, X, Smartphone,
   Mail, MessageSquare, Globe, RefreshCw, UserPlus, Copy, Sliders, Pencil,
   RotateCcw, Moon, Sparkles, Image as ImageIcon, Palette, AlignLeft,
-  Bold, Italic, Link as LinkIcon, PenLine, Loader2,
+  Bold, Italic, Link as LinkIcon, PenLine, Loader2, Settings2,
 } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun, useIndustryNotificationGuidance } from "../../lib/use-brand";
 const recipLabel = (r: { key: string; label: string }, noun: string, customerNoun: string) =>
   r.key === "tech" ? noun : r.key === "client" ? customerNoun : r.label;
 import { EmailEditor, type EmailBlock } from "../../components/email-editor";
 import { starterDesignForRecipient } from "../../lib/email-starters";
+import { CustomMilestoneDialog } from "./custom-milestone-dialog";
 
 type Channel = "inApp" | "email" | "sms" | "webhook";
 const CHANNELS: { key: Channel; label: string; icon: any }[] = [
@@ -76,6 +77,8 @@ function RulesMatrix() {
   const { noun } = useWorkerNoun();
   const { noun: customerNoun } = useCustomerNoun();
   const [openEvent, setOpenEvent] = useState<{ event: string; label: string } | null>(null);
+  // undefined = closed, null = a new milestone, string = editing that one
+  const [milestone, setMilestone] = useState<string | null | undefined>(undefined);
   const rules = useQuery({
     queryKey: ["notif-rules"],
     queryFn: async () => (await api["notif-config"].rules.$get()).json(),
@@ -103,15 +106,99 @@ function RulesMatrix() {
 
   if (rules.isLoading) return <FullLoader label="Loading rules…" />;
   const data = rules.data as any;
-  const events = data?.events ?? [];
+  const allEvents: any[] = data?.events ?? [];
+  const events = allEvents.filter((e) => !e.custom);
+  const customEvents = allEvents.filter((e) => e.custom);
   const allRules = data?.rules ?? [];
   const byKey = (event: string, recipient: string) => allRules.find((r: any) => r.event === event && r.recipient === recipient);
 
+  const row = (ev: any) => (
+    <tr key={ev.event} className={`border-b border-white/5 last:border-0 hover:bg-white/[0.02] ${ev.custom && !ev.enabled ? "opacity-60" : ""}`}>
+      <td className="px-4 py-3 font-semibold text-white">
+        {ev.custom ? (
+          <button
+            type="button"
+            onClick={() => setMilestone(ev.event.slice("custom:".length))}
+            title="Edit milestone"
+            className="group flex max-w-[16rem] items-start gap-2 text-left"
+          >
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5">
+                <span className="truncate">{ev.label}</span>
+                {!ev.enabled && <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Paused</span>}
+              </span>
+              <span className="block text-xs font-normal text-slate-500">{ev.summary}</span>
+            </span>
+            <Settings2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-600 group-hover:text-cyan-glow" aria-hidden="true" />
+          </button>
+        ) : (
+          <span className="whitespace-nowrap">{ev.label}</span>
+        )}
+      </td>
+      {RECIPIENTS.map((rc, i) => {
+        const rule = byKey(ev.event, rc.key);
+        return (
+          <td key={rc.key} className={`px-4 py-3 ${i > 0 ? "border-l border-white/5" : ""}`}>
+            <div className="flex items-center justify-center gap-1.5">
+              {CHANNELS.map((ch) => {
+                const on = rule?.[ch.key];
+                return (
+                  <button
+                    key={ch.key}
+                    aria-label={`${on ? "Disable" : "Enable"} ${ch.label} → ${rc.label}`}
+                    title={`${on ? "Disable" : "Enable"} ${ch.label} → ${rc.label}`}
+                    disabled={!rule}
+                    onClick={() => rule && patch.mutate({ id: rule.id, body: { [ch.key]: !on } })}
+                    className={`grid h-9 w-9 place-items-center rounded-lg border transition ${
+                      on
+                        ? "border-brand/60 bg-brand/25 text-cyan-glow shadow-sm shadow-brand/20"
+                        : "border-white/5 bg-ink/60 text-slate-700 hover:text-slate-400 hover:border-white/10"
+                    }`}
+                  >
+                    <ch.icon className="h-4 w-4" />
+                  </button>
+                );
+              })}
+            </div>
+          </td>
+        );
+      })}
+      <td className="px-4 py-3 text-center">
+        <button
+          onClick={() => setOpenEvent({ event: ev.event, label: ev.label })}
+          data-tour={ev.event === "enroute" ? "notif.edit.enroute" : undefined}
+          title="Edit message copy"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/40 hover:text-cyan-glow"
+        >
+          <Pencil className="h-3.5 w-3.5" /> Edit
+        </button>
+      </td>
+      <td className="px-4 py-3 text-right">
+        <button
+          onClick={() => test.mutate(ev.event)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/40 hover:text-cyan-glow"
+        >
+          <Send className="h-3.5 w-3.5" /> Test
+        </button>
+      </td>
+    </tr>
+  );
+
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-400">
-        Toggle a channel for each recipient on each event. Changes save instantly and apply to the whole work-order lifecycle.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-400">
+          Toggle a channel for each recipient on each event. Changes save instantly and apply to the whole work-order lifecycle.
+        </p>
+        <button
+          type="button"
+          onClick={() => setMilestone(null)}
+          data-tour="notif.custom.new"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-brand/40 bg-brand/15 px-3 py-2 text-sm font-semibold text-cyan-glow hover:bg-brand/25"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" /> New milestone
+        </button>
+      </div>
       <div className="overflow-x-auto rounded-2xl border border-white/5 nvc-card" data-tour="notif.matrix">
         <table className="w-full min-w-[860px] text-sm">
           <thead>
@@ -138,57 +225,24 @@ function RulesMatrix() {
             </tr>
           </thead>
           <tbody>
-            {events.map((ev: any) => (
-              <tr key={ev.event} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02]">
-                <td className="px-4 py-3 font-semibold text-white whitespace-nowrap">{ev.label}</td>
-                {RECIPIENTS.map((rc, i) => {
-                  const rule = byKey(ev.event, rc.key);
-                  return (
-                    <td key={rc.key} className={`px-4 py-3 ${i > 0 ? "border-l border-white/5" : ""}`}>
-                      <div className="flex items-center justify-center gap-1.5">
-                        {CHANNELS.map((ch) => {
-                          const on = rule?.[ch.key];
-                          return (
-                            <button
-                              key={ch.key}
-                              aria-label={`${on ? "Disable" : "Enable"} ${ch.label} → ${rc.label}`}
-                              title={`${on ? "Disable" : "Enable"} ${ch.label} → ${rc.label}`}
-                              disabled={!rule}
-                              onClick={() => rule && patch.mutate({ id: rule.id, body: { [ch.key]: !on } })}
-                              className={`grid h-9 w-9 place-items-center rounded-lg border transition ${
-                                on
-                                  ? "border-brand/60 bg-brand/25 text-cyan-glow shadow-sm shadow-brand/20"
-                                  : "border-white/5 bg-ink/60 text-slate-700 hover:text-slate-400 hover:border-white/10"
-                              }`}
-                            >
-                              <ch.icon className="h-4 w-4" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </td>
-                  );
-                })}
-                <td className="px-4 py-3 text-center">
-                  <button
-                    onClick={() => setOpenEvent({ event: ev.event, label: ev.label })}
-                    data-tour={ev.event === "enroute" ? "notif.edit.enroute" : undefined}
-                    title="Edit message copy"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/40 hover:text-cyan-glow"
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Edit
-                  </button>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => test.mutate(ev.event)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/40 hover:text-cyan-glow"
-                  >
-                    <Send className="h-3.5 w-3.5" /> Test
+            {events.map(row)}
+            <tr className="border-y border-white/5 bg-ink/40">
+              <td colSpan={RECIPIENTS.length + 3} className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Your milestones
+              </td>
+            </tr>
+            {customEvents.length ? (
+              customEvents.map(row)
+            ) : (
+              <tr>
+                <td colSpan={RECIPIENTS.length + 3} className="px-4 py-4 text-sm text-slate-400">
+                  None yet. Add moments that matter to you, like "Water restored" when the tech ticks it, or a day-before reminder.{" "}
+                  <button type="button" onClick={() => setMilestone(null)} className="font-semibold text-cyan-glow hover:underline">
+                    New milestone
                   </button>
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
@@ -200,6 +254,7 @@ function RulesMatrix() {
       </div>
       {test.isSuccess && <p className="px-1 text-xs text-green-400">Test event fired against the latest work order — check the Delivery Log.</p>}
       {openEvent && <EventDrawer event={openEvent.event} label={openEvent.label} onClose={() => setOpenEvent(null)} />}
+      {milestone !== undefined && <CustomMilestoneDialog milestoneId={milestone} onClose={() => setMilestone(undefined)} />}
     </div>
   );
 }
@@ -227,6 +282,7 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
   const rules: any[] = data?.rules ?? [];
   const defaults: Record<string, string> = data?.defaults ?? {};
   const vars: { key: string; label: string }[] = data?.vars ?? [];
+  const custom: { id: string; summary: string } | null = data?.custom ?? null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" {...dismiss(onClose)}>
@@ -234,8 +290,9 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
       <DialogPanel onClose={onClose} label={`Notification settings: ${label}`} className="relative h-full w-full max-w-4xl overflow-y-auto border-l border-white/10 bg-ink-2 p-6 shadow-2xl">
         <div className="mb-5 flex items-start justify-between">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-brand">Event</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-brand">{custom ? "Your milestone" : "Event"}</div>
             <h2 className="text-xl font-bold text-white">{label}</h2>
+            {custom && <p className="mt-0.5 text-sm text-slate-400">{custom.summary}</p>}
             <p className="mt-1 text-xs text-slate-500">Edit channels and message copy for each recipient.</p>
           </div>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white">
@@ -257,6 +314,7 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
                   recipientLabel={recipLabel(rc, noun, customerNoun)}
                   eventLabel={label}
                   fallback={defaults[rc.key] || ""}
+                  custom={!!custom}
                   vars={vars}
                   onSave={(body) => patch.mutate({ id: rule.id, body })}
                   saving={patch.isPending}
@@ -271,10 +329,12 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
 }
 
 function MessageComposer({
-  value, fallback, vars, smsOn, contextLabel, saving,
+  value, fallback, vars, smsOn, contextLabel, saving, custom = false,
   onSave, onReset, onClose,
 }: {
   value: string; fallback: string;
+  /** A custom milestone: no built-in copy to fall back on, so blank sends nothing. */
+  custom?: boolean;
   vars: { key: string; label: string }[];
   smsOn: boolean; contextLabel: string; saving: boolean;
   onSave: (v: string) => void;
@@ -405,7 +465,7 @@ function MessageComposer({
                 aria-label="Message template"
                 value={tpl}
                 onChange={(e) => setTpl(e.target.value)}
-                placeholder={fallback || "Leave blank to use the default copy…"}
+                placeholder={fallback || (custom ? "Write the message. Left blank, nothing is sent." : "Leave blank to use the default copy…")}
                 className={`${inputCls} flex-1 resize-none font-mono text-sm leading-relaxed`}
                 style={{ minHeight: 0 }}
               />
@@ -469,7 +529,7 @@ function MessageComposer({
             onClick={() => { onReset(); setTpl(""); }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-white"
           >
-            <RotateCcw className="h-3.5 w-3.5" /> Use default
+            <RotateCcw className="h-3.5 w-3.5" /> {custom ? "Clear message" : "Use default"}
           </button>
           <div className="flex items-center gap-2">
             <button
@@ -489,9 +549,10 @@ function MessageComposer({
 }
 
 function RecipientCard({
-  rule, recipientLabel, fallback, vars, onSave, saving, eventLabel,
+  rule, recipientLabel, fallback, vars, onSave, saving, eventLabel, custom = false,
 }: {
   rule: any; recipientLabel: string; fallback: string;
+  custom?: boolean;
   vars: { key: string; label: string }[];
   onSave: (body: any) => void; saving: boolean; eventLabel: string;
 }) {
@@ -576,7 +637,7 @@ function RecipientCard({
           <div className="mb-0.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             Message text
             <span className="font-medium normal-case text-slate-600">
-              {[rule.sms && "SMS", rule.inApp && "in-app", rule.email && emailMode === "text" && "email"].filter(Boolean).join(" \u00b7 ") || "fallback only"}
+              {[rule.sms && "SMS", rule.inApp && "in-app", rule.email && emailMode === "text" && "email"].filter(Boolean).join(" \u00b7 ") || (custom ? "off" : "fallback only")}
             </span>
             {smsOn && (
               <span className={`ml-auto font-mono text-[10px] ${charCount > 160 ? "text-amber-400" : "text-slate-500"}`}>
@@ -585,9 +646,9 @@ function RecipientCard({
             )}
           </div>
           <p className={`line-clamp-2 text-sm leading-snug ${tpl ? "text-slate-200" : "italic text-slate-500"}`}>
-            {tpl || fallback || "No default copy."}
+            {tpl || fallback || (custom ? `Nothing is sent to the ${recipientLabel.toLowerCase()} until you write a message.` : "No default copy.")}
           </p>
-          {!tpl && <p className="mt-0.5 text-[10px] text-slate-600">Using default copy</p>}
+          {!tpl && !custom && <p className="mt-0.5 text-[10px] text-slate-600">Using default copy</p>}
         </div>
         <button
           onClick={() => setComposerOpen(true)}
@@ -603,6 +664,7 @@ function RecipientCard({
           fallback={fallback}
           vars={vars}
           smsOn={smsOn}
+          custom={custom}
           contextLabel={`${eventLabel} \u2192 ${recipientLabel}`}
           saving={saving}
           onSave={(v) => onSave({ template: v })}
@@ -1393,7 +1455,7 @@ function DeliveryLog() {
             return (
               <tr key={r.id} className="border-b border-white/5 last:border-0">
                 <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-500">{new Date(r.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-3 font-medium text-white">{r.event}</td>
+                <td className="px-4 py-3 font-medium text-white">{r.eventLabel ?? r.event}</td>
                 <td className="px-4 py-3 capitalize text-slate-300">{r.recipient}</td>
                 <td className="px-4 py-3"><span className="inline-flex items-center gap-1.5 text-slate-300"><Icon className="h-3.5 w-3.5" /> {r.channel}</span></td>
                 <td className="px-4 py-3 max-w-[200px] truncate text-xs text-slate-500">{r.target}</td>

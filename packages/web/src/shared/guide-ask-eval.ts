@@ -34,6 +34,6 @@ export const ASK_EVAL: AskEvalCase[] = [
   { q: "Can I see our jobs in Google Calendar?", tours: ["export"], articles: ["exports-and-integrations"] },
   { q: "Where can I check whether a message was actually sent?", tours: ["notifications"], articles: ["check-what-was-sent"] },
   { q: "How do I assign a job to one of my techs?", tours: ["scheduler"], articles: ["assigning-jobs"] },
-  { q: "I want to add my own custom milestone", tours: ["milestones"], pages: ["/admin/automation", "/admin/notifications"] },
+  { q: "I want to add my own custom milestone", tours: ["milestones"], articles: ["custom-milestones"], pages: ["/admin/notifications"] },
   { q: "The ETA on the tracking page isn't updating", articles: ["eta-not-updating"] },
 ];

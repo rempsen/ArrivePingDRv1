@@ -47,6 +47,7 @@ export const ANCHORS = [
   "notif.tab.log",
   "notif.matrix",
   "notif.edit.enroute",
+  "notif.custom.new",
   "notif.masters",
   "notif.log",
   "email.sender",
