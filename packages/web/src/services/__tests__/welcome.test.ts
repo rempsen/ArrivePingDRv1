@@ -80,6 +80,11 @@ beforeEach(() => {
   sent.length = 0;
 });
 
+const tokensFor = async (userId: string) =>
+  (await db.select().from(schema.verification).where(and(eq(schema.verification.value, userId), like(schema.verification.identifier, "reset-password:%")))).map((v) =>
+    v.identifier.slice("reset-password:".length),
+  );
+
 describe("who gets a welcome", () => {
   it("field staff and office roles; never customers or platform operators", () => {
     expect(w.welcomeKind("rider")).toBe("field");
@@ -144,17 +149,51 @@ describe("sendWelcome", () => {
     } finally {
       await db.update(schema.user).set({ email: "sam@wl-co.invalid", isSample: false }).where(eq(schema.user.id, "wl-sample"));
     }
+    // A spreadsheet row without an email gets a placeholder nobody receives.
+    await db.update(schema.user).set({ email: "rider-1a2b3c4d@wl-co.import.local" }).where(eq(schema.user.id, "wl-sample"));
+    try {
+      expect(await w.sendWelcome({ companyId: CO, userId: "wl-sample" }, deps)).toEqual({ sent: false, reason: "sample" });
+    } finally {
+      await db.update(schema.user).set({ email: "sam@wl-co.invalid" }).where(eq(schema.user.id, "wl-sample"));
+    }
     expect(await w.sendWelcome({ companyId: CO, userId: "wl-gone" }, deps)).toEqual({ sent: false, reason: "not on the team" });
     expect(await w.sendWelcome({ companyId: "wl-other-co", userId: "wl-tech" }, deps)).toEqual({ sent: false, reason: "not on the team" });
     expect(sent).toHaveLength(0);
   });
 
-  it("a failed send is reported and not recorded as sent", async () => {
+  it("a failed send is reported, not recorded, and leaves the link they already have working", async () => {
+    await db.update(schema.memberships).set({ onboarding: null }).where(eq(schema.memberships.id, "m-wl-disp"));
+    await w.sendWelcome({ companyId: CO, userId: "wl-disp" }, deps);
+    const before = await tokensFor("wl-disp");
+    expect(before).toHaveLength(1);
     await db.update(schema.memberships).set({ onboarding: null }).where(eq(schema.memberships.id, "m-wl-disp"));
     const r = await w.sendWelcome({ companyId: CO, userId: "wl-disp" }, { send: (async () => ({ ok: false, error: "boom" })) as any });
     expect(r).toEqual({ sent: false, reason: "send failed" });
     const [mem] = await db.select().from(schema.memberships).where(eq(schema.memberships.id, "m-wl-disp"));
     expect(parseOnboarding(mem!.onboarding).welcomeSentAt).toBeUndefined();
+    expect(await tokensFor("wl-disp")).toEqual(before);
+  });
+
+  it("a successful resend retires the old link", async () => {
+    const before = await tokensFor("wl-disp");
+    await w.sendWelcome({ companyId: CO, userId: "wl-disp" }, deps);
+    const after = await tokensFor("wl-disp");
+    expect(after).toHaveLength(1);
+    expect(after[0]).not.toBe(before[0]);
+    expect(sent.at(-1)!.html).toContain(after[0]!);
+  });
+
+  it("recording it keeps what else is on their record (e.g. a tips unsubscribe)", async () => {
+    await db
+      .update(schema.memberships)
+      .set({ onboarding: JSON.stringify({ v: 1, tours: { "find-your-way": { status: "completed", at: "2026-10-18T00:00:00.000Z" } }, nudgesOff: true }) })
+      .where(eq(schema.memberships.id, "m-wl-disp"));
+    await w.sendWelcome({ companyId: CO, userId: "wl-disp" }, deps);
+    const [mem] = await db.select().from(schema.memberships).where(eq(schema.memberships.id, "m-wl-disp"));
+    const st = parseOnboarding(mem!.onboarding);
+    expect(st.nudgesOff).toBe(true);
+    expect(st.tours["find-your-way"]?.status).toBe("completed");
+    expect(st.welcomeSentAt).toBeTruthy();
   });
 });
 
@@ -167,33 +206,33 @@ describe("a spreadsheet roster", () => {
 });
 
 describe("the set-password link", () => {
-  const tokensFor = async (userId: string) =>
-    (await db.select().from(schema.verification).where(and(eq(schema.verification.value, userId), like(schema.verification.identifier, "reset-password:%")))).map((v) =>
-      v.identifier.slice("reset-password:".length),
-    );
-
-  it("lasts 7 days, and a new one replaces the old", async () => {
+  it("lasts 7 days; once the new one is out, it's the only one", async () => {
     const now = new Date("2026-10-18T03:00:00Z");
-    const first = new URL(await w.setPasswordLink("wl-tech", "field", now));
+    const firstLink = await w.setPasswordLink("wl-tech", "field", now);
+    const first = new URL(firstLink.url);
     expect(first.pathname).toBe("/reset-password");
     expect(first.searchParams.get("welcome")).toBe("field");
     const t1 = first.searchParams.get("token")!;
-    expect(await tokensFor("wl-tech")).toEqual([t1]);
     const [row] = await db.select().from(schema.verification).where(eq(schema.verification.identifier, `reset-password:${t1}`));
     expect(row!.expiresAt.getTime() - now.getTime()).toBe(7 * 86_400_000);
 
-    const t2 = new URL(await w.setPasswordLink("wl-tech", "field", now)).searchParams.get("token")!;
+    const second = await w.setPasswordLink("wl-tech", "field", now);
+    const t2 = new URL(second.url).searchParams.get("token")!;
     expect(t2).not.toBe(t1);
+    // Both work until the email with the new one has gone out…
+    expect(await tokensFor("wl-tech")).toContain(t1);
+    await w.keepOnlyLink("wl-tech", second.identifier);
+    // …then only the new one.
     expect(await tokensFor("wl-tech")).toEqual([t2]);
   });
 
   it("is redeemed by the normal reset-password endpoint", async () => {
     const { auth } = await import("../../api/auth");
-    const token = new URL(await w.setPasswordLink("wl-disp", "office")).searchParams.get("token")!;
+    const token = new URL((await w.setPasswordLink("wl-disp", "office")).url).searchParams.get("token")!;
     const res = await auth.api.resetPassword({ body: { newPassword: "Correct-horse-42", token } });
     expect(res.status).toBe(true);
     // One use only.
-    expect(await tokensFor("wl-disp")).toEqual([]);
+    expect(await tokensFor("wl-disp")).not.toContain(token);
     const accounts = await db.select().from(schema.account).where(eq(schema.account.userId, "wl-disp"));
     expect(accounts.some((a) => a.providerId === "credential" && Boolean(a.password))).toBe(true);
   });

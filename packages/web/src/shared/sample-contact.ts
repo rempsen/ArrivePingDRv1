@@ -33,13 +33,17 @@ export function samplePhone(n: number): string {
   return `(${SAMPLE_AREA}) 555-01${nn}`;
 }
 
-/** True for any address under a `.invalid` domain — never deliverable. */
+/**
+ * True for an address nobody can deliver to: a `.invalid` domain (sample
+ * people) or a `.local` one (the placeholder a spreadsheet import gives a row
+ * with no email, `…@<company>.import.local`). Both are reserved names.
+ */
 export function isUndeliverableEmail(addr: string | null | undefined): boolean {
   const a = String(addr ?? "").trim().toLowerCase();
   const at = a.lastIndexOf("@");
   if (at < 0) return false;
   const host = a.slice(at + 1).replace(/\.$/, "");
-  return host === "invalid" || host.endsWith(".invalid");
+  return host === "invalid" || host.endsWith(".invalid") || host === "local" || host.endsWith(".local");
 }
 
 /**
