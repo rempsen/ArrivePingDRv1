@@ -378,11 +378,11 @@ export const officeView = {
     {
       label: "Assign",
       url: "arriveping.com/admin/scheduler",
-      src: "/img/site/app/office-week.webp?v=bd83d4b7",
+      src: "/img/site/app/office-week.webp?v=6923808c",
       width: 1920,
       height: 1200,
-      alt: "The ArrivePing scheduler's calendar in Work Week view, Monday to Friday: each technician's jobs by day and time, marked with their initials, and a work queue of unassigned jobs beside it.",
-      caption: "Monday to Friday at a glance. Click a job to assign or reassign it, or drag queued work onto a day.",
+      alt: "The ArrivePing scheduler's day calendar placing an urgent no-heat call: six HVAC technicians' rows with their jobs, three suggested slots drawn on the rows as Best fit, Option 2 and Option 3, and beside them the ranked list with each technician's drive time and how full their day would be, above the queue of jobs still to schedule.",
+      caption: "Pick a waiting job and the best slots appear, ranked by skill, drive time and workload. Click one, or drag the job onto any row.",
     },
     {
       label: "Work order",
