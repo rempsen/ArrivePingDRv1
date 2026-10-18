@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAuth } from "../../hooks/use-auth";
-import { PlaybackProvider } from "../../site/motion/playback";
+import { PlaybackProvider, usePlayback } from "../../site/motion/playback";
 import { useReveal } from "../../site/motion/use-reveal";
 import { useHeaderOffset } from "../../site/motion/use-scrollspy";
 import { SiteHeader } from "../../site/components/SiteHeader";
@@ -44,6 +44,8 @@ function Landing({ page }: { page: LandingPage }) {
   const headerRef = useRef<HTMLElement>(null);
   const { isAuthed, role } = useAuth();
   const dashboardHref = isAuthed ? (role === "admin" ? "/admin" : role === "rider" ? "/rider" : "/app") : undefined;
+  // Same as the homepage: the live sections' CSS drops all motion under this flag.
+  const { reduced } = usePlayback();
 
   useReveal(rootRef);
   useHeaderOffset(headerRef, rootRef);
@@ -58,7 +60,7 @@ function Landing({ page }: { page: LandingPage }) {
   }, []);
 
   return (
-    <div className="site" ref={rootRef}>
+    <div className="site" ref={rootRef} data-reduced={reduced ? "true" : undefined}>
       <a className="skip" href="#main">
         Skip to content
       </a>
