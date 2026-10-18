@@ -236,6 +236,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(800)
     check("phone: tapping a job opens its inspector in the sheet", pg.locator(".ap-sheet .ap-inspector").count() == 1)
     pg.screenshot(path=f"{SHOTS}/phone-3-job.png")
+    # Swipe the grip up and down through the detents.
+    pg.keyboard.press("Escape")
+    g = pg.locator(".ap-sheet__grip").bounding_box()
+    d0 = pg.locator(".ap-sheet").get_attribute("data-detent")
+    pg.mouse.move(g["x"] + g["width"] / 2, g["y"] + 10); pg.mouse.down(); pg.mouse.move(g["x"] + g["width"] / 2, g["y"] - 120, steps=6); pg.mouse.up()
+    pg.wait_for_timeout(300)
+    d1 = pg.locator(".ap-sheet").get_attribute("data-detent")
+    check("phone: swiping the sheet grip up moves to the next detent", d0 != d1, f"{d0} -> {d1}")
     ctx.close()
     browser.close()
 

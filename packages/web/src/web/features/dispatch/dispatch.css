@@ -47,8 +47,9 @@
   inset: 0;
   background: var(--ink);
 }
-.dispatch-v2 .maplibregl-ctrl-bottom-left {
+.dispatch-v2 .maplibregl-ctrl-bottom-right {
   bottom: var(--ap-attrib-bottom, 0px);
+  margin-right: 4px;
 }
 .dispatch-v2 .maplibregl-ctrl-attrib {
   background: rgba(7, 11, 18, 0.62);
@@ -351,9 +352,9 @@ body.ap-dragging * {
 .dispatch-v2 .ap-live { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
 .dispatch-v2 .ap-live[data-on] { background: var(--ok); }
 
-.dispatch-v2 .ap-left { position: absolute; z-index: 4; top: 64px; left: 12px; bottom: 84px; width: 316px; display: flex; flex-direction: column; min-height: 0; }
+.dispatch-v2 .ap-left { position: absolute; z-index: 4; top: 64px; left: 12px; bottom: 96px; width: 316px; display: flex; flex-direction: column; min-height: 0; }
 .dispatch-v2[data-layout="wide"] .ap-left { width: 320px; }
-.dispatch-v2 .ap-right { position: absolute; z-index: 4; top: 12px; right: 12px; bottom: 84px; width: 356px; display: flex; flex-direction: column; min-height: 0; }
+.dispatch-v2 .ap-right { position: absolute; z-index: 4; top: 12px; right: 12px; bottom: 96px; width: 356px; display: flex; flex-direction: column; min-height: 0; }
 
 .dispatch-v2 .ap-panel { border-radius: 16px; padding: 12px; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
 .dispatch-v2 .ap-queue { max-height: 100%; }
@@ -460,7 +461,7 @@ body.ap-dragging * {
 .dispatch-v2 .ap-sheet[data-detent="peek"] { height: 112px; }
 .dispatch-v2 .ap-sheet[data-detent="half"] { height: 46dvh; }
 .dispatch-v2 .ap-sheet[data-detent="full"] { height: calc(100dvh - 190px); }
-.dispatch-v2 .ap-sheet__grip { appearance: none; border: 0; background: none; height: 22px; display: grid; place-items: center; cursor: pointer; flex: none; }
+.dispatch-v2 .ap-sheet__grip { touch-action: none; appearance: none; border: 0; background: none; height: 22px; display: grid; place-items: center; cursor: pointer; flex: none; }
 .dispatch-v2 .ap-sheet__grip::before { content: ""; width: 36px; height: 5px; border-radius: 3px; background: var(--line-strong); }
 .dispatch-v2 .ap-sheet__body { overflow: auto; flex: 1; min-height: 0; padding: 0 4px 4px; }
 .dispatch-v2 .ap-sheet .ap-panel { background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -485,3 +486,6 @@ body.ap-dragging * {
 .dispatch-v2 .ap-more { margin-top: 8px; align-self: stretch; }
 .dispatch-v2 .ap-toasts { position: absolute; z-index: 9; left: 50%; transform: translateX(-50%); bottom: 84px; display: flex; flex-direction: column-reverse; gap: 8px; align-items: center; }
 .dispatch-v2 .ap-toasts .ap-toast { position: static; transform: none; }
+/* Credits sit just above the team strip, never under it. */
+.dispatch-v2.ap-page { --ap-attrib-bottom: 76px; }
+.dispatch-v2[data-layout="narrow"] .maplibregl-ctrl-bottom-right { bottom: auto; top: 62px; }

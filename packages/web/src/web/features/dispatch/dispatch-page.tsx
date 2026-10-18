@@ -47,6 +47,8 @@ export function DispatchPage() {
   const [sel, setSel] = useState(readSel);
   const [satellite, setSatellite] = useState(false);
   const [hoverJob, setHoverJob] = useState<string | null>(null);
+  const swipe = useRef<{ y: number; moved: boolean } | null>(null);
+  const swiped = useRef(false);
   const [finding, setFinding] = useState(false);
   const [sheet, setSheet] = useState<"peek" | "half" | "full">("peek");
   const [dragJob, setDragJob] = useState<string | null>(null);
@@ -113,7 +115,7 @@ export function DispatchPage() {
   const padding = useMemo(() => {
     if (layout === "narrow") return { top: 64, right: 12, bottom: 160, left: 12 };
     const left = layout === "wide" ? 340 : 316;
-    return { top: 72, right: hasInspector ? 380 : 16, bottom: 92, left };
+    return { top: 72, right: hasInspector ? 380 : 16, bottom: 104, left };
   }, [layout, hasInspector]);
 
   // Fit score per technician for whatever job is being dragged.
@@ -243,6 +245,9 @@ export function DispatchPage() {
       } else if (e.key === "/") {
         e.preventDefault();
         setFinding(true);
+      } else if (e.key === "a" || e.key === "A") {
+        // Keyboard assign: jump to the best match's Assign button; Enter assigns.
+        root.current?.querySelector<HTMLElement>(".ap-inspector .ap-cand button")?.focus();
       } else if (e.key === "f" || e.key === "F") mapRef.current?.fitAll();
       else if (e.key === "s" || e.key === "S") setSatellite((v) => !v);
     };
@@ -410,7 +415,28 @@ export function DispatchPage() {
             type="button"
             className="ap-sheet__grip"
             aria-label="Resize panel"
-            onClick={() => setSheet((s) => (s === "peek" ? "half" : s === "half" ? "full" : "peek"))}
+            onPointerDown={(e) => {
+              swipe.current = { y: e.clientY, moved: false };
+              e.currentTarget.setPointerCapture(e.pointerId);
+            }}
+            onPointerUp={(e) => {
+              const st = swipe.current;
+              swipe.current = null;
+              if (!st) return;
+              const dy = e.clientY - st.y;
+              if (Math.abs(dy) < 24) return;
+              st.moved = true;
+              swiped.current = true;
+              const order = ["peek", "half", "full"] as const;
+              setSheet((cur) => order[Math.max(0, Math.min(2, order.indexOf(cur) + (dy < 0 ? 1 : -1)))]);
+            }}
+            onClick={() => {
+              if (swiped.current) {
+                swiped.current = false;
+                return;
+              }
+              setSheet((s) => (s === "peek" ? "half" : s === "half" ? "full" : "peek"));
+            }}
           />
           <div className="ap-sheet__body">{inspector ?? panels}</div>
         </div>

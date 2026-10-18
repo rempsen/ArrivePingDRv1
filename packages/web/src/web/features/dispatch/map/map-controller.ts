@@ -67,7 +67,7 @@ export function createMapController(
   map.touchZoomRotate.disableRotation();
   map.keyboard.disableRotation();
   // The data credit is always on screen: the full text, not a collapsed (i).
-  map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-left");
+  map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
 
   // The ink style asks for a sprite image the sprite doesn't contain.
   map.on("styleimagemissing", (e) => {
