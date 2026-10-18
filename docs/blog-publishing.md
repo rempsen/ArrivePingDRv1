@@ -88,11 +88,13 @@ The first three covers in this format were too alike: same angle, same warm gold
 | Post | Subject | Phone hand | Setting | Light / grade | Angle |
 |---|---|---|---|---|---|
 | preferred-provider | woman, homeowner | right (device in bg) | front door, van arriving | dusk, warm | wide |
-| no-call-no-show | man 40s, homeowner | right | kitchen table, driveway through window | golden hour, warm | over-shoulder from left |
+| no-call-no-show (replaced 2026-10-18) | man 20s–30s, contractor in hard hat and hi-vis vest, clipboard; real Pexels photo | none (real "Your technician has arrived!" card overlaid, lower right) | home's front doorway, white siding | bright daylight, neutral | eye level from the porch, subject centre-right |
 | last-mile | woman 30s, homeowner | right | front porch, van on street | golden hour, warm | over-shoulder from left |
 | phone-vs-vehicle-gps-tracking | woman 30s, technician | left (into dash mount) | van cab, residential street | rainy overcast, cool desaturated | through open passenger door, subject right |
 
-Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left, and two van-cab shots in a row. Good next options: no person at all (trucks at a dock, a dispatcher's screen), night or fluorescent light, a man or an older technician, a construction site.
+Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left, two van-cab shots in a row, and another front door or porch (three covers are now at the door). Good next options: no person at all (trucks at a dock, a dispatcher's screen), night or fluorescent light, an older technician, a construction site, a dispatch office.
+
+Real stock photos are fine instead of a generated image: Pexels (Pexels License: free for commercial use, edits allowed) is what the site already uses. Credit the photographer and photo URL in an HTML comment at the top of the post, and paint out house numbers, street signs and brand logos. Combining a photo with a real app screenshot works well, shown as a floating card rather than faked into someone's hand.
 
 ## Why the format works, and what to add (researched 2026-10-17)
 
