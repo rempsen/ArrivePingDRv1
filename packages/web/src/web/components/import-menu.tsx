@@ -235,19 +235,32 @@ export function ImportMenu({
               </div>
             )}
             <p className="text-xs text-slate-500">
-              {result.type === "customer"
-                ? "Customers aren't emailed: they first hear from you when a job is booked."
-                : result.welcoming
-                  ? `We're emailing ${result.welcoming === 1 ? "the new person" : `the ${result.welcoming} new people`} a link to set a password, one after another over the next few minutes. Rows imported without an email address can't sign in until you add one on their profile.`
-                  : result.created
-                    ? "Nobody was emailed: the new rows had no email address, so they can't sign in yet. Add an email on each profile, then use “Email a sign-in link”."
-                    : "Nobody new was added, so nobody was emailed."}
+              {importNote(result)}
             </p>
           </div>
         )}
       </Modal>
     </>
   );
+}
+
+/** What happened by email after an import (services/welcome.ts, lib/join-invite.ts). */
+function importNote(r: ImportResult): string {
+  const parts: string[] = [];
+  if (r.type === "customer") {
+    if (r.created) parts.push("New customers aren't emailed: they first hear from you when a job is booked.");
+  } else if (r.welcoming) {
+    parts.push(
+      `We're emailing ${r.welcoming === 1 ? "the new person" : `the ${r.welcoming} new people`} a link to set a password, one after another over the next few minutes. Rows imported without an email address can't sign in until you add one on their profile.`,
+    );
+  } else if (r.created) {
+    parts.push("Nobody new was emailed: the new rows had no email address, so they can't sign in yet. Add an email on each profile, then use “Email a sign-in link”.");
+  }
+  if (r.invited)
+    parts.push(
+      `${r.invited === 1 ? "One person" : `${r.invited} people`} already had an ArrivePing login, so ${r.invited === 1 ? "they were" : "they were each"} emailed an invitation to join instead.`,
+    );
+  return parts.join(" ") || "Nobody new was added, so nobody was emailed.";
 }
 
 function MenuItem({ icon: Icon, label, onClick }: { icon: any; label: string; onClick: () => void }) {
