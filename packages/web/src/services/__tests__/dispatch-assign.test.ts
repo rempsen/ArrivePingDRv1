@@ -27,6 +27,8 @@ function colDdl(col: PgColumn, withPk: boolean): string {
     : typeof dflt === "string" ? `'${dflt.replace(/'/g, "''")}'`
     : typeof dflt === "boolean" ? (dflt ? "TRUE" : "FALSE")
     : typeof dflt === "number" ? String(dflt)
+    // sql`now()` defaults (createdAt and friends): notices compare against them.
+    : dflt && typeof dflt === "object" && "queryChunks" in dflt && col.getSQLType().startsWith("timestamp") ? "now()"
     : null;
   if (lit !== null) parts.push(`DEFAULT ${lit}`);
   return parts.join(" ");
@@ -85,10 +87,14 @@ afterAll(() => da._setGraceTimerForTests(null));
 
 /** Run the deferred "assigned" notices that are due. */
 async function flushNotices() {
-  const runs = pending.splice(0);
-  for (const r of runs) r();
-  // runTaskNow is async inside the timer callback; give it a moment.
-  await new Promise((r) => setTimeout(r, 150));
+  // A notice may hold another (a move notice waiting for an assignment
+  // notice), so keep going until nothing new is queued.
+  for (let round = 0; round < 8 && pending.length > 0; round++) {
+    const runs = pending.splice(0);
+    for (const r of runs) r();
+    // runTaskNow is async inside the timer callback; give it a moment.
+    await new Promise((r) => setTimeout(r, 150));
+  }
 }
 
 describe("dispatchAssign + undoAssign", () => {

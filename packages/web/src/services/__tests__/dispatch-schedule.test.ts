@@ -28,6 +28,8 @@ function colDdl(col: PgColumn, withPk: boolean): string {
     : typeof dflt === "string" ? `'${dflt.replace(/'/g, "''")}'`
     : typeof dflt === "boolean" ? (dflt ? "TRUE" : "FALSE")
     : typeof dflt === "number" ? String(dflt)
+    // sql`now()` defaults (createdAt and friends): notices compare against them.
+    : dflt && typeof dflt === "object" && "queryChunks" in dflt && col.getSQLType().startsWith("timestamp") ? "now()"
     : null;
   if (lit !== null) parts.push(`DEFAULT ${lit}`);
   return parts.join(" ");
@@ -86,10 +88,14 @@ afterAll(() => da._setGraceTimerForTests(null));
 
 /** Run the deferred "assigned" notices that are due. */
 async function flushNotices() {
-  const runs = pending.splice(0);
-  for (const r of runs) r();
-  // runTaskNow is async inside the timer callback; give it a moment.
-  await new Promise((r) => setTimeout(r, 150));
+  // A notice may hold another (a move notice waiting for an assignment
+  // notice), so keep going until nothing new is queued.
+  for (let round = 0; round < 8 && pending.length > 0; round++) {
+    const runs = pending.splice(0);
+    for (const r of runs) r();
+    // runTaskNow is async inside the timer callback; give it a moment.
+    await new Promise((r) => setTimeout(r, 150));
+  }
 }
 
 
@@ -191,10 +197,35 @@ describe("dispatchSchedule + undo", () => {
     expect(a.ok).toBe(true);
     const m = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
     expect(m.ok).toBe(true);
-    expect(await tasks(id)).toHaveLength(0);
     await flushNotices();
     const kinds = await events(id);
     expect(kinds).toContain("assigned");
+    expect(kinds).not.toContain("rescheduled");
+  });
+
+  it("a move still gets announced if the offer is declined before its notice goes", async () => {
+    const id = await job(CO, { status: "pending", assignStatus: "none" });
+    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
+    // the technician declines inside the window: the "assigned" notice won't go
+    await db.update(schema.bookings).set({ riderId: null, status: "confirmed", assignStatus: "declined" }).where(eq(schema.bookings.id, id));
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).not.toContain("assigned");
+    expect(kinds).toContain("rescheduled");
+  });
+
+  it("a move made while the assignment notice is already going isn't announced twice", async () => {
+    const id = await job(CO, { status: "pending", assignStatus: "none" });
+    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    const T = schema.scheduledTasks;
+    const [assigned] = await db.select().from(T).where(and(eq(T.bookingId, id), eq(T.kind, da.ASSIGNED_NOTICE_TASK)));
+    await db.update(T).set({ status: "running" }).where(eq(T.id, assigned!.id));
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
+    await db.update(T).set({ status: "pending" }).where(eq(T.id, assigned!.id));
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds.filter((k) => k === "assigned")).toHaveLength(1);
     expect(kinds).not.toContain("rescheduled");
   });
 

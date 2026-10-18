@@ -354,7 +354,7 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
     await holdNotice(companyId, {
       kind: RESCHEDULED_NOTICE_TASK,
       bookingId: c.b,
-      payload: { from: told, at: new Date(b.scheduledAt).toISOString() },
+      payload: { from: told, at: new Date(b.scheduledAt).toISOString(), movedAt: new Date().toISOString() },
       fallback: "rescheduled",
     });
   await reconcileRiderStatus(companyId, c.r);
