@@ -81,6 +81,10 @@ export default defineConfig(({ command, mode }) => {
 				output: {
 					manualChunks(id) {
 						if (!id.includes("node_modules")) return;
+						// MapLibre 6 (npm alias, used only by the Map v2 dispatch page) gets its
+						// own chunk. Without this it would land in vendor-maps next to Leaflet and
+						// MapLibre 4, and every page with a map would download both engines.
+						if (/node_modules\/(\.bun\/[^/]+\/node_modules\/)?maplibre-gl-6\//.test(id)) return "vendor-maplibre6";
 						if (id.includes("leaflet") || id.includes("maplibre")) return "vendor-maps";
 						if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
 						if (id.includes("pdf-lib")) return "vendor-pdf";
