@@ -12,15 +12,15 @@
  * from one technician to another is a reassignment: it asks first, notifies at
  * once and has no Undo (the same rule as the dispatch map).
  *
- * A drop is all or nothing. From the queue the technician and the time go in
- * one request with one Undo. A reassignment to a new time takes two: the time
- * goes first (it can be undone) and is taken back if the reassignment, which
- * can't be, is declined or fails.
+ * A drop is one request, so it happens whole or not at all: a technician and a
+ * time together go through /api/dispatch/assign (from the queue with one Undo
+ * for both; a reassignment notifies at once, without Undo), a time alone
+ * through /api/dispatch/schedule.
  */
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { activeCompany } from "../../../lib/tenant";
-import { assignJob } from "../../../lib/assign-job";
+import { withAssignConfirm } from "../../../lib/assign-job";
 import { runWithForceConfirm, type ConfirmFn } from "../../../lib/force-confirm";
 import { fetchBoard, fetchLoad, postAssign, postSchedule, postUndo } from "../../../features/dispatch/data/api";
 import { openDispatchStream } from "../../../features/dispatch/data/stream";
@@ -156,15 +156,11 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
 
   /** Move the job's time, asking before a double booking. False when they back out. */
   const moveTime = useCallback(
-    async (bookingId: string, at: string, tokens: string[], forTechId?: string, onForced?: () => void) => {
-      const s = await runWithForceConfirm(
-        (force) => {
-          if (force) onForced?.();
-          return postSchedule({ bookingId, scheduledAt: at, force, ...(forTechId ? { forTechId } : {}) });
-        },
-        confirm,
-        { title: "Move it there anyway?", confirmLabel: "Move it" },
-      );
+    async (bookingId: string, at: string, tokens: string[]) => {
+      const s = await runWithForceConfirm((force) => postSchedule({ bookingId, scheduledAt: at, force }), confirm, {
+        title: "Move it there anyway?",
+        confirmLabel: "Move it",
+      });
       if (s === null) return false;
       if (s.undo) tokens.push(s.undo);
       return true;
@@ -183,10 +179,6 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
 
       const release = overlay({ id: job.id, riderId: techId, scheduledAt: at, ...(fromQueue ? { status: "assigned", assignStatus: "offered" } : {}) });
       const tokens: string[] = [];
-      /** Take back whatever this drop already did, newest first. */
-      const rollBack = async () => {
-        for (const t of tokens.splice(0).reverse()) await postUndo(t).catch(() => {});
-      };
       try {
         if (fromQueue) {
           // One request: the technician and the time together, checked at the new
@@ -199,12 +191,15 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
           if (r === null) return;
           if (r.undo) tokens.push(r.undo);
         } else if (reassign) {
-          // A reassignment can't be undone, so the time goes first (checked against
-          // the new technician) and is taken back if the reassignment doesn't happen.
-          let busyConfirmed = false;
-          if (moved && !(await moveTime(job.id, at, tokens, techId, () => (busyConfirmed = true)))) return;
-          const r = await assignJob({ bookingId: job.id, riderId: techId, techName, confirm, busyConfirmed });
-          if (r.cancelled) return void (await rollBack());
+          // One request: the new technician and the time together, checked at
+          // the new time, in one conditional write. It notifies at once and has
+          // no Undo, like a reassignment on the map.
+          const r = await withAssignConfirm(
+            (force) => postAssign({ bookingId: job.id, riderId: techId, force, ...(moved ? { scheduledAt: at } : {}) }),
+            confirm,
+            techName,
+          );
+          if (r.cancelled) return;
         } else if (!(await moveTime(job.id, at, tokens))) return;
         const when = new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: tz });
         const who = firstName(techName);
@@ -212,7 +207,6 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
         else if (fromQueue) toast(`${job.title || job.service} → ${who}, ${when}. The customer and ${who} hear about it in a few seconds.`, tokens);
         else toast(`${job.title || job.service} moved to ${when}. The customer gets the new time in a few seconds.`, tokens);
       } catch (e) {
-        await rollBack();
         toast((e as Error).message || "That didn't save. Try again.", [], "warn");
       } finally {
         await refresh().catch(() => {});

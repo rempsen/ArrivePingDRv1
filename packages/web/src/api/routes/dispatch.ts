@@ -49,8 +49,6 @@ const ScheduleBody = z.object({
   scheduledAt: z.string({ message: "Time is required" }).datetime({ message: "Time must be an ISO date-time", offset: true }),
   /** The dispatcher confirmed "Move it there anyway?". */
   force: z.boolean().optional(),
-  /** Check the time against this technician instead: the job is about to be reassigned to them. */
-  forTechId: idField("Technician").optional(),
 });
 const UndoBody = z.object({ token: z.string({ message: "Undo token is required" }).min(1, "Undo token is required").max(2_000) });
 
@@ -115,8 +113,8 @@ export const dispatchRoutes = new Hono<AppEnv>()
 
   .post("/schedule", requireAdmin, jsonBody(ScheduleBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    const { bookingId, scheduledAt, force, forTechId } = c.req.valid("json");
-    const r = await dispatchSchedule(tenantId(c), { bookingId, scheduledAt, force, forTechId, by: u.name });
+    const { bookingId, scheduledAt, force } = c.req.valid("json");
+    const r = await dispatchSchedule(tenantId(c), { bookingId, scheduledAt, force, by: u.name });
     if (!r.ok) {
       if (r.status === 404) return c.json({ message: r.message }, 404);
       return c.json({ message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) }, 409);

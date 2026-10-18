@@ -83,7 +83,7 @@ async function holdRescheduled(companyId: string, bookingId: string, from: strin
 
 export async function dispatchSchedule(
   companyId: string,
-  input: { bookingId: string; scheduledAt: string; force?: boolean; forTechId?: string; by: string },
+  input: { bookingId: string; scheduledAt: string; force?: boolean; by: string },
   now = Date.now(),
 ): Promise<ScheduleOutcome> {
   const t = tdb(companyId);
@@ -103,7 +103,7 @@ export async function dispatchSchedule(
   const to = new Date(input.scheduledAt);
   if (!input.force) {
     const busy = await findAvailabilityBlock(companyId, {
-      riderId: input.forTechId ?? prev.riderId,
+      riderId: prev.riderId,
       scheduledAt: to,
       bookingId: prev.id,
       serviceId: prev.serviceId,
@@ -114,13 +114,19 @@ export async function dispatchSchedule(
   const from = new Date(prev.scheduledAt);
   if (from.getTime() === to.getTime()) return { ok: true, job: patchOf(prev), undo: null };
 
-  // Compare-and-set on what was checked: a job finished, cancelled or moved in the
-  // meantime is left alone.
+  // Compare-and-set on what was checked: a job finished, cancelled, moved or
+  // given to someone else in the meantime is left alone.
   const B = schema.bookings;
   const [b] = await t.update(
     B,
     { scheduledAt: to },
-    and(eq(B.id, prev.id), eq(B.status, prev.status), eq(B.scheduledAt, prev.scheduledAt), isNull(B.deletedAt)),
+    and(
+      eq(B.id, prev.id),
+      eq(B.status, prev.status),
+      eq(B.scheduledAt, prev.scheduledAt),
+      prev.riderId ? eq(B.riderId, prev.riderId) : isNull(B.riderId),
+      isNull(B.deletedAt),
+    ),
   );
   if (!b) return { ok: false, status: 409, message: "This job just changed — pull it up again to see where it is now.", forceable: false };
 

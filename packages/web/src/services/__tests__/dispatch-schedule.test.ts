@@ -195,14 +195,6 @@ describe("dispatchSchedule + undo", () => {
     expect(kinds).not.toContain("rescheduled");
   });
 
-  it("checks the time against the technician the job is about to go to", async () => {
-    const theirs = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
-    const mine = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
-    const target = (await row(theirs)).scheduledAt.toISOString();
-    const r = await ds.dispatchSchedule(CO, { bookingId: mine, scheduledAt: target, forTechId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
-    expect(r).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
-  });
-
   it("won't undo a job that has moved again since", async () => {
     const id = await job(CO);
     const base = (await row(id)).scheduledAt;

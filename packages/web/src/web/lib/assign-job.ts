@@ -18,9 +18,6 @@ import { ApiError } from "./api-error";
  * clearing drive time and on-site clocks, which is nonsense for "Mike is already
  * booked at 2:00 PM".
  *
- * `busyConfirmed` says the dispatcher already agreed to the double booking (the
- * calendar asks about the time before it reassigns), so that one isn't asked twice.
- *
  * Returns `{ cancelled: true }` when the dispatcher backs out of the
  * confirmation, so the caller can close quietly instead of showing an error for
  * something the user chose not to do.
@@ -39,18 +36,32 @@ export async function assignJob(opts: {
   riderId: string;
   techName?: string;
   confirm: ConfirmFn;
-  busyConfirmed?: boolean;
 }): Promise<AssignResult> {
-  const post = async (force?: boolean) =>
-    ok(
-      await api.bookings[":id"].assign.$post({
-        param: { id: opts.bookingId },
-        json: force ? { riderId: opts.riderId, force: true } : { riderId: opts.riderId },
-      }),
-    );
+  return withAssignConfirm(
+    async (force) =>
+      ok(
+        await api.bookings[":id"].assign.$post({
+          param: { id: opts.bookingId },
+          json: force ? { riderId: opts.riderId, force: true } : { riderId: opts.riderId },
+        }),
+      ),
+    opts.confirm,
+    opts.techName,
+  );
+}
 
+/**
+ * The confirmation half of assignJob, for any request that assigns: run it, and
+ * on a forceable 409 ask the question that fits the reason, then run it again
+ * with force. The dispatch calendar uses it for /api/dispatch/assign.
+ */
+export async function withAssignConfirm(
+  post: (force: boolean) => Promise<unknown>,
+  confirm: ConfirmFn,
+  techName?: string,
+): Promise<AssignResult> {
   try {
-    await post();
+    await post(false);
     return { cancelled: false };
   } catch (e) {
     const body =
@@ -60,15 +71,11 @@ export async function assignJob(opts: {
     if (!(e instanceof ApiError) || e.status !== 409 || !body?.forceable) throw e;
 
     const busy = body.reason === "overlap" || body.reason === "timeoff";
-    if (busy && opts.busyConfirmed) {
-      await post(true);
-      return { cancelled: false };
-    }
-    const yes = await opts.confirm({
+    const yes = await confirm({
       title: busy
         ? "Send them anyway?"
-        : opts.techName
-          ? `Reassign this job to ${opts.techName}?`
+        : techName
+          ? `Reassign this job to ${techName}?`
           : "Reassign this job?",
       message: busy
         ? `${e.message} You can dispatch them anyway — check they can actually make it.`
