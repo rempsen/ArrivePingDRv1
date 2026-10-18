@@ -24,6 +24,8 @@ export interface OnboardingState {
   welcomeDoneAt?: string;
   tours: Record<string, ChapterProgress>;
   checklistHidden?: boolean;
+  /** Technicians: when their practice job was handed out (set by the server only; services/practice-job.ts). */
+  practiceJobAt?: string;
 }
 
 export type OnboardingPatch = Partial<Omit<OnboardingState, "v">>;

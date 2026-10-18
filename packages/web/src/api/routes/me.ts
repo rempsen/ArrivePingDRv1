@@ -15,7 +15,7 @@ import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
-import { requireAuth, loadMemberships } from "../middleware/auth";
+import { requireAuth, loadMemberships, tenantId } from "../middleware/auth";
 import { isSuperadmin } from "../lib/permissions";
 import { detachMembership } from "../lib/memberships";
 import { deleteOwnAccount, deletionBlockers } from "../../services/account-deletion";
@@ -27,6 +27,7 @@ import { parseLineItems, round2 } from "../../shared/catalog";
 import { jsonBody } from "../lib/validate";
 import { mergeOnboarding, ONBOARDING_MAX_BYTES, parseOnboarding } from "../../shared/onboarding";
 import { OnboardingPatchSchema } from "../../shared/onboarding-schema";
+import { ensurePracticeJob, removePracticeJob } from "../../services/practice-job";
 
 type SessionUser = { id: string; role?: string; companyId?: string };
 
@@ -124,6 +125,21 @@ async function countsForCompany(
 }
 
 export const meRoutes = new Hono<AppEnv>()
+  /**
+   * Practice job for a technician's first run of the app: created once per
+   * technician per company (sample-flagged, so nobody is messaged), returned
+   * while it exists. DELETE removes it. See services/practice-job.ts.
+   */
+  .post("/practice-job", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    const out = await ensurePracticeJob(tenantId(c), me.id);
+    if (out.jobId && "created" in out && out.created) capture("guide.practice_job_created", me.id, { companyId: tenantId(c) });
+    return c.json(out);
+  })
+  .delete("/practice-job", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    return c.json(await removePracticeJob(tenantId(c), me.id));
+  })
   /**
    * ArrivePing Guide progress for me at the acting company: Welcome answers,
    * tour chapters done, checklist hidden. Per person per company, stored on
@@ -438,6 +454,8 @@ export const meRoutes = new Hono<AppEnv>()
               eq(schema.bookings.riderId, rider.id),
               eq(schema.bookings.status, "completed"),
               isNull(schema.bookings.deletedAt),
+              // A practice job is never paid (payouts skip sample jobs too), so it isn't earnings.
+              eq(schema.bookings.isSample, false),
             ),
           );
           const svcIds = [...new Set(completed.map((b) => b.serviceId).filter((v): v is string => !!v))];

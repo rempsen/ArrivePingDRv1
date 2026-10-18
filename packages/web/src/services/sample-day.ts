@@ -192,15 +192,34 @@ async function centerFor(companyId: string, co: typeof schema.companies.$inferSe
   return FALLBACK_CENTER;
 }
 
-/** Sample rows that exist for the company right now. */
-export async function sampleRows(companyId: string) {
+/**
+ * Practice jobs (services/practice-job.ts) are sample-flagged too, so every
+ * safety rail above applies to them, but they belong to a real technician's
+ * first run, not to the office's sample day: they don't count toward it, don't
+ * stop it being seeded, and aren't re-planned with it. "Clear sample data"
+ * still removes them, as it promises to remove all sample data.
+ */
+export const PRACTICE_SLOT = "practice";
+export const practiceCustomerId = (companyId: string) => sampleId(companyId, "u-practice");
+
+/**
+ * Sample rows that exist for the company right now: the sample day's, or with
+ * `includePractice`, every sample row including practice jobs and their customer.
+ */
+export async function sampleRows(companyId: string, opts: { includePractice?: boolean } = {}) {
   const t = tdb(companyId);
   const [users, riders, bookings] = await Promise.all([
     t.select(schema.user, and(eq(schema.user.isSample, true), eq(schema.user.companyId, companyId))),
     t.select(schema.riders, eq(schema.riders.isSample, true)),
     t.select(schema.bookings, eq(schema.bookings.isSample, true)),
   ]);
-  return { users, riders, bookings };
+  if (opts.includePractice) return { users, riders, bookings };
+  const practiceCust = practiceCustomerId(companyId);
+  return {
+    users: users.filter((u) => u.id !== practiceCust),
+    riders,
+    bookings: bookings.filter((b) => slotOf(b) !== PRACTICE_SLOT),
+  };
 }
 
 export function slotOf(b: { fieldData: string }): string | null {
@@ -486,7 +505,7 @@ export async function clearSampleDay(companyId: string, now = new Date()): Promi
   const t = tdb(companyId);
   const co = await loadCompany(companyId);
   const state = parseSampleState(co?.sampleData) ?? { v: 1 as const };
-  const { users, riders, bookings } = await sampleRows(companyId);
+  const { users, riders, bookings } = await sampleRows(companyId, { includePractice: true });
   const userIds = users.map((u) => u.id);
   const riderIds = riders.map((r) => r.id);
 

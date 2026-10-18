@@ -66,7 +66,8 @@ export type AnalyticsEvent =
   | "guide.chapter_completed"
   | "guide.chapter_skipped"
   | "guide.sample_cleared"
-  | "guide.sample_added";
+  | "guide.sample_added"
+  | "guide.practice_job_created";
 
 /**
  * Capture a business event. Fire-and-forget: never throws, never blocks the

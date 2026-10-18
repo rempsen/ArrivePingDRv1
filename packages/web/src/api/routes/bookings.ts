@@ -536,7 +536,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // find rider record for this user
     const rider = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
     if (!rider) return c.json({ jobsDone: 0, earnings: 0, activeJobs: 0 }, 200);
-    const all = await t.select(schema.bookings, eq(schema.bookings.riderId, rider.id));
+    // Practice and sample jobs are pretend work: they don't count toward the day.
+    const all = await t.select(schema.bookings, and(eq(schema.bookings.riderId, rider.id), eq(schema.bookings.isSample, false)));
     // "Today" is the tenant's local day, not the server's. setHours() here ran
     // in the process time zone (UTC in production), so for a Winnipeg tenant
     // the window rolled over at 19:00 local: the tech's completed jobs and
