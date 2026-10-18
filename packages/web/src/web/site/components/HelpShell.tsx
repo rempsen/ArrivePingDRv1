@@ -10,6 +10,7 @@ import type { ArticleBlock } from "../support/articles";
 import { support } from "../support/articles";
 import { SupportMessageForm } from "./SupportMessageForm";
 import "../site.css";
+import { homeFor } from "../../lib/home";
 
 /**
  * Chrome shared by the Help Center hub and every help article: site header
@@ -32,7 +33,7 @@ function Body({ path, children }: { path: string; children: ReactNode }) {
   useHeaderOffset(headerRef, rootRef);
   usePageMeta(path);
 
-  const dashboardHref = isAuthed ? (role === "admin" ? "/admin" : role === "rider" ? "/rider" : "/app") : undefined;
+  const dashboardHref = isAuthed ? homeFor(role) : undefined;
 
   useEffect(() => {
     const prevBg = document.documentElement.style.backgroundColor;

@@ -14,14 +14,15 @@ import {
   Route as RouteIcon,
   Bot,
 } from "lucide-react";
+import { homeFor } from "../lib/home";
 
-type Role = "customer" | "rider" | "admin" | "superadmin";
+type Role = string;
 
 // Public sign-up is client-only. Technicians join via admin invite (/join/:token).
 
 
 function dest(role: Role) {
-  return role === "admin" || role === "superadmin" ? "/admin" : role === "rider" ? "/rider" : "/app";
+  return homeFor(role);
 }
 
 export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {

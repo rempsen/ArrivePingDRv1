@@ -17,6 +17,7 @@ import "../../site/landing.css";
 import "../../site/live/live.css";
 import "../../site/live/opening.css";
 import "../../site/live/trade.css";
+import { homeFor } from "../../lib/home";
 
 /**
  * Public solution, pricing, about and comparison pages. Content lives in
@@ -43,7 +44,7 @@ function Landing({ page }: { page: LandingPage }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const { isAuthed, role } = useAuth();
-  const dashboardHref = isAuthed ? (role === "admin" ? "/admin" : role === "rider" ? "/rider" : "/app") : undefined;
+  const dashboardHref = isAuthed ? homeFor(role) : undefined;
   // Same as the homepage: the live sections' CSS drops all motion under this flag.
   const { reduced } = usePlayback();
 

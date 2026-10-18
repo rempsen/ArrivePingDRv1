@@ -22,6 +22,7 @@ import {
   resolveGeofenceRadiusM,
   AUTO_PAUSE_RADIUS_MULTIPLIER,
 } from "../../../shared/geo-distance";
+import { useAccess } from "../../hooks/use-access";
 
 const TIMEZONES = [
   "America/Winnipeg", "America/Toronto", "America/Vancouver", "America/Edmonton",
@@ -956,20 +957,26 @@ type SettingsSection = {
   render: () => React.ReactNode;
   /** sub-pages that already render their own PageWrap/PageHead */
   embedded?: boolean;
+  /** Who sees the tab besides admins: a permission, or "admin" for admins only. */
+  need?: string;
 };
 
-const SECTIONS: SettingsSection[] = [
+const ALL_SECTIONS: SettingsSection[] = [
   { key: "company", label: "Company", icon: Building2, render: () => <CompanySettingsTab /> },
-  { key: "billing", label: "Billing", icon: Receipt, render: () => <BillingSettingsTab /> },
-  { key: "payments", label: "Payments", icon: CreditCard, render: () => <PaymentsSettingsTab /> },
-  { key: "automation", label: "Automation & AI", icon: Sparkles, render: () => <AutomationPage />, embedded: true },
-  { key: "integrations", label: "Integrations", icon: Plug, render: () => <IntegrationsPage />, embedded: true },
-  { key: "api", label: "API & MCP", icon: KeyRound, render: () => <ApiAccessPage />, embedded: true },
-  { key: "audit", label: "Audit Log", icon: ScrollText, render: () => <AuditPage />, embedded: true },
+  // Money and keys stay with admins (api/lib/office-access.ts).
+  { key: "billing", label: "Billing", icon: Receipt, render: () => <BillingSettingsTab />, need: "admin" },
+  { key: "payments", label: "Payments", icon: CreditCard, render: () => <PaymentsSettingsTab />, need: "admin" },
+  { key: "automation", label: "Automation & AI", icon: Sparkles, render: () => <AutomationPage />, embedded: true, need: "automation:edit" },
+  { key: "integrations", label: "Integrations", icon: Plug, render: () => <IntegrationsPage />, embedded: true, need: "integrations:edit" },
+  { key: "api", label: "API & MCP", icon: KeyRound, render: () => <ApiAccessPage />, embedded: true, need: "admin" },
+  { key: "audit", label: "Audit Log", icon: ScrollText, render: () => <AuditPage />, embedded: true, need: "audit:view" },
   { key: "security", label: "Security", icon: Lock, render: () => <SecurityTab /> },
 ];
 
 export default function AdminSettings() {
+  // Admins see every tab; anyone else with Settings access sees the ones their role includes.
+  const { isAdmin, can } = useAccess();
+  const SECTIONS = ALL_SECTIONS.filter((s) => isAdmin || !s.need || (s.need !== "admin" && can(s.need)));
   // remember last-opened section across reloads
   const [active, setActive] = useState<string>(() => {
     if (typeof window === "undefined") return "company";

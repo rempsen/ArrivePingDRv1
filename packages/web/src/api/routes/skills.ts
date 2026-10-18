@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, tx } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { officeCan, requireAuth, tx } from "../middleware/auth";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
@@ -20,7 +19,7 @@ export const skillsRoutes = new Hono<AppEnv>()
   // add a skill (type-new-to-add). Idempotent on name (case-insensitive).
   .post("/", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "techs:edit"))) return c.json({ message: "Forbidden" }, 403);
     const body = await c.req.json();
     const name = String(body.name || "").trim();
     if (!name) return c.json({ message: "Skill name is required" }, 400);
@@ -33,7 +32,7 @@ export const skillsRoutes = new Hono<AppEnv>()
   })
   .delete("/:id", requireAuth, async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!isAdminRole(u.role)) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "techs:edit"))) return c.json({ message: "Forbidden" }, 403);
     await tx(c).delete(schema.skillLibrary, eq(schema.skillLibrary.id, c.req.param("id")));
     return c.json({ ok: true }, 200);
   });

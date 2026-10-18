@@ -12,6 +12,7 @@ import { Provider } from "./components/provider";
 import { ProtectedRoute } from "./components/protected-route";
 import { AgentFeedback } from "@runablehq/website-runtime";
 import { RootErrorBoundary, RouteErrorBoundary } from "./components/error-boundary";
+import { OFFICE_ROLES } from "./lib/home";
 
 // The global + per-route error boundaries now live in components/error-boundary.tsx.
 // The old inline class here caught crashes but reported them nowhere and tore
@@ -162,7 +163,7 @@ function App() {
             </ProtectedRoute>
           </Route>
           <Route path="/admin/*?">
-            <ProtectedRoute roles={["admin", "superadmin"]}>
+            <ProtectedRoute roles={[...OFFICE_ROLES]}>
               <RouteErrorBoundary name="admin">
                 <AdminApp />
               </RouteErrorBoundary>

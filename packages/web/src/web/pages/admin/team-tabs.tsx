@@ -101,6 +101,10 @@ function useCatalog() {
 export function InternalTeamTab() {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
+  const { role: myRole } = useAuth();
+  // Admins add office staff and change roles; a manager adds field staff.
+  const isAdminRole = myRole === "admin" || myRole === "superadmin";
+  const defaultRole = isAdminRole ? "dispatcher" : "rider";
   const [showAdd, setShowAdd] = useState(false);
   const [editEmp, setEditEmp] = useState<any>(null);
   const [delEmp, setDelEmp] = useState<any>(null);
@@ -117,7 +121,7 @@ export function InternalTeamTab() {
     email: "",
     password: "",
     phone: "",
-    role: "dispatcher",
+    role: defaultRole,
     staffType: "technician",
   });
 
@@ -147,7 +151,7 @@ export function InternalTeamTab() {
       );
       setTimeout(() => setInviteMsg(""), 8000);
       setShowAdd(false);
-      setForm({ name: "", email: "", password: "", phone: "", role: "dispatcher", staffType: "technician" });
+      setForm({ name: "", email: "", password: "", phone: "", role: defaultRole, staffType: "technician" });
       setErr("");
     },
     onError: (e: any) => setErr(e.message),
@@ -428,7 +432,11 @@ export function InternalTeamTab() {
       {editEmp && (
         <Modal open onClose={() => setEditEmp(null)} title="Edit Employee">
           <div className="space-y-3">
-            <RolePicker value={editEmp.role} onChange={(role) => setEditEmp((e: any) => ({ ...e, role }))} />
+            {isAdminRole ? (
+              <RolePicker value={editEmp.role} onChange={(role) => setEditEmp((e: any) => ({ ...e, role }))} />
+            ) : (
+              <p className="text-xs text-slate-500">Only an admin can change someone's role or sign-in email.</p>
+            )}
             {editEmp.role === "rider" && (
               <Field label="Field staff type">
                 <div className="flex gap-2">
@@ -514,11 +522,14 @@ export function InternalTeamTab() {
 
 function RolePicker({ value, onChange }: { value: string; onChange: (r: string) => void }) {
   const { role: myRole } = useAuth();
-  // Only a superadmin may assign admin-tier roles.
+  // Only a superadmin may assign admin-tier roles, and only an admin assigns
+  // office roles (a manager adds field staff).
   const roles =
     myRole === "superadmin"
       ? ["superadmin", "admin", "manager", "dispatcher", "project_manager", "rider"]
-      : ["manager", "dispatcher", "project_manager", "rider"];
+      : myRole === "admin"
+        ? ["manager", "dispatcher", "project_manager", "rider"]
+        : ["rider"];
   return (
     <Field label="Role">
       <div className="grid grid-cols-1 gap-2">

@@ -14,6 +14,8 @@
  * articles that best match the question. It never sees the company's jobs,
  * customers, people, settings or numbers.
  */
+import { canOpen } from "../shared/office-pages";
+import { DEFAULT_ROLE_PERMS } from "../api/lib/permissions";
 import { streamText, tool, type LanguageModel, type ModelMessage } from "ai";
 import { z } from "zod";
 import { gateway, MODELS } from "../api/agent/gateway";
@@ -47,10 +49,15 @@ function askModel(): LanguageModel {
   return modelOverride ?? gateway(MODELS.text);
 }
 
-/** What this role may be shown: its tour chapters and the pages behind them. */
-export function askScope(role: Role) {
+/**
+ * What this person may be shown: their role's tour chapters, and the pages
+ * their permissions open (the role's defaults unless the route passes their
+ * own, which include any per-person override).
+ */
+export function askScope(role: Role, permissions?: string[]) {
   const chapters = CHAPTERS.filter((c) => c.roles.includes(role));
-  const pages = ASK_PAGES.filter((p) => !p.adminOnly || role === "admin");
+  const access = { role, admin: role === "admin", permissions: permissions ?? DEFAULT_ROLE_PERMS[role] ?? [] };
+  const pages = ASK_PAGES.filter((p) => canOpen(p.route, access));
   return { chapters, pages, slugs: articles.map((a) => a.slug) };
 }
 
@@ -76,10 +83,10 @@ export function retrieveArticles(question: string, history: AskTurn[] = [], limi
   return [...primary, ...extra].slice(0, limit);
 }
 
-export function buildAskSystem(opts: { role: Role; terms: Terms; question: string; history?: AskTurn[] }): string {
+export function buildAskSystem(opts: { role: Role; permissions?: string[]; terms: Terms; question: string; history?: AskTurn[] }): string {
   const { role, terms } = opts;
   const t = (s: string) => interpolate(s, terms);
-  const { chapters, pages } = askScope(role);
+  const { chapters, pages } = askScope(role, opts.permissions);
   const top = retrieveArticles(opts.question, opts.history);
 
   const chapterLines = chapters
@@ -117,8 +124,8 @@ ${fullText || "(none matched)"}`;
 }
 
 /** The navigation tools. No `execute`: each call becomes a button in the panel. */
-export function askTools(role: Role) {
-  const { chapters, pages, slugs } = askScope(role);
+export function askTools(role: Role, permissions?: string[]) {
+  const { chapters, pages, slugs } = askScope(role, permissions);
   const enumOf = (xs: string[]) => z.enum(xs as [string, ...string[]]);
   return {
     start_tour: tool({
@@ -137,8 +144,8 @@ export function askTools(role: Role) {
 }
 
 /** A tool call → an action, only if it names something this role may open. */
-export function toAction(role: Role, toolName: string, input: unknown): AskAction | null {
-  const { chapters, pages, slugs } = askScope(role);
+export function toAction(role: Role, toolName: string, input: unknown, permissions?: string[]): AskAction | null {
+  const { chapters, pages, slugs } = askScope(role, permissions);
   const v = (input ?? {}) as Record<string, unknown>;
   if (toolName === "start_tour" && typeof v.id === "string" && chapters.some((c) => c.id === v.id)) return { type: "tour", id: v.id };
   if (toolName === "open_page" && typeof v.route === "string" && pages.some((p) => p.route === v.route)) return { type: "page", route: v.route };
@@ -146,7 +153,7 @@ export function toAction(role: Role, toolName: string, input: unknown): AskActio
   return null;
 }
 
-export function streamAsk(opts: { role: Role; terms: Terms; question: string; history?: AskTurn[]; abortSignal?: AbortSignal }) {
+export function streamAsk(opts: { role: Role; permissions?: string[]; terms: Terms; question: string; history?: AskTurn[]; abortSignal?: AbortSignal }) {
   const history = opts.history ?? [];
   const messages: ModelMessage[] = [
     ...history.map((h) => ({ role: h.role, content: h.text }) as ModelMessage),
@@ -156,7 +163,7 @@ export function streamAsk(opts: { role: Role; terms: Terms; question: string; hi
     model: askModel(),
     system: buildAskSystem(opts),
     messages,
-    tools: askTools(opts.role),
+    tools: askTools(opts.role, opts.permissions),
     maxOutputTokens: 500,
     temperature: 0.2,
     abortSignal: opts.abortSignal,
