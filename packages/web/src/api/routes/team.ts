@@ -13,6 +13,7 @@ import {
 } from "../middleware/auth";
 import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { sendWelcome, unguessablePassword } from "../../services/welcome";
 import { audit } from "../lib/audit";
 import { AccessError, deactivateUser, openJobsFor, reactivateUser } from "../../services/user-access";
 import { capture } from "../lib/analytics";
@@ -76,7 +77,8 @@ const TeamCreate = z.object({
   name: shortText("Name", 120),
   email: emailField(),
   // better-auth enforces its own minimum; this is the outer sanity bound.
-  password: z.string({ message: "Password is required" }).min(8, "Password must be at least 8 characters").max(200, "Password is too long"),
+  // Optional: without one, they choose their own from the welcome email.
+  password: z.string().min(8, "Password must be at least 8 characters").max(200, "Password is too long").optional(),
   phone: phoneField.optional(),
   role: roleField,
   staffType: staffTypeField.optional(),
@@ -263,7 +265,7 @@ export const teamRoutes = new Hono<AppEnv>()
     // ---- Case 2: brand new person ------------------------------------------
     try {
       await auth.api.signUpEmail({
-        body: { name, email, password, role, phone: phone ?? "" } as any,
+        body: { name, email, password: password || unguessablePassword(), role, phone: phone ?? "" } as any,
       });
     } catch (e: any) {
       return c.json({ message: e?.message ?? "Sign-up failed" }, 400);
@@ -306,7 +308,9 @@ export const teamRoutes = new Hono<AppEnv>()
         payRatePerHour: b.payRatePerHour ?? 0,
       });
     }
-    return c.json({ user: { id: u.id, name, email, role } }, 201);
+    // Their set-password link, and the app or the dashboard, right away.
+    const welcome = await sendWelcome({ companyId: company, userId: u.id, inviterId: me.id });
+    return c.json({ user: { id: u.id, name, email, role }, welcomeSent: welcome.sent }, 201);
   })
 
   // ---- update an employee (role / type / manager / basics) --------------
@@ -482,6 +486,33 @@ export const teamRoutes = new Hono<AppEnv>()
       return c.json({ message: "Couldn't send the email. Try again shortly." }, 502);
     }
     return c.json({ ok: true, email: target.email });
+  })
+
+  /**
+   * Email someone a fresh welcome (set-password link), e.g. the first one went
+   * to spam or expired, or they were imported from a spreadsheet. Only for
+   * logins this company created: someone who joined with an existing
+   * ArrivePing account already has a password (they use Forgot password).
+   */
+  .post("/:id/send-welcome", requirePermission("techs:create"), async (c) => {
+    const id = c.req.param("id");
+    const cid = tenantId(c);
+    const me = c.get("user") as SessionUser;
+    const membership = await tx(c).selectOne(schema.memberships, eq(schema.memberships.userId, id));
+    // 404 for a non-member, as above.
+    if (!membership) return c.json({ message: "Not found" }, 404);
+    if (membership.status !== "active") return c.json({ message: "Their invitation is still pending — resend the invite instead" }, 400);
+    const [target] = await sdb.select({ companyId: schema.user.companyId, role: schema.user.role }).from(schema.user).where(eq(schema.user.id, id));
+    if (!target || target.role === "superadmin") return c.json({ message: "Not found" }, 404);
+    if (target.companyId !== cid)
+      return c.json({ message: "They already have an ArrivePing login from another company. They can use “Forgot password” on the sign-in page." }, 400);
+    const r = await sendWelcome({ companyId: cid, userId: id, inviterId: me.id });
+    if (!r.sent)
+      return c.json(
+        { message: r.reason === "sample" ? "That's a sample person — nothing to send" : r.reason === "role" ? "Customers don't get a welcome email" : "Couldn't send the email. Try again shortly." },
+        r.reason === "send failed" ? 502 : 400,
+      );
+    return c.json({ ok: true });
   })
 
   // ---- deactivate / reactivate (reversible; see services/user-access.ts) --

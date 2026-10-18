@@ -14,6 +14,8 @@ export default function ResetPasswordPage() {
   );
   const token = params.get("token") ?? "";
   const linkError = params.get("error");
+  // From a welcome email (services/welcome.ts): first password, not a reset.
+  const welcome = params.get("welcome") === "field" ? "field" : params.get("welcome") === "office" ? "office" : null;
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -37,9 +39,17 @@ export default function ResetPasswordPage() {
       const { error } = await authClient.resetPassword({ newPassword: password, token });
       if (error) throw new Error(error.message);
       setDone(true);
-      setTimeout(() => navigate("/sign-in"), 2200);
+      // Field staff sign in on the app, not here.
+      if (welcome !== "field") setTimeout(() => navigate("/sign-in"), 2200);
     } catch (err: any) {
-      setError(err.message || "Could not reset password. The link may have expired.");
+      const msg = String(err?.message || "");
+      setError(
+        /invalid token|expired/i.test(msg)
+          ? welcome
+            ? "This link has already been used or has expired. Ask your office to send a new sign-in link."
+            : "This reset link has already been used or has expired. Request a new one."
+          : msg || "Could not reset password. The link may have expired.",
+      );
     } finally {
       setLoading(false);
     }
@@ -56,7 +66,7 @@ export default function ResetPasswordPage() {
           <Logo light />
           <div>
             <h1 className="font-display text-4xl font-extrabold leading-tight">
-              Set a new
+              {welcome ? "Set your" : "Set a new"}
               <br /> <span className="text-glow text-cyan-glow">password.</span>
             </h1>
             <p className="mt-4 max-w-sm text-slate-400">
@@ -85,8 +95,9 @@ export default function ResetPasswordPage() {
                 Invalid or expired link
               </h2>
               <p className="mt-2 text-slate-400">
-                This password reset link is no longer valid. Request a fresh one
-                and we'll email it right over.
+                {welcome
+                  ? "This link has expired or was replaced by a newer one. Ask your office to send a new sign-in link, or request one yourself below."
+                  : "This password reset link is no longer valid. Request a fresh one and we'll email it right over."}
               </p>
               <Link
                 to="/forgot-password"
@@ -101,16 +112,20 @@ export default function ResetPasswordPage() {
                 <CheckCircle2 className="h-7 w-7" />
               </div>
               <h2 className="mt-5 font-display text-3xl font-extrabold text-white">
-                Password updated
+                {welcome ? "Password set" : "Password updated"}
               </h2>
               <p className="mt-2 text-slate-400">
-                Your password has been reset. Redirecting you to sign in…
+                {welcome === "field"
+                  ? "Now get the ArrivePing app from the App Store or Google Play and sign in with your email and this password."
+                  : welcome
+                    ? "Taking you to sign in…"
+                    : "Your password has been reset. Redirecting you to sign in…"}
               </p>
             </div>
           ) : (
             <>
               <h2 className="font-display text-3xl font-extrabold text-white">
-                Choose a new password
+                {welcome ? "Choose your password" : "Choose a new password"}
               </h2>
               <p className="mt-1 text-slate-400">
                 Make it at least 8 characters.
@@ -155,7 +170,7 @@ export default function ResetPasswordPage() {
                     <Loader className="h-5 w-5 border-white/40 border-t-white" />
                   ) : (
                     <>
-                      Reset password
+                      {welcome ? "Set password" : "Reset password"}
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}

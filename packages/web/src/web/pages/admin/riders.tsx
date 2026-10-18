@@ -106,14 +106,24 @@ function FieldStaffTab() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const res = await api.riders.$post({ json: form });
+      // No password: they choose their own from the welcome email.
+      const res = await api.riders.$post({ json: { ...form, password: form.password || undefined } });
       const data = await res.json();
       if (!res.ok) throw new Error((data as any).message || "Failed");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ["riders"] });
       qc.invalidateQueries({ queryKey: ["fleet"] });
+      const who = form.name.trim().split(" ")[0] || "them";
+      setInviteMsg(
+        data?.existingAccount
+          ? data.message
+          : data?.welcomeSent
+            ? `Added. We've emailed ${who} a link to set a password and get the app.`
+            : `Added, but the welcome email didn't go out. Use “Email a sign-in link” on ${who}'s profile to try again.`,
+      );
+      setTimeout(() => setInviteMsg(""), 8000);
       setShowAdd(false);
       setForm({ name: "", email: "", password: "", phone: "", skillClass: "General", vehicle: "Van", vehicleColor: "", licensePlate: "", licenseNumber: "", address: "", notes: "", skills: [], payRatePerHour: 0 });
       setErr("");
@@ -399,7 +409,7 @@ function FieldStaffTab() {
           <>
             <BtnGhost onClick={() => setShowAdd(false)}>Cancel</BtnGhost>
             <BtnPrimary
-              disabled={!form.name || !form.email || !form.password || create.isPending}
+              disabled={!form.name || !form.email || create.isPending}
               onClick={() => create.mutate()}
             >
               <Plus className="h-4 w-4" />
@@ -421,9 +431,9 @@ function FieldStaffTab() {
               <input aria-label="marcus@arriveping.app" className={inputCls} type="email" value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="marcus@arriveping.app" />
             </Field>
-            <Field label="Temp password" hint="Tech can change later">
-              <input aria-label="min 8 chars" className={inputCls} value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="min 8 chars" />
+            <Field label="Password (optional)" hint="Leave blank: we'll email them a link to set their own">
+              <input aria-label="Password (optional)" className={inputCls} value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Leave blank" />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -587,6 +597,22 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
     onError: (e: any) => setPwErr(e.message),
   });
 
+  // A fresh welcome email with a set-password link (services/welcome.ts).
+  const sendLink = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await (api as any).team[":id"]["send-welcome"].$post({ param: { id: userId } });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as any).message || "Couldn't send");
+      return data;
+    },
+    onSuccess: () => {
+      setPwErr("");
+      setPwMsg(`Sent. ${(rider?.name || "They").split(" ")[0]} can set a password from the email.`);
+      setTimeout(() => setPwMsg(""), 6000);
+    },
+    onError: (e: any) => setPwErr(e.message),
+  });
+
   useEffect(() => { setTab("profile"); setNewPw(""); setPwMsg(""); setPwErr(""); }, [riderId]);
 
   if (!riderId) return null;
@@ -665,8 +691,15 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
 
                   <div className="rounded-lg border border-white/10 bg-ink-2/60 p-3">
                     <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-white/70">
-                      <KeyRound className="h-3.5 w-3.5" /> Reset password
+                      <KeyRound className="h-3.5 w-3.5" /> Sign-in help
                     </p>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <BtnGhost onClick={() => { setPwErr(""); sendLink.mutate(rider.userId); }} disabled={sendLink.isPending}>
+                        {sendLink.isPending ? "Sending…" : "Email a sign-in link"}
+                      </BtnGhost>
+                      <span className="text-[11px] text-white/40">They set their own password and get the app links.</span>
+                    </div>
+                    <p className="mb-1.5 text-[11px] text-white/50">Or set a temporary password:</p>
                     <div className="flex gap-2">
                       <input
                         aria-label="New password"

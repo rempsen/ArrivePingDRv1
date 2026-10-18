@@ -378,6 +378,71 @@ export const emailTemplates = {
     // The button sits in the body so the unsubscribe line can come after it.
     return { subject: d.subject, html: shell(esc(d.title), body, undefined, FALLBACK_BRAND), text };
   },
+  /**
+   * Sent the moment someone is added to a company's team (services/welcome.ts):
+   * set a password, then the app (field staff) or the dashboard (office).
+   * Branded as the company, since it's the company adding them.
+   */
+  welcome(
+    d: {
+      kind: "field" | "office";
+      firstName: string;
+      email: string;
+      inviter: string | null;
+      roleLabel: string;
+      setPasswordUrl: string;
+      signInUrl: string;
+      appStoreUrl?: string;
+      playStoreUrl?: string;
+      expiresDays: number;
+    },
+    brand: TenantEmailBrand = FALLBACK_BRAND,
+  ) {
+    const company = brand.company || FALLBACK_BRAND.company;
+    const accent = brand.brandColor || BRAND;
+    const who = d.inviter ? `${esc(d.inviter)} at <b>${esc(company)}</b>` : `<b>${esc(company)}</b>`;
+    const article = /^[aeiou]/i.test(d.roleLabel) ? "an" : "a";
+    const step = (n: number, title: string, body: string) =>
+      `<tr><td style="padding:12px 0;border-top:1px solid #1e293b;vertical-align:top;width:34px">
+          <div style="width:24px;height:24px;border-radius:12px;background:${accent};color:${contrastText(accent)};font-weight:700;font-size:13px;line-height:24px;text-align:center">${n}</div></td>
+        <td style="padding:12px 0;border-top:1px solid #1e293b"><div style="font-weight:700;color:#f1f5f9">${title}</div>
+          <div style="color:#94a3b8;font-size:14px;margin-top:2px">${body}</div></td></tr>`;
+    const storeBtn = (label: string, url: string) =>
+      `<a href="${url}" style="display:inline-block;background:#1e293b;border:1px solid #334155;color:#e2e8f0;text-decoration:none;padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px;margin:6px 6px 0 0">${label}</a>`;
+    const stores = [d.appStoreUrl && storeBtn("App Store", d.appStoreUrl), d.playStoreUrl && storeBtn("Google Play", d.playStoreUrl)].filter(Boolean).join("");
+    const steps =
+      d.kind === "field"
+        ? [
+            step(1, "Set your password", "Use the button below. The link works for " + d.expiresDays + " days."),
+            step(2, "Get the ArrivePing app", (stores ? "Download it for your phone:<br/>" + stores : "Search for <b>ArrivePing</b> in the App Store or Google Play.")),
+            step(3, "Sign in", `Use <b>${esc(d.email)}</b> and your new password. A short tour and a practice job show you around.`),
+          ]
+        : [
+            step(1, "Set your password", "Use the button below. The link works for " + d.expiresDays + " days."),
+            step(2, "Sign in", `Go to <a href="${d.signInUrl}" style="color:${accent}">${esc(d.signInUrl.replace(/^https?:\/\//, ""))}</a> and use <b>${esc(d.email)}</b>.`),
+            step(3, "Take the short tour", "It shows you where jobs, the scheduler and the live map are. The Guide (the question-mark button) has the rest."),
+          ];
+    const body = `<p>Hi ${esc(d.firstName)},</p>
+      <p style="margin-top:10px">${who} added you to the team as ${article} <b>${esc(d.roleLabel.toLowerCase())}</b> on ArrivePing${d.kind === "field" ? ", where your jobs, directions and customer details show up on your phone" : ", where the team plans, assigns and tracks jobs"}.</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">${steps.join("")}</table>
+      <div style="margin-top:22px"><a href="${d.setPasswordUrl}" style="display:inline-block;background:${accent};color:${contrastText(accent)};text-decoration:none;padding:11px 25px;border:1px solid rgba(15,23,42,0.14);border-radius:10px;font-weight:700;font-size:14px">Set your password</a></div>
+      <p style="margin-top:20px;color:#64748b;font-size:12px">Link expired or not expecting this? Ask ${esc(company)} to send a new one, or reply to this email.</p>
+      <p style="margin-top:6px;color:#64748b;font-size:12px">If the button doesn't work, paste this link: ${d.setPasswordUrl}</p>`;
+    const text = [
+      `Hi ${d.firstName},`,
+      "",
+      `${d.inviter ? `${d.inviter} at ${company}` : company} added you to the team as ${article} ${d.roleLabel.toLowerCase()} on ArrivePing.`,
+      "",
+      `1. Set your password (link works for ${d.expiresDays} days): ${d.setPasswordUrl}`,
+      ...(d.kind === "field"
+        ? [
+            `2. Get the ArrivePing app: ${[d.appStoreUrl, d.playStoreUrl].filter(Boolean).join(" · ") || "search for ArrivePing in the App Store or Google Play"}`,
+            `3. Sign in on the app with ${d.email}. A short tour and a practice job show you around.`,
+          ]
+        : [`2. Sign in at ${d.signInUrl} with ${d.email}.`, "3. Take the short tour: it shows you where jobs, the scheduler and the live map are."]),
+    ].join("\n");
+    return { subject: `${company} added you to ArrivePing`, html: shell(`Welcome to ${esc(company)}`, body, undefined, brand), text };
+  },
   passwordReset(d: { name?: string; url: string }, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
     const co = brand.company || "your";
     const body = `<p>Hi ${d.name || "there"}, we received a request to reset the password for your ${esc(co)} account.</p>

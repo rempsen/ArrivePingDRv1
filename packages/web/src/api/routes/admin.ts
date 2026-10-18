@@ -10,6 +10,7 @@ import { isAdminRole, isSuperadmin, canBeSuperadmin, SUPERADMIN_DOMAINS } from "
 import { z } from "zod";
 import { jsonBody, shortText, longText, email as emailField, phone as phoneField } from "../lib/validate";
 import type { AppEnv } from "../env";
+import { sendWelcome } from "../../services/welcome";
 
 type SessionUser = { id: string; role?: string };
 
@@ -347,8 +348,11 @@ export const adminRoutes = new Hono<AppEnv>()
       status: "active",
       invitedBy: me.id,
     });
+    // An admin (only a superadmin can add one) gets the office welcome right
+    // away; customers get nothing until their first job (services/welcome.ts).
+    const welcome = r === "admin" ? await sendWelcome({ companyId: cid, userId: u.id, inviterId: me.id }) : null;
     return c.json(
-      { user: { id: u.id, name, email, phone: phone ?? "", role: r } },
+      { user: { id: u.id, name, email, phone: phone ?? "", role: r }, ...(welcome ? { welcomeSent: welcome.sent } : {}) },
       201,
     );
   })

@@ -102,21 +102,22 @@ export const articles: Article[] = [
   {
     slug: "invite-your-technicians",
     title: "Invite your technicians",
-    summary: "Add field staff from the dashboard; each one gets an email to set a password and install the app.",
+    summary: "Add field staff from the dashboard; each one gets an email right away to set a password and get the app.",
     category: "get-started",
-    updated: U,
-    keywords: ["add technician", "add driver", "invitation", "seat", "roster"],
+    updated: U2,
+    keywords: ["add technician", "add driver", "invitation", "seat", "roster", "welcome email", "sign-in link", "password"],
     blocks: [
       {
         type: "ol",
         items: [
           "Open **People → Technicians & Managers** in the dispatch dashboard.",
-          "Choose **Invite**, enter the technician's name, mobile number and email, and pick a role (Field Staff for technicians and drivers).",
-          "The technician receives an invitation email. They set a password, install the ArrivePing app from the App Store and sign in with that email.",
+          "Choose **Add technician** and enter their name, email and mobile number. Leave the password blank.",
+          "They get an email right away, in your company's name, with a link to set their own password (it works for 7 days) and where to get the ArrivePing app. They sign in on the app with that email.",
         ],
       },
+      { type: "p", text: "Adding a whole roster from a spreadsheet works the same way: each new technician gets the email, sent one after another over a few minutes." },
       { type: "p", text: "Each active technician is a driver seat on your plan. During the free trial seats are unlimited; after it, you are billed by driver count as described in [How ArrivePing is priced](/support/pricing-and-seats)." },
-      { type: "p", text: "A technician who didn't get the email should check spam, then ask you to resend the invitation from the same page. If they already work for another ArrivePing company, the invitation adds your company to their existing account; see [Working for more than one company](/support/working-for-more-than-one-company)." },
+      { type: "p", text: "Email didn't arrive, or the link expired? Ask them to check spam, then open their profile and choose **Email a sign-in link** to send a fresh one. If they already work for another ArrivePing company, they get an invitation to add your company to their existing account instead; see [Working for more than one company](/support/working-for-more-than-one-company)." },
     ],
   },
   {
