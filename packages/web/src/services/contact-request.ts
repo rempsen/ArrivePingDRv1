@@ -14,7 +14,7 @@
  * email run after, and their outcome is written back to the row. If the save
  * itself fails, the email is sent first so the lead is never lost.
  */
-import { and, eq, gt, inArray, lt, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { log } from "../api/lib/logger";
@@ -230,6 +230,10 @@ export async function submitContactRequest(req: ContactRequestInput): Promise<{ 
 
 /** Attempts in total (the first is at submit time); with the backoff below that's about 6 hours of trying. */
 export const MAX_ATTEMPTS = 8;
+/** `attempts` once the last attempt has finished; a row left at MAX_ATTEMPTS was interrupted. */
+export const FINISHED = MAX_ATTEMPTS + 1;
+/** How long the last attempt may stay claimed before it counts as interrupted and is run again. */
+const STUCK_MS = 30 * 60 * 1000;
 const RETRY_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 /** Wait after attempt n before trying again: 10 min, 20 min, 30 min, ... */
 export function retryDelayMs(attempts: number): number {
@@ -244,27 +248,40 @@ export function retryDelayMs(attempts: number): number {
  * lead at once. Runs every few minutes from server.ts.
  */
 export async function retryContactRequests(now = new Date()): Promise<{ checked: number; retried: number; gaveUp: number }> {
+  const t = schema.contactRequests;
+  const at = now.toISOString();
   const rows = await sdb
     .select()
-    .from(schema.contactRequests)
+    .from(t)
     .where(
       and(
-        or(inArray(schema.contactRequests.emailStatus, OPEN), inArray(schema.contactRequests.hubspotStatus, OPEN)),
-        lt(schema.contactRequests.attempts, MAX_ATTEMPTS),
-        gt(schema.contactRequests.createdAt, new Date(now.getTime() - RETRY_WINDOW_MS)),
+        or(inArray(t.emailStatus, OPEN), inArray(t.hubspotStatus, OPEN)),
+        gt(t.createdAt, new Date(now.getTime() - RETRY_WINDOW_MS)),
+        or(
+          // Due: the backoff since the last attempt has run out. Filtered here,
+          // not in the loop, so a backlog of rows still waiting can't crowd
+          // due ones out of the batch.
+          and(lt(t.attempts, MAX_ATTEMPTS), sql`${t.lastAttemptAt} <= ${at}::timestamptz - (${t.attempts} * interval '10 minutes')`),
+          // The last attempt was claimed but never finished (a restart mid-call).
+          and(eq(t.attempts, MAX_ATTEMPTS), lt(t.lastAttemptAt, new Date(now.getTime() - STUCK_MS))),
+        ),
       ),
     )
+    .orderBy(asc(t.createdAt))
     .limit(50);
 
   let retried = 0;
   let gaveUp = 0;
   for (const r of rows) {
-    if (now.getTime() - r.lastAttemptAt.getTime() < retryDelayMs(r.attempts)) continue;
+    // Claiming bumps the counter, so two sweeps can't both take the same row.
+    // The final attempt is counted as MAX_ATTEMPTS while it runs and as
+    // FINISHED once it's done, which is how an interrupted one is told apart.
+    const next = r.attempts < MAX_ATTEMPTS ? r.attempts + 1 : FINISHED;
     const claimed = await sdb
-      .update(schema.contactRequests)
-      .set({ attempts: r.attempts + 1, lastAttemptAt: now })
-      .where(and(eq(schema.contactRequests.id, r.id), eq(schema.contactRequests.attempts, r.attempts)))
-      .returning({ id: schema.contactRequests.id });
+      .update(t)
+      .set({ attempts: next, lastAttemptAt: now })
+      .where(and(eq(t.id, r.id), eq(t.attempts, r.attempts)))
+      .returning({ id: t.id });
     if (!claimed.length) continue; // another instance took it
 
     const todo = { hubspot: OPEN.includes(r.hubspotStatus), email: OPEN.includes(r.emailStatus) };
@@ -277,14 +294,16 @@ export async function retryContactRequests(now = new Date()): Promise<{ checked:
     const req: ContactRequestInput = { name: r.name, email: r.email || undefined, phone: r.phone || undefined, company: r.company || undefined, source: r.source };
     const out = await processContactRequest(r.id, req, r.createdAt, todo, known);
     retried++;
+    if (next === MAX_ATTEMPTS) await sdb.update(t).set({ attempts: FINISHED }).where(and(eq(t.id, r.id), eq(t.attempts, MAX_ATTEMPTS)));
 
     const stillOpen = (todo.hubspot && out.hubspot?.status === "failed") || (todo.email && out.email === "failed");
-    if (stillOpen && r.attempts + 1 >= MAX_ATTEMPTS) {
+    if (stillOpen && next >= MAX_ATTEMPTS) {
       gaveUp++;
       log.error("contact-request: giving up after retries — follow up by hand", {
         id: r.id,
         hubspot: out.hubspot?.status ?? r.hubspotStatus,
         email: out.email ?? r.emailStatus,
+        ...(next === FINISHED && { resumed: true }),
       });
     }
   }

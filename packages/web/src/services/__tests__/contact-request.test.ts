@@ -28,7 +28,7 @@ afterAll(() => {
   mock.module("../email", () => realEmail);
 });
 
-const { parseContact, splitName, normalizePhone, phoneVariants, displayPhone, pushContactRequestToHubspot, emailContactRequest, submitContactRequest, retryContactRequests, retryDelayMs, MAX_ATTEMPTS, LEAD_SOURCE } =
+const { parseContact, splitName, normalizePhone, phoneVariants, displayPhone, pushContactRequestToHubspot, emailContactRequest, submitContactRequest, retryContactRequests, retryDelayMs, MAX_ATTEMPTS, FINISHED, LEAD_SOURCE } =
   await import("../contact-request");
 const { _setHubspotFetch, _resetHubspotForTests } = await import("../hubspot-sync");
 const { db } = await import("../../api/database/index");
@@ -279,9 +279,33 @@ describe("retryContactRequests", () => {
       t += retryDelayMs(i) / 60_000 + 1;
       gaveUp += (await retryContactRequests(later(t))).gaveUp;
     }
-    expect((await row(id)).attempts).toBe(MAX_ATTEMPTS);
+    expect((await row(id)).attempts).toBe(FINISHED);
     expect(gaveUp).toBe(1);
     expect((await retryContactRequests(later(t + 10_000))).checked).toBe(0);
+  });
+
+  it("runs an interrupted last attempt again, once, and reports it if it still fails", async () => {
+    const id = await failedLead();
+    // A restart right after the last attempt was claimed.
+    await db.update(schema.contactRequests).set({ attempts: MAX_ATTEMPTS, lastAttemptAt: later(60) }).where(eq(schema.contactRequests.id, id));
+    failCreateTimes = Infinity;
+    expect((await retryContactRequests(later(80))).checked).toBe(0); // might still be running
+    const out = await retryContactRequests(later(95));
+    expect(out).toMatchObject({ retried: 1, gaveUp: 1 });
+    expect((await row(id)).attempts).toBe(FINISHED);
+    expect((await retryContactRequests(later(500))).checked).toBe(0);
+  });
+
+  it("doesn't let rows still waiting crowd due ones out of the batch", async () => {
+    const waiting = Array.from({ length: 60 }, (_, i) => ({ name: `Wait ${i}`, phone: "+12045550100", hubspotStatus: "failed", emailStatus: "sent", attempts: 5, lastAttemptAt: later(50), createdAt: T0 }));
+    await db.insert(schema.contactRequests).values(waiting);
+    const [due] = await db
+      .insert(schema.contactRequests)
+      .values({ name: "Due Lee", phone: "+12045550199", lastAttemptAt: T0, createdAt: later(1) })
+      .returning({ id: schema.contactRequests.id });
+    const out = await retryContactRequests(later(60));
+    expect(out).toMatchObject({ checked: 1, retried: 1 });
+    expect((await row(due!.id)).attempts).toBe(2);
   });
 
   it("never lets two sweeps retry the same lead", async () => {

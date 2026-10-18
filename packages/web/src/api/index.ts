@@ -63,7 +63,6 @@ import { platformAnalyticsRoutes } from "./routes/platform-analytics";
 import { mobileReleaseRoutes } from "./routes/mobile-release";
 import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
-import { demoRequestRoutes } from "./routes/demo-request";
 import { supportMessageRoutes } from "./routes/support-message";
 import { contactRequestRoutes } from "./routes/contact-request";
 import { websiteInquiryRoutes } from "./routes/website-inquiry";
@@ -213,8 +212,6 @@ const app = new Hono<{ Variables: Variables }>()
   // NOT CORS). Mounted before basePath/authMiddleware so it stays unauthenticated.
   .use("/api/public/*", cors({ origin: "*", allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "X-Public-Key"] }))
   .route("/api/public/forms", publicFormsRoutes)
-  // PUBLIC "Book a demo" form on the marketing site — emails contact@nvc360.com.
-  .route("/api/public/demo-request", demoRequestRoutes)
   // PUBLIC Help Center "Send us a message" — posts to the support Slack channel + emails support@.
   .route("/api/public/support-message", supportMessageRoutes)
   // PUBLIC homepage "contact me" choice — saves the lead, pushes it to HubSpot, emails contact@.

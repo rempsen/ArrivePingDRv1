@@ -151,7 +151,7 @@ export async function emailSupport(m: SupportMessage): Promise<EmailOutcome> {
  * Deliver to Slack and the inbox in parallel. `delivered` is false only when
  * neither channel took it and at least one actually tried and failed — an
  * environment with nothing configured (local dev) logs and reports success,
- * the same way the demo-request form behaves.
+ * the same way the website contact form behaves.
  */
 export const SUPPORT_LEAD_SOURCE = "Help Center message";
 
