@@ -43,6 +43,8 @@ const AssignBody = z.object({
   force: z.boolean().optional(),
   /** Asked separately: "already booked / off then — send them anyway?" (see AssignOptions.forceBusy). */
   forceBusy: z.boolean().optional(),
+  /** The assignee the dispatcher saw; the request is refused if it has changed. */
+  expectRiderId: idField("Technician").nullable().optional(),
   /** Also move it to this time (the calendar), in the same write and the same Undo. */
   scheduledAt: z.string().datetime({ message: "Time must be an ISO date-time", offset: true }).optional(),
 });
@@ -107,11 +109,11 @@ export const dispatchRoutes = new Hono<AppEnv>()
 
   .post("/assign", requireAdmin, jsonBody(AssignBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    const { bookingId, riderId, force, forceBusy, scheduledAt } = c.req.valid("json");
+    const { bookingId, riderId, force, forceBusy, scheduledAt, expectRiderId } = c.req.valid("json");
     // Moving the time as well is scheduling (see /schedule).
     if (scheduledAt && !(await officeCan(u, "scheduler:edit")))
       return forbidden(c);
-    const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, forceBusy, scheduledAt, by: u.name });
+    const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, forceBusy, scheduledAt, expectRiderId, by: u.name });
     if (!r.ok) {
       if (r.status === 404) return c.json({ message: r.message }, 404);
       return c.json({ message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) }, 409);

@@ -347,6 +347,14 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
   });
 
+  it("a reassignment is refused if the job went to someone else meanwhile", async () => {
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "offered" });
+    // the dispatcher saw t1 on it
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, expectRiderId: `${CO}-t9`, by: "Dana" }, NOW.getTime());
+    expect(r).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

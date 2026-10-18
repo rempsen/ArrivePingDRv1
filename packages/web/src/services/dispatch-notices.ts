@@ -141,6 +141,10 @@ async function hold(
  * and went out at once (then there's no Undo to offer).
  */
 export async function noteMove(companyId: string, bookingId: string, move: { from: Date; to: Date }): Promise<string | null> {
+  // A later move got here first: its notice stands, and this one has nothing
+  // to say (nor an Undo to offer).
+  const cur = await tdb(companyId).selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
+  if (!cur || new Date(cur.scheduledAt).getTime() !== move.to.getTime()) return null;
   const told = (await waitingFrom(companyId, bookingId)) ?? move.from.toISOString();
   const before = await latestMove(companyId, bookingId);
   return hold(companyId, bookingId, { from: told, at: move.to.toISOString(), prevGen: before.gen });

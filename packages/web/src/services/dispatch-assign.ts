@@ -190,7 +190,16 @@ async function techName(companyId: string, riderId: string): Promise<string> {
 
 export async function dispatchAssign(
   companyId: string,
-  input: { bookingId: string; riderId: string; force?: boolean; forceBusy?: boolean; scheduledAt?: string; by: string },
+  input: {
+    bookingId: string;
+    riderId: string;
+    force?: boolean;
+    forceBusy?: boolean;
+    scheduledAt?: string;
+    /** The assignee the dispatcher saw (a reassignment): refused if it changed since. */
+    expectRiderId?: string | null;
+    by: string;
+  },
   now = Date.now(),
 ): Promise<AssignOutcome> {
   const t = tdb(companyId);
@@ -203,8 +212,9 @@ export async function dispatchAssign(
   const to = input.scheduledAt ? new Date(input.scheduledAt) : null;
   const r = await assignJob(companyId, input.bookingId, input.riderId, {
     force: input.force,
-    // A queue drop stays a queue drop: if someone assigned it meanwhile, refuse.
-    ...(undoable ? { expectRiderId: null } : {}),
+    // A queue drop stays a queue drop, and a reassignment takes the job from
+    // the technician the dispatcher saw: if either changed meanwhile, refuse.
+    ...(undoable ? { expectRiderId: null } : input.expectRiderId !== undefined ? { expectRiderId: input.expectRiderId } : {}),
     ...(input.forceBusy !== undefined ? { forceBusy: input.forceBusy } : {}),
     by: { kind: "dispatcher", name: input.by },
     deferEvent: undoable,

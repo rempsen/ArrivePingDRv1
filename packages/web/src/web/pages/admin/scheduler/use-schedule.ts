@@ -218,7 +218,15 @@ export function usePlace(
           const r = await withAssignConfirm(
             // The live-visit question and the double-booking one are asked separately,
             // so taking a job off a visit doesn't skip the check at the new time.
-            (f) => postAssign({ bookingId: job.id, riderId: techId, force: f.inflight, forceBusy: f.busy, ...(moved ? { scheduledAt: at } : {}) }),
+            (f) =>
+              postAssign({
+                bookingId: job.id,
+                riderId: techId,
+                force: f.inflight,
+                forceBusy: f.busy,
+                expectRiderId: job.riderId,
+                ...(moved ? { scheduledAt: at } : {}),
+              }),
             confirm,
             techName,
           );
