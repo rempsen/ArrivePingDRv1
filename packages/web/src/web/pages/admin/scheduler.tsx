@@ -32,10 +32,10 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 import { tourAttr } from "../../guide/anchors";
-import { groupTechJobs, type ListJob } from "../../lib/tech-job-groups";
+import { groupTechJobs, jobClock, type ListJob } from "../../../shared/tech-job-groups";
 
 type CalView = "day" | "week" | "workweek" | "month";
 
@@ -1709,7 +1709,8 @@ export function TechJobList<T extends ListJob>({
   onRemove: (b: T) => void;
   jobLower: string;
 }) {
-  const groups = groupTechJobs(jobs);
+  const { timezone } = useBrand();
+  const groups = groupTechJobs(jobs, timezone);
   return (
     <div>
       {groups.map((g) => (
@@ -1720,7 +1721,6 @@ export function TechJobList<T extends ListJob>({
           </h4>
           <ul className="divide-y divide-white/5 overflow-hidden rounded-lg border border-white/10 bg-ink-3/40">
             {g.jobs.map((b) => {
-              const t = b.scheduledAt ? new Date(b.scheduledAt as string) : null;
               return (
                 <li key={b.id} className="group/row flex items-center transition hover:bg-white/[0.03]">
                   <button
@@ -1730,7 +1730,7 @@ export function TechJobList<T extends ListJob>({
                     className="grid min-h-11 flex-1 grid-cols-[4.25rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left"
                   >
                     <span className="text-xs font-semibold tabular-nums text-cyan-glow">
-                      {t ? t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—"}
+                      {jobClock(b.scheduledAt, timezone)}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-[13px] font-medium text-slate-100">{b.title || b.service?.name}</span>
