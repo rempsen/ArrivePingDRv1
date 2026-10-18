@@ -169,6 +169,8 @@ describe("safety", () => {
     const tool = (name: string) => MCP_TOOLS.find((x) => x.name === name)!;
     const rev = (await tool("get_revenue_report").handler({}, t)) as { totalJobs: number; revenue: number };
     expect([rev.totalJobs, rev.revenue]).toEqual([0, 0]);
+    const perf = (await tool("get_tech_performance").handler({}, t)) as unknown;
+    expect(JSON.stringify(perf)).not.toContain("(sample)");
     for (const entity of ["work_orders", "clients", "technicians", "invoices", "reviews", "job_photos"]) {
       const out = (await tool("export_data").handler({ entity }, t)) as { count: number };
       expect({ entity, count: out.count }).toEqual({ entity, count: 0 });
