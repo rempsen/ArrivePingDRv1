@@ -302,6 +302,29 @@ export const articles: Article[] = [
     ],
   },
   {
+    slug: "set-your-reply-to-email",
+    title: "Set your reply-to email",
+    summary: "Choose the name customers see on emails and the inbox their replies land in.",
+    category: "customer-notifications",
+    updated: U,
+    keywords: ["reply-to", "reply to", "sender", "from name", "from address", "email address", "domain", "dns", "verify"],
+    blocks: [
+      { type: "p", text: "Open **Setup → Notifications → Channels**. The **Email sender** card controls every email ArrivePing sends for your company." },
+      {
+        type: "ol",
+        items: [
+          "**From name**: the name customers see, usually your business name.",
+          "**Reply-to**: the inbox a customer's reply goes to. Use one someone reads every day.",
+          "**From address**: optional. Only used once its domain is verified (below).",
+          "Type your own email under **Send a test** and send one. It saves your changes first, then shows you exactly what customers receive.",
+        ],
+      },
+      { type: "p", text: "Until you verify a domain, emails are sent as \"Your business via ArrivePing\" from our address, and replies still go to your reply-to. That works with any inbox, including Gmail, Outlook and iCloud." },
+      { type: "h3", text: "Send from your own address" },
+      { type: "p", text: "To send from an address like office@yourbusiness.com, add **yourbusiness.com** under the sending domains on the same card. Once it's approved, the DNS records to add appear there. Add them where your domain is hosted (GoDaddy, Namecheap, Cloudflare and so on); it verifies itself within minutes. Public mailbox domains such as gmail.com can't be verified, because their owners control the DNS." },
+    ],
+  },
+  {
     slug: "sms-consent",
     title: "SMS consent and Canadian CASL rules",
     summary: "Appointment updates are transactional messages about a service the customer booked; keep promotions in a separate, opted-in channel.",

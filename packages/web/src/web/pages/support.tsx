@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpShell, ContactCard } from "../site/components/HelpShell";
-import { articles, articlesIn, categories, categoryById, popularSlugs, support, type Article } from "../site/support/articles";
+import { articles, articlesIn, categories, categoryById, popularSlugs, support } from "../site/support/articles";
+import { searchArticles } from "../site/support/search";
 
 /**
  * Help Center hub — https://arriveping.com/support
@@ -137,7 +138,7 @@ const SUGGESTED = [
 function Hero() {
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const results = useMemo(() => search(q), [q]);
+  const results = useMemo(() => searchArticles(q), [q]);
 
   // ⌘K / Ctrl+K focuses the search, like every help center people already use.
   useEffect(() => {
@@ -222,33 +223,3 @@ function Hero() {
   );
 }
 
-/** Tiny ranked search over titles, summaries, keywords and body text. */
-function search(q: string): Article[] {
-  const terms = q
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 1);
-  if (!terms.length) return [];
-  const scored = articles
-    .map((a) => {
-      const title = a.title.toLowerCase();
-      const summary = a.summary.toLowerCase();
-      const kw = (a.keywords ?? []).join(" ").toLowerCase();
-      const body = a.blocks
-        .map((b) => ("text" in b ? b.text : "items" in b ? b.items.join(" ") : ""))
-        .join(" ")
-        .toLowerCase();
-      let score = 0;
-      for (const t of terms) {
-        if (title.includes(t)) score += 6;
-        if (kw.includes(t)) score += 4;
-        if (summary.includes(t)) score += 3;
-        if (body.includes(t)) score += 1;
-      }
-      return { a, score };
-    })
-    .filter((x) => x.score > 0)
-    .sort((x, y) => y.score - x.score);
-  return scored.slice(0, 7).map((x) => x.a);
-}
