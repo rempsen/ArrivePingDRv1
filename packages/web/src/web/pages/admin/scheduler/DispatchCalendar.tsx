@@ -100,7 +100,8 @@ export function DispatchCalendar(p: {
 
   const offToday = useMemo(() => new Set((sb.board?.timeOff ?? []).filter((o) => o.day === day).map((o) => o.techId)), [sb.board, day]);
   const ghosts: Slot[] = useMemo(() => {
-    if (!placing || view !== "day" || day < today) return [];
+    // No suggestions from the previous day's board while this day loads.
+    if (!placing || view !== "day" || day < today || sb.stale) return [];
     return rankSlots({
       job: { durationMins: durationOf(placing), lat: placing.lat, lng: placing.lng },
       techs: techs.map((t) => {
@@ -134,7 +135,7 @@ export function DispatchCalendar(p: {
       // grows to show an early or late job), but that's display, not hours.
       range: DEFAULT_RANGE,
     });
-  }, [placing, view, day, today, techs, jobsByTech, tz, now, offToday, sb.board]);
+  }, [placing, view, day, today, techs, jobsByTech, tz, now, offToday, sb.board, sb.stale]);
   const dimmed = useMemo(() => new Set(placing ? techs.filter((t) => !qualifiedFor(t, placing)).map((t) => t.id) : []), [placing, techs]);
 
   // ---- drag and drop ----

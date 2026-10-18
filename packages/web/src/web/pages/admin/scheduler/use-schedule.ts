@@ -119,7 +119,8 @@ export function useScheduleBoard(day: string, days: 1 | 7) {
     void qc.invalidateQueries({ queryKey: ["bookings"] });
   }, [qc, company]);
 
-  return { board, isLoading: q.isLoading, error: q.error as Error | null, connected, overlay, refresh };
+  // `stale`: still showing the previous day's board while the new one loads.
+  return { board, isLoading: q.isLoading, stale: q.isPlaceholderData, error: q.error as Error | null, connected, overlay, refresh };
 }
 
 export function useDayLoad(from: string, days: number, enabled: boolean) {
