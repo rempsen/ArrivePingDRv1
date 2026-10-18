@@ -46,6 +46,8 @@ type EarnJob = {
   payRatePerHour: number;
   hourlyPay: number;
   unitPay: number;
+  mileagePay?: number;
+  flatPay?: number;
   /** $0 because the office has not set an hourly rate and there was no unit pay. */
   unrated: boolean;
 };
@@ -60,6 +62,8 @@ type EarnPayout = {
   net: number;
   hourlyPay: number;
   unitPay: number;
+  mileagePay?: number;
+  flatPay?: number;
   onSiteMinutes: number;
   status: string;
 };
@@ -72,6 +76,8 @@ type EarnCompany = {
   pay: number;
   hourlyPay: number;
   unitPay: number;
+  mileagePay?: number;
+  flatPay?: number;
   onSiteMinutes: number;
 };
 type Earnings = {
@@ -80,7 +86,7 @@ type Earnings = {
   payouts: EarnPayout[];
   totals: {
     gross: number; weekGross: number; weekJobs: number; jobsCount: number; paidNet: number;
-    pay: number; weekPay: number; hourlyPay: number; unitPay: number; onSiteMinutes: number;
+    pay: number; weekPay: number; hourlyPay: number; unitPay: number; mileagePay?: number; flatPay?: number; onSiteMinutes: number;
   };
   truncated: boolean;
 };
@@ -177,6 +183,18 @@ export default function Earnings() {
           <Text style={s.splitLbl}>On-site time{"\n"}<Text style={s.splitHint}>{fmtHours(d?.totals.onSiteMinutes ?? 0)} worked</Text></Text>
           <Text style={s.splitVal}>{money(d?.totals.hourlyPay ?? 0)}</Text>
         </View>
+        {(d?.totals.mileagePay ?? 0) > 0 && (
+          <View style={s.splitRow}>
+            <Text style={s.splitLbl}>Mileage</Text>
+            <Text style={s.splitVal}>{money(d?.totals.mileagePay ?? 0)}</Text>
+          </View>
+        )}
+        {(d?.totals.flatPay ?? 0) > 0 && (
+          <View style={s.splitRow}>
+            <Text style={s.splitLbl}>Flat per job</Text>
+            <Text style={s.splitVal}>{money(d?.totals.flatPay ?? 0)}</Text>
+          </View>
+        )}
         <View style={s.splitRow}>
           <Text style={s.splitLbl}>Per-unit work</Text>
           <Text style={s.splitVal}>{money(d?.totals.unitPay ?? 0)}</Text>
@@ -320,6 +338,8 @@ export default function Earnings() {
                       : b.unrated
                         ? "No pay rate set — ask the office"
                         : `${fmtHours(b.onSiteMinutes)} on site`}
+                    {(b.mileagePay ?? 0) > 0 ? ` · mileage ${money(b.mileagePay ?? 0)}` : ""}
+                    {(b.flatPay ?? 0) > 0 ? ` · flat ${money(b.flatPay ?? 0)}` : ""}
                     {b.unitPay > 0 ? ` · per-unit ${money(b.unitPay)}` : ""}
                   </Text>
                 </View>

@@ -27,7 +27,7 @@ const SITE = "https://arriveping.com";
 
 // Paths crawlers have no business in: the product, private links and the API.
 // "/admin" also covers "/admin/…" (prefix match), so no "$" anchors are needed.
-const PRIVATE = ["/api/", "/admin", "/app", "/rider", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/", "/uploads/"];
+const PRIVATE = ["/api/", "/admin", "/app", "/rider", "/t/", "/pay/", "/s/", "/p/", "/f/", "/join/", "/join-company/", "/uploads/"];
 // Search and AI crawlers, named explicitly so our intent is unambiguous. They get
 // the same rules as "*"; the separate group exists because some operators only
 // honour a group that names their agent.

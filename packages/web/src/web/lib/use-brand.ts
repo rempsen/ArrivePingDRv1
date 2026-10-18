@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import { getIndustryPreset } from "../../services/industry-presets";
+import { parseDistanceUnit, type DistanceUnit } from "../../shared/units";
 
 /**
  * Tenant brand + vocabulary, read from the active company's settings.
@@ -34,6 +35,8 @@ export interface TenantBrand {
    * "9 AM" means.
    */
   timezone: string;
+  /** metric (m, km) | imperial (ft, mi) — company_settings.distance_unit. */
+  distanceUnit: DistanceUnit;
 }
 
 const DEFAULTS: TenantBrand = {
@@ -51,6 +54,7 @@ const DEFAULTS: TenantBrand = {
   industry: "",
   industryOther: "",
   timezone: "",
+  distanceUnit: "metric",
 };
 
 export function useBrand(): TenantBrand {
@@ -82,7 +86,13 @@ export function useBrand(): TenantBrand {
     industry: str(s.industry, DEFAULTS.industry),
     industryOther: str(s.industryOther, DEFAULTS.industryOther),
     timezone: str(s.timezone, DEFAULTS.timezone),
+    distanceUnit: parseDistanceUnit(s.distanceUnit),
   };
+}
+
+/** The company's distance unit (metric | imperial). */
+export function useDistanceUnit(): DistanceUnit {
+  return useBrand().distanceUnit;
 }
 
 /** Convenience: just the worker noun pair. */

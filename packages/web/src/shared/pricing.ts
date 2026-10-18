@@ -9,7 +9,12 @@
  * Pure per-minute / per-hour / per-km models = set flatRate 0 and included* 0.
  */
 
+import { distanceLabel, kmToUnit, perKmToUnit, type DistanceUnit } from "./units";
+
 export type TimeUnit = "minute" | "hour";
+/** Which tracked distance a mileage charge or mileage pay counts. Mileage is
+ *  always tracked and recorded in full; this only picks what gets billed/paid. */
+export type MileageBasis = "round_trip" | "to_job";
 /** How many minutes are included free before billing starts (0 = none, 30, 60). */
 export type IncludedFreeMinutes = 0 | 30 | 60;
 
@@ -25,6 +30,8 @@ export interface RateModel {
   freeMinutes: number;       // minutes included at no charge (0 | 30 | 60)
   firstHourRate: number;     // $ for the first billable hour (0 = use timeRate)
   additionalHourRate: number;// $ per hour after the first (0 = same as first)
+  // ── mileage basis ── (optional so older stored models stay valid)
+  kmBasis?: MileageBasis;    // round_trip (default) | to_job
 }
 
 export const EMPTY_RATE_MODEL: RateModel = {
@@ -67,7 +74,8 @@ export interface PriceResult {
 export function computeSubtotal(
   rm: RateModel,
   actualMinutes: number,
-  actualKm: number
+  actualKm: number,
+  unit: DistanceUnit = "metric",
 ): PriceResult {
   const items: PriceLineItem[] = [];
   const round = (n: number) => Math.round(n * 100) / 100;
@@ -75,7 +83,7 @@ export function computeSubtotal(
   if (rm.flatRate > 0) {
     const incl: string[] = [];
     if (rm.includedMinutes > 0) incl.push(`${rm.includedMinutes} min`);
-    if (rm.includedKm > 0) incl.push(`${rm.includedKm} km`);
+    if (rm.includedKm > 0) incl.push(`${round(kmToUnit(rm.includedKm, unit))} ${distanceLabel(unit)}`);
     items.push({
       label: incl.length ? `Flat rate (incl. ${incl.join(" + ")})` : "Flat rate",
       qty: 1,
@@ -125,7 +133,13 @@ export function computeSubtotal(
   if (rm.kmRate > 0) {
     const billableKm = round(Math.max(0, actualKm - rm.includedKm));
     if (billableKm > 0)
-      items.push({ label: "Mileage", qty: billableKm, unit: "km", rate: rm.kmRate, amount: round(billableKm * rm.kmRate) });
+      items.push({
+        label: "Mileage",
+        qty: round(kmToUnit(billableKm, unit)),
+        unit: distanceLabel(unit),
+        rate: round(perKmToUnit(rm.kmRate, unit)),
+        amount: round(billableKm * rm.kmRate),
+      });
   }
 
   let subtotal = round(items.reduce((s, i) => s + i.amount, 0));
@@ -137,13 +151,13 @@ export function computeSubtotal(
 }
 
 /** Human-readable one-line summary of a rate model (for cards/lists). */
-export function describeRateModel(rm: RateModel): string {
+export function describeRateModel(rm: RateModel, unit: DistanceUnit = "metric"): string {
   const parts: string[] = [];
   if (rm.flatRate > 0) {
     let s = `$${rm.flatRate.toFixed(2)} flat`;
     const inc: string[] = [];
     if (rm.includedMinutes) inc.push(`${rm.includedMinutes}m`);
-    if (rm.includedKm) inc.push(`${rm.includedKm}km`);
+    if (rm.includedKm) inc.push(`${Math.round(kmToUnit(rm.includedKm, unit) * 10) / 10}${distanceLabel(unit)}`);
     if (inc.length) s += ` (incl ${inc.join("/")})`;
     parts.push(s);
   }
@@ -156,7 +170,13 @@ export function describeRateModel(rm: RateModel): string {
   } else {
     if (rm.timeRate > 0) parts.push(`+$${rm.timeRate.toFixed(2)}/${rm.timeUnit === "hour" ? "hr" : "min"}`);
   }
-  if (rm.kmRate > 0) parts.push(`+$${rm.kmRate.toFixed(2)}/km`);
+  if (rm.kmRate > 0) parts.push(`+$${perKmToUnit(rm.kmRate, unit).toFixed(2)}/${distanceLabel(unit)}${rm.kmBasis === "to_job" ? " (to job)" : ""}`);
   if (!parts.length) return "No pricing set";
   return parts.join(" · ");
+}
+
+/** The distance a mileage charge or mileage pay counts, from what was tracked. */
+export function mileageFor(basis: MileageBasis | undefined, roundTripKm: number, toJobKm: number): number {
+  const v = basis === "to_job" ? Number(toJobKm) : Number(roundTripKm);
+  return Number.isFinite(v) && v > 0 ? v : 0;
 }

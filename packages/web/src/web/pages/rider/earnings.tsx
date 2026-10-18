@@ -130,6 +130,8 @@ export default function RiderEarnings() {
                             : bd.unrated
                               ? "No pay rate set — ask the office"
                               : `${fmtMins(bd.onSiteMinutes)} on site`}
+                          {Number(bd.mileagePay) > 0 ? ` · mileage ${money(Number(bd.mileagePay))}` : ""}
+                          {Number(bd.flatPay) > 0 ? ` · flat ${money(Number(bd.flatPay))}` : ""}
                           {unit > 0 ? ` · per-unit ${money(unit)}` : ""}
                         </p>
                       );

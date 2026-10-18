@@ -1,10 +1,11 @@
 import * as schema from "../api/database/schema";
 import { eq } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
-import { parseRateModel, computeSubtotal, EMPTY_RATE_MODEL, type RateModel } from "../shared/pricing";
+import { parseRateModel, computeSubtotal, EMPTY_RATE_MODEL, mileageFor, type RateModel } from "../shared/pricing";
+import { parseDistanceUnit } from "../shared/units";
 import { lookupTax, regionFromAddress } from "../shared/tax";
 import { parseLineItems, sumLineItems, round2 } from "../shared/catalog";
-import { computeTechPay, type TechPayResult } from "../shared/tech-pay";
+import { jobTechPay, type TechPayResult } from "../shared/tech-pay";
 
 /**
  * Tenancy: every function takes the resolved `companyId` and routes all
@@ -67,9 +68,12 @@ export async function recomputeBooking(
   const region = await resolveRegion(companyId, b);
 
   const actualMinutes = opts.actualMinutes ?? b.onSiteMinutes ?? 0;
-  const actualKm = opts.actualKm ?? b.mileageKm ?? 0;
+  // Mileage is always tracked in full; the rate model picks which distance is billed.
+  const actualKm = opts.actualKm ?? mileageFor(rm.kmBasis, b.mileageKm ?? 0, b.mileageToJobKm ?? 0);
+  const settings = await t.selectOne(schema.companySettings);
+  const unit = parseDistanceUnit(settings?.distanceUnit);
 
-  const { subtotal: rateSubtotal, items: rateItems } = computeSubtotal(rm, actualMinutes, actualKm);
+  const { subtotal: rateSubtotal, items: rateItems } = computeSubtotal(rm, actualMinutes, actualKm, unit);
 
   // ---- catalog line items ----
   const lineItems = parseLineItems(b.lineItems);
@@ -126,7 +130,8 @@ export async function quoteBooking(companyId: string, bookingId: string, actualM
 export type { TechPayResult } from "../shared/tech-pay";
 
 /** Compute & persist tech pay for a completed job.
- *  = hourly pay (on-site time × rider hourly rate) + ad-hoc per-unit line pay.
+ *  = hourly pay + mileage pay + flat pay + per-unit line pay, at the workflow's
+ *  rates or the technician's own (see `jobTechPay`).
  *  The arithmetic lives in `shared/tech-pay.ts` so job completion, payout
  *  generation and the Earnings screens can never drift apart. */
 export async function accrueTechPay(companyId: string, bookingId: string): Promise<TechPayResult | null> {
@@ -135,11 +140,7 @@ export async function accrueTechPay(companyId: string, bookingId: string): Promi
   if (!b || !b.riderId) return null;
   const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
   if (!r) return null;
-  const pay = computeTechPay({
-    onSiteMinutes: b.onSiteMinutes || 0,
-    payRatePerHour: r.payRatePerHour || 0,
-    lineItems: parseLineItems(b.lineItems),
-  });
+  const pay = jobTechPay(b, r);
   const breakdown = {
     onSiteMinutes: b.onSiteMinutes || 0,
     hours: pay.hours,
@@ -147,6 +148,12 @@ export async function accrueTechPay(companyId: string, bookingId: string): Promi
     hourlyPay: pay.hourlyPay,
     unitPay: pay.unitPay,
     mileageKm: b.mileageKm || 0,
+    mileageToJobKm: b.mileageToJobKm || 0,
+    mileageBasis: pay.mileageBasis,
+    paidKm: pay.paidKm,
+    payRatePerKm: pay.payRatePerKm,
+    mileagePay: pay.mileagePay,
+    flatPay: pay.flatPay,
     techPay: pay.techPay,
     unrated: pay.unrated,
   };
@@ -155,4 +162,41 @@ export async function accrueTechPay(companyId: string, bookingId: string): Promi
     techPayBreakdown: JSON.stringify(breakdown),
   }, eq(schema.bookings.id, bookingId));
   return pay;
+}
+
+/**
+ * Make the booking's invoice match what the job actually costs, right before a
+ * payment is taken. Invoices are created when a work order is booked, from the
+ * estimate; the job is re-priced on completion (actual time, mileage, parts),
+ * and nothing carried that final total onto the invoice — so a card charge used
+ * the stale estimate. Creates the invoice if the job never had one. A paid (or
+ * refunded) invoice is never touched.
+ */
+export async function syncInvoiceToBooking(companyId: string, bookingId: string) {
+  const t = tdb(companyId);
+  const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
+  if (!b) return null;
+  const subtotal = round2(Number(b.subtotal) || 0);
+  const tax = round2(Number(b.taxAmount) || 0);
+  const total = round2(Number(b.total) || Number(b.price) || subtotal + tax);
+  const inv = await t.selectOne(schema.invoices, eq(schema.invoices.bookingId, bookingId));
+  if (!inv) {
+    const [created] = await t.insert(schema.invoices, {
+      bookingId,
+      customerId: b.customerId,
+      number: `INV-${Date.now().toString().slice(-6)}`,
+      amount: subtotal || total,
+      tax,
+      total,
+    });
+    return created ?? null;
+  }
+  if (inv.status === "paid" || inv.status === "refunded") return inv;
+  if (inv.amount === subtotal && inv.tax === tax && inv.total === total) return inv;
+  const [updated] = await t.update(
+    schema.invoices,
+    { amount: subtotal || total, tax, total },
+    eq(schema.invoices.id, inv.id),
+  );
+  return updated ?? { ...inv, amount: subtotal || total, tax, total };
 }

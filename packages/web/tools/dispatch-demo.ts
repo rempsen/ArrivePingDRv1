@@ -32,6 +32,10 @@ process.env.DATABASE_AUTH_TOKEN = "";
 process.env.BETTER_AUTH_SECRET ||= "dispatch-demo-secret-not-for-production";
 process.env.WEBSITE_URL ||= `http://localhost:${PORT}`;
 process.env.NODE_ENV ||= "development";
+// The showcase company has Stripe connected so the pay screens render as a
+// configured company sees them. This placeholder key only lets those screens
+// show; any real charge call fails (pass a real sk_test_ key to take one).
+if (SHOWCASE) process.env.STRIPE_SECRET_KEY ||= "sk_test_showcase_placeholder";
 
 export const DEMO = {
   company: "demo-dispatch",

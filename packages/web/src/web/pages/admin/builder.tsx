@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { CollectPaymentToggle, TechPayEditor } from "../../components/tech-pay-editor";
+import { parseTechPayModel, type TechPayModel } from "../../../shared/tech-pay";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
@@ -79,6 +81,10 @@ export default function BuilderPage() {
   // editor re-reads which pricing mode the loaded model uses instead of keeping
   // the mode of whatever was open before.
   const [rateEditorKey, setRateEditorKey] = useState(0);
+  // How this workflow pays the technician (null = each tech's own rates) and
+  // whether the tech collects payment on site.
+  const [techPayModel, setTechPayModel] = useState<TechPayModel | null>(null);
+  const [collectPayment, setCollectPayment] = useState<"" | "on_site">("");
   const [fields, setFields] = useState<Field[]>([]);
   const [dragType, setDragType] = useState<FieldType | null>(null);
   const [over, setOver] = useState(false);
@@ -105,6 +111,8 @@ export default function BuilderPage() {
     setEstimatedMins(60);
     setRateModel({ ...EMPTY_RATE_MODEL });
     setRateEditorKey((k) => k + 1);
+    setTechPayModel(null);
+    setCollectPayment("");
     setFields([]);
   }
 
@@ -115,6 +123,8 @@ export default function BuilderPage() {
     setEstimatedMins(t.estimatedMins || 60);
     setRateModel(parseRateModel(t.rateModel) ?? { ...EMPTY_RATE_MODEL });
     setRateEditorKey((k) => k + 1);
+    setTechPayModel(parseTechPayModel(t.techPayModel));
+    setCollectPayment(t.collectPayment === "on_site" ? "on_site" : "");
     let parsed: Field[] = [];
     try {
       parsed = (JSON.parse(t.fields || "[]") as any[]).map((f) => ({
@@ -137,6 +147,8 @@ export default function BuilderPage() {
         category,
         estimatedMins,
         rateModel,
+        techPayModel: techPayModel ?? "",
+        collectPayment,
         fields: fields.map((f) => ({
           type: f.type,
           label: f.label,
@@ -300,12 +312,17 @@ export default function BuilderPage() {
           {/* pricing / rate model */}
           <details className="mb-4 rounded-xl border border-white/10 bg-ink-3/30 p-3" open>
             <summary className="cursor-pointer select-none text-xs font-bold uppercase tracking-wide text-slate-400">
-              Pricing &amp; rate model
+              Pricing, pay &amp; payment
             </summary>
             <p className="mb-3 mt-2 text-[11px] text-slate-500">
               Mix any components. Charged on completion using actual on-site time + tracked mileage.
             </p>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Customer pricing</p>
             <RateModelEditor key={rateEditorKey} value={rateModel} onChange={setRateModel} />
+            <div className="mt-3 space-y-3">
+              <TechPayEditor key={`pay-${rateEditorKey}`} value={techPayModel} onChange={setTechPayModel} />
+              <CollectPaymentToggle value={collectPayment} onChange={setCollectPayment} />
+            </div>
           </details>
 
           {fields.length === 0 ? (

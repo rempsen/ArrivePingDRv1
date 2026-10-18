@@ -64,6 +64,7 @@ export const riders = pgTable("riders", {
   status: text("status").notNull().default("offline"), // offline | available | enroute | onsite | break | busy
   manualOffline: boolean("manual_offline").notNull().default(false), // tech toggled themselves offline
   payRatePerHour: real("pay_rate_per_hour").notNull().default(0), // tech hourly pay for time on site
+  payRatePerKm: real("pay_rate_per_km").notNull().default(0), // tech mileage pay per km (shown per mi for imperial companies)
   rating: real("rating").notNull().default(4.9),
   completedJobs: integer("completed_jobs").notNull().default(0),
   approval: text("approval").notNull().default("active"), // invited | pending | active | suspended
@@ -98,6 +99,8 @@ export const taskTemplates = pgTable("task_templates", {
   estimatedMins: integer("estimated_mins").notNull().default(60),
   // flexible pricing model (JSON RateModel) applied to bookings created from this template
   rateModel: text("rate_model").notNull().default(""),
+  techPayModel: text("tech_pay_model").notNull().default(""), // TechPayModel JSON, "" = tech's own rates
+  collectPayment: text("collect_payment").notNull().default(""), // "" | "on_site"
   active: boolean("active").notNull().default(true),
   createdAt: now(),
 }, (t) => ({
@@ -292,6 +295,11 @@ export const bookings = pgTable("bookings", {
   lastResumeAt: timestamp("last_resume_at", { mode: "date", withTimezone: true }), // when clock last started running
   insideGeofence: boolean("inside_geofence").notNull().default(false), // current presence at job site
   mileageKm: real("mileage_km").notNull().default(0), // round-trip km accumulated from GPS pings (enroute + on-site + return)
+  // The same trip split by leg, always recorded: the drive to the job and the
+  // drive back (on-site movement = mileageKm minus both). Billing and tech pay
+  // pick which distance counts via their `kmBasis` / `mileageBasis`.
+  mileageToJobKm: real("mileage_to_job_km").notNull().default(0),
+  mileageReturnKm: real("mileage_return_km").notNull().default(0),
   /**
    * Road-matched version of the GPS breadcrumb trail, as JSON (see
    * services/route-snap.ts `SnappedRoute`). Raw pings arrive every 8 s, so
@@ -305,6 +313,12 @@ export const bookings = pgTable("bookings", {
   routeSnapped: text("route_snapped"),
   techPay: real("tech_pay").notNull().default(0), // computed driver pay for this job (hourly)
   techPayBreakdown: text("tech_pay_breakdown").notNull().default(""), // JSON
+  // How this job pays the technician (shared/tech-pay.ts TechPayModel JSON),
+  // snapshotted from the template like rateModel. "" = the tech's own rates.
+  techPayModel: text("tech_pay_model").notNull().default(""),
+  // "" = no payment taken in the field | "on_site" = the technician collects
+  // payment on site (card / Apple Pay / Google Pay through the company's Stripe).
+  collectPayment: text("collect_payment").notNull().default(""),
   paymentStatus: text("payment_status").notNull().default("unpaid"), // unpaid | paid | refunded
   /**
    * The payout that already paid the technician for this job.
@@ -718,6 +732,9 @@ export const companySettings = pgTable("company_settings", {
   // blank zones page. See services/company-provisioning.ts.
   serviceArea: text("service_area").notNull().default(""),
   geofenceRadiusM: integer("geofence_radius_m").notNull().default(150), // auto-arrive radius from job address (meters)
+  // metric | imperial — how every distance is shown and typed (m/km vs ft/mi).
+  // Storage is always metric; see shared/units.ts.
+  distanceUnit: text("distance_unit").notNull().default("metric"),
   // ── Review requests ────────────────────────────────────────────────────
   // A completed job schedules ONE review-request SMS this many minutes later
   // (services/reviews.ts). 0 or disabled = never ask.
@@ -947,6 +964,8 @@ export const payouts = pgTable("payouts", {
   // cheque this number?" without re-opening every job.
   hourlyPay: real("hourly_pay").notNull().default(0), // on-site hours x hourly rate
   unitPay: real("unit_pay").notNull().default(0),     // per-unit line pay
+  mileagePay: real("mileage_pay").notNull().default(0), // paid distance x mileage rate
+  flatPay: real("flat_pay").notNull().default(0),       // flat per-job pay
   onSiteMinutes: real("on_site_minutes").notNull().default(0),
   // Jobs in this payout that produced $0 because no hourly rate was set and
   // there was no per-unit pay — the office needs to fix the rate.

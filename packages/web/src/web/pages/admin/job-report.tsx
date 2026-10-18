@@ -18,6 +18,7 @@ import { PageWrap, StatusBadge } from "../../components/brand";
 import { FullLoader } from "../../components/loader";
 import { apiHeaders } from "../../lib/api";
 import { money, fmtDate } from "../../lib/utils";
+import { distanceLabel, fmtDistance, parseDistanceUnit, perKmToUnit } from "../../../shared/units";
 import { useAuth } from "../../hooks/use-auth";
 import { useConfirm } from "../../components/confirm-dialog";
 import { RouteHistoryMap } from "../../components/route-history-map";
@@ -211,6 +212,9 @@ export default function JobReportPage() {
   const transitLabel = fmtMins(j.transitMinutes ? Math.round(j.transitMinutes) : mins(t.enrouteAt, t.startedAt));
   const onSiteLabel = fmtMins(j.onSiteMinutes ? Math.round(j.onSiteMinutes) : mins(t.startedAt, t.finishedAt));
   const lineItems = j.pricing?.lineItems ?? [];
+  const billed: any[] = j.pricing?.items ?? [];
+  const unit = parseDistanceUnit(j.distanceUnit);
+  const pay: any = j.techPay?.breakdown ?? null;
 
   return (
     <PageWrap>
@@ -295,7 +299,12 @@ export default function JobReportPage() {
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mileage</p>
-                <p className="mt-0.5 text-sm font-semibold text-white">{j.mileageKm ? `${Number(j.mileageKm).toFixed(1)} km` : "—"}</p>
+                <p className="mt-0.5 text-sm font-semibold text-white">{j.mileageKm ? fmtDistance(Number(j.mileageKm), unit) : "—"}</p>
+                {Number(j.mileageKm) > 0 && (
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {fmtDistance(Number(j.mileageToJobKm) || 0, unit)} there · {fmtDistance(Number(j.mileageReturnKm) || 0, unit)} back
+                  </p>
+                )}
               </div>
             </div>
           </Card>
@@ -311,7 +320,7 @@ export default function JobReportPage() {
                   }`}
                   title={
                     j.routeSnapped
-                      ? `GPS fixes matched to the road network (${j.routeSnapped.distanceKm} km by road)`
+                      ? `GPS fixes matched to the road network (${fmtDistance(Number(j.routeSnapped.distanceKm) || 0, unit, 2)} by road)`
                       : "Straight lines between GPS fixes — road matching is applied once the trip has finished"
                   }
                 >
@@ -385,7 +394,22 @@ export default function JobReportPage() {
           </Card>
 
           <Card title="Pricing" icon={<Receipt className="h-4 w-4 text-brand" />}>
-            {lineItems.length > 0 && (
+            {billed.length > 0 ? (
+              <div className="mb-3 space-y-1.5 border-b border-white/5 pb-3">
+                {billed.map((it: any, i: number) => (
+                  <div key={i} className="flex items-start justify-between gap-3 text-xs">
+                    <span className="text-slate-300">
+                      {it.label}
+                      {it.unit && it.unit !== "job" && it.unit !== "each" && (
+                        <span className="text-slate-500"> · {it.qty} {it.unit} × {money(it.rate ?? 0)}</span>
+                      )}
+                      {(it.unit === "each" || it.unit === "job") && Number(it.qty) > 1 && <span className="text-slate-500"> · {it.qty} ×</span>}
+                    </span>
+                    <span className="shrink-0 font-semibold text-slate-200">{money(it.amount ?? 0)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : lineItems.length > 0 && (
               <div className="mb-3 space-y-1.5 border-b border-white/5 pb-3">
                 {lineItems.map((li: any, i: number) => (
                   <div key={i} className="flex items-center justify-between text-xs">
@@ -406,6 +430,25 @@ export default function JobReportPage() {
           <Card title="Technician pay" icon={<DollarSign className="h-4 w-4 text-amber-400" />}>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-rose-400">Internal — not shown to the customer</p>
             <p className="text-lg font-bold text-amber-300">{money(j.techPay?.total ?? 0)}</p>
+            {pay && (
+              <div className="mt-2 space-y-1 border-t border-white/5 pt-2 text-xs">
+                {Number(pay.hourlyPay) > 0 && (
+                  <div className="flex justify-between text-slate-400"><span>Time on site · {pay.hours} h × {money(pay.payRatePerHour)}</span><span className="text-slate-200">{money(pay.hourlyPay)}</span></div>
+                )}
+                {Number(pay.mileagePay) > 0 && (
+                  <div className="flex justify-between text-slate-400">
+                    <span>Mileage · {fmtDistance(Number(pay.paidKm) || 0, unit)} × {money(perKmToUnit(Number(pay.payRatePerKm) || 0, unit))}/{distanceLabel(unit)}{pay.mileageBasis === "to_job" ? " (to job)" : ""}</span>
+                    <span className="text-slate-200">{money(pay.mileagePay)}</span>
+                  </div>
+                )}
+                {Number(pay.flatPay) > 0 && (
+                  <div className="flex justify-between text-slate-400"><span>Flat per job</span><span className="text-slate-200">{money(pay.flatPay)}</span></div>
+                )}
+                {Number(pay.unitPay) > 0 && (
+                  <div className="flex justify-between text-slate-400"><span>Per-unit work</span><span className="text-slate-200">{money(pay.unitPay)}</span></div>
+                )}
+              </div>
+            )}
           </Card>
         </div>
       </div>

@@ -18,6 +18,7 @@ import { publishTrack, publishDispatch } from "../../services/realtime";
 import { LA_TOKEN_KEYS } from "../../services/apns";
 import { z } from "zod";
 import { jsonBody, latitude, longitude } from "../lib/validate";
+import { accrueTechPay } from "../../services/billing";
 import type { AppEnv } from "../env";
 
 /**
@@ -75,11 +76,23 @@ export const trackingRoutes = new Hono<AppEnv>()
       // starting the moment the tech tapped "on my way" (enrouteAt is set).
       const seg = haversineKm(prev.lat, prev.lng, lat, lng);
       if (seg > 0.005 && seg < 5) {
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+        // The total plus the leg it belongs to, so the job record always shows
+        // the drive there and the drive back, whatever the company bills or pays.
         await t.update(
           schema.bookings,
-          { mileageKm: Math.round((b.mileageKm + seg) * 100) / 100 },
+          {
+            mileageKm: r2(b.mileageKm + seg),
+            ...(phase === "enroute" ? { mileageToJobKm: r2((b.mileageToJobKm || 0) + seg) } : {}),
+            ...(phase === "return" ? { mileageReturnKm: r2((b.mileageReturnKm || 0) + seg) } : {}),
+          },
           eq(schema.bookings.id, bookingId),
         );
+        // The drive back lands after completion; keep the job's tech pay
+        // current until a payout locks it in.
+        if (phase === "return" && b.riderId && !b.payoutId) {
+          void accrueTechPay(b.companyId, b.id).catch(() => {});
+        }
       }
     }
 

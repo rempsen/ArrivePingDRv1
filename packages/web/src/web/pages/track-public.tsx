@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { fmtDistance, fmtShortDistance } from "../../shared/units";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { api } from "../lib/api";
@@ -6,7 +7,7 @@ import { UserFacingError } from "../lib/api-error";
 import { LiveMap } from "../components/live-map";
 import { Logo } from "../components/brand";
 import { TechAvatar } from "../components/tech-avatar";
-import { STATUS_META } from "../lib/utils";
+import { STATUS_META, money } from "../lib/utils";
 import { statusStepIndex } from "../../shared/job-status";
 import { safeTimeZone } from "../../shared/tz";
 import {
@@ -44,6 +45,7 @@ import {
   FileText,
   ExternalLink,
   Flag,
+  CreditCard,
 } from "lucide-react";
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -741,6 +743,23 @@ export default function TrackPublic() {
               sideways on a 390px phone — the one page every customer opens
               from an SMS link. */}
           <div className="min-w-0 space-y-4">
+            {data.payment && ["arrived", "in_progress", "completed"].includes(data.status) && (
+              <div className="nvc-card mb-4 flex items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-500">{data.payment.paid ? "Payment" : "Amount due"}</p>
+                  <p className="text-lg font-bold text-white">{money(data.payment.total)}</p>
+                </div>
+                {data.payment.paid ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1.5 text-sm font-semibold text-emerald-300">
+                    <CheckCircle2 className="h-4 w-4" /> Paid
+                  </span>
+                ) : (
+                  <a href={data.payment.url} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-deep">
+                    <CreditCard className="h-4 w-4" /> Pay {money(data.payment.total)}
+                  </a>
+                )}
+              </div>
+            )}
             {isDone ? (
               /* Completion summary + review */
               <div className="space-y-4">
@@ -936,9 +955,13 @@ export default function TrackPublic() {
                         )}
                         {data.etaDistanceKm != null && (
                           <p>
-                            {data.etaDistanceKm < 1
-                              ? `${Math.round(data.etaDistanceKm * 1000)} m away`
-                              : `${data.etaDistanceKm.toFixed(1)} km away`}
+                            {data.distanceUnit === "imperial"
+                              ? data.etaDistanceKm < 0.3
+                                ? `${fmtShortDistance(data.etaDistanceKm * 1000, "imperial")} away`
+                                : `${fmtDistance(data.etaDistanceKm, "imperial")} away`
+                              : data.etaDistanceKm < 1
+                                ? `${Math.round(data.etaDistanceKm * 1000)} m away`
+                                : `${data.etaDistanceKm.toFixed(1)} km away`}
                           </p>
                         )}
                         {sseUp && (

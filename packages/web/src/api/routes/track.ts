@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseDistanceUnit } from "../../shared/units";
 import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
@@ -284,6 +285,12 @@ async function buildSnapshot(b: typeof schema.bookings.$inferSelect) {
     address: b.address,
     etaMins,
     etaDistanceKm,
+    distanceUnit: parseDistanceUnit(cs?.distanceUnit),
+    // On-site payment: the page offers "Pay" once work has started.
+    payment:
+      b.collectPayment === "on_site"
+        ? { total: Number(b.total) || Number(b.price) || 0, paid: b.paymentStatus === "paid", url: `/pay/${b.publicToken}` }
+        : null,
     service: svc ? { name: svc.name, icon: svc.icon } : null,
     company,
     workerNoun,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MileageRateInput } from "../../components/distance-inputs";
 import { DialogPanel } from "../../components/dialog-panel";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -94,6 +95,7 @@ function FieldStaffTab() {
     notes: "",
     skills: [] as string[],
     payRatePerHour: 0,
+    payRatePerKm: 0,
   });
   const [err, setErr] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
@@ -125,7 +127,7 @@ function FieldStaffTab() {
       );
       setTimeout(() => setInviteMsg(""), 8000);
       setShowAdd(false);
-      setForm({ name: "", email: "", password: "", phone: "", skillClass: "General", vehicle: "Van", vehicleColor: "", licensePlate: "", licenseNumber: "", address: "", notes: "", skills: [], payRatePerHour: 0 });
+      setForm({ name: "", email: "", password: "", phone: "", skillClass: "General", vehicle: "Van", vehicleColor: "", licensePlate: "", licenseNumber: "", address: "", notes: "", skills: [], payRatePerHour: 0, payRatePerKm: 0 });
       setErr("");
     },
     onError: (e: any) => setErr(e.message),
@@ -462,6 +464,9 @@ function FieldStaffTab() {
               />
             </div>
           </Field>
+          <Field label="Mileage pay rate" hint="Paid per distance driven, when a job's workflow pays mileage. Leave 0 to not pay mileage.">
+            <MileageRateInput ariaLabel="Mileage pay rate" className={inputCls} perKm={form.payRatePerKm ?? 0} onChange={(v) => setForm({ ...form, payRatePerKm: v ?? 0 })} />
+          </Field>
           <Field label="Skills" hint="Pick from the library or type a new skill and press Enter">
             <SkillPicker value={form.skills} onChange={(skills) => setForm({ ...form, skills })} />
           </Field>
@@ -558,6 +563,7 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
         address: rider.address ?? "",
         notes: rider.notes ?? "",
         payRatePerHour: rider.payRatePerHour ?? 0,
+        payRatePerKm: rider.payRatePerKm ?? 0,
         skills: (rider.skills ?? "").split(",").map((s: string) => s.trim()).filter(Boolean),
       });
     }
@@ -676,6 +682,9 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
                       </div>
                     </Field>
                   </div>
+                  <Field label="Mileage pay rate" hint="Paid per distance driven, when a job's workflow pays mileage.">
+                    <MileageRateInput ariaLabel="Mileage pay rate" className={inputCls} perKm={form.payRatePerKm ?? 0} onChange={(v) => setForm({ ...form, payRatePerKm: v ?? 0 })} />
+                  </Field>
                   <Field label="Skills" hint="Pick from the library or type a new skill and press Enter">
                     <SkillPicker value={form.skills ?? []} onChange={(skills) => setForm({ ...form, skills })} />
                   </Field>

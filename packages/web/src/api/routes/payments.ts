@@ -2,10 +2,14 @@ import { Hono } from "hono";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, requireAdmin, tenantId, tx } from "../middleware/auth";
+import { officeCan, requireAuth, requireAdmin, tenantId, tx } from "../middleware/auth";
+import QRCode from "qrcode";
+import { sendSms } from "../../services/sms";
 import { isAdminRole } from "../lib/permissions";
 import { notify, buildEmailData } from "../../services/notify";
 import { getStripe, stripeEnabled, STRIPE_PUBLISHABLE_KEY, toMinor } from "../../services/stripe";
+import type Stripe from "stripe";
+import { syncInvoiceToBooking } from "../../services/billing";
 import {
   CONNECT_COUNTRIES,
   canTakeCards,
@@ -183,6 +187,52 @@ async function syncInvoiceFromIntent(pi: {
   return { inv, status };
 }
 
+/**
+ * Create (or reuse) the PaymentIntent for an invoice, as a DIRECT charge on the
+ * tenant's connected account. Shared by the signed-in customer portal and the
+ * public on-site pay page (/pay/:token).
+ */
+export async function startIntent(
+  inv: typeof schema.invoices.$inferSelect,
+  idempotencyKey: string | undefined,
+  meta: Record<string, string> = {},
+): Promise<{ alreadyPaid: true } | { pi: Stripe.PaymentIntent; acct: PaymentAccount }> {
+  if (inv.status === "paid") return { alreadyPaid: true };
+  const stripe = getStripe();
+  const acct = await requireConnected(inv.companyId);
+  // Key includes the previous intent id so that after a canceled/failed
+  // intent we get a FRESH one instead of Stripe replaying the dead one.
+  const idemKey = idempotencyKey || `pi_${inv.id}_${inv.stripePaymentIntentId ?? "first"}`;
+
+  // reuse an existing open intent if we have one (avoids duplicate charges)
+  let pi: Stripe.PaymentIntent | null = null;
+  if (inv.stripePaymentIntentId) {
+    pi = await stripe.paymentIntents.retrieve(inv.stripePaymentIntentId, {}, acct).catch(() => null);
+    if (pi && ["canceled", "succeeded"].includes(pi.status)) pi = null;
+    // keep amount in sync if invoice total changed
+    if (pi && pi.amount !== toMinor(inv.total)) {
+      pi = await stripe.paymentIntents.update(pi.id, { amount: toMinor(inv.total) }, acct);
+    }
+  }
+  if (!pi) {
+    pi = await stripe.paymentIntents.create(
+      {
+        amount: toMinor(inv.total),
+        currency: inv.currency,
+        automatic_payment_methods: { enabled: true },
+        metadata: { invoiceId: inv.id, bookingId: inv.bookingId, number: inv.number, companyId: inv.companyId, ...meta },
+        description: `Invoice ${inv.number}`,
+      },
+      { idempotencyKey: idemKey, ...acct },
+    );
+    await sdb
+      .update(schema.invoices)
+      .set({ stripePaymentIntentId: pi.id, status: "processing", lastPaymentError: null })
+      .where(eq(schema.invoices.id, inv.id));
+  }
+  return { pi, acct };
+}
+
 export const paymentsRoutes = new Hono<AppEnv>()
   // publishable key + capability flag for the browser
   .get("/config", (c) =>
@@ -240,44 +290,57 @@ export const paymentsRoutes = new Hono<AppEnv>()
     if (!inv) throw Err.notFound("Invoice not found");
     if (inv.status === "paid") return c.json({ alreadyPaid: true, invoice: inv }, 200);
 
-    const stripe = getStripe();
-    // Direct charge on the tenant's connected account.
-    const acct = await requireConnected(inv.companyId);
-    // Key includes the previous intent id so that after a canceled/failed
-    // intent we get a FRESH one instead of Stripe replaying the dead one.
-    const idemKey = c.req.header("Idempotency-Key") || `pi_${inv.id}_${inv.stripePaymentIntentId ?? "first"}`;
-
-    // reuse an existing open intent if we have one (avoids duplicate charges)
-    let pi;
-    if (inv.stripePaymentIntentId) {
-      pi = await stripe.paymentIntents.retrieve(inv.stripePaymentIntentId, {}, acct).catch(() => null);
-      if (pi && ["canceled", "succeeded"].includes(pi.status)) pi = null;
-      // keep amount in sync if invoice total changed
-      if (pi && pi.amount !== toMinor(inv.total)) {
-        pi = await stripe.paymentIntents.update(pi.id, { amount: toMinor(inv.total) }, acct);
-      }
-    }
-    if (!pi) {
-      pi = await stripe.paymentIntents.create(
-        {
-          amount: toMinor(inv.total),
-          currency: inv.currency,
-          automatic_payment_methods: { enabled: true },
-          metadata: { invoiceId: inv.id, bookingId, customerId: u.id, number: inv.number, companyId: inv.companyId },
-          description: `Invoice ${inv.number}`,
-        },
-        { idempotencyKey: idemKey, ...acct },
-      );
-      await tx(c).update(
-        schema.invoices,
-        { stripePaymentIntentId: pi.id, status: "processing", lastPaymentError: null },
-        eq(schema.invoices.id, inv.id),
-      );
-    }
+    const synced = (await syncInvoiceToBooking(inv.companyId, bookingId)) ?? inv;
+    const out = await startIntent(synced, c.req.header("Idempotency-Key"), { customerId: u.id });
+    if ("alreadyPaid" in out) return c.json({ alreadyPaid: true, invoice: synced }, 200);
+    const { pi, acct } = out;
 
     // `stripeAccount` must be passed to Stripe.js on the browser side too —
     // a direct charge's client_secret only resolves on the connected account.
     return c.json({ clientSecret: pi.client_secret, paymentIntentId: pi.id, publishableKey: STRIPE_PUBLISHABLE_KEY, stripeAccount: acct.stripeAccount }, 200);
+  })
+
+  // The on-site pay link for a job set to "Collect payment on site": the URL,
+  // a QR code the customer can scan, and (send: true) a text to the customer.
+  // For the assigned technician or office staff.
+  .post("/link/:bookingId", requireAuth, async (c) => {
+    const u = c.get("user") as SessionUser & { role?: string; name?: string };
+    const t = tx(c);
+    const bookingId = c.req.param("bookingId");
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
+    if (!b) throw Err.notFound("Job not found");
+    let allowed = await officeCan(u as never, "work_orders:view");
+    if (!allowed) {
+      const rp = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
+      allowed = !!rp && rp.id === b.riderId;
+    }
+    if (!allowed) throw Err.notFound("Job not found");
+    if (b.collectPayment !== "on_site") {
+      throw new AppError(409, "not_on_site", "This job isn't set up to collect payment on site");
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { send?: boolean };
+    const inv = await syncInvoiceToBooking(tenantId(c), bookingId);
+    const co = await loadCompanyConnect(b.companyId);
+    const url = `${publicOrigin(c)}/pay/${b.publicToken}`;
+    const qr = await QRCode.toDataURL(url, { margin: 1, width: 480, errorCorrectionLevel: "M" });
+    let sent = false;
+    if (body.send && b.customerPhone) {
+      const company = (await t.selectOne(schema.companySettings))?.name || "Your service company";
+      const r = await sendSms(b.customerPhone, `${company}: your total is $${(inv?.total ?? 0).toFixed(2)}. Pay securely by card, Apple Pay or Google Pay: ${url}`);
+      sent = r.ok;
+    }
+    return c.json(
+      {
+        url,
+        qr,
+        total: inv?.total ?? (Number(b.total) || 0),
+        paid: b.paymentStatus === "paid" || inv?.status === "paid",
+        cardPayments: stripeEnabled && canTakeCards(co),
+        canText: !!b.customerPhone,
+        sent,
+      },
+      200,
+    );
   })
 
   // Confirm/refresh: poll Stripe for the latest intent state and reconcile.

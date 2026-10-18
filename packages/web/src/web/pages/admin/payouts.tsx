@@ -7,7 +7,8 @@ import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
 import { Modal, Field, inputCls, BtnPrimary, BtnGhost } from "../../components/modal";
 import { Plus, CheckCircle2, Clock, DollarSign, AlertTriangle, ChevronRight } from "lucide-react";
-import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useJobNoun, useDistanceUnit } from "../../lib/use-brand";
+import { fmtDistance } from "../../../shared/units";
 
 const fmtMins = (m: number) => {
   const n = Math.max(0, Math.round(Number(m) || 0));
@@ -20,6 +21,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: 
 export default function AdminPayouts() {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
+  const unit = useDistanceUnit();
   const { nounPlural: jobPlural } = useJobNoun();
   const [genOpen, setGenOpen] = useState(false);
   const today = new Date();
@@ -89,6 +91,8 @@ export default function AdminPayouts() {
                 <th className="px-4 py-3 text-right">Jobs</th>
                 <th className="px-4 py-3 text-right">On site</th>
                 <th className="px-4 py-3 text-right">Hourly</th>
+                <th className="px-4 py-3 text-right">Mileage</th>
+                <th className="px-4 py-3 text-right">Flat</th>
                 <th className="px-4 py-3 text-right">Per-unit</th>
                 <th className="px-4 py-3 text-right">Total pay</th>
                 <th className="px-4 py-3 text-right">Status</th>
@@ -122,6 +126,8 @@ export default function AdminPayouts() {
                   <td className="px-4 py-3 text-right text-slate-300">{p.jobsCount}</td>
                   <td className="px-4 py-3 text-right text-slate-400">{fmtMins(p.onSiteMinutes)}</td>
                   <td className="px-4 py-3 text-right text-slate-300">{legacy ? "—" : money(p.hourlyPay)}</td>
+                  <td className="px-4 py-3 text-right text-slate-300">{legacy ? "—" : money(p.mileagePay ?? 0)}</td>
+                  <td className="px-4 py-3 text-right text-slate-300">{legacy ? "—" : money(p.flatPay ?? 0)}</td>
                   <td className="px-4 py-3 text-right text-slate-300">{legacy ? "—" : money(p.unitPay)}</td>
                   <td className="px-4 py-3 text-right font-bold text-emerald-live">{money(p.net)}</td>
                   <td className="px-4 py-3 text-right">
@@ -139,7 +145,7 @@ export default function AdminPayouts() {
                 </tr>
                 {openRow === p.id && (
                   <tr className="border-b border-white/5 bg-black/20">
-                    <td colSpan={8} className="px-4 py-3">
+                    <td colSpan={10} className="px-4 py-3">
                       {jobs.length === 0 ? (
                         <p className="text-xs text-slate-500">
                           {legacy
@@ -154,6 +160,9 @@ export default function AdminPayouts() {
                               <th className="py-1.5 pr-3 text-right">On site</th>
                               <th className="py-1.5 pr-3 text-right">Rate</th>
                               <th className="py-1.5 pr-3 text-right">Hourly</th>
+                              <th className="py-1.5 pr-3 text-right">Distance paid</th>
+                              <th className="py-1.5 pr-3 text-right">Mileage</th>
+                              <th className="py-1.5 pr-3 text-right">Flat</th>
                               <th className="py-1.5 pr-3 text-right">Per-unit</th>
                               <th className="py-1.5 text-right">Pay</th>
                             </tr>
@@ -170,6 +179,9 @@ export default function AdminPayouts() {
                                 <td className="py-1.5 pr-3 text-right text-slate-400">{fmtMins(j.onSiteMinutes)}</td>
                                 <td className="py-1.5 pr-3 text-right text-slate-400">{j.payRatePerHour ? `${money(j.payRatePerHour)}/h` : "—"}</td>
                                 <td className="py-1.5 pr-3 text-right text-slate-400">{money(j.hourlyPay)}</td>
+                                <td className="py-1.5 pr-3 text-right text-slate-400">{j.paidKm ? fmtDistance(j.paidKm, unit) : "—"}</td>
+                                <td className="py-1.5 pr-3 text-right text-slate-400">{money(j.mileagePay ?? 0)}</td>
+                                <td className="py-1.5 pr-3 text-right text-slate-400">{money(j.flatPay ?? 0)}</td>
                                 <td className="py-1.5 pr-3 text-right text-slate-400">{money(j.unitPay)}</td>
                                 <td className="py-1.5 text-right font-semibold text-white">{money(j.techPay)}</td>
                               </tr>

@@ -26,6 +26,8 @@ export const SHOWCASE = {
   token: "showcasejob1",
   liveToken: "showcaselive",
   tech: "demo-tech-0",
+  techEmail: "marcus@demo.test",
+  techPassword: "demo-tech-123",
 };
 
 /** A hand-drawn-looking signature, as the signature pad stores it (SVG data URL). */
@@ -54,7 +56,20 @@ export async function seedShowcase(opts: {
   const { scoutStarterTemplates } = await import("../src/services/template-scout");
 
   // An established company: industry chosen, set-up finished, Welcome done.
-  await db.update(schema.companies).set({ industry: "hvac-plumbing", onboardingCompletedAt: new Date() }).where(eq(schema.companies.id, CO));
+  await db
+    .update(schema.companies)
+    .set({
+      industry: "hvac-plumbing",
+      onboardingCompletedAt: new Date(),
+      // Stripe connected (display only in the demo — see dispatch-demo.ts).
+      stripeAccountId: "acct_showcase_demo",
+      stripeCountry: "CA",
+      stripeDetailsSubmitted: true,
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+      stripeConnectedAt: new Date(),
+    })
+    .where(eq(schema.companies.id, CO));
   await db
     .update(schema.memberships)
     .set({ onboarding: JSON.stringify({ welcomeDoneAt: new Date().toISOString(), checklistHidden: true }) })
@@ -79,14 +94,22 @@ export async function seedShowcase(opts: {
     customerNoun: "Customer",
     brandColor: "#0ea5e9",
   } as never).catch(() => []);
-  // The service-call template: $150 covers the first hour on site, then $90/h
-  // (the editor's per-hour mode) — the rule the showcase job is billed on.
-  const RATE = { flatRate: 0, includedMinutes: 0, includedKm: 0, timeRate: 0, timeUnit: "hour", kmRate: 0, minCharge: 0, freeMinutes: 0, firstHourRate: 150, additionalHourRate: 90 };
+  // The service-call template: a $150 call-out that includes the first 60
+  // minutes, then $90/h — the rule the showcase job is billed on.
+  const SERVICE_PAY = { hourlyRate: null, perKmRate: 0.5, flatPay: 0, mileageBasis: "round_trip", includedKm: 0 };
+  const RATE = { flatRate: 150, includedMinutes: 60, includedKm: 0, timeRate: 90, timeUnit: "hour", kmRate: 0, minCharge: 0, freeMinutes: 0, firstHourRate: 0, additionalHourRate: 0 };
   for (const tpl of tpls as any[]) {
-    if (/service|maintenance/i.test(tpl.name)) tpl.rateModel = RATE;
+    if (/service|maintenance/i.test(tpl.name)) {
+      tpl.rateModel = RATE;
+      // Pay the tech their own hourly rate plus 50 cents a km round trip, and
+      // collect payment on site.
+      tpl.techPayModel = SERVICE_PAY;
+      tpl.collectPayment = "on_site";
+    }
     await db.insert(schema.taskTemplates).values({
       companyId: CO, name: tpl.name, category: tpl.category, icon: tpl.icon, color: tpl.color, description: tpl.description,
-      fields: JSON.stringify(tpl.fields), checklist: JSON.stringify(tpl.checklist), estimatedMins: tpl.estimatedMins, rateModel: JSON.stringify(tpl.rateModel), active: true,
+      fields: JSON.stringify(tpl.fields), checklist: JSON.stringify(tpl.checklist), estimatedMins: tpl.estimatedMins, rateModel: JSON.stringify(tpl.rateModel),
+      techPayModel: tpl.techPayModel ? JSON.stringify(tpl.techPayModel) : "", collectPayment: tpl.collectPayment ?? "", active: true,
     });
   }
 
@@ -184,6 +207,10 @@ export async function seedShowcase(opts: {
     accumulatedMs: 85 * MIN,
     clockState: "idle",
     mileageKm,
+    mileageToJobKm: R.enrouteKm,
+    mileageReturnKm: R.returnKm,
+    techPayModel: JSON.stringify(SERVICE_PAY),
+    collectPayment: "on_site",
     routeSnapped: JSON.stringify(snapped),
     rateModel: JSON.stringify(RATE),
     lineItems: JSON.stringify(lineItems),
@@ -246,8 +273,25 @@ export async function seedShowcase(opts: {
   // The live job for the customer tracking page: Sofia is on the way.
   await db
     .update(schema.bookings)
-    .set({ publicToken: SHOWCASE.liveToken, customerPhone: "+12045550188", etaMins: 12, etaDistanceKm: 4.1 })
+    .set({ publicToken: SHOWCASE.liveToken, customerPhone: "+12045550188", etaMins: 12, etaDistanceKm: 4.1, collectPayment: "on_site" })
     .where(eq(schema.bookings.id, SHOWCASE.liveJobId));
+
+  // A technician login for the technician-app screens: Marcus Lee, on site on
+  // "Thermostat swap" (demo-job-7), a job that collects payment on site.
+  const { auth } = await import("../src/api/auth");
+  const { attachMembership } = await import("../src/api/lib/memberships");
+  await auth.api.signUpEmail({ body: { name: "Marcus Lee", email: SHOWCASE.techEmail, password: SHOWCASE.techPassword } as never });
+  const [tu] = await db.select().from(schema.user).where(eq(schema.user.email, SHOWCASE.techEmail));
+  if (tu) {
+    await db.update(schema.user).set({ role: "rider", companyId: CO, emailVerified: true, phone: "+12045551002" }).where(eq(schema.user.id, tu.id));
+    await attachMembership({ userId: tu.id, companyId: CO, role: "rider", status: "active" });
+    await db.update(schema.riders).set({ userId: tu.id }).where(eq(schema.riders.id, "demo-tech-2"));
+  }
+  await db
+    .update(schema.bookings)
+    .set({ collectPayment: "on_site", customerPhone: "+12045550177", rateModel: JSON.stringify(RATE), techPayModel: JSON.stringify(SERVICE_PAY) })
+    .where(eq(schema.bookings.id, "demo-job-7"));
+  await recomputeBooking(CO, "demo-job-7", { actualMinutes: 40 });
 
   return { photos: photos.length, pings: pings.length, templates: (tpls as unknown[]).length, mileageKm, total };
 }
