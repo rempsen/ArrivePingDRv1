@@ -649,15 +649,15 @@ export const articles: Article[] = [
     title: "Exports and integrations",
     summary: "Your data is yours: CSV, Excel, PDF and JSON exports, calendar feeds, webhooks, Zapier, Make and an MCP server.",
     category: "integrations",
-    updated: U,
-    keywords: ["csv", "excel", "quickbooks", "zapier", "make", "webhook", "api", "mcp", "calendar", "ical"],
+    updated: U2,
+    keywords: ["csv", "excel", "quickbooks", "zapier", "make", "webhook", "api", "mcp", "calendar", "ical", "google calendar", "outlook"],
     blocks: [
       { type: "p", text: "ArrivePing runs scheduling, assignment, tracking and customer updates and does not try to replace your accounting or CRM. Everything it holds can leave:" },
       {
         type: "ul",
         items: [
           "**Exports:** jobs, customers, technicians and time on site as CSV, Excel, PDF or JSON from Money → Reports.",
-          "**Calendar feeds:** subscribe to a technician's or the company's schedule from Google Calendar, Outlook or Apple Calendar.",
+          "**Calendar feeds:** subscribe to a technician's or the company's schedule from Google Calendar, Outlook or Apple Calendar. Copy the subscription link from the **Calendar Sync** card on Setup → Settings → **Company**.",
           "**Webhooks, Zapier and Make:** fire on job created, assigned, on the way, arrived and completed. Add and test webhooks on the **Webhooks** tab under Setup → **Notifications**; Zapier and Make connect through them.",
           "**API & MCP:** Setup → Settings → **API & MCP** issues keys for your own scripts and an MCP server so AI agents can read and act on your dispatch data.",
         ],
