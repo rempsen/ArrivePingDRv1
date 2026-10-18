@@ -8,11 +8,11 @@
  * ghosts on the rows that fit it.
  */
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { AlertTriangle, Clock3 } from "lucide-react";
+import { AlertTriangle, Clock3, Plus } from "lucide-react";
 import { useEffect, useRef, type CSSProperties } from "react";
 import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
-import { bookedMinutes, driveMinutes, durationOf, loadLevel, packLanes, pct, type Range, type Slot } from "../../../../shared/schedule-layout";
+import { bookedMinutes, driveMinutes, durationOf, loadLevel, packLanes, pct, snapMinutes, type Range, type Slot } from "../../../../shared/schedule-layout";
 import { DRIVE_HATCH, LOAD_COLOR, PHASE_STYLE, TECH_STATUS, clock, hourLabel, hours, matches, phaseOf, spanOf } from "./calendar-utils";
 
 export interface DropPreview {
@@ -38,6 +38,8 @@ interface Props {
   dimmedTechs: Set<string>;
   onGhost(slot: Slot): void;
   onOpenJob(job: BoardJob): void;
+  /** New job for this technician; at a time when one was picked on the row. */
+  onNewJob(techId: string, startMin?: number): void;
 }
 
 export const TECH_COL_PX = 232;
@@ -138,6 +140,15 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[13.5px] font-semibold text-white">{t.name}</span>
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: st.dot }} title={st.label} />
+            <button
+              type="button"
+              onClick={() => p.onNewJob(t.id)}
+              aria-label={`New job for ${t.name} on this day`}
+              title="New job for this technician (or double-click a time on the row)"
+              className="ml-auto grid h-5 w-5 shrink-0 place-items-center rounded text-slate-500 opacity-60 hover:bg-white/10 hover:text-white hover:opacity-100 focus-visible:opacity-100"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
           </div>
           {dim && p.placing ? (
             <span className="truncate text-xs font-semibold text-slate-500">Not qualified for this job</span>
@@ -157,7 +168,19 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
         </div>
       </div>
 
-      <div ref={setNodeRef} className="relative" style={{ ...p.grid, background: isOver ? "rgba(14,165,233,.06)" : undefined }}>
+      <div
+        ref={setNodeRef}
+        className="relative"
+        style={{ ...p.grid, background: isOver ? "rgba(14,165,233,.06)" : undefined }}
+        // Double-click an empty spot to book a job there.
+        onDoubleClick={(e) => {
+          if ((e.target as HTMLElement).closest("button")) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          if (r.width <= 0) return;
+          const at = range.startMin + ((e.clientX - r.left) / r.width) * (range.endMin - range.startMin);
+          p.onNewJob(t.id, snapMinutes(at));
+        }}
+      >
         {p.nowMin !== null && p.nowMin > range.startMin && (
           <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 bg-black/25" style={{ width: `${pct(Math.min(p.nowMin, range.endMin), range)}%` }} />
         )}

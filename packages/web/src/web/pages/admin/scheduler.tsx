@@ -70,6 +70,7 @@ export default function SchedulerPage() {
   const [focusTech, setFocusTech] = useState<string | null>(null);
   const [mode, setMode] = useState<"board" | "calendar">("calendar");
   const [newDate, setNewDate] = useState<Date | null>(null);
+  const [newRider, setNewRider] = useState<string | undefined>(undefined);
   const [editJob, setEditJob] = useState<any | null>(null);
   const [, navigate] = useLocation();
   // Completed jobs are historical now — open the read-only report instead
@@ -189,7 +190,11 @@ export default function SchedulerPage() {
       <WorkOrderModal
         open={newDate !== null}
         defaultDate={newDate ?? undefined}
-        onClose={() => setNewDate(null)}
+        defaultRiderId={newRider}
+        onClose={() => {
+          setNewDate(null);
+          setNewRider(undefined);
+        }}
       />
       <WorkOrderModal
         open={editJob !== null}
@@ -263,7 +268,14 @@ export default function SchedulerPage() {
       )}
 
       {mode === "calendar" ? (
-        <DispatchCalendar confirm={confirm} onOpenJob={openJobById} />
+        <DispatchCalendar
+          confirm={confirm}
+          onOpenJob={openJobById}
+          onNewJob={(at, riderId) => {
+            setNewRider(riderId);
+            setNewDate(at);
+          }}
+        />
       ) : (
       <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
         {/* unassigned queue */}

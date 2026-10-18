@@ -3,6 +3,7 @@
  * day at a glance (the first few jobs and how full the day is), never a
  * squeezed time grid. A cell opens that day; a job opens its work order.
  */
+import { Plus } from "lucide-react";
 import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
 import { addDays, bookedMinutes, jobMinutes, loadLevel } from "../../../../shared/schedule-layout";
@@ -18,6 +19,7 @@ export function WeekCapacity(p: {
   query: string;
   onOpenDay(day: string): void;
   onOpenJob(job: BoardJob): void;
+  onNewJob(day: string): void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(p.monday, i));
   const max = p.compact ? 2 : 3;
@@ -34,23 +36,33 @@ export function WeekCapacity(p: {
               const pctBooked = Math.round((booked / cap) * 100);
               const isToday = d === p.today;
               return (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => p.onOpenDay(d)}
-                  className={`flex flex-col gap-1.5 border-l border-white/10 px-3 py-2.5 text-left hover:bg-white/[0.03] ${isToday ? "bg-brand/[0.08] shadow-[inset_0_2px_0_var(--color-brand)]" : ""}`}
-                >
-                  <span className="flex items-baseline gap-1.5">
-                    <strong className="text-sm text-white">{dayTitle(d, { weekday: "short" })}</strong>
-                    <span className="text-[13px] text-slate-500">{dayTitle(d, { month: "short", day: "numeric" })}</span>
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                    <span className="h-1 flex-1 overflow-hidden rounded bg-white/10">
-                      <span className="block h-full" style={{ width: `${Math.min(100, pctBooked)}%`, background: LOAD_COLOR[loadLevel(booked, cap)] }} />
+                <div key={d} className={`relative border-l border-white/10 ${isToday ? "bg-brand/[0.08] shadow-[inset_0_2px_0_var(--color-brand)]" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => p.onOpenDay(d)}
+                    className="flex w-full flex-col gap-1.5 px-3 py-2.5 text-left hover:bg-white/[0.03]"
+                  >
+                    <span className="flex items-baseline gap-1.5">
+                      <strong className="text-sm text-white">{dayTitle(d, { weekday: "short" })}</strong>
+                      <span className="text-[13px] text-slate-500">{dayTitle(d, { month: "short", day: "numeric" })}</span>
                     </span>
-                    {pctBooked}%
-                  </span>
-                </button>
+                    <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                      <span className="h-1 flex-1 overflow-hidden rounded bg-white/10">
+                        <span className="block h-full" style={{ width: `${Math.min(100, pctBooked)}%`, background: LOAD_COLOR[loadLevel(booked, cap)] }} />
+                      </span>
+                      {pctBooked}%
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => p.onNewJob(d)}
+                    aria-label={`New job on ${dayTitle(d, { weekday: "long", month: "long", day: "numeric" })}`}
+                    title="New job on this day"
+                    className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded text-slate-500 hover:bg-white/10 hover:text-white"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>

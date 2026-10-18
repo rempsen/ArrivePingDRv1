@@ -54,6 +54,11 @@ const UndoBody = z.object({ token: z.string({ message: "Undo token is required" 
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+const NOT_IN_ROLE = "Your role doesn't include this. Ask an admin on your account.";
+const forbidden = (c: { json(body: unknown, status: 403): Response }) => c.json({ message: NOT_IN_ROLE }, 403);
+/** The board feeds the dispatch map (work orders) and the calendar (scheduler). */
+const readsBoard = async (u: SessionUser) => (await officeCan(u, "work_orders:view")) || (await officeCan(u, "scheduler:view"));
+
 /** Stream tuning: one flush a second; a ping after ~20 quiet seconds. */
 const TICK_MS = 1_000;
 const PING_EVERY = 20;
@@ -71,6 +76,7 @@ export const dispatchRoutes = new Hono<AppEnv>()
   })
 
   .get("/board", requireAdmin, async (c) => {
+    if (!(await readsBoard(c.get("user") as SessionUser))) return forbidden(c);
     const day = c.req.query("day");
     if (day && !DAY.test(day)) throw new ValidationError({ day: "Day must look like 2026-10-17" }, "day: Day must look like 2026-10-17");
     const days = Number(c.req.query("days") ?? 1);
@@ -102,7 +108,7 @@ export const dispatchRoutes = new Hono<AppEnv>()
     const { bookingId, riderId, force, scheduledAt } = c.req.valid("json");
     // Moving the time as well is scheduling (see /schedule).
     if (scheduledAt && !(await officeCan(u, "scheduler:edit")))
-      return c.json({ message: "Your role doesn't include this. Ask an admin on your account." }, 403);
+      return forbidden(c);
     const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, scheduledAt, by: u.name });
     if (!r.ok) {
       if (r.status === 404) return c.json({ message: r.message }, 404);
@@ -137,13 +143,14 @@ export const dispatchRoutes = new Hono<AppEnv>()
       allowed = true;
       for (const p of allOf) if (allowed) allowed = await officeCan(u, p);
     } else allowed = (await officeCan(u, "work_orders:edit")) || (await officeCan(u, "scheduler:edit"));
-    if (!allowed) return c.json({ message: "Your role doesn't include this. Ask an admin on your account." }, 403);
+    if (!allowed) return forbidden(c);
     const r = await undoAny(tenantId(c), token, u.name);
     if (!r.ok) return c.json({ message: r.message }, r.status);
     return c.json({ job: r.job }, 200);
   })
 
   .get("/stream", requireAdmin, async (c) => {
+    if (!(await readsBoard(c.get("user") as SessionUser))) return forbidden(c);
     const co = tenantId(c);
     return streamSSE(c, async (stream) => {
       let closed = false;

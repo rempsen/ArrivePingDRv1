@@ -11,7 +11,7 @@ import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types"
 import { useBrand } from "../../../lib/use-brand";
 import { tourAttr } from "../../../guide/anchors";
 import type { ConfirmFn } from "../../../lib/force-confirm";
-import { addDays, clampStart, durationOf, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
+import { addDays, clampStart, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
 import { safeTimeZone, zonedDayKey, zonedMinutesOfDay } from "../../../../shared/tz";
 import { isTerminalStatus } from "../../../../shared/job-status";
 import { Agenda } from "./Agenda";
@@ -44,7 +44,12 @@ function pointerX(e: DragMoveEvent | DragEndEvent): number | null {
   return typeof start === "number" ? start + e.delta.x : null;
 }
 
-export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: string): void }) {
+export function DispatchCalendar(p: {
+  confirm: ConfirmFn;
+  onOpenJob(jobId: string): void;
+  /** Open the new-job form at this time, for this technician when one was picked. */
+  onNewJob(at: Date, riderId?: string): void;
+}) {
   const brand = useBrand();
   const [view, setView] = useState<View>("day");
   const [compact, setCompact] = useState(readCompact);
@@ -199,6 +204,11 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
   }, 0);
 
   const openJob = (j: BoardJob) => p.onOpenJob(j.id);
+  /** A new job on `d`: at the time picked, else the next half hour today, else 9:00. */
+  const newJob = (d: string, riderId?: string, startMin?: number) => {
+    const min = startMin ?? (d === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 30) * 30 : 9 * 60);
+    p.onNewJob(instantFor(d, Math.min(min, 23 * 60 + 30), tz), riderId);
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -324,10 +334,11 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
                     dimmedTechs={dimmed}
                     onGhost={placeSlot}
                     onOpenJob={openJob}
+                    onNewJob={(techId, startMin) => newJob(day, techId, startMin)}
                   />
                 </div>
                 <div className="lg:hidden">
-                  <Agenda techs={techs} jobsByTech={jobsByTech} tz={tz} query={query} onOpenJob={openJob} />
+                  <Agenda techs={techs} jobsByTech={jobsByTech} tz={tz} query={query} onOpenJob={openJob} onNewJob={() => newJob(day)} />
                 </div>
               </>
             )}
@@ -345,6 +356,7 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
                   setView("day");
                 }}
                 onOpenJob={openJob}
+                onNewJob={(d) => newJob(d)}
               />
             )}
             {view === "month" && (

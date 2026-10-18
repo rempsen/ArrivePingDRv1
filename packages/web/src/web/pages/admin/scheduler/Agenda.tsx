@@ -2,16 +2,20 @@
  * Phones: the Day view as a list (a 12-hour row doesn't fit 390 px), grouped by
  * technician, soonest first. Tapping a job opens it.
  */
+import { Plus } from "lucide-react";
 import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
 import { durationOf, jobMinutes } from "../../../../shared/schedule-layout";
 import { PHASE_STYLE, clock, matches, phaseOf } from "./calendar-utils";
 
-export function Agenda(p: { techs: BoardTech[]; jobsByTech: Map<string, BoardJob[]>; tz: string; query: string; onOpenJob(job: BoardJob): void }) {
+export function Agenda(p: { techs: BoardTech[]; jobsByTech: Map<string, BoardJob[]>; tz: string; query: string; onOpenJob(job: BoardJob): void; onNewJob(): void }) {
   const rows = p.techs.map((t) => ({ t, jobs: (p.jobsByTech.get(t.id) ?? []).filter((j) => matches(p.query, j.title, j.service, j.customerName, j.address, t.name)) }));
   const any = rows.some((r) => r.jobs.length > 0);
   return (
     <div className="flex flex-col gap-3">
+      <button type="button" onClick={p.onNewJob} className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/15 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/5">
+        <Plus className="h-4 w-4" /> New job on this day
+      </button>
       {!any && <p className="nvc-card px-4 py-8 text-center text-sm text-slate-500">Nothing booked this day.</p>}
       {rows
         .filter((r) => r.jobs.length > 0)
