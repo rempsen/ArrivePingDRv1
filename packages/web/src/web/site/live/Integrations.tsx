@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import { integrations } from "../config";
 import { useAnchorNav } from "../components/SiteHeader";
 import { useLivePlay } from "./shared";
+import { IntegrationTrace } from "./IntegrationTrace";
 
 /**
  * Integrations — what connects today, and an open door for the rest.
@@ -103,22 +104,9 @@ export function Integrations() {
             </div>
           </div>
 
-          {/* ArrivePing ⇄ your system: events flow both ways along the line */}
+          {/* ArrivePing → your system: a job event goes out as a webhook and is acknowledged */}
           <div className="ap-int__link" aria-hidden="true">
-            <div className="ap-int__node ap-int__node--ap">
-              <span className="ap-int__dot" />
-              ArrivePing
-            </div>
-            <div className="ap-int__wire">
-              <span className="ap-int__pulse ap-int__pulse--out" />
-              <span className="ap-int__pulse ap-int__pulse--back" />
-            </div>
-            <div className="ap-int__node ap-int__node--yours">Your system</div>
-            <div className="ap-int__events">
-              {["Job created", "Technician on the way", "Arrived", "Completed"].map((e) => (
-                <span key={e}>{e}</span>
-              ))}
-            </div>
+            <IntegrationTrace play={play} />
           </div>
         </div>
       </div>
