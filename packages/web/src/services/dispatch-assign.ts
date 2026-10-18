@@ -29,13 +29,13 @@ import { reconcileRiderStatus } from "./presence";
 import { logJobEvent } from "./job-events";
 import { publishDispatch } from "./realtime";
 import { fireEvent } from "./dispatch";
-import { cancelTasks, registerTaskHandler, runTaskNow, scheduleTask } from "./scheduler";
-import { ASSIGNED_NOTICE_TASK, RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
+import { cancelTasks, registerTaskHandler } from "./scheduler";
+import { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
+import { holdNotice, noteMove, noteMoveUndone } from "./dispatch-notices";
 
 /** How long an Undo token stays valid. The map's toast offers it for 6 s. */
 export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
-/** How long the "assigned" notifications wait, so an Undo inside the window reaches nobody. */
-export const NOTIFY_GRACE_MS = 8_000;
+export { NOTIFY_GRACE_MS, holdNotice, _setGraceTimerForTests } from "./dispatch-notices";
 export { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
 /** The longest decline/release reason an Undo can restore (the decline form's limit). */
 const MAX_KEPT_REASON = 2_000;
@@ -77,10 +77,8 @@ interface UndoClaims {
   /** What the queue entry said before: why it came back (declineReason) and when it was last offered (assignedAt, ISO). */
   d?: string;
   o?: string;
-  /** A move notice this assignment replaced: the time people were last told, to announce again if it's undone. */
-  n?: string;
-  /** The job's time when it was assigned (ISO): if it has moved since, Undo announces where it is now. */
-  w?: string;
+  /** When the drop moved the time: when (ISO), to tell whether its notice went out before an Undo. */
+  m?: string;
   /** This offer's assignedAt (ISO): Undo takes back this offer, not a later one to the same technician. */
   g?: string;
   /** expiry, ms */
@@ -148,7 +146,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
-  if (c.k !== "time" && [c.d, c.o, c.n, c.w, c.g].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
+  if (c.k !== "time" && [c.d, c.o, c.m, c.g].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (c.k === "time" && [c.r, c.m, c.q].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (now > c.exp) return "expired";
   return c;
@@ -160,58 +158,6 @@ const patchOf = (b: typeof schema.bookings.$inferSelect): JobPatch => ({
   assignStatus: b.assignStatus,
   riderId: b.riderId,
 });
-
-// The timer is injectable so tests can run the deferred notice on demand.
-type GraceTimer = (run: () => void, ms: number) => void;
-const realTimer: GraceTimer = (run, ms) => {
-  const h = setTimeout(run, ms);
-  (h as { unref?: () => void }).unref?.();
-};
-let graceTimer: GraceTimer = realTimer;
-/** Tests only: capture the deferred-notice callback instead of waiting for it. */
-export function _setGraceTimerForTests(fn: GraceTimer | null) {
-  graceTimer = fn ?? realTimer;
-}
-
-/**
- * Hold a notification for the Undo window: a scheduled task run by an
- * in-process timer (or the scheduler's tick if this process dies first). If the
- * task can't be queued, the event fires now rather than never, and this
- * returns false: there is nothing left for an Undo to keep quiet.
- */
-export async function holdNotice(
-  companyId: string,
-  opts: { kind: string; bookingId: string; payload: Record<string, unknown>; fallback: Parameters<typeof fireEvent>[0] },
-): Promise<boolean> {
-  const id = await scheduleTask({
-    companyId,
-    kind: opts.kind,
-    runAt: Date.now() + NOTIFY_GRACE_MS,
-    bookingId: opts.bookingId,
-    payload: opts.payload,
-  });
-  if (!id) {
-    await fireEvent(opts.fallback, opts.bookingId);
-    return false;
-  }
-  graceTimer(() => void runTaskNow(id), NOTIFY_GRACE_MS);
-  return true;
-}
-
-/** The "last told" time of a move notice still waiting for this job, if any. */
-async function waitingMoveFrom(companyId: string, bookingId: string): Promise<string | null> {
-  const T = schema.scheduledTasks;
-  const rows = await tdb(companyId).select(T, and(eq(T.bookingId, bookingId), eq(T.status, "pending"), eq(T.kind, RESCHEDULED_NOTICE_TASK)));
-  for (const r of rows) {
-    try {
-      const from = (JSON.parse(r.payload || "{}") as { from?: unknown }).from;
-      if (typeof from === "string") return from;
-    } catch {
-      /* unreadable payload: nothing to carry */
-    }
-  }
-  return null;
-}
 
 async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string): Promise<boolean> {
   return holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId }, fallback: "assigned" });
@@ -274,14 +220,12 @@ export async function dispatchAssign(
   // A reason too long to carry back can't be restored exactly: no Undo then
   // (the notice still waits out the window, so nothing is sent early).
   const restorable = (was.declineReason ?? "").length <= MAX_KEPT_REASON;
+  const from = new Date(was.scheduledAt);
+  const moved = new Date(r.booking.scheduledAt).getTime() !== from.getTime();
+  // A new time is announced on its own ("rescheduled"), apart from the
+  // assignment: tenants set the two messages up separately.
+  const moveHeld = moved ? (await noteMove(companyId, input.bookingId, { from, to: new Date(r.booking.scheduledAt) })) !== null : true;
   if (undoable) {
-    // The "assigned" notice gives the time, so a move still waiting to be
-    // announced has nothing to add (as on the immediate path in assignJob).
-    // Its "last told" time rides in the token, so an Undo can put it back.
-    const toldFrom = await waitingMoveFrom(companyId, input.bookingId);
-    await cancelTasks({ bookingId: input.bookingId, kind: RESCHEDULED_NOTICE_TASK });
-    const from = new Date(was.scheduledAt);
-    const moved = new Date(r.booking.scheduledAt).getTime() !== from.getTime();
     undo = signUndo({
       v: 1,
       c: companyId,
@@ -289,16 +233,14 @@ export async function dispatchAssign(
       r: input.riderId,
       s: was.status,
       a: was.assignStatus,
-      ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString() } : {}),
+      ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString(), m: new Date().toISOString() } : {}),
       ...(was.declineReason ? { d: was.declineReason } : {}),
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
-      ...(toldFrom ? { n: toldFrom } : {}),
-      w: from.toISOString(),
       ...(r.booking.assignedAt ? { g: new Date(r.booking.assignedAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
-    // Already announced (the notice couldn't be held): no Undo to offer.
-    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId)) || !restorable) undo = null;
+    // Already announced (a notice couldn't be held): no Undo to offer.
+    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId)) || !moveHeld || !restorable) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.
     void publishDispatch(companyId, { kind: "job", jobId: input.bookingId });
   }
@@ -352,21 +294,10 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   }
 
   // Nothing left to cancel: the notice already went (or is going) out.
-  const notified = (await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK })) === 0;
-  // The assignment's notice would have given the time. With it gone, a move
-  // notice waits instead: from what people were last told (a move notice the
-  // assignment had replaced, else the time when it was assigned). It says
-  // something only if the job is somewhere else now, e.g. moved meanwhile.
-  // If the assignment's notice already went out, it announced the time this
-  // drop set (c.t when it moved the job), so that is what to correct from.
-  const told = notified ? (c.t ?? c.w) : (c.n ?? c.w);
-  if (told)
-    await holdNotice(companyId, {
-      kind: RESCHEDULED_NOTICE_TASK,
-      bookingId: c.b,
-      payload: { from: told, at: new Date(b.scheduledAt).toISOString(), movedAt: new Date().toISOString() },
-      fallback: "rescheduled",
-    });
+  const assignNotified = (await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK })) === 0;
+  // The drop's time change, if any, is undone like any move.
+  const moveNotified = c.f && c.t ? await noteMoveUndone(companyId, c.b, { f: c.f, t: c.t, m: c.m }) : false;
+  const notified = assignNotified || moveNotified;
   await reconcileRiderStatus(companyId, c.r);
   await logJobEvent({
     companyId,

@@ -19,8 +19,6 @@ import { reconcileRiderStatus } from "./presence";
 import { findAvailabilityBlock } from "./availability";
 import { logJobEvent } from "./job-events";
 import { assignBlockedReason, isInFlightStatus } from "../shared/job-status";
-import { RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
-import { cancelTasks } from "./scheduler";
 
 export type Booking = typeof schema.bookings.$inferSelect;
 
@@ -185,11 +183,6 @@ export async function assignJob(
     });
   }
 
-  if (!opts.deferEvent) {
-    // "Assigned" tells the technician and the customer the job's time, so a
-    // calendar move still waiting out its Undo window has nothing left to add.
-    await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
-    await fireEvent("assigned", bookingId);
-  }
+  if (!opts.deferEvent) await fireEvent("assigned", bookingId);
   return { ok: true, booking: b, previous: prev };
 }

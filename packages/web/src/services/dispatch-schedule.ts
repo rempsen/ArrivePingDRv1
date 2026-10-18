@@ -4,34 +4,25 @@
  *
  * The same promise as dispatch-assign.ts: an undone move texts nobody. Moving a
  * job normally fires "rescheduled" at once (the technician's SMS and the
- * customer's email). Here it waits out the Undo window as a scheduled task.
- * There is at most one such notice per job, and it remembers the time people
- * were last told (`from`). When it runs it announces wherever the job is now,
- * or nothing if that is still `from`. So two quick moves send one text, undoing
- * the second still announces the first, and undoing back to `from` sends none.
- *
- * An "assigned" notice gives the job's time too. A move notice waits while one
- * is pending and stays quiet if it went out after the move; if it never goes
- * out (the offer was declined or undone), the move notice speaks.
+ * customer's email). Here it waits out the Undo window; see
+ * services/dispatch-notices.ts for how that notice decides what to say.
  *
  * Guards are the ones POST /bookings/:id/schedule has: a finished or cancelled
  * job can't move (its date is in reports and payouts), and a time the
  * technician is already booked or off comes back as a question the dispatcher
  * can override.
  */
-import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, ne } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { DEFAULT_TZ, namedDayBounds, safeTimeZone, zonedDayKey } from "../shared/tz";
 import { isTerminalStatus } from "../shared/job-status";
 import { addDays, durationOf } from "../shared/schedule-layout";
 import { findAvailabilityBlock } from "./availability";
-import { fireEvent } from "./dispatch";
-import { ASSIGNED_NOTICE_TASK, holdNotice, readAnyUndo, signUndo, undoAssign, UNDO_TOKEN_TTL_MS, type JobPatch, type UndoOutcome } from "./dispatch-assign";
+import { readAnyUndo, signUndo, undoAssign, UNDO_TOKEN_TTL_MS, type JobPatch, type UndoOutcome } from "./dispatch-assign";
+import { currentMoveGen, noteMove, noteMoveUndone } from "./dispatch-notices";
 import { logJobEvent } from "./job-events";
 import { publishDispatch } from "./realtime";
-import { cancelTasks, registerTaskHandler } from "./scheduler";
-import { RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
 
 export { RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
 /** The longest range the Month view asks for (six weeks). */
@@ -48,110 +39,6 @@ const patchOf = (b: typeof schema.bookings.$inferSelect) => ({
   riderId: b.riderId,
   scheduledAt: new Date(b.scheduledAt).toISOString(),
 });
-
-/** How many times a move notice waits for an assignment notice before speaking anyway. */
-const MAX_NOTICE_WAITS = 5;
-
-registerTaskHandler(RESCHEDULED_NOTICE_TASK, async (task) => {
-  const from = typeof task.payload.from === "string" ? task.payload.from : "";
-  if (!task.bookingId || !from) return;
-  const t = tdb(task.companyId);
-  const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, task.bookingId));
-  // Archived or closed, or back where everyone was last told: nothing to say.
-  if (!b || b.deletedAt || isTerminalStatus(b.status)) return;
-  if (new Date(b.scheduledAt).getTime() === new Date(from).getTime()) return;
-  // Each notice is for one time (`at`). If the job has moved since, a newer
-  // notice is waiting for that move, so this one stays quiet (even when the
-  // two race: a move landing while this one is already running).
-  const at = typeof task.payload.at === "string" ? task.payload.at : null;
-  if (at && new Date(b.scheduledAt).getTime() !== new Date(at).getTime()) return;
-
-  // An "assigned" notice for this job states its time. While one is still to
-  // go (or going), wait for it rather than guess whether it will be sent.
-  const T = schema.scheduledTasks;
-  const assigning = await t.select(T, and(eq(T.bookingId, task.bookingId), eq(T.kind, ASSIGNED_NOTICE_TASK), inArray(T.status, ["pending", "running"])));
-  const waits = typeof task.payload.waits === "number" ? task.payload.waits : 0;
-  if (assigning.length > 0 && waits < MAX_NOTICE_WAITS) {
-    await holdNotice(task.companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId: task.bookingId, payload: { ...task.payload, waits: waits + 1 }, fallback: "rescheduled" });
-    return;
-  }
-  // A correction after an Undo: only if the move it corrects was announced.
-  const correcting = typeof task.payload.ifToldSince === "string" ? new Date(task.payload.ifToldSince) : null;
-  if (correcting && !(await toldSince(task.companyId, task.bookingId, correcting))) return;
-  // ...and if it went out after this move, it already said the new time.
-  const movedAt = typeof task.payload.movedAt === "string" ? new Date(task.payload.movedAt) : null;
-  if (movedAt) {
-    const E = schema.jobEvents;
-    const told = await t.select(E, and(eq(E.bookingId, task.bookingId), eq(E.kind, "assigned"), gte(E.createdAt, movedAt)));
-    if (told.length > 0) return;
-  }
-  await fireEvent("rescheduled", task.bookingId);
-});
-
-/** Whether a "rescheduled" message went out for this job at or after `since`. */
-async function toldSince(companyId: string, bookingId: string, since: Date): Promise<boolean> {
-  const E = schema.jobEvents;
-  const rows = await tdb(companyId).select(E, and(eq(E.bookingId, bookingId), eq(E.kind, "rescheduled"), gte(E.createdAt, since)));
-  return rows.length > 0;
-}
-
-/** Move notices for this job still waiting out their Undo window. */
-async function pendingNotices(companyId: string, bookingId: string) {
-  const T = schema.scheduledTasks;
-  const rescheduled = await tdb(companyId).select(T, and(eq(T.bookingId, bookingId), eq(T.status, "pending"), eq(T.kind, RESCHEDULED_NOTICE_TASK)));
-  return { rescheduled };
-}
-
-const fromOf = (task: { payload: string }) => {
-  try {
-    const p = JSON.parse(task.payload || "{}") as { from?: unknown };
-    return typeof p.from === "string" ? p.from : null;
-  } catch {
-    return null;
-  }
-};
-
-/** Hold one "rescheduled" notice for the job, replacing any that is waiting. */
-async function holdRescheduled(
-  companyId: string,
-  bookingId: string,
-  from: string,
-  at: string,
-  opts: { ifToldSince?: string; gen?: string | null; prevGen?: string | null } = {},
-): Promise<string | null> {
-  await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
-  // `gen` names the move the job is now at (a notice that waits and re-holds
-  // itself keeps it); `prevGen` the one before, which an Undo returns to.
-  const gen = opts.gen ?? crypto.randomUUID();
-  const held = await holdNotice(companyId, {
-    kind: RESCHEDULED_NOTICE_TASK,
-    bookingId,
-    payload: {
-      from,
-      at,
-      gen,
-      ...(opts.prevGen ? { prevGen: opts.prevGen } : {}),
-      movedAt: new Date().toISOString(),
-      ...(opts.ifToldSince ? { ifToldSince: opts.ifToldSince } : {}),
-    },
-    fallback: "rescheduled",
-  });
-  return held ? gen : null;
-}
-
-/** The latest move notice for this job (any status): its generation and the one before it. */
-async function latestMove(companyId: string, bookingId: string): Promise<{ gen: string | null; prevGen: string | null }> {
-  const T = schema.scheduledTasks;
-  const rows = await tdb(companyId).select(T, and(eq(T.bookingId, bookingId), eq(T.kind, RESCHEDULED_NOTICE_TASK)));
-  const latest = rows.sort((x, y) => new Date(y.createdAt ?? 0).getTime() - new Date(x.createdAt ?? 0).getTime())[0];
-  if (!latest) return { gen: null, prevGen: null };
-  try {
-    const p = JSON.parse(latest.payload || "{}") as { gen?: unknown; prevGen?: unknown };
-    return { gen: typeof p.gen === "string" ? p.gen : null, prevGen: typeof p.prevGen === "string" ? p.prevGen : null };
-  } catch {
-    return { gen: null, prevGen: null };
-  }
-}
 
 export async function dispatchSchedule(
   companyId: string,
@@ -202,12 +89,7 @@ export async function dispatchSchedule(
   );
   if (!b) return { ok: false, status: 409, message: "This job just changed — pull it up again to see where it is now.", forceable: false };
 
-  // Carry forward the time people were last told, if an earlier move is still
-  // waiting. (If an "assigned" notice is also waiting, this one defers to it.)
-  const waiting = await pendingNotices(companyId, prev.id);
-  const told = waiting.rescheduled.map(fromOf).find((f) => f) ?? from.toISOString();
-  const before = await latestMove(companyId, prev.id);
-  const gen = await holdRescheduled(companyId, prev.id, told, to.toISOString(), { prevGen: before.gen });
+  const gen = await noteMove(companyId, prev.id, { from, to });
   void publishDispatch(companyId, { kind: "job", jobId: prev.id });
 
   // Already announced (the notice couldn't be held): no Undo to offer.
@@ -237,8 +119,7 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
   const B = schema.bookings;
   // Only the latest move can be undone: moved away and back since, the job
   // may sit at the same time, but this token's move isn't the last one.
-  const move = await latestMove(companyId, c.b);
-  if (c.q && move.gen !== c.q)
+  if (c.q && (await currentMoveGen(companyId, c.b)) !== c.q)
     return { ok: false, status: 409, message: "This job changed since you moved it — open it to see where it is now." };
   // The old slot may have been filled since: don't put the job back into a
   // double booking or a day off without asking (open the job to force it).
@@ -266,18 +147,7 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
     if (!cur || cur.deletedAt) return { ok: false, status: 404, message: "Work order not found" };
     return { ok: false, status: 409, message: "This job changed since you moved it — open it to see where it is now." };
   }
-  const waiting = await pendingNotices(companyId, c.b);
-  const told = waiting.rescheduled.map(fromOf).find((f) => f);
-  if (told) {
-    // The waiting notice now speaks for the time the job went back to: nothing
-    // if that's where people were last told, else that time. It takes the
-    // previous move's generation, so that move's Undo still works.
-    await holdRescheduled(companyId, c.b, told, c.f, { gen: move.prevGen });
-  } else {
-    // No notice waiting: it went out, or is going out right now. A correction
-    // waits its turn and speaks only if the move was in fact announced.
-    await holdRescheduled(companyId, c.b, c.t, c.f, { ifToldSince: c.m, gen: move.prevGen });
-  }
+  const notified = await noteMoveUndone(companyId, c.b, { f: c.f, t: c.t, m: c.m });
   await logJobEvent({
     companyId,
     bookingId: c.b,
@@ -289,8 +159,6 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
     customerVisible: false,
   });
   void publishDispatch(companyId, { kind: "job", jobId: c.b });
-  // Had the move been announced? Its message is in the job's history if so.
-  const notified = !told && (c.m ? await toldSince(companyId, c.b, new Date(c.m)) : true);
   return { ok: true, job: { id: b.id, status: b.status, assignStatus: b.assignStatus, riderId: b.riderId }, notified };
 }
 
@@ -305,8 +173,8 @@ export interface DayLoad {
   tz: string;
   /** Technicians who can be dispatched (not suspended). */
   techs: number;
-  /** jobs: all that day, queued included; bookedMins: assigned work only. */
-  days: Array<{ day: string; jobs: number; bookedMins: number }>;
+  /** jobs: all that day, queued included; bookedMins: assigned work only; techs: the team less anyone off that day. */
+  days: Array<{ day: string; jobs: number; bookedMins: number; techs: number }>;
 }
 
 /**
@@ -321,7 +189,7 @@ export async function loadDayLoad(companyId: string, opts: { from: string; days:
   const start = namedDayBounds(opts.from, tz).start;
   const end = new Date(namedDayBounds(addDays(opts.from, days - 1), tz).end.getTime() + 1);
   const B = schema.bookings;
-  const [rows, techRows] = await Promise.all([
+  const [rows, techRows, offRows] = await Promise.all([
     t.transaction((tx) =>
       tx
         .select({ scheduledAt: B.scheduledAt, riderId: B.riderId, durationMins: schema.services.durationMins })
@@ -330,9 +198,28 @@ export async function loadDayLoad(companyId: string, opts: { from: string; days:
         .where(t.scope(B, and(isNull(B.deletedAt), ne(B.status, "cancelled"), gte(B.scheduledAt, start), lt(B.scheduledAt, end)))),
     ),
     t.transaction((tx) => tx.select({ id: schema.riders.id }).from(schema.riders).where(t.scope(schema.riders, ne(schema.riders.approval, "suspended")))),
+    // Days off in range (a day either side covers every zone offset).
+    t.select(
+      schema.techShifts,
+      and(
+        eq(schema.techShifts.kind, "timeoff"),
+        gte(schema.techShifts.date, new Date(start.getTime() - 48 * 3_600_000)),
+        lt(schema.techShifts.date, new Date(end.getTime() + 48 * 3_600_000)),
+      ),
+    ),
   ]);
-  const byDay = new Map<string, { jobs: number; bookedMins: number }>();
-  for (let i = 0; i < days; i++) byDay.set(addDays(opts.from, i), { jobs: 0, bookedMins: 0 });
+  const team = new Set(techRows.map((r) => r.id));
+  const offByDay = new Map<string, Set<string>>();
+  for (const o of offRows) {
+    if (!team.has(o.riderId)) continue;
+    const key = zonedDayKey(new Date(o.date), tz);
+    offByDay.set(key, (offByDay.get(key) ?? new Set()).add(o.riderId));
+  }
+  const byDay = new Map<string, { jobs: number; bookedMins: number; techs: number }>();
+  for (let i = 0; i < days; i++) {
+    const key = addDays(opts.from, i);
+    byDay.set(key, { jobs: 0, bookedMins: 0, techs: team.size - (offByDay.get(key)?.size ?? 0) });
+  }
   for (const r of rows) {
     const d = byDay.get(zonedDayKey(new Date(r.scheduledAt), tz));
     if (!d) continue;

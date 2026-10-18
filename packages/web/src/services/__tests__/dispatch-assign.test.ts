@@ -254,7 +254,7 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
   });
 
-  it("a queue assignment replaces a move still waiting to be announced", async () => {
+  it("a move still waiting is announced alongside a queue assignment", async () => {
     const ds = await import("../dispatch-schedule");
     const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
     await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString(), by: "Dana" }, NOW.getTime());
@@ -265,7 +265,7 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
     const kinds = await events(id);
     expect(kinds).toContain("assigned");
-    expect(kinds).not.toContain("rescheduled");
+    expect(kinds.filter((k) => k === "rescheduled")).toHaveLength(1);
   });
 
   it("undoing that assignment brings the move notice back", async () => {
@@ -322,7 +322,8 @@ describe("dispatchAssign + undoAssign", () => {
     expect(await events(id)).toContain("assigned");
     expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: true, notified: true });
     await flushNotices();
-    expect(await events(id)).toContain("rescheduled");
+    // the move went out with the assignment; the correction follows the Undo
+    expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(2);
   });
 
   it("a queue drop that finds the job already assigned is refused, not turned into a reassignment", async () => {

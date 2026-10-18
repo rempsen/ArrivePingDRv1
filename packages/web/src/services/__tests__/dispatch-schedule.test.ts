@@ -214,7 +214,7 @@ describe("dispatchSchedule + undo", () => {
     expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(2);
   });
 
-  it("a job placed from the queue gets one notice, not assigned and rescheduled", async () => {
+  it("a move after a queue assignment is announced as well (the two messages are set up separately)", async () => {
     const id = await job(CO, { status: "pending", assignStatus: "none" });
     const a = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
     expect(a.ok).toBe(true);
@@ -222,8 +222,8 @@ describe("dispatchSchedule + undo", () => {
     expect(m.ok).toBe(true);
     await flushNotices();
     const kinds = await events(id);
-    expect(kinds).toContain("assigned");
-    expect(kinds).not.toContain("rescheduled");
+    expect(kinds.filter((k) => k === "assigned")).toHaveLength(1);
+    expect(kinds.filter((k) => k === "rescheduled")).toHaveLength(1);
   });
 
   it("a move still gets announced if the offer is declined before its notice goes", async () => {
@@ -238,31 +238,16 @@ describe("dispatchSchedule + undo", () => {
     expect(kinds).toContain("rescheduled");
   });
 
-  it("a move made while the assignment notice is already going isn't announced twice", async () => {
-    const id = await job(CO, { status: "pending", assignStatus: "none" });
-    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
-    const T = schema.scheduledTasks;
-    const [assigned] = await db.select().from(T).where(and(eq(T.bookingId, id), eq(T.kind, da.ASSIGNED_NOTICE_TASK)));
-    await db.update(T).set({ status: "running" }).where(eq(T.id, assigned!.id));
-    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
-    await db.update(T).set({ status: "pending" }).where(eq(T.id, assigned!.id));
-    await flushNotices();
-    const kinds = await events(id);
-    expect(kinds.filter((k) => k === "assigned")).toHaveLength(1);
-    expect(kinds).not.toContain("rescheduled");
-  });
-
-  it("a reassignment announced at once replaces the held reschedule notice", async () => {
+  it("a move and an immediate reassignment are each announced", async () => {
     const { assignJob } = await import("../assign");
     const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "offered" });
     await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
     const r = await assignJob(CO, id, `${CO}-t2`, { by: { kind: "dispatcher", name: "Dana" } });
     expect(r.ok).toBe(true);
-    expect((await tasks(id)).map((t) => t.status)).toEqual(["cancelled"]);
     await flushNotices();
     const kinds = await events(id);
     expect(kinds).toContain("assigned");
-    expect(kinds).not.toContain("rescheduled");
+    expect(kinds.filter((k) => k === "rescheduled")).toHaveLength(1);
   });
 
   it("won't undo a time move once the job has gone to another technician", async () => {
@@ -353,14 +338,16 @@ describe("loadDayLoad", () => {
     await job(LC, { scheduledAt: at("2026-10-20T15:00:00Z"), riderId: `${LC}-t2`, status: "assigned" });
     // queued: counts as a job that day, not as booked time
     await job(LC, { scheduledAt: at("2026-10-20T17:00:00Z") });
+    // one technician off on the 21st
+    await db.insert(schema.techShifts).values({ companyId: LC, riderId: `${LC}-t1`, kind: "timeoff", date: at("2026-10-21T17:00:00Z") });
     await job(LC, { scheduledAt: at("2026-10-22T15:00:00Z"), status: "cancelled" });
     const r = await ds.loadDayLoad(LC, { from: "2026-10-19", days: 4 });
     expect(r.techs).toBe(2);
     expect(r.days).toEqual([
-      { day: "2026-10-19", jobs: 0, bookedMins: 0 },
-      { day: "2026-10-20", jobs: 3, bookedMins: 180 },
-      { day: "2026-10-21", jobs: 0, bookedMins: 0 },
-      { day: "2026-10-22", jobs: 0, bookedMins: 0 },
+      { day: "2026-10-19", jobs: 0, bookedMins: 0, techs: 2 },
+      { day: "2026-10-20", jobs: 3, bookedMins: 180, techs: 2 },
+      { day: "2026-10-21", jobs: 0, bookedMins: 0, techs: 1 },
+      { day: "2026-10-22", jobs: 0, bookedMins: 0, techs: 2 },
     ]);
   });
 });

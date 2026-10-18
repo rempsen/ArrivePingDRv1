@@ -26,7 +26,8 @@ export function MonthLoad(p: { load: DayLoad | undefined; month: string; today: 
         <div className="grid grid-cols-7 gap-1.5">
           {p.load.days.map((d) => {
             const inMonth = d.day.slice(0, 7) === p.month;
-            const cap = techs * 480;
+            // Capacity is the people working that day: days off come out of it.
+            const cap = Math.max(1, d.techs ?? techs) * 480;
             const pctBooked = Math.round((d.bookedMins / cap) * 100);
             const isToday = d.day === p.today;
             return (
@@ -52,7 +53,7 @@ export function MonthLoad(p: { load: DayLoad | undefined; month: string; today: 
           })}
         </div>
       )}
-      <p className="mt-3 px-1 text-xs text-slate-500">Booked hours against an 8-hour day for each technician. Click a day to open its week.</p>
+      <p className="mt-3 px-1 text-xs text-slate-500">Booked hours against an 8-hour day for each technician working that day. Click a day to open its week.</p>
     </div>
   );
 }

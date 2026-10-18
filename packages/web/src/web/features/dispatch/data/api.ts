@@ -32,7 +32,8 @@ export const fetchBoard = (day?: string | null, signal?: AbortSignal, days = 1) 
 export interface DayLoad {
   tz: string;
   techs: number;
-  days: Array<{ day: string; jobs: number; bookedMins: number }>;
+  /** techs: available that day (the team less anyone off). */
+  days: Array<{ day: string; jobs: number; bookedMins: number; techs?: number }>;
 }
 export const fetchLoad = (from: string, days: number, signal?: AbortSignal) =>
   call<DayLoad>(`/load?from=${encodeURIComponent(from)}&days=${days}`, { signal });
