@@ -79,6 +79,83 @@ const TEMPLATE_COLUMNS: Record<ImportType, { key: string; label: string; example
   ],
 };
 
+/**
+ * Other names a column goes by in the spreadsheets people already have (an
+ * export from another field-service tool, a CRM or a hand-kept list), keyed
+ * by the template column they mean. Matching ignores case, spaces and
+ * punctuation, so "E-mail Address", "email_address" and "Email Address" are
+ * one name. Each template column's own key and label always match too.
+ */
+const COLUMN_ALIASES: Record<string, string[]> = {
+  firstName: ["first", "first name", "given name", "fname", "contact first name"],
+  lastName: ["last", "last name", "surname", "family name", "lname", "contact last name"],
+  name: [
+    "name", "full name", "customer name", "client name", "contact name", "contact", "display name",
+    "customer", "client", "technician", "technician name", "employee", "employee name", "staff name",
+  ],
+  email: ["email", "email address", "e mail", "mail", "primary email", "customer email", "contact email", "work email"],
+  phone: [
+    "phone", "phone number", "mobile", "mobile phone", "mobile number", "cell", "cell phone", "cell number",
+    "telephone", "tel", "primary phone", "main phone", "contact phone", "phone 1",
+  ],
+  company: ["company", "company name", "business", "business name", "organization", "organisation"],
+  website: ["website", "web site", "url", "web"],
+  address: [
+    "address", "street", "street address", "address 1", "address line 1", "service address", "property address", "site address",
+  ],
+  city: ["city", "town", "municipality"],
+  region: ["region", "province", "state", "province state", "state province", "prov"],
+  postalCode: ["postal code", "postal", "postcode", "zip", "zip code", "postal zip", "zip postal code", "postal zip code"],
+  country: ["country"],
+  customerType: ["customer type", "account type", "type"],
+  skillClass: ["skill class", "trade", "skill level"],
+  vehicle: ["vehicle", "truck", "van"],
+  licensePlate: ["license plate", "licence plate", "plate", "plate number"],
+  licenseNumber: ["license number", "licence number", "drivers license", "drivers licence", "driver license", "driver licence"],
+  payRatePerHour: ["pay rate per hour", "pay rate", "hourly rate", "wage", "rate per hour"],
+  skills: ["skills", "skill"],
+};
+
+const squash = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * One uploaded row with its columns renamed to the template's keys, whatever
+ * the file called them. A column the template doesn't have is dropped; when
+ * two columns mean the same thing, the first non-empty one wins. A row with a
+ * first and last name but no full name gets one, so a technician list split
+ * into two name columns imports with names too.
+ */
+export function normalizeImportRow(type: ImportType, raw: Record<string, string>): Record<string, string> {
+  const lookup = new Map<string, string>();
+  for (const col of TEMPLATE_COLUMNS[type]) {
+    lookup.set(squash(col.key), col.key);
+    lookup.set(squash(col.label), col.key);
+  }
+  // Only the fields this import has (plus the name parts a full name is built
+  // from), so a column meant for another kind of import doesn't make a row.
+  const allowed = new Set([...TEMPLATE_COLUMNS[type].map((c) => c.key), "name", "firstName", "lastName"]);
+  for (const [key, names] of Object.entries(COLUMN_ALIASES)) {
+    if (!allowed.has(key)) continue;
+    for (const n of names) if (!lookup.has(squash(n))) lookup.set(squash(n), key);
+  }
+  const out: Record<string, string> = {};
+  for (const [header, value] of Object.entries(raw)) {
+    const key = lookup.get(squash(header));
+    const v = (value ?? "").trim();
+    if (key && v && !out[key]) out[key] = v;
+  }
+  if (!out.name && (out.firstName || out.lastName)) out.name = [out.firstName, out.lastName].filter(Boolean).join(" ");
+  if (out.customerType) out.customerType = /repeat|recurring|regular|member/i.test(out.customerType) ? "repeat" : "one_time";
+  return out;
+}
+
+/** The template's own example row, filled in for each type: never imported if left in. */
+export function isTemplateExample(type: ImportType, row: Record<string, string>): boolean {
+  const cols = TEMPLATE_COLUMNS[type];
+  const email = cols.find((c) => c.key === "email")?.example;
+  return !!email && (row.email || "").toLowerCase() === email.toLowerCase();
+}
+
 function isImportType(v: string): v is ImportType {
   return (IMPORT_TYPES as string[]).includes(v);
 }
@@ -410,14 +487,17 @@ export const importRoutes = new Hono<AppEnv>()
     } catch {
       return c.json({ message: "Could not read that file — check it's a valid CSV or Excel export" }, 400);
     }
-    if (!rows.length) return c.json({ message: "No rows found in that file" }, 400);
-    if (rows.length > 500) return c.json({ message: "Import is limited to 500 rows at a time" }, 400);
+    // Keep each row's line in the file (the header is line 1) for the failure list.
+    const lines = rows
+      .map((r, i) => ({ line: i + 2, row: normalizeImportRow(type, r) }))
+      .filter((x) => Object.keys(x.row).length && !isTemplateExample(type, x.row));
+    if (!lines.length) return c.json({ message: "No rows found in that file. Check that the first row holds the column names, such as Name, Email and Phone." }, 400);
+    if (lines.length > 500) return c.json({ message: "Import is limited to 500 rows at a time" }, 400);
 
     const cid = tenantId(c);
     const results: { row: number; email: string; ok: boolean; status?: string; reason?: string; emailed?: boolean }[] = [];
     const newPeople: string[] = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]!;
+    for (const { line, row } of lines) {
       const result =
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })
@@ -425,7 +505,7 @@ export const importRoutes = new Hono<AppEnv>()
       // A row without an email gets a placeholder address nobody can receive.
       if (result.ok && result.status === "created" && row.email && !isUndeliverableEmail(row.email)) newPeople.push(result.userId);
       results.push({
-        row: i + 2, // header is row 1
+        row: line,
         email: row.email || "",
         ok: result.ok,
         ...(result.ok ? { status: result.status } : { reason: result.reason }),
@@ -445,7 +525,7 @@ export const importRoutes = new Hono<AppEnv>()
     if (welcoming) queueWelcomes(cid, newPeople, me.id);
     return c.json(
       {
-        total: rows.length,
+        total: lines.length,
         created,
         invited,
         invitesNotEmailed,

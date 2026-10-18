@@ -32,6 +32,7 @@ const PATHS: Record<string, string> = {
   book: "M5 4h10a3 3 0 013 3v13H8a3 3 0 01-3-3zM5 17a3 3 0 013-3h10",
   export: "M12 4v11M8 8l4-4 4 4M5 14v6h14v-6",
   swap: "M7 7h12l-3-3M17 17H5l3 3",
+  import: "M12 4v11M8 11l4 4 4-4M5 14v6h14v-6",
 };
 
 function Icon({ name }: { name: string }) {
