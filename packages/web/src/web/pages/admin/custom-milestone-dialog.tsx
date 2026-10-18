@@ -104,7 +104,8 @@ interface ExistingMilestone {
   offsetMinutes: number;
   customerTimeline: boolean;
   enabled: boolean;
-  messages: Record<string, { on: boolean; text: string }>;
+  /** `designed`: a branded email is designed for them, so the text may be empty. */
+  messages: Record<string, { on: boolean; text: string; designed?: boolean }>;
 }
 
 function MilestoneForm({
@@ -141,6 +142,7 @@ function MilestoneForm({
       office: { on: m.office?.on ?? false, text: m.office?.text ?? "" },
     };
   });
+  const designed = new Set<MilestoneRecipient>(MILESTONE_RECIPIENTS.filter((r) => existing?.messages?.[r]?.designed));
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const lastFocused = useRef<{ r: MilestoneRecipient; el: HTMLTextAreaElement } | null>(null);
@@ -153,7 +155,7 @@ function MilestoneForm({
     const p = milestoneProblem(fields);
     if (p) return p;
     for (const r of MILESTONE_RECIPIENTS) {
-      if (messages[r].on && !messages[r].text.trim()) return `Write the message for the ${recipientLabel(r).toLowerCase()}, or untick them.`;
+      if (messages[r].on && !messages[r].text.trim() && !designed.has(r)) return `Write the message for the ${recipientLabel(r).toLowerCase()}, or untick them.`;
     }
     return null;
   };
@@ -386,6 +388,11 @@ function MilestoneForm({
                         onFocus={(e) => (lastFocused.current = { r, el: e.currentTarget })}
                         onChange={(e) => setMsg(r, { text: e.target.value })}
                       />
+                    )}
+                    {m.on && designed.has(r) && (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        A branded email is designed for them, so this can stay empty. Text here also goes by text message and in the app.
+                      </p>
                     )}
                   </div>
                 );

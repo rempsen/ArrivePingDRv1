@@ -62,6 +62,17 @@ export interface MilestoneFields {
 /** Per recipient: whether they get a message, and what it says ({{vars}} allowed). */
 export type MilestoneMessages = Partial<Record<MilestoneRecipient, { on: boolean; text: string }>>;
 
+/** Whether a rule has a branded email designed (it can go out with no plain-text message). */
+export function hasEmailDesign(emailDesign: string | null | undefined): boolean {
+  if (!emailDesign) return false;
+  try {
+    const d = JSON.parse(emailDesign);
+    return Array.isArray(d) && d.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Keep only the field the trigger uses, so a milestone never carries a stale one. */
 function triggerColumns(f: MilestoneFields) {
   return {
@@ -91,7 +102,8 @@ export async function milestoneRules(companyId: string, id: string): Promise<Rul
  * Write the three recipient rules. A recipient switched on gets the message as
  * its copy and, if every channel was off, the default channels; switched off,
  * every channel goes off but the words are kept, so switching back on restores
- * them. A recipient not mentioned is left exactly as it is.
+ * them. A recipient not mentioned is left exactly as it is. One with a branded
+ * email designed may be on with no text: the design is what they get.
  */
 async function writeRules(companyId: string, id: string, messages: MilestoneMessages) {
   const t = tdb(companyId);
@@ -100,8 +112,9 @@ async function writeRules(companyId: string, id: string, messages: MilestoneMess
   for (const recipient of MILESTONE_RECIPIENTS) {
     const row = existing.find((r) => r.recipient === recipient);
     const msg = messages[recipient];
-    const on = !!msg?.on && !!msg.text.trim();
     const text = msg?.text.trim() ?? "";
+    const designed = hasEmailDesign(row?.emailDesign);
+    const on = !!msg?.on && (!!text || designed);
     if (!row) {
       const channels = on ? DEFAULT_CHANNELS[recipient] : { inApp: false, email: false, sms: false };
       await t.insert(schema.notificationRules, { event, recipient, ...channels, webhook: false, template: text, enabled: true });
@@ -110,9 +123,11 @@ async function writeRules(companyId: string, id: string, messages: MilestoneMess
     if (!msg) continue;
     if (on) {
       const anyOn = row.inApp || row.email || row.sms || row.webhook;
+      // With no words, only the designed email can carry it, so email is on.
+      const channels = !text ? { email: true } : anyOn ? {} : DEFAULT_CHANNELS[recipient];
       await t.update(
         schema.notificationRules,
-        { template: text, ...(anyOn ? {} : DEFAULT_CHANNELS[recipient]), enabled: true, updatedAt: new Date() },
+        { template: text, ...channels, enabled: true, updatedAt: new Date() },
         eq(schema.notificationRules.id, row.id),
       );
     } else {
@@ -226,7 +241,7 @@ export async function fireMilestone(m: CustomMilestone, bookingId: string, opts:
     );
     if (!claimed.length) return false;
   }
-  await fireCustomEvent({
+  const result = await fireCustomEvent({
     companyId: m.companyId,
     bookingId,
     milestoneId: m.id,
@@ -234,17 +249,29 @@ export async function fireMilestone(m: CustomMilestone, bookingId: string, opts:
     customerVisible: m.customerTimeline,
     timeline: !opts.test,
   });
-  return true;
+  if (result === "done") return true;
+  // Nothing went out (a database hiccup, or not this company's job): let the
+  // claim go, so the next event or sweep can still send it.
+  if (!opts.test) {
+    await tdb(m.companyId)
+      .delete(
+        schema.customMilestoneFires,
+        and(eq(schema.customMilestoneFires.milestoneId, m.id), eq(schema.customMilestoneFires.bookingId, bookingId)),
+      )
+      .catch((e) => console.error("[custom-milestones] couldn't release claim", m.id, bookingId, e));
+  }
+  return false;
 }
 
 /** Called by fireEvent after every built-in event on a job. */
 export async function onBuiltInEvent(event: string, b: { id: string; companyId: string }): Promise<void> {
   const t = tdb(b.companyId);
-  const ms = await t.select(schema.customMilestones, eq(schema.customMilestones.enabled, true));
+  const ms = await t.select(schema.customMilestones);
   if (!ms.length) return;
   if (event === "rescheduled") {
     // The appointment moved: a reminder that already went out was about the
-    // old time, so let it go again for the new one.
+    // old time, so let it go again for the new one. Paused reminders too, so
+    // one switched back on before the new time still goes out.
     const timed = ms.filter((m) => m.trigger === "before_start").map((m) => m.id);
     if (timed.length) {
       await t.delete(
@@ -254,7 +281,7 @@ export async function onBuiltInEvent(event: string, b: { id: string; companyId: 
     }
   }
   for (const m of ms) {
-    if (m.trigger === "stage" && m.triggerEvent === event) await fireMilestone(m, b.id);
+    if (m.enabled && m.trigger === "stage" && m.triggerEvent === event) await fireMilestone(m, b.id);
   }
 }
 

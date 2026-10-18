@@ -215,11 +215,14 @@ describe("checklist trigger", () => {
     // Their milestone, our job id: the claim is made under their company, but
     // the job isn't theirs, so nothing is logged or sent.
     expect(await cm.onChecklistTicked(CO, "cm-check-mine", "Done")).toBe(0);
-    await cm.fireMilestone(m, "cm-check-mine");
+    expect(await cm.fireMilestone(m, "cm-check-mine")).toBe(false);
     expect((await milestoneEvents("cm-check-mine")).length).toBe(0);
     expect((await deliveries(m.id)).length).toBe(0);
+    // ...and it leaves no claim behind.
+    expect((await fires(m.id)).length).toBe(0);
     await cm.deleteMilestone(OTHER, m.id);
   });
+
 });
 
 describe("before the appointment", () => {
@@ -249,6 +252,38 @@ describe("before the appointment", () => {
     expect((await milestoneEvents("cm-before-due")).length).toBe(2);
     await cm.deleteMilestone(CO, m.id);
     expect((await fires(m.id)).length).toBe(0);
+  });
+});
+
+describe("claims", () => {
+  it("a milestone that couldn't go out lets its claim go, so it can go later", async () => {
+    const m = await cm.createMilestone(CO, { name: "Claim check", trigger: "stage", triggerEvent: "arrived" }, toCustomer("hi"));
+    expect(await cm.fireMilestone(m, "cm-no-such-job")).toBe(false);
+    expect((await fires(m.id)).length).toBe(0);
+    await job("cm-claim");
+    expect(await cm.fireMilestone(m, "cm-claim")).toBe(true);
+    expect((await fires(m.id)).length).toBe(1);
+    await cm.deleteMilestone(CO, m.id);
+  });
+
+  it("a paused reminder is reset by a reschedule too, so switching it back on still sends", async () => {
+    const m = await cm.createMilestone(CO, { name: "Paused reminder", trigger: "before_start", offsetMinutes: 60 }, toCustomer("Soon"));
+    const JOB = "cm-paused-resched";
+    const claimed = async () => (await fires(m.id)).some((f) => f.bookingId === JOB);
+    await job(JOB, { scheduledAt: new Date(NOW.getTime() + 55 * MIN) });
+    await cm.sweepCustomMilestones(NOW);
+    expect(await claimed()).toBe(true);
+    await cm.updateMilestone(CO, m.id, { enabled: false });
+    await fireEvent("rescheduled", JOB);
+    expect(await claimed()).toBe(false);
+    // Paused: the sweep leaves it alone. Back on: it goes for the new time.
+    await cm.sweepCustomMilestones(NOW);
+    expect(await claimed()).toBe(false);
+    await cm.updateMilestone(CO, m.id, { enabled: true });
+    await cm.sweepCustomMilestones(NOW);
+    expect(await claimed()).toBe(true);
+    expect((await milestoneEvents(JOB)).length).toBe(2);
+    await cm.deleteMilestone(CO, m.id);
   });
 });
 
@@ -331,6 +366,21 @@ describe("editing and deleting", () => {
     // The line it already put on the job's timeline stays.
     expect((await milestoneEvents("cm-del")).length).toBe(1);
     expect(await cm.deleteMilestone(CO, m.id)).toBe(false);
+  });
+
+  it("a recipient with a branded email designed can be on with no text", async () => {
+    const m = await cm.createMilestone(CO, { name: "Designed", trigger: "stage", triggerEvent: "arrived" });
+    const office = (await cm.milestoneRules(CO, m.id)).find((r) => r.recipient === "office")!;
+    await db
+      .update(schema.notificationRules)
+      .set({ emailDesign: JSON.stringify([{ type: "text", text: "Hello" }]) })
+      .where(eq(schema.notificationRules.id, office.id));
+    expect(cm.hasEmailDesign(JSON.stringify([{ type: "text" }]))).toBe(true);
+    expect(cm.hasEmailDesign("[]")).toBe(false);
+    await cm.updateMilestone(CO, m.id, {}, { office: { on: true, text: "" } });
+    const after = (await cm.milestoneRules(CO, m.id)).find((r) => r.recipient === "office")!;
+    expect([after.email, after.inApp, after.sms, after.template]).toEqual([true, false, false, ""]);
+    await cm.deleteMilestone(CO, m.id);
   });
 
   it("suggests checklist items from the company's templates", async () => {
