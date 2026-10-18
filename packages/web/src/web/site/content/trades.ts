@@ -6,7 +6,8 @@ import type { LandingPage, TradeContent } from "./landing";
  * is something ArrivePing does today. Scenarios use sample names only.
  */
 
-const media = (key: string, film = true): TradeContent["media"] => ({
+// Real photos only (see tradeMedia in config.ts); the generated film loops are retired.
+const media = (key: string, film = false): TradeContent["media"] => ({
   poster: `/img/site/trades/${key}-hero.jpg`,
   posterWebp: `/img/site/trades/${key}-hero.webp`,
   ...(film ? { film: { large: `/media/trades/${key}-1600.mp4`, small: `/media/trades/${key}-960.mp4` } } : {}),

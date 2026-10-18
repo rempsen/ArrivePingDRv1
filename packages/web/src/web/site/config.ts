@@ -403,50 +403,73 @@ export const integrations = {
 export const trades = [
   {
     key: "hvac",
+    /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
+    ping: "Devon is on the way to fix your heat. ETA 19 min.",
     label: "HVAC & mechanical",
     line: "No-heat calls to a licensed tech, with a live ETA.",
     href: "/hvac-dispatch-software",
   },
   {
     key: "plumbing",
+    /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
+    ping: "Jordan, your licensed plumber, is 14 minutes away.",
     label: "Plumbing",
     line: "Burst pipes to the nearest qualified plumber.",
     href: "/plumbing-dispatch-software",
   },
   {
     key: "electrical",
+    /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
+    ping: "Malik, a licensed electrician, is 14 minutes away.",
     label: "Electrical",
     line: "No-power calls to the right license level.",
     href: "/electrical-dispatch-software",
   },
   {
     key: "construction",
+    /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
+    ping: "Marcus finished your install. Photos and sign-off are on file.",
     label: "Installers & construction",
     line: "The right installer at every site, with proof at close-out.",
     href: "/construction-trades",
   },
   {
     key: "property",
+    /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
+    ping: "Omar from maintenance is on the way to Unit 4B. ETA 16 min.",
     label: "Property maintenance",
     line: "Residents know exactly when maintenance is coming.",
     href: "/property-maintenance-software",
   },
   {
     key: "delivery",
+    /** The text this trade's customer gets, shown over the photo (same sample technician as the trade page). */
+    ping: "Luis is 3 stops away with your washer. Track it live.",
     label: "Delivery & installation",
     line: "Every customer knows when your truck arrives.",
     href: "/delivery-dispatch-software",
   },
 ] as const;
 
-/** Generated stills and loops for each trade (see public/img/site/trades and public/media/trades). */
+/**
+ * Real photographs for each trade (public/img/site/trades: 800×600 card,
+ * 1600×900 hero, JPEG + WebP), from Pexels under the Pexels License (free for
+ * commercial use, edits allowed, no attribution required; we credit anyway).
+ * Each is cropped and given the same grade (calmer saturation, navy shadows,
+ * warm highlights, light grain) so the set reads as one shoot; product logos
+ * in frame are blurred so no brand appears to endorse us.
+ *   hvac          Kathleen Austin Kuhn  https://www.pexels.com/photo/32497161/
+ *   plumbing      Anıl Karakaya         https://www.pexels.com/photo/6419128/
+ *   electrical    Kathleen Austin Kuhn  https://www.pexels.com/photo/32497160/
+ *   construction  Mikael Blomkvist      https://www.pexels.com/photo/8961699/
+ *   property      Ksenia Chernaya       https://www.pexels.com/photo/5691548/
+ *   delivery      Carbell Sarfo         https://www.pexels.com/photo/33679977/
+ */
 export const tradeMedia = (key: string) => ({
   card: `/img/site/trades/${key}-card.webp`,
   cardJpg: `/img/site/trades/${key}-card.jpg`,
   poster: `/img/site/trades/${key}-hero.jpg`,
   posterWebp: `/img/site/trades/${key}-hero.webp`,
-  film: `/media/trades/${key}-960.mp4`,
-  filmLarge: `/media/trades/${key}-1600.mp4`,
 });
 
 /* ------------------------------------------------------------------ */
