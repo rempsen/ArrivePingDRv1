@@ -86,6 +86,8 @@ export interface BoardJob {
   /** The running-late watch flagged it. */
   late: boolean;
   isSample: boolean;
+  /** Set when an automation rule assigned it (shown as the "A" badge); "" otherwise. */
+  autoAssignedRuleId: string;
 }
 
 export interface Board {
@@ -240,6 +242,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
           etaMins: B.etaMins,
           delayFlaggedAt: B.delayFlaggedAt,
           isSample: B.isSample,
+          autoAssignedRuleId: B.autoAssignedRuleId,
           serviceName: schema.services.name,
           category: schema.services.category,
           durationMins: schema.services.durationMins,
@@ -313,6 +316,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         etaMins: r.etaMins,
         late: r.delayFlaggedAt != null && !TERMINAL_STATUSES.includes(r.status as never),
         isSample: r.isSample,
+        autoAssignedRuleId: r.autoAssignedRuleId ?? "",
       };
     })
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));

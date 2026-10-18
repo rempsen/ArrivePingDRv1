@@ -12,6 +12,7 @@ import { AlertTriangle, Clock3, Plus } from "lucide-react";
 import { useEffect, useRef, type CSSProperties } from "react";
 import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
+import { AutoBadge } from "../../../components/auto-badge";
 import { bookedMinutes, driveMinutes, durationOf, loadLevel, packLanes, pct, snapMinutes, type Range, type Slot } from "../../../../shared/schedule-layout";
 import { DRIVE_HATCH, LOAD_COLOR, PHASE_STYLE, TECH_STATUS, clock, hourLabel, hours, matches, phaseOf, spanOf } from "./calendar-utils";
 
@@ -310,6 +311,7 @@ function JobBlock(p: {
       <span className="flex min-w-0 items-start gap-1.5">
         <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: look.dot }} />
         <span className={`text-[12.5px] font-bold leading-tight ${short && !split && !p.compact ? "line-clamp-2" : "truncate"}`}>{j.title || j.service}</span>
+        <AutoBadge booking={j} size="xs" className="mt-0.5" />
         {lane.conflict && (
           <span title="Overlaps another job" className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-red-400 px-1 text-[10px] font-extrabold text-red-950">
             <AlertTriangle className="h-2.5 w-2.5" />

@@ -5,6 +5,7 @@
 import { Plus } from "lucide-react";
 import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
+import { AutoBadge } from "../../../components/auto-badge";
 import { durationOf, jobMinutes } from "../../../../shared/schedule-layout";
 import { PHASE_STYLE, clock, matches, phaseOf } from "./calendar-utils";
 
@@ -40,7 +41,10 @@ export function Agenda(p: { techs: BoardTech[]; jobsByTech: Map<string, BoardJob
                   >
                     <span className="font-mono text-[11.5px] text-slate-300">{clock(start, true)}–{clock(start + durationOf(j), true)}</span>
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold text-white">{j.title || j.service}</span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-[13px] font-semibold text-white">{j.title || j.service}</span>
+                        <AutoBadge booking={j} size="xs" />
+                      </span>
                       <span className="block truncate text-[11.5px] text-slate-400">
                         {look.label}
                         {j.customerName ? ` · ${j.customerName}` : ""}

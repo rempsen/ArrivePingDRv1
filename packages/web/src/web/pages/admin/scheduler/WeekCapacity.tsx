@@ -6,6 +6,7 @@
 import { Plus } from "lucide-react";
 import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
+import { AutoBadge } from "../../../components/auto-badge";
 import { addDays, bookedMinutes, jobMinutes, loadLevel } from "../../../../shared/schedule-layout";
 import { LOAD_COLOR, PHASE_STYLE, clock, dayTitle, hours, matches, phaseOf, techDayJobs } from "./calendar-utils";
 
@@ -109,6 +110,7 @@ export function WeekCapacity(p: {
                         >
                           <span className="shrink-0 font-mono text-[10.5px] text-slate-400">{clock(jobMinutes(j.scheduledAt, p.tz), true)}</span>
                           <span className="truncate">{j.title || j.service}</span>
+                          <AutoBadge booking={j} size="xs" />
                         </button>
                       );
                     })}

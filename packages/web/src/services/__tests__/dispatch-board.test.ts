@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -177,6 +178,14 @@ describe("loadBoard", () => {
     expect(three.jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["b-day", "b-late-evening", "b-two-days-on"]));
     // asking for more than a week is capped, not an unbounded read
     expect((await loadBoard(CO, { now: NOW, days: 30 })).days).toBe(7);
+  });
+
+  it("marks jobs an automation rule assigned", async () => {
+    await db.update(schema.bookings).set({ autoAssignedRuleId: "rule-1" }).where(eq(schema.bookings.id, "b-day"));
+    const b = await loadBoard(CO, { now: NOW });
+    expect(b.jobs.find((j) => j.id === "b-day")!.autoAssignedRuleId).toBe("rule-1");
+    expect(b.jobs.find((j) => j.id === "b-day-later")!.autoAssignedRuleId).toBe("");
+    await db.update(schema.bookings).set({ autoAssignedRuleId: "" }).where(eq(schema.bookings.id, "b-day"));
   });
 
   it("lists the days off in range, in company time", async () => {
