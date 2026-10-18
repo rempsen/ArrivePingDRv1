@@ -24,6 +24,8 @@ type ImportResult = {
   total: number;
   created: number;
   invited: number;
+  /** New technicians / office staff being emailed a set-password link (services/welcome.ts). */
+  welcoming?: number;
   failedCount: number;
   failed: { row: number; email: string; reason: string }[];
 };
@@ -231,7 +233,9 @@ export function ImportMenu({
               </div>
             )}
             <p className="text-xs text-slate-500">
-              Newly created accounts have no password yet — invite each person from their profile (Reset password / Resend invite) when you're ready to give them access.
+              {result.welcoming
+                ? `We're emailing ${result.welcoming === 1 ? "the new person" : `the ${result.welcoming} new people`} a link to set a password, one after another over the next few minutes. Rows imported without an email address can't sign in until you add one on their profile.`
+                : "Customers aren't emailed: they first hear from you when a job is booked."}
             </p>
           </div>
         )}

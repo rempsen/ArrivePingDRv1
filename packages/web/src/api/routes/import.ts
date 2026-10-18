@@ -26,6 +26,7 @@ import { isSuperadmin } from "../lib/permissions";
 import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { queueWelcomes } from "../../services/welcome";
+import { isUndeliverableEmail } from "../../shared/sample-contact";
 import { email as emailField } from "../lib/validate";
 import { toCsv, toXlsx, fileResponse } from "./export";
 import type { AppEnv } from "../env";
@@ -417,7 +418,8 @@ export const importRoutes = new Hono<AppEnv>()
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })
           : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id });
-      if (result.ok && result.status === "created") newPeople.push(result.userId);
+      // A row without an email gets a placeholder address nobody can receive.
+      if (result.ok && result.status === "created" && row.email && !isUndeliverableEmail(row.email)) newPeople.push(result.userId);
       results.push({
         row: i + 2, // header is row 1
         email: row.email || "",

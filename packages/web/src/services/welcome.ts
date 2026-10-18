@@ -18,7 +18,7 @@
  * too, but skipping here keeps the token table clean.
  */
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, ne } from "drizzle-orm";
 import { sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
@@ -49,23 +49,51 @@ export function welcomeKind(role: string | null | undefined): "field" | "office"
 }
 
 /**
- * A one-off "set your password" link. Older unused links for the same person
- * stop working, so a resent email is the only live one.
+ * A one-off "set your password" link. It doesn't retire older links: that
+ * happens only once the email carrying the new one has gone out
+ * (keepOnlyLink), so a failed resend never breaks the link they already have.
  */
-export async function setPasswordLink(userId: string, kind: "field" | "office", now = new Date()): Promise<string> {
+export async function setPasswordLink(userId: string, kind: "field" | "office", now = new Date()): Promise<{ url: string; identifier: string }> {
   const token = randomBytes(24).toString("base64url");
-  await sdb
-    .delete(schema.verification)
-    .where(and(eq(schema.verification.value, userId), like(schema.verification.identifier, "reset-password:%")));
+  const identifier = `reset-password:${token}`;
   await sdb.insert(schema.verification).values({
     id: randomUUID(),
-    identifier: `reset-password:${token}`,
+    identifier,
     value: userId,
     expiresAt: new Date(now.getTime() + WELCOME_LINK_DAYS * DAY),
     createdAt: now,
     updatedAt: now,
   });
-  return `${SITE()}/reset-password?token=${encodeURIComponent(token)}&welcome=${kind}`;
+  return { url: `${SITE()}/reset-password?token=${encodeURIComponent(token)}&welcome=${kind}`, identifier };
+}
+
+/** After a successful send: the new link is the only one that works. */
+export async function keepOnlyLink(userId: string, identifier: string): Promise<void> {
+  await sdb
+    .delete(schema.verification)
+    .where(and(eq(schema.verification.value, userId), like(schema.verification.identifier, "reset-password:%"), ne(schema.verification.identifier, identifier)));
+}
+
+/** After a failed send: drop the link nobody received. */
+async function dropLink(identifier: string): Promise<void> {
+  await sdb.delete(schema.verification).where(eq(schema.verification.identifier, identifier));
+}
+
+/**
+ * Note on their membership that a welcome went out. Read, merge and write
+ * under a row lock, like PATCH /api/me/onboarding, so a Guide progress save or
+ * a launch-tips unsubscribe at the same moment isn't lost.
+ */
+async function markWelcomeSent(membershipId: string, at: Date): Promise<void> {
+  await sdb.transaction(async (tx) => {
+    const [m] = await tx.select().from(schema.memberships).where(eq(schema.memberships.id, membershipId)).limit(1).for("update");
+    if (!m) return;
+    const state = parseOnboarding(m.onboarding);
+    await tx
+      .update(schema.memberships)
+      .set({ onboarding: JSON.stringify({ ...state, welcomeSentAt: at.toISOString() }), updatedAt: at })
+      .where(eq(schema.memberships.id, membershipId));
+  });
 }
 
 async function workerNoun(companyId: string): Promise<string> {
@@ -102,7 +130,7 @@ export async function sendWelcome(
     // A platform operator (superadmin) adding someone isn't who the person knows.
     const inviterName = inviter && inviter.role !== "superadmin" ? (inviter.name || "").trim() || null : null;
     const roleLabel = kind === "field" ? await workerNoun(a.companyId) : ROLE_LABELS[membership.role] || "team member";
-    const [brand, sender, url] = await Promise.all([loadEmailBrand(a.companyId), resolveFromAddress(a.companyId), setPasswordLink(a.userId, kind)]);
+    const [brand, sender, link] = await Promise.all([loadEmailBrand(a.companyId), resolveFromAddress(a.companyId), setPasswordLink(a.userId, kind)]);
 
     const mail = emailTemplates.welcome(
       {
@@ -111,7 +139,7 @@ export async function sendWelcome(
         email: user.email,
         inviter: inviterName,
         roleLabel,
-        setPasswordUrl: url,
+        setPasswordUrl: link.url,
         signInUrl: `${SITE()}/sign-in`,
         appStoreUrl: process.env.APP_STORE_URL?.trim() || undefined,
         playStoreUrl: process.env.PLAY_STORE_URL?.trim() || undefined,
@@ -122,15 +150,11 @@ export async function sendWelcome(
     const r = await send({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text, ...sender });
     if ((r as { ok?: boolean; skipped?: boolean })?.ok === false && !(r as { skipped?: boolean }).skipped) {
       log.error("welcome email failed", { companyId: a.companyId, userId: a.userId, err: (r as { error?: string }).error });
+      await dropLink(link.identifier);
       return { sent: false, reason: "send failed" };
     }
-    // Remember it on their membership (shown as "Welcome email sent" in People).
-    const state = parseOnboarding(membership.onboarding);
-    await t.update(
-      schema.memberships,
-      { onboarding: JSON.stringify({ ...state, welcomeSentAt: new Date().toISOString() }), updatedAt: new Date() },
-      eq(schema.memberships.id, membership.id),
-    );
+    await keepOnlyLink(a.userId, link.identifier);
+    await markWelcomeSent(membership.id, new Date());
     return { sent: true };
   } catch (e) {
     log.error("welcome email error", { companyId: a.companyId, userId: a.userId, err: (e as Error).message });
