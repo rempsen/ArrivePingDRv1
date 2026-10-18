@@ -70,6 +70,12 @@ export interface StaffInviteResult {
   inviteId?: string;
   link?: string;
   message?: string;
+  /**
+   * Whether the email carrying their way in (set-password link or join
+   * invitation) actually went out. Absent when nothing was meant to be sent
+   * (`silent`) or they were already on the roster.
+   */
+  emailed?: boolean;
 }
 
 /** Map the plain-English kind onto our role/staffType model. */
@@ -156,7 +162,7 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
       }
     }
     const emailed = a.silent
-      ? true // nothing was meant to be sent
+      ? undefined // nothing was meant to be sent
       : await trySendJoinCompanyInvite({ email: existing.email, name: existing.name, companyId: a.companyId, membershipId: membership!.id });
     return {
       ...base,
@@ -164,9 +170,11 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
       status: "joined",
       userId: existing.id,
       riderId,
-      message: emailed
-        ? "Already has an ArrivePing login — invited to join your company with their existing password."
-        : "Already has an ArrivePing login — added as invited, but the invitation email didn't go out. Use “Resend invite” next to their name.",
+      emailed,
+      message:
+        emailed === false
+          ? "Already has an ArrivePing login — added as invited, but the invitation email didn't go out. Use “Resend invite” next to their name."
+          : "Already has an ArrivePing login — invited to join your company with their existing password.",
     };
   }
 
@@ -225,20 +233,38 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
   });
   const link = `${SITE}/join/${inv.token}`;
 
+  let emailed: boolean | undefined;
   if (!a.silent) {
-    await sendWelcomeSetPassword({ companyId: a.companyId, to: email, name, kind: a.kind, link }).catch((e) =>
-      console.error("[staff-invite] welcome email failed", e),
-    );
+    emailed = await sendWelcomeSetPassword({ companyId: a.companyId, to: email, name, kind: a.kind, link }).catch((e) => {
+      console.error("[staff-invite] welcome email failed", e);
+      return false;
+    });
     if (phone) {
       const co = await t.selectOne(schema.companySettings);
       sendSms(phone, `${co?.name || "ArrivePing"}: you've been added as a ${KIND_LABEL[a.kind]}. Set your password here: ${link}`).catch(() => {});
     }
   }
 
-  return { ...base, ok: true, status: "invited", userId: u.id, riderId, inviteId: inv.id, link, message: "Account created — set-password email sent." };
+  return {
+    ...base,
+    ok: true,
+    status: "invited",
+    userId: u.id,
+    riderId,
+    inviteId: inv.id,
+    link,
+    emailed,
+    message:
+      emailed === false
+        ? "Account created, but the set-password email didn't go out. Use “Email a sign-in link” on their profile."
+        : emailed
+          ? "Account created — set-password email sent."
+          : "Account created.",
+  };
 }
 
-async function sendWelcomeSetPassword(a: { companyId: string; to: string; name: string; kind: StaffKind; link: string }) {
+/** Resolves true only when the email was handed to the provider (sendEmail reports a skip or failure as { ok: false }). */
+async function sendWelcomeSetPassword(a: { companyId: string; to: string; name: string; kind: StaffKind; link: string }): Promise<boolean> {
   const co = await tdb(a.companyId).selectOne(schema.companySettings);
   const company = co?.name || "ArrivePing";
   const brand = await loadEmailBrand(a.companyId);
@@ -256,7 +282,7 @@ async function sendWelcomeSetPassword(a: { companyId: string; to: string; name: 
     : "see the schedule, dispatch jobs, and keep customers in the loop";
   const noun = isField ? (co?.workerNoun || "technician").toLowerCase() : KIND_LABEL[a.kind];
 
-  await sendEmail({
+  const sent = await sendEmail({
     to: a.to,
     subject: `Welcome to ${company} on ArrivePing — set your password`,
     html: `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px">
@@ -271,4 +297,5 @@ async function sendWelcomeSetPassword(a: { companyId: string; to: string; name: 
       </div>
     </div>`,
   });
+  return Boolean(sent?.ok);
 }

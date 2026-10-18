@@ -669,8 +669,10 @@ without it unless the user explicitly says to skip/finish everything.
         kind and email. Each person gets a login invite by email (and SMS
         if a mobile was given) to set their own password — nobody types
         passwords for anyone else. Then say one line like "Invites are on
-        their way — they'll each set their own password." and continue
-        with question 3.
+        their way — they'll each set their own password." If the result
+        lists anyone under notEmailed, say instead that their invite
+        didn't go out and how to resend it (from howToResend). Then
+        continue with question 3.
     Anyone they're not sure about yet can be added later under Settings →
     Team; say so once if they seem stuck, then move on. Don't make them
     finish everything now.
@@ -1024,7 +1026,7 @@ correction like that — it reads like you weren't listening.`;
         }),
         add_team_members: tool({
           description:
-            "Create login invites for the tenant's staff in one go. Field staff (tech/driver) get a technician profile with vehicle details; office staff (dispatcher/manager/owner) get a dispatcher/manager login. Every person receives a branded email (and SMS when a mobile is given) with a link to set their OWN password — never ask the admin for passwords. Only include people with a name, kind and email; skip the rest and tell the user they can add them later under Settings → Team.",
+            "Create login invites for the tenant's staff in one go. Field staff (tech/driver) get a technician profile with vehicle details; office staff (dispatcher/manager/owner) get a dispatcher/manager login. Every person is sent a branded email (and SMS when a mobile is given) with a link to set their OWN password — never ask the admin for passwords. The result lists anyone whose email did NOT go out under notEmailed, with how to resend it; tell the admin about those instead of saying their invite is on its way. Only include people with a name, kind and email; skip the rest and tell the user they can add them later under Settings → Team.",
           inputSchema: z.object({
             members: z
               .array(
@@ -1092,9 +1094,19 @@ correction like that — it reads like you weren't listening.`;
             const invited = results.filter((r) => r.status === "invited" || r.status === "joined");
             const existing = results.filter((r) => r.status === "exists");
             const failed = results.filter((r) => r.status === "error");
+            // Added, but the email with their way in didn't go out: the
+            // admin has to resend it, so the model must not say it's sent.
+            const notEmailed = invited.filter((r) => r.emailed === false);
             return {
               ok: failed.length < results.length,
-              invited: invited.map((r) => ({ name: r.name, email: r.email, kind: r.kind })),
+              invited: invited.map((r) => ({ name: r.name, email: r.email, kind: r.kind, emailed: r.emailed !== false })),
+              notEmailed: notEmailed.map((r) => ({
+                name: r.name,
+                howToResend:
+                  r.status === "joined"
+                    ? "People → Technicians & Managers → “Resend invite” next to their name"
+                    : "People → Technicians & Managers → their profile → “Email a sign-in link”",
+              })),
               alreadyOnRoster: existing.map((r) => r.name),
               failed: failed.map((r) => ({ name: r.name, reason: r.message ?? "failed" })),
               // Never surface the set-password links to the model/user —
