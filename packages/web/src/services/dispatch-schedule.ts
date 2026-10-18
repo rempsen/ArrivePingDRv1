@@ -222,6 +222,7 @@ export interface DayLoad {
   tz: string;
   /** Technicians who can be dispatched (not suspended). */
   techs: number;
+  /** jobs: all that day, queued included; bookedMins: assigned work only. */
   days: Array<{ day: string; jobs: number; bookedMins: number }>;
 }
 
@@ -240,7 +241,7 @@ export async function loadDayLoad(companyId: string, opts: { from: string; days:
   const [rows, techRows] = await Promise.all([
     t.transaction((tx) =>
       tx
-        .select({ scheduledAt: B.scheduledAt, durationMins: schema.services.durationMins })
+        .select({ scheduledAt: B.scheduledAt, riderId: B.riderId, durationMins: schema.services.durationMins })
         .from(B)
         .leftJoin(schema.services, eq(schema.services.id, B.serviceId))
         .where(t.scope(B, and(isNull(B.deletedAt), ne(B.status, "cancelled"), gte(B.scheduledAt, start), lt(B.scheduledAt, end)))),
@@ -253,7 +254,8 @@ export async function loadDayLoad(companyId: string, opts: { from: string; days:
     const d = byDay.get(zonedDayKey(new Date(r.scheduledAt), tz));
     if (!d) continue;
     d.jobs += 1;
-    d.bookedMins += durationOf(r);
+    // Booked time is time on someone's day; queued jobs are demand, not load.
+    if (r.riderId) d.bookedMins += durationOf(r);
   }
   return { tz, techs: techRows.length, days: [...byDay].map(([day, v]) => ({ day, ...v })) };
 }

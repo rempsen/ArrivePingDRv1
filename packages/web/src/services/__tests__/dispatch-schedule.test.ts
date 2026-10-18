@@ -268,14 +268,16 @@ describe("loadDayLoad", () => {
     const LC = "load-co";
     await company(LC);
     // 9 PM in Winnipeg on Oct 20 is 02:00 UTC on Oct 21: it belongs to the 20th.
-    await job(LC, { scheduledAt: at("2026-10-21T02:00:00Z") });
-    await job(LC, { scheduledAt: at("2026-10-20T15:00:00Z") });
+    await job(LC, { scheduledAt: at("2026-10-21T02:00:00Z"), riderId: `${LC}-t1`, status: "assigned" });
+    await job(LC, { scheduledAt: at("2026-10-20T15:00:00Z"), riderId: `${LC}-t2`, status: "assigned" });
+    // queued: counts as a job that day, not as booked time
+    await job(LC, { scheduledAt: at("2026-10-20T17:00:00Z") });
     await job(LC, { scheduledAt: at("2026-10-22T15:00:00Z"), status: "cancelled" });
     const r = await ds.loadDayLoad(LC, { from: "2026-10-19", days: 4 });
     expect(r.techs).toBe(2);
     expect(r.days).toEqual([
       { day: "2026-10-19", jobs: 0, bookedMins: 0 },
-      { day: "2026-10-20", jobs: 2, bookedMins: 180 },
+      { day: "2026-10-20", jobs: 3, bookedMins: 180 },
       { day: "2026-10-21", jobs: 0, bookedMins: 0 },
       { day: "2026-10-22", jobs: 0, bookedMins: 0 },
     ]);

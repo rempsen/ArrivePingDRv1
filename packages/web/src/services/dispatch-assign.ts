@@ -30,7 +30,7 @@ import { logJobEvent } from "./job-events";
 import { publishDispatch } from "./realtime";
 import { fireEvent } from "./dispatch";
 import { cancelTasks, registerTaskHandler, runTaskNow, scheduleTask } from "./scheduler";
-import { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
+import { ASSIGNED_NOTICE_TASK, RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
 
 /** How long an Undo token stays valid. The map's toast offers it for 6 s. */
 export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
@@ -262,6 +262,9 @@ export async function dispatchAssign(
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
+    // The "assigned" notice gives the time, so a move still waiting to be
+    // announced has nothing to add (as on the immediate path in assignJob).
+    await cancelTasks({ bookingId: input.bookingId, kind: RESCHEDULED_NOTICE_TASK });
     // Already announced (the notice couldn't be held): no Undo to offer.
     if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId))) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.

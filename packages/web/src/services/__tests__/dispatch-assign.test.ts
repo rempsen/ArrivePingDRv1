@@ -239,6 +239,20 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
   });
 
+  it("a queue assignment replaces a move still waiting to be announced", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    // the technician hands it back, and it goes straight out again
+    await db.update(schema.bookings).set({ riderId: null, status: "confirmed", assignStatus: "released" }).where(eq(schema.bookings.id, id));
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect(r.ok).toBe(true);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("assigned");
+    expect(kinds).not.toContain("rescheduled");
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();
