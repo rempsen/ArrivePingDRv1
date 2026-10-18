@@ -48,13 +48,15 @@ export const nav = [
 /* ------------------------------------------------------------------ */
 
 export const hero = {
-  /** The three value propositions in the pill above the headline, with a blinking dot between each. */
-  pillars: ["Plan with visibility.", "Assign and track.", "Communicate."],
-  /** The owner's most-felt pain, in the dispatcher's own words (Dan, 2026-10-18). */
-  title: "No more \u201cWhere\u2019s my tech?\u201d calls.",
-  /** The promise against the industry's worst habit, the four-hour window. */
-  subhead: "Give every customer a time, not a window.",
-  lede: "They get a text and a live map the moment your tech heads their way. You get your phone back.",
+  /** The category label in the pill above the headline: what ArrivePing is, in under a second.
+   *  (The three pillars, Plan with visibility / Assign and track / Communicate, are now the headline itself.) */
+  pillars: ["Field service software for trades"],
+  /** What ArrivePing does, in three verbs: the three pillars as one line (Dan, 2026-10-18, option 2).
+   *  The pain hook ("No more 'Where's my tech?' calls.") now heads the customer-view section. */
+  title: "See every tech. Assign every job. Update every customer.",
+  /** Optional bold line under the headline; empty hides it. */
+  subhead: "",
+  lede: "ArrivePing puts your crew on a live map, sends the right tech to each work order, and texts your customers a live ETA so they never have to call.",
   /** The four objections a buyer has before clicking, answered before the button. */
   assurances: [
     { icon: "phone", label: "No GPS hardware", sub: "Runs on the phones your team carries" },
@@ -107,7 +109,7 @@ export const hero = {
 /** What the homeowner gets: a full-width module, deliberately unlike the dark sections around it. */
 export const customerView = {
   eyebrow: "For your customers",
-  title: "What your customer sees.",
+  title: "No more \u201cWhere\u2019s my tech?\u201d calls.",
   titleMuted: "No app, no account, no phone tag.",
   body:
     "The moment your technician taps Start Driving, your customer gets a text with a link to a live page: who's coming, an ETA that updates as they drive, and one-tap text or call.",

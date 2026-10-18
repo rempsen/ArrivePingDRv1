@@ -81,10 +81,13 @@ export function HomeHero() {
             ))}
           </p>
           <h1 id="hero-title" className="lv-hero__title enter enter--2">
-            {hero.title}
+            {/* One sentence per line, so "Assign every job." never breaks mid-thought. */}
+            {hero.title.split(/(?<=\.)\s+/).map((line) => (
+              <span key={line} className="lv-hero__line">{line} </span>
+            ))}
           </h1>
           <p className="lv-hero__promise enter enter--3">
-            <strong className="lv-hero__sub">{hero.subhead}</strong>
+            {hero.subhead ? <strong className="lv-hero__sub">{hero.subhead}</strong> : null}
             <span>{hero.lede}</span>
           </p>
 

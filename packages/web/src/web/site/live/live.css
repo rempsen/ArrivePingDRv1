@@ -264,6 +264,7 @@
   color: #fff;
   font-weight: 600;
 }
+.site .lv-hero__line { display: block; }
 .site .lv-hero__sub {
   font-size: 1.18em;
   line-height: 1.35;
@@ -901,5 +902,17 @@
   .site .lv-pause {
     min-height: 44px;
     padding: 0 16px;
+  }
+}
+
+/* Home headline: three short sentences, one per line. Size it so the longest
+   ("Update every customer.", about 10.7 x the font size wide) never wraps:
+   capped at 52px on desktop, and at the column width on phones. */
+.site .lv-hero--home .lv-hero__title {
+  font-size: min(clamp(40px, 4.5vw, 64px), 52px);
+}
+@media (max-width: 640px) {
+  .site .lv-hero--home .lv-hero__title {
+    font-size: min(clamp(30px, 10vw, 42px), calc((100vw - 32px) / 11));
   }
 }
