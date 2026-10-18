@@ -7,7 +7,7 @@ import { Field, inputCls } from "../components/modal";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../components/provisioning-progress";
 import { SignupReveal } from "../components/signup-reveal";
 import { SignupPayment, type BillingIds } from "../components/signup-payment";
-import { hubspotIdentify, loadHubspotTracking } from "../site/lib/hubspot-tracking";
+import { hubspotIdentify } from "../site/lib/hubspot-tracking";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../services/industry-presets";
 import {
   Building2,
@@ -240,10 +240,6 @@ export default function SignupCompanyPage() {
     setStep("payment");
   }
 
-  // Visitors who accepted analytics on the marketing site keep their HubSpot session here.
-  useEffect(() => {
-    loadHubspotTracking();
-  }, []);
 
   // Arriving from the homepage setup film: /get-started?site=example.com, with
   // the work email they typed handed over in sessionStorage (never the URL).
@@ -261,7 +257,7 @@ export default function SignupCompanyPage() {
       const mail = typeof h?.email === "string" ? h.email.trim() : "";
       if (h?.site === site && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
         setAdminEmail((cur) => cur || mail);
-        hubspotIdentify(mail); // only with analytics consent
+        hubspotIdentify(mail); // only with cookie consent
       }
     } catch {
       /* storage blocked or unreadable: they'll just type it */
@@ -304,8 +300,8 @@ export default function SignupCompanyPage() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
-      // Tie the marketing-site visits that led here to the new HubSpot contact (consent-gated).
-      hubspotIdentify(adminEmail, { firstname: firstName.trim(), lastname: lastName.trim(), company: name.trim() });
+      // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
+      hubspotIdentify(adminEmail);
       setProvisionResult((d as any)?.seeded ?? null);
 
       // Sign the new admin in with the credentials they just typed. Reveal

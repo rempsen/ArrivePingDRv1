@@ -1,5 +1,6 @@
-import { Suspense } from "react";
-import { Route, Switch } from "wouter";
+import { Suspense, useEffect } from "react";
+import { Route, Switch, useLocation } from "wouter";
+import { trackRoute } from "./site/lib/hubspot-tracking";
 import Index from "./pages/index";
 import AuthPage from "./pages/auth";
 import { makeLanding } from "./pages/marketing/landing";
@@ -111,10 +112,18 @@ function RouteFallback() {
   );
 }
 
+/** HubSpot tracking on the marketing pages only (site/lib/hubspot-tracking.ts). */
+function MarketingTracking() {
+  const [path] = useLocation();
+  useEffect(() => trackRoute(path), [path]);
+  return null;
+}
+
 function App() {
   return (
     <RootErrorBoundary>
     <Provider>
+      <MarketingTracking />
       <Suspense fallback={<RouteFallback />}>
         <RouteErrorBoundary name="public">
         <Switch>

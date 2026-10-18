@@ -81,7 +81,7 @@ export function SetupTry() {
       // Link this visit to the lead in HubSpot (no-op without analytics
       // consent), and give the tracker a moment to send before we navigate.
       if (r.ok) {
-        hubspotIdentify(mail, { website: domain! });
+        hubspotIdentify(mail);
         if (hasAnalyticsConsent()) await new Promise((res) => setTimeout(res, 350));
       }
     } catch {

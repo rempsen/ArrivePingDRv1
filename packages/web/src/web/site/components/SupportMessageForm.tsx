@@ -74,7 +74,7 @@ export function SupportMessageForm() {
         }),
       });
       if (r.ok) {
-        hubspotIdentify(f.email); // only with analytics consent
+        hubspotIdentify(f.email); // only with cookie consent
         setStatus({ kind: "sent", email: f.email.trim() });
         setF(EMPTY);
         return;

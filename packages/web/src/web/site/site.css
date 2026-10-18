@@ -1527,6 +1527,24 @@
   gap: 16px;
   flex-wrap: wrap;
 }
+.site .footer__link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.site .footer__link-btn:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site .footer__link-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .site .footer__mini-mark {
   border-radius: 4px;
   flex-shrink: 0;
@@ -2054,6 +2072,67 @@
   .site .contact-ask__opt span,
   .site .contact-ask__opt span::before {
     transition: none;
+  }
+}
+
+/* Cookie notice (components/CookieConsent.tsx): a small card in the corner,
+   clear of the page's content and buttons. */
+.site .consent {
+  position: fixed;
+  z-index: 60;
+  left: 20px;
+  bottom: 20px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 18px 18px 16px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-overlay);
+  animation: consent-in 0.28s ease-out both;
+}
+@keyframes consent-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site .consent {
+    animation: none;
+  }
+}
+.site .consent__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.site .consent__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+.site .consent__link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site .consent__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+@media (max-width: 560px) {
+  .site .consent {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+  }
+  .site .consent__actions > * {
+    flex: 1;
   }
 }
 
