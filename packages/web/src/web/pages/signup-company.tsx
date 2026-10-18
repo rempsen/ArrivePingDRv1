@@ -247,18 +247,24 @@ export default function SignupCompanyPage() {
 
   // Arriving from the homepage setup film: /get-started?site=example.com, with
   // the work email they typed handed over in sessionStorage (never the URL).
+  // The email is used once, and only alongside the same ?site= it was saved
+  // with, so a later plain visit (or someone else on this tab) never gets it.
   // Setting the website starts the scout through the effect above.
   useEffect(() => {
+    const site = new URLSearchParams(window.location.search).get("site")?.trim().toLowerCase() ?? "";
+    if (!site || !looksLikeDomain(site)) return;
+    setWebsite((cur) => cur || site);
     try {
-      const site = new URLSearchParams(window.location.search).get("site")?.trim() ?? "";
-      if (site && looksLikeDomain(site)) setWebsite((cur) => cur || site);
-      const mail = window.sessionStorage.getItem("ap_signup_email")?.trim() ?? "";
-      if (mail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+      const raw = window.sessionStorage.getItem("ap_signup_handoff");
+      window.sessionStorage.removeItem("ap_signup_handoff");
+      const h = raw ? (JSON.parse(raw) as { email?: unknown; site?: unknown }) : null;
+      const mail = typeof h?.email === "string" ? h.email.trim() : "";
+      if (h?.site === site && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
         setAdminEmail((cur) => cur || mail);
         hubspotIdentify(mail); // only with analytics consent
       }
     } catch {
-      /* storage blocked: they'll just type it */
+      /* storage blocked or unreadable: they'll just type it */
     }
   }, []);
 

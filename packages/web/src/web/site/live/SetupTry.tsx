@@ -9,9 +9,9 @@ import { getConsent, hubspotIdentify } from "../lib/hubspot-tracking";
  * On submit it posts to /api/public/setup-demo, which makes them a HubSpot
  * lead (source "ArrivePing setup demo") for marketing. This visit is linked
  * to that contact only if they accepted analytics cookies (hubspotIdentify
- * checks consent). The email reaches signup through sessionStorage, never
- * the URL; only the domain goes in ?site=. If the lead call fails they still
- * go on to signup.
+ * checks consent). The email reaches signup through sessionStorage (used
+ * once, and only with the matching ?site=), never the URL. If the lead call
+ * fails they still go on to signup.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -88,7 +88,7 @@ export function SetupTry() {
       /* the lead is best effort; signup is what matters */
     }
     try {
-      window.sessionStorage.setItem("ap_signup_email", mail);
+      window.sessionStorage.setItem("ap_signup_handoff", JSON.stringify({ email: mail, site: domain }));
     } catch {
       /* storage blocked: they'll type it on signup */
     }
