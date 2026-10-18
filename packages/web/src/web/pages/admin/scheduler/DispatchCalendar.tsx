@@ -382,6 +382,7 @@ export function DispatchCalendar(p: {
                 }}
                 onOpenJob={openJob}
                 onNewJob={(d) => newJob(d)}
+                timeOff={sb.board?.timeOff ?? []}
               />
             )}
             {view === "month" && (

@@ -31,7 +31,7 @@ import { publishDispatch } from "./realtime";
 import { fireEvent } from "./dispatch";
 import { cancelTasks, registerTaskHandler } from "./scheduler";
 import { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
-import { holdNotice, noteMove, noteMoveUndone } from "./dispatch-notices";
+import { currentMoveGen, holdNotice, noteMove, noteMoveUndone } from "./dispatch-notices";
 
 /** How long an Undo token stays valid. The map's toast offers it for 6 s. */
 export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
@@ -79,6 +79,8 @@ interface UndoClaims {
   o?: string;
   /** When the drop moved the time: when (ISO), to tell whether its notice went out before an Undo. */
   m?: string;
+  /** ...and that move's generation: Undo only while it's still the latest move. */
+  q?: string;
   /** This offer's assignedAt (ISO): Undo takes back this offer, not a later one to the same technician. */
   g?: string;
   /** expiry, ms */
@@ -146,7 +148,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
-  if (c.k !== "time" && [c.d, c.o, c.m, c.g].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
+  if (c.k !== "time" && [c.d, c.o, c.m, c.g, c.q].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (c.k === "time" && [c.r, c.m, c.q].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (now > c.exp) return "expired";
   return c;
@@ -224,7 +226,8 @@ export async function dispatchAssign(
   const moved = new Date(r.booking.scheduledAt).getTime() !== from.getTime();
   // A new time is announced on its own ("rescheduled"), apart from the
   // assignment: tenants set the two messages up separately.
-  const moveHeld = moved ? (await noteMove(companyId, input.bookingId, { from, to: new Date(r.booking.scheduledAt) })) !== null : true;
+  const moveGen = moved ? await noteMove(companyId, input.bookingId, { from, to: new Date(r.booking.scheduledAt) }) : null;
+  const moveHeld = !moved || moveGen !== null;
   if (undoable) {
     undo = signUndo({
       v: 1,
@@ -233,7 +236,7 @@ export async function dispatchAssign(
       r: input.riderId,
       s: was.status,
       a: was.assignStatus,
-      ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString(), m: new Date().toISOString() } : {}),
+      ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString(), m: new Date().toISOString(), ...(moveGen ? { q: moveGen } : {}) } : {}),
       ...(was.declineReason ? { d: was.declineReason } : {}),
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
       ...(r.booking.assignedAt ? { g: new Date(r.booking.assignedAt).toISOString() } : {}),
@@ -255,6 +258,10 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
 
   const t = tdb(companyId);
   const B = schema.bookings;
+  // A drop that moved the time: only while that move is still the latest
+  // (moved away and back since, the time matches but the decision doesn't).
+  if (c.q && (await currentMoveGen(companyId, c.b)) !== c.q)
+    return { ok: false, status: 409, message: "This job changed since you assigned it — open it to see where it is now." };
   // Only an offer nobody has acted on yet: same tech, still offered, still
   // assigned, not archived. Anything else means the world moved on.
   const [b] = await t.update(

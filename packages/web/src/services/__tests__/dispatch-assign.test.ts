@@ -334,6 +334,19 @@ describe("dispatchAssign + undoAssign", () => {
     expect((await row(id)).riderId).toBe(`${CO}-t2`);
   });
 
+  it("won't undo an assign-and-move after the job was moved away and back", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO);
+    const base = (await row(id)).scheduledAt;
+    const b = new Date(base.getTime() + HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: b, by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date(base.getTime() + 2 * HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: b, by: "Dana" }, NOW.getTime());
+    expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
+    await flushNotices();
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

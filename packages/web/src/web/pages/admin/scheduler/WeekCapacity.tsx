@@ -21,6 +21,8 @@ export function WeekCapacity(p: {
   onOpenDay(day: string): void;
   onOpenJob(job: BoardJob): void;
   onNewJob(day: string): void;
+  /** Days off in the week: those technicians don't count toward that day's capacity. */
+  timeOff: ReadonlyArray<{ techId: string; day: string }>;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(p.monday, i));
   const max = p.compact ? 2 : 3;
@@ -33,7 +35,8 @@ export function WeekCapacity(p: {
             <div className="flex items-center px-4 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Technicians</div>
             {days.map((d) => {
               const booked = p.techs.reduce((s, t) => s + bookedMinutes(techDayJobs(p.jobs, t.id, d, p.tz)), 0);
-              const cap = Math.max(1, p.techs.length) * 480;
+              const off = new Set(p.timeOff.filter((o) => o.day === d).map((o) => o.techId));
+              const cap = Math.max(1, p.techs.filter((t) => !off.has(t.id)).length) * 480;
               const pctBooked = Math.round((booked / cap) * 100);
               const isToday = d === p.today;
               return (
