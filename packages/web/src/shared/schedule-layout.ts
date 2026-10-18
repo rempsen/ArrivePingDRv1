@@ -124,6 +124,11 @@ export interface SlotTech {
   available: boolean;
   /** Not before this (minutes since midnight): when a live job really finishes. */
   earliestMin?: number;
+  /**
+   * Where they set out from before their first job of the day, and from when
+   * (minutes since midnight): their live position today, the office otherwise.
+   */
+  origin?: Point & { atMin: number };
   dayJobs: ReadonlyArray<{ startMin: number; endMin: number } & Point>;
 }
 
@@ -158,13 +163,16 @@ export function rankSlots(input: {
     let prev: (typeof jobs)[number] | null = null;
     for (let i = 0; i <= jobs.length; i++) {
       const next = jobs[i] ?? null;
-      const drive = driveMinutes(prev, job);
-      const from = Math.max(input.earliestMin, t.earliestMin ?? 0, range.startMin, prev ? prev.endMin + (drive ?? 15) : 0);
+      // Coming from the last job, or before any, from where they start the day.
+      const start = prev ?? (t.origin && driveMinutes(t.origin, job) !== null ? t.origin : null);
+      const drive = driveMinutes(start, job);
+      const readyAt = prev ? prev.endMin : (t.origin?.atMin ?? 0);
+      const from = Math.max(input.earliestMin, t.earliestMin ?? 0, range.startMin, start ? readyAt + (drive ?? 15) : 0);
       const startMin = Math.ceil(from / 15) * 15;
       // They have to get from this job to the next one in time, too.
       const limit = next ? next.startMin - Math.max(SLACK_MINS, driveMinutes(job, next) ?? SLACK_MINS) : range.endMin;
       if (startMin + dur <= limit && startMin + dur <= range.endMin) {
-        const driveMins = prev ? drive : null;
+        const driveMins = start ? drive : null;
         found.push({
           techId: t.id,
           startMin,

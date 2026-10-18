@@ -157,6 +157,22 @@ describe("rankSlots", () => {
     expect(r[0]!.startMin).toBeGreaterThanOrEqual(800);
   });
 
+  it("counts the drive to the first job from where they start", () => {
+    const r = rankSlots({
+      job: { durationMins: 60, ...here },
+      techs: [
+        { id: "far", qualified: true, available: true, origin: { ...far, atMin: 600 }, dayJobs: [] },
+        { id: "near", qualified: true, available: true, origin: { ...here, atMin: 600 }, dayJobs: [] },
+      ],
+      earliestMin: 630,
+      range,
+    });
+    expect(r.map((s) => s.techId)).toEqual(["near", "far"]);
+    const f = r.find((s) => s.techId === "far")!;
+    expect(f.driveMins).toBeGreaterThanOrEqual(40);
+    expect(f.startMin).toBeGreaterThanOrEqual(600 + f.driveMins!);
+  });
+
   it("leaves time to drive on to the next job", () => {
     // 555–615 here would leave 25 minutes to reach a job ~25 km away at 640.
     const r = rankSlots({

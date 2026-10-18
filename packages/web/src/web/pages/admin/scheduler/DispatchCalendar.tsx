@@ -106,12 +106,22 @@ export function DispatchCalendar(p: {
         // Today, someone on a job that's running long is free when it really ends.
         const free = day === today && t.freeAt ? new Date(t.freeAt) : null;
         const freeLater = free != null && zonedDayKey(free, tz) > day;
+        // Where they set out from: today, where they are now (from when they're
+        // free); another day, the office at the start of the day.
+        const office = sb.board?.office ?? null;
+        const origin =
+          day === today && t.lat != null && t.lng != null
+            ? { lat: t.lat, lng: t.lng, atMin: free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz) }
+            : day !== today && office
+              ? { ...office, atMin: range.startMin }
+              : undefined;
         return {
           id: t.id,
           qualified: qualifiedFor(t, placing),
           // Off, on a break or off for the day: not a same-day suggestion.
           available: !(day === today && (t.status === "offline" || t.status === "break")) && !offToday.has(t.id) && !freeLater,
           ...(free && !freeLater ? { earliestMin: Math.ceil((zonedMinutesOfDay(free, tz) + 15) / 15) * 15 } : {}),
+          ...(origin ? { origin } : {}),
           // Finished and cancelled jobs stay on the calendar but don't hold time.
           dayJobs: (jobsByTech.get(t.id) ?? []).filter((j) => !isTerminalStatus(j.status)).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
         };
@@ -119,7 +129,7 @@ export function DispatchCalendar(p: {
       earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,
       range,
     });
-  }, [placing, view, day, today, techs, jobsByTech, tz, now, range, offToday]);
+  }, [placing, view, day, today, techs, jobsByTech, tz, now, range, offToday, sb.board]);
   const dimmed = useMemo(() => new Set(placing ? techs.filter((t) => !qualifiedFor(t, placing)).map((t) => t.id) : []), [placing, techs]);
 
   // ---- drag and drop ----
