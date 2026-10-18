@@ -26,6 +26,7 @@ import {
   setInternal,
   tenantDetail,
   tenants,
+  weekly,
   type AnalyticsParams,
   type Dimension,
 } from "../../services/platform-analytics";
@@ -99,6 +100,12 @@ export const platformAnalyticsRoutes = new Hono<AppEnv>()
     const p = parseParams(c.req.query());
     if (!p.ok) return c.json({ message: p.message }, 400);
     return c.json({ tenants: await tenants(p.params), generatedAt: new Date().toISOString() });
+  })
+
+  .get("/weekly", async (c) => {
+    const p = parseParams(c.req.query());
+    if (!p.ok) return c.json({ message: p.message }, 400);
+    return c.json({ weeks: await weekly(p.params), generatedAt: new Date().toISOString() });
   })
 
   .get("/tenants/:id", async (c) => {

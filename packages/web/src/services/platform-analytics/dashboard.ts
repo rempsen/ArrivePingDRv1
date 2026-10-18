@@ -60,6 +60,11 @@ export const DASHBOARD_DATASETS: Record<DashboardDatasetId, { title: string; des
     title: "Industries in use",
     description: "The industries companies have chosen, for the industry filter. Reads companies.",
   },
+  weekly: {
+    title: "Weekly growth",
+    description:
+      "Week by week: companies, trial starts, trials converted to paid and lost, paying companies lost (churn), technicians per company and plan revenue. Reads company_history and technician_history.",
+  },
   first_day: {
     title: "First day of data",
     description: "The earliest day a company or a job was created, where All time starts. Reads companies and bookings.",

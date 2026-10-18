@@ -169,6 +169,13 @@
       "when": 1792354110235,
       "tag": "0023_pay_units_onsite",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792360487297,
+      "tag": "0024_tenant_history",
+      "breakpoints": true
     }
   ]
 }
