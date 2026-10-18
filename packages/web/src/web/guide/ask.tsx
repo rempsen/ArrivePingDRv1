@@ -138,6 +138,8 @@ export function useAsk(terms: Terms) {
         trackGuide({ name: "guide.ask_question", answered: Boolean(text.trim()) && !failed, actions: Math.min(5, buttons) });
       } catch (e) {
         if ((e as { name?: string })?.name === "AbortError") return;
+        // Lost connection counts as unanswered too.
+        trackGuide({ name: "guide.ask_question", answered: false, actions: Math.min(5, buttons) });
         patchLast((t) => ({ ...t, status: "error", error: "Couldn't reach ArrivePing. Check your connection and try again." }));
       }
     },

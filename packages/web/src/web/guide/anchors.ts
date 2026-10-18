@@ -97,7 +97,9 @@ export function navAnchor(route: string): AnchorId | undefined {
  * hidden copy and the spotlight would land on nothing.
  */
 export function findAnchor(id: string): HTMLElement | null {
-  const all = document.querySelectorAll<HTMLElement>(`[data-tour="${id}"]`);
+  // Array.from, not for-of on the NodeList: the mobile app's typecheck reaches
+  // this file through the server types and has no DOM iterables.
+  const all = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${id}"]`));
   for (const el of all) {
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden") return el;
