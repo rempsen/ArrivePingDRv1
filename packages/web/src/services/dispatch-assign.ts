@@ -53,6 +53,8 @@ export type UndoOutcome = { ok: true; job: JobPatch } | { ok: false; status: 400
 
 interface UndoClaims {
   v: 1;
+  /** kind: an assignment from the queue (the default, and every token issued before kinds existed) */
+  k?: "assign";
   /** company */
   c: string;
   /** booking */
@@ -67,6 +69,21 @@ interface UndoClaims {
   exp: number;
 }
 
+/** A time move on the calendar (services/dispatch-schedule.ts). */
+export interface TimeUndoClaims {
+  v: 1;
+  k: "time";
+  c: string;
+  b: string;
+  /** scheduledAt before the move, ISO */
+  f: string;
+  /** scheduledAt after the move, ISO */
+  t: string;
+  exp: number;
+}
+
+export type AnyUndoClaims = UndoClaims | TimeUndoClaims;
+
 let processKey: Buffer | null = null;
 function signingKey(): Buffer {
   const secret = process.env.BETTER_AUTH_SECRET;
@@ -75,13 +92,21 @@ function signingKey(): Buffer {
   return (processKey ??= randomBytes(32));
 }
 
-export function signUndo(claims: UndoClaims): string {
+export function signUndo(claims: AnyUndoClaims): string {
   const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
   const mac = createHmac("sha256", signingKey()).update(body).digest("base64url");
   return `${body}.${mac}`;
 }
 
+/** An assignment token, for undoAssign. A time-move token reads as invalid here. */
 export function readUndo(token: unknown, now = Date.now()): UndoClaims | "invalid" | "expired" {
+  const c = readAnyUndo(token, now);
+  if (typeof c === "string") return c;
+  return c.k === "time" ? "invalid" : c;
+}
+
+/** Either kind of token, verified and unexpired. */
+export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "invalid" | "expired" {
   if (typeof token !== "string" || token.length > 2_000) return "invalid";
   const parts = token.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return "invalid";
@@ -89,14 +114,15 @@ export function readUndo(token: unknown, now = Date.now()): UndoClaims | "invali
   const want = createHmac("sha256", signingKey()).update(body).digest();
   const got = Buffer.from(mac, "base64url");
   if (got.length !== want.length || !timingSafeEqual(got, want)) return "invalid";
-  let c: UndoClaims;
+  let c: AnyUndoClaims;
   try {
-    c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as UndoClaims;
+    c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as AnyUndoClaims;
   } catch {
     return "invalid";
   }
-  const strings = [c?.c, c?.b, c?.r, c?.s, c?.a];
-  if (!c || c.v !== 1 || strings.some((x) => typeof x !== "string") || typeof c.exp !== "number") return "invalid";
+  if (!c || c.v !== 1 || typeof c.exp !== "number") return "invalid";
+  const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
+  if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (now > c.exp) return "expired";
   return c;
 }
@@ -120,20 +146,31 @@ export function _setGraceTimerForTests(fn: GraceTimer | null) {
   graceTimer = fn ?? realTimer;
 }
 
-async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string) {
+/**
+ * Hold a notification for the Undo window: a scheduled task run by an
+ * in-process timer (or the scheduler's tick if this process dies first). If the
+ * task can't be queued, the event fires now rather than never.
+ */
+export async function holdNotice(
+  companyId: string,
+  opts: { kind: string; bookingId: string; payload: Record<string, unknown>; fallback: Parameters<typeof fireEvent>[0] },
+) {
   const id = await scheduleTask({
     companyId,
-    kind: ASSIGNED_NOTICE_TASK,
+    kind: opts.kind,
     runAt: Date.now() + NOTIFY_GRACE_MS,
-    bookingId,
-    payload: { riderId },
+    bookingId: opts.bookingId,
+    payload: opts.payload,
   });
-  // Couldn't queue it: tell people now rather than never.
   if (!id) {
-    await fireEvent("assigned", bookingId);
+    await fireEvent(opts.fallback, opts.bookingId);
     return;
   }
   graceTimer(() => void runTaskNow(id), NOTIFY_GRACE_MS);
+}
+
+async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string) {
+  await holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId }, fallback: "assigned" });
 }
 
 registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {

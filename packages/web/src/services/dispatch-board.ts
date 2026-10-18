@@ -23,6 +23,7 @@ import { DEFAULT_TZ, namedDayBounds, safeTimeZone, zonedDayKey } from "../shared
 import { IN_FLIGHT_STATUSES, TERMINAL_STATUSES } from "../shared/job-status";
 import { jobMinutes } from "../shared/availability";
 import { parseSkills } from "../shared/qualify";
+import { addDays } from "../shared/schedule-layout";
 
 export const BOARD_JOB_LIMIT = 3000;
 /** A location older than this greys the technician's pin ("last seen 12 min ago"). */
@@ -88,8 +89,10 @@ export interface BoardJob {
 }
 
 export interface Board {
-  /** The day shown, YYYY-MM-DD in company time. */
+  /** The day shown, YYYY-MM-DD in company time (the first of them when `days` > 1). */
   day: string;
+  /** How many days from `day` the jobs cover (the calendar's week view asks for 7). */
+  days: number;
   tz: string;
   workerNoun: string;
   jobNoun: string;
@@ -155,7 +158,10 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-export async function loadBoard(companyId: string, opts: { day?: string | null; now?: Date } = {}): Promise<Board> {
+/** The most days one board read covers (the calendar's week view). */
+export const MAX_BOARD_DAYS = 7;
+
+export async function loadBoard(companyId: string, opts: { day?: string | null; days?: number; now?: Date } = {}): Promise<Board> {
   const now = opts.now ?? new Date();
   const t = tdb(companyId);
 
@@ -163,7 +169,9 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
   const settings = await t.selectOne(schema.companySettings);
   const tz = safeTimeZone(settings?.timezone ?? DEFAULT_TZ);
   const day = opts.day && /^\d{4}-\d{2}-\d{2}$/.test(opts.day) ? opts.day : zonedDayKey(now, tz);
-  const { start, end } = namedDayBounds(day, tz);
+  const days = Math.min(MAX_BOARD_DAYS, Math.max(1, Math.floor(opts.days ?? 1)));
+  const { start } = namedDayBounds(day, tz);
+  const { end } = namedDayBounds(days > 1 ? addDays(day, days - 1) : day, tz);
   const dayEnd = new Date(end.getTime() + 1); // exclusive
 
   const customer = alias(schema.user, "dispatch_customer");
@@ -324,6 +332,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
 
   return {
     day,
+    days,
     tz,
     workerNoun: settings?.workerNoun || "Technician",
     jobNoun: settings?.jobNoun || "Job",

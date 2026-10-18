@@ -98,6 +98,7 @@ beforeAll(async () => {
   await job(CO, "b-unplaced", { lat: 43.6532, lng: -79.3832 });
   // 23:30 on Oct 17 in Winnipeg is already Oct 18 in UTC.
   await job(CO, "b-late-evening", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: new Date("2026-10-18T04:30:00Z") });
+  await job(CO, "b-two-days-on", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: at(50 * HOUR) });
   await job(OTHER, "b-other", { status: "pending" });
 });
 
@@ -164,6 +165,18 @@ describe("loadBoard", () => {
     expect(next.jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["b-wait-old", "b-wait-future", "b-live"]));
     // a bad day falls back to today
     expect((await loadBoard(CO, { now: NOW, day: "17/10/2026" })).day).toBe("2026-10-17");
+  });
+
+  it("covers several days for the calendar's week view", async () => {
+    const one = await loadBoard(CO, { now: NOW });
+    expect(one.days).toBe(1);
+    expect(one.jobs.some((j) => j.id === "b-two-days-on")).toBe(false);
+    const three = await loadBoard(CO, { now: NOW, days: 3 });
+    expect(three.day).toBe("2026-10-17");
+    expect(three.days).toBe(3);
+    expect(three.jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["b-day", "b-late-evening", "b-two-days-on"]));
+    // asking for more than a week is capped, not an unbounded read
+    expect((await loadBoard(CO, { now: NOW, days: 30 })).days).toBe(7);
   });
 
   it("never shows another company's technicians or jobs", async () => {
