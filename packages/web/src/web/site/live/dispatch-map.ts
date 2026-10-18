@@ -10,9 +10,9 @@ export const M_PER_PX = 1.17;
 
 /** 214 Waverley St (front door on Waverley). */
 export const HOME = [600, 330] as const;
-/** Marcus: Niagara St → Kingsway → Waverley St, 856 m. Starts northbound on Niagara. */
-export const MARCUS = [80.9, 526.8] as const;
-export const MARCUS_ROUTE = "M80.9 526.8 L84.6 459.6 L175.2 465.4 L591.1 488.1 L600 330";
+/** Jordan (the JORDAN constants): Niagara St → Kingsway → Waverley St, 856 m. Starts northbound on Niagara. */
+export const JORDAN = [80.9, 526.8] as const;
+export const JORDAN_ROUTE = "M80.9 526.8 L84.6 459.6 L175.2 465.4 L591.1 488.1 L600 330";
 /** Priya: Academy Rd → Waverley St, 529 m. */
 export const PRIYA = [888.5, 172] as const;
 export const PRIYA_ROUTE = "M888.5 172 L776.3 164.9 L698.9 161.6 L609.7 156.3 L600 330";

@@ -15,13 +15,14 @@ import {
   ClosingCTA,
 } from "../site/sections";
 import { HeroFilm } from "../site/live/HeroFilm";
-import { OpsBento } from "../site/live/OpsBento";
+import { CustomerView } from "../site/live/CustomerView";
 import { DispatchStory } from "../site/live/DispatchStory";
-import { SetupAgent } from "../site/live/SetupAgent";
+import { TechApp } from "../site/live/TechApp";
 import { FirstHour } from "../site/live/FirstHour";
 import { usePageMeta } from "../site/seo/head";
 import "../site/site.css";
 import "../site/live/live.css";
+import "../site/live/opening.css";
 import "../site/scenes/scenes.css";
 
 /** Marketing landing page — Attio-inspired light design language, scoped under `.site`. */
@@ -80,9 +81,9 @@ function Page() {
       <SiteHeader ref={headerRef} dashboardHref={dashboardHref} />
       <main id="main" tabIndex={-1}>
         <HeroFilm />
-        <OpsBento />
+        <CustomerView />
         <DispatchStory />
-        <SetupAgent />
+        <TechApp />
         <FirstHour />
         <Showcase />
         <OutcomeStories />

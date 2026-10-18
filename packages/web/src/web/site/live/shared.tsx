@@ -3,7 +3,7 @@ import { usePlayback } from "../motion/playback";
 import { useInView } from "../motion/use-scene-clock";
 
 /**
- * Shared pieces for the live sections (hero film, ops bento, dispatch story).
+ * Shared pieces for the live sections (hero, dispatch story, technician app, getting started).
  *
  * The street map is a stylised Winnipeg-style grid where 1 SVG unit = 1 metre.
  * Vans drive closed loops on real streets (keyframes in live.css are sampled
