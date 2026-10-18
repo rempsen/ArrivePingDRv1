@@ -58,7 +58,11 @@ export function useShift() {
         endAllLiveActivities().catch(() => {});
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    // Not awaited: returning the refetch would keep the request "pending"
+    // (and the rejected colour showing) until it and its retries finish.
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["me"] });
+    },
   });
 
   // While a change is on its way, show where it's going (this button only).
