@@ -558,7 +558,7 @@ export const TOOLS: ToolDef[] = [
           })
           .from(schema.riders)
           .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
-          .where(t.scope(schema.riders)),
+          .where(t.scope(schema.riders, eq(schema.riders.isSample, false))),
       );
       const stats = techs.map((t) => {
         const mine = jobs.filter((j) => j.riderId === t.id);
