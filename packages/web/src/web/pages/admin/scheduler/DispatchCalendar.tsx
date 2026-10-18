@@ -13,6 +13,7 @@ import { tourAttr } from "../../../guide/anchors";
 import type { ConfirmFn } from "../../../lib/force-confirm";
 import { addDays, clampStart, durationOf, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
 import { safeTimeZone, zonedDayKey, zonedMinutesOfDay } from "../../../../shared/tz";
+import { isTerminalStatus } from "../../../../shared/job-status";
 import { Agenda } from "./Agenda";
 import { DayTimeline, type DropPreview } from "./DayTimeline";
 import { MonthLoad } from "./MonthLoad";
@@ -103,9 +104,11 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
         return {
           id: t.id,
           qualified: qualifiedFor(t, placing),
-          available: !(day === today && t.status === "offline") && !offToday.has(t.id) && !freeLater,
+          // Off, on a break or off for the day: not a same-day suggestion.
+          available: !(day === today && (t.status === "offline" || t.status === "break")) && !offToday.has(t.id) && !freeLater,
           ...(free && !freeLater ? { earliestMin: Math.ceil((zonedMinutesOfDay(free, tz) + 15) / 15) * 15 } : {}),
-          dayJobs: (jobsByTech.get(t.id) ?? []).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
+          // Finished and cancelled jobs stay on the calendar but don't hold time.
+          dayJobs: (jobsByTech.get(t.id) ?? []).filter((j) => !isTerminalStatus(j.status)).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
         };
       }),
       earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,

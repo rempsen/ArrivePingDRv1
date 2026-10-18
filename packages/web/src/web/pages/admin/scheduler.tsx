@@ -93,14 +93,18 @@ export default function SchedulerPage() {
     }
   };
 
+  // The Board tab's full lists. The calendar reads the dispatch board and its
+  // live stream instead, so these load only while the Board tab is open.
   const bookings = useQuery({
     queryKey: ["bookings"],
     queryFn: async () => ok(await api.bookings.$get()),
     refetchInterval: 8000,
+    enabled: mode === "board",
   });
   const riders = useQuery({
     queryKey: ["riders"],
     queryFn: async () => ok(await api.riders.$get()),
+    enabled: mode === "board",
   });
 
   const skillClassesQ = useQuery({
@@ -154,7 +158,7 @@ export default function SchedulerPage() {
     if (ok) del.mutate(b.id);
   };
 
-  if (bookings.isLoading || riders.isLoading)
+  if (mode === "board" && (bookings.isLoading || riders.isLoading))
     return <FullLoader label="Loading scheduler…" />;
 
   const all = bookings.data?.bookings ?? [];
@@ -239,12 +243,7 @@ export default function SchedulerPage() {
             {((risk.data as any).risks as any[]).slice(0, 4).map((r) => (
               <button
                 key={r.bookingId}
-                onClick={() => {
-                  const b = (bookings.data?.bookings ?? []).find(
-                    (x: any) => x.id === r.bookingId,
-                  );
-                  if (b) setEditJob(b);
-                }}
+                onClick={() => void openJobById(r.bookingId)}
                 className="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left text-xs hover:bg-white/5"
               >
                 <span className="font-semibold text-slate-200">
