@@ -14,6 +14,7 @@ import { useLocationHeartbeat } from "../../lib/use-location-heartbeat";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
 import { usePushNotifications, setAppBadgeCount } from "../../lib/push";
 import { useNotifySummary } from "../../lib/notify-summary";
+import { useCoach } from "../../components/coach-tour";
 
 export default function RiderLayout() {
   // Rider's own status drives whether native background GPS tracking runs at
@@ -58,6 +59,13 @@ export default function RiderLayout() {
 
   // register this device for push (job offers, enroute alerts) + handle taps.
   usePushNotifications();
+
+  // First run: four coach marks and a practice job (components/coach-tour.tsx).
+  // Waits for the profile so the tour starts on a loaded Jobs screen.
+  const coach = useCoach();
+  useEffect(() => {
+    if (me.isSuccess) coach.maybeStart();
+  }, [me.isSuccess, coach]);
 
   // Everything that needs the tech's attention, at EVERY company they work for.
   // One query drives all four tab badges and the app-icon count.

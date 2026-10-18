@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight } from "phosphor-react-native";
+import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Signpost } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { authClient, clearToken, authHeaders } from "../../lib/auth";
 import { unregisterPushToken } from "../../lib/push";
@@ -20,6 +20,7 @@ import { useMyCompanies } from "../../lib/my-companies";
 import { useNotifySummary, companyCount } from "../../lib/notify-summary";
 import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../../components/company-alert";
 import { DeleteAccountSheet } from "../../components/delete-account-sheet";
+import { CoachAnchor, useCoach } from "../../components/coach-tour";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
@@ -33,6 +34,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
 type RiderStatus = NonNullable<Parameters<typeof api.riders.me.$patch>[0]>["json"]["status"];
 
 export default function Profile() {
+  const coach = useCoach();
   const router = useRouter();
   const qc = useQueryClient();
   const { data: session } = authClient.useSession();
@@ -249,6 +251,7 @@ export default function Profile() {
           </View>
         </View>
 
+        <CoachAnchor id="profile.clock">
         <Card>
           <View style={s.availRow}>
             <View style={{ flex: 1 }}>
@@ -280,6 +283,7 @@ export default function Profile() {
             </Pressable>
           </View>
         </Card>
+        </CoachAnchor>
 
         {biometric.data?.available && (
           <Card>
@@ -390,6 +394,20 @@ export default function Profile() {
           <Row label="Phone" value={(session?.user as any)?.phone || rider?.phone} />
           <Row label="Completed jobs" value={String(rider?.completedJobs ?? 0)} />
           <Row label="License plate" value={rider?.licensePlate} />
+        </Card>
+
+        <Card>
+          <Pressable
+            onPress={() => coach.replay()}
+            style={s.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Show me around again"
+            accessibilityHint="Replays the four tips about the app"
+          >
+            <Signpost color={C.sub} size={18} />
+            <Text style={s.linkTxt}>Show me around again</Text>
+            <CaretRight color={C.muted} size={16} />
+          </Pressable>
         </Card>
 
         <Card>

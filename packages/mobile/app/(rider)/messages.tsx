@@ -28,6 +28,7 @@ import { FullLoader } from "../../components/ui";
 import { NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { useActiveCompanyName } from "../../lib/my-companies";
 import { dispatchLabels } from "../../lib/company-name";
+import { CoachAnchor } from "../../components/coach-tour";
 import { useLiveMessageSignal } from "../../lib/live-messages";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
@@ -139,6 +140,7 @@ export default function Messages() {
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
+      <CoachAnchor id="messages.header">
       <View style={s.header}>
         <View style={s.headIcon}>
           <Headset color={C.cyan} size={22} weight="fill" />
@@ -153,6 +155,7 @@ export default function Messages() {
           <Text style={s.sub}>Direct line to your dispatcher</Text>
         </View>
       </View>
+      </CoachAnchor>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

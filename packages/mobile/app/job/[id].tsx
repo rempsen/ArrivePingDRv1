@@ -61,6 +61,8 @@ import { C, R, money, fmtDate, assetUrl, WIDE } from "../../lib/theme";
 import { StatusBadge, Button, FullLoader } from "../../components/ui";
 import { SignaturePad } from "../../components/signature-pad";
 import { isVoiceNoteSupported, startVoiceNote, uploadVoiceNote, type Recording } from "../../lib/voice-note";
+import { CoachAnchor } from "../../components/coach-tour";
+import { isPracticeJob, isSampleJob } from "../../lib/practice";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -156,6 +158,20 @@ export default function JobDetail() {
       return (await res.json()).booking as any;
     },
     refetchInterval: 15000,
+  });
+
+  // Practice job (lib/practice.ts): the technician can drop it any time.
+  const removePractice = useMutation({
+    mutationFn: async () => {
+      const res = await api.me["practice-job"].$delete();
+      if (!res.ok) throw new Error("Failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bookings"] });
+      qc.invalidateQueries({ queryKey: ["today-stats"] });
+      router.back();
+    },
+    onError: () => Alert.alert("Couldn't remove it", "Check your signal and try again."),
   });
 
   const messages = useQuery({
@@ -720,6 +736,8 @@ export default function JobDetail() {
   if (!j) return <FullLoader label="Not found" />;
 
   const action = FLOW[j.status];
+  const practice = isPracticeJob(j);
+  const sample = isSampleJob(j);
   // Releasing is only for a job this tech already committed to. An un-accepted
   // offer is a Decline (home screen), and a finished job has nothing to give back.
   const canRelease = RELEASABLE.has(j.status) && j.assignStatus !== "offered" && !!j.riderId;
@@ -770,7 +788,7 @@ export default function JobDetail() {
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={10} accessibilityRole="button" accessibilityLabel="Go back">
           <CaretLeft color={C.text} size={22} />
         </Pressable>
-        <Text style={s.topTitle} numberOfLines={1}>{j.service?.name || j.title || jobNoun}</Text>
+        <Text style={s.topTitle} numberOfLines={1}>{practice ? "Practice job" : j.service?.name || j.title || jobNoun}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -795,6 +813,34 @@ export default function JobDetail() {
           // touch event with zero competition.
           scrollEnabled={!signing}
         >
+          {sample && (
+            <View style={s.practiceBox} accessible accessibilityRole="summary">
+              <Text style={s.practiceTitle}>{practice ? "Practice job" : "Sample job"}</Text>
+              <Text style={s.practiceBody}>
+                {practice
+                  ? "Try Start Driving, I've Arrived and Complete. Nobody is texted and it isn't paid."
+                  : "From the office's sample day. Nobody is texted and it isn't paid."}
+              </Text>
+              {practice && (
+                <Pressable
+                  onPress={() =>
+                    Alert.alert("Remove the practice job?", "It's gone for good. Your real jobs aren't touched.", [
+                      { text: "Keep it", style: "cancel" },
+                      { text: "Remove", style: "destructive", onPress: () => removePractice.mutate() },
+                    ])
+                  }
+                  disabled={removePractice.isPending}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove the practice job"
+                  style={s.practiceRemove}
+                >
+                  {removePractice.isPending ? <ActivityIndicator color={C.amber} size="small" /> : <Text style={s.practiceRemoveTxt}>Remove it</Text>}
+                </Pressable>
+              )}
+            </View>
+          )}
+
           <View style={s.statusRow}>
             <StatusBadge status={j.status} />
             <Text style={s.price}>{money(j.price)}</Text>
@@ -1717,6 +1763,7 @@ export default function JobDetail() {
             {setStatus.isPaused && (
               <Text style={s.offlineHint}>No signal — will send the moment you're back online</Text>
             )}
+            <CoachAnchor id="job.primary">
             <Button
               title={action.label}
               variant={action.variant}
@@ -1780,6 +1827,7 @@ export default function JobDetail() {
                 }
               }}
             />
+            </CoachAnchor>
             {action.hint ? (
               <Text style={s.footerHint}>{action.hint}</Text>
             ) : null}
@@ -2106,6 +2154,18 @@ const s = StyleSheet.create({
     maxHeight: 100,
   },
   sendBtn: { width: 44, height: 44, borderRadius: R.control, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
+  practiceBox: {
+    borderRadius: R.card,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.35)",
+    backgroundColor: C.amberBg,
+    padding: 14,
+    marginBottom: 14,
+  },
+  practiceTitle: { color: C.amber, fontSize: 13, fontWeight: "800", letterSpacing: 0.4, marginBottom: 3 },
+  practiceBody: { color: C.text, fontSize: 13, lineHeight: 19 },
+  practiceRemove: { alignSelf: "flex-start", minHeight: 36, justifyContent: "center", marginTop: 6 },
+  practiceRemoveTxt: { color: C.amber, fontSize: 13, fontWeight: "800", textDecorationLine: "underline" },
   footer: {
     position: "absolute",
     left: 0,
