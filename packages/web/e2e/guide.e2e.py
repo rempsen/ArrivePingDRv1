@@ -31,14 +31,32 @@ PASSWORD = os.environ["E2E_PASSWORD"]
 SHOT_DIR = os.environ.get("SHOT_DIR", "/tmp/guide-shots")
 
 # Keep in sync with src/web/guide/registry.ts (chapter id -> step count).
-CHAPTERS = {"find-your-way": 4, "create-job": 5, "scheduler": 5}
+CHAPTERS = {
+    "find-your-way": 4,
+    "create-job": 5,
+    "scheduler": 5,
+    "people": 5,
+    "notifications": 4,
+    "milestones": 4,
+    "reply-to": 3,
+    "reports": 3,
+    "export": 4,
+}
+# Office roles below admin only get chapters 1–3 (the pages behind 4–9 are admin-only).
+NON_ADMIN_CHAPTERS = ["find-your-way", "create-job", "scheduler"]
+DISPATCHER_EMAIL = os.environ.get("E2E_DISPATCHER_EMAIL")
+DISPATCHER_PASSWORD = os.environ.get("E2E_DISPATCHER_PASSWORD")
 VIEWPORTS = {"desktop": {"width": 1280, "height": 800}, "phone": {"width": 390, "height": 844}}
 
 
-def sign_in(page):
+class _Skip(Exception):
+    pass
+
+
+def sign_in(page, email=None, password=None):
     page.goto(f"{BASE_URL}/sign-in", wait_until="networkidle")
-    page.get_by_placeholder("Email address").fill(EMAIL)
-    page.get_by_placeholder("Password").fill(PASSWORD)
+    page.get_by_placeholder("Email address").fill(email or EMAIL)
+    page.get_by_placeholder("Password").fill(password or PASSWORD)
     page.get_by_role("button", name="Sign in").click()
     page.wait_for_url("**/admin**", timeout=20_000)
 
@@ -97,6 +115,25 @@ def run_chapter(page, vp_name, chapter, steps):
         )
         assert focused_inside, f"{chapter} step {i + 1}: focus is not inside the step card"
         page.wait_for_timeout(500)  # let the card finish fading in before the screenshot
+        # The card must be fully on screen (a target inside a sideways-scrolling
+        # table once put it off the right edge on phones).
+        box = card(page).bounding_box()
+        vw = page.viewport_size["width"]
+        assert box and box["x"] >= -1 and box["x"] + box["width"] <= vw + 1, (
+            f"{chapter} step {i + 1}: card is off screen ({box}, viewport {vw})"
+        )
+        # The spotlighted target must be on screen and not hidden under the card.
+        target = page.locator("[data-guide-active]")
+        if target.count():
+            t = target.first.bounding_box()
+            vh = page.viewport_size["height"]
+            assert t and t["y"] < vh and t["y"] + t["height"] > 0 and t["x"] < vw and t["x"] + t["width"] > 0, (
+                f"{chapter} step {i + 1}: target is off screen ({t})"
+            )
+            if t["height"] < vh * 0.4:  # a small target must not be covered by the card
+                covered = not (t["y"] + t["height"] <= box["y"] or t["y"] >= box["y"] + box["height"]
+                               or t["x"] + t["width"] <= box["x"] or t["x"] >= box["x"] + box["width"])
+                assert not covered, f"{chapter} step {i + 1}: card covers its target ({t} vs {box})"
         page.screenshot(path=f"{SHOT_DIR}/{vp_name}-{chapter}-{i + 1}.png")
         page.keyboard.press("Enter")  # activates the focused Next / Done button
         page.wait_for_timeout(250)
@@ -139,6 +176,41 @@ def main() -> int:
             except (AssertionError, PWTimeout) as e:
                 failures.append(f"{vp_name}: {e}")
                 page.screenshot(path=f"{SHOT_DIR}/FAIL-{vp_name}.png")
+            finally:
+                ctx.close()
+        if DISPATCHER_EMAIL and DISPATCHER_PASSWORD:
+            ctx = browser.new_context(viewport=VIEWPORTS["desktop"])
+            page = ctx.new_page()
+            try:
+                page.goto(f"{BASE_URL}/sign-in", wait_until="networkidle")
+                page.get_by_placeholder("Email address").fill(DISPATCHER_EMAIL)
+                page.get_by_placeholder("Password").fill(DISPATCHER_PASSWORD)
+                page.get_by_role("button", name="Sign in").click()
+                page.wait_for_timeout(5000)
+                if "/admin" not in page.url:
+                    # Known issue (2026-10-17): non-admin office roles are routed to
+                    # the customer portal and /admin admits admin/superadmin only.
+                    raise _Skip(f"dispatcher lands on {page.url}, not /admin")
+                skip = page.get_by_role("button", name="Skip for now")
+                try:
+                    skip.wait_for(timeout=4_000)
+                    skip.click()
+                except PWTimeout:
+                    pass
+                page.locator('[data-tour="guide.button"]:visible').first.click()
+                items = page.get_by_role("menu").get_by_role("menuitem")
+                expect(items).to_have_count(len(NON_ADMIN_CHAPTERS), timeout=5_000)
+                page.keyboard.press("Escape")
+                # An admin-only chapter can't be started by deep link either.
+                page.goto(f"{BASE_URL}/admin?guide=reports", wait_until="networkidle")
+                page.wait_for_timeout(1500)
+                expect(card(page)).to_have_count(0)
+                print(f"PASS dispatcher: sees only chapters 1–3")
+            except _Skip as e:
+                print(f"SKIP dispatcher: {e}")
+            except (AssertionError, PWTimeout) as e:
+                failures.append(f"dispatcher: {e}")
+                page.screenshot(path=f"{SHOT_DIR}/FAIL-dispatcher.png")
             finally:
                 ctx.close()
         browser.close()

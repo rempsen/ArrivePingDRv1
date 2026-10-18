@@ -47,6 +47,7 @@ export default function AdminTechs() {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
+              data-tour={t.key === "internal" ? "techs.tab.internal" : undefined}
               className={`flex items-center gap-2 whitespace-nowrap rounded-t-lg px-4 py-3 text-sm font-semibold transition ${
                 active
                   ? "border-b-2 border-brand text-white"
@@ -182,7 +183,7 @@ function FieldStaffTab() {
               workerLabel={workerNounPlural}
               onDone={() => { qc.invalidateQueries({ queryKey: ["riders"] }); qc.invalidateQueries({ queryKey: ["fleet"] }); }}
             />
-            <BtnPrimary onClick={() => setShowAdd(true)}>
+            <BtnPrimary onClick={() => setShowAdd(true)} data-tour="techs.add">
               <UserPlus className="h-4 w-4" /> Add {workerNoun}
             </BtnPrimary>
           </div>

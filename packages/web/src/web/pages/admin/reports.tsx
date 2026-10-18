@@ -139,7 +139,7 @@ export default function ReportsPage() {
         title="Reports & Analytics"
         subtitle="Operational insight across revenue, fleet, payroll, catalog & clients"
         actions={
-          <div className="relative">
+          <div className="relative" data-tour="reports.export">
             <button
               onClick={() => setMenuOpen((v) => !v)}
               disabled={!d || !d.rows?.length}
@@ -159,7 +159,7 @@ export default function ReportsPage() {
       />
 
       {/* filter bar */}
-      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-ink-2/60 p-2.5">
+      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-ink-2/60 p-2.5" data-tour="reports.range">
         <div className="flex items-center gap-1 rounded-xl bg-ink-3/60 p-1">
           {PRESETS.map((p) => (
             <button key={p.id} onClick={() => applyPreset(p.id)}
@@ -191,7 +191,7 @@ export default function ReportsPage() {
 
       <div className="grid gap-5 lg:grid-cols-[230px_1fr]">
         {/* report tabs */}
-        <div className="space-y-1.5">
+        <div className="space-y-1.5" data-tour="reports.list">
           {REPORTS.map((r) => (
             <button key={r.id} type="button" aria-label={r.label} onClick={() => setReport(r.id)}
               className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
@@ -381,7 +381,7 @@ function RawExports() {
     } finally { setBusy(""); }
   }
   return (
-    <div id="raw-export" className="nvc-card mt-5 p-5">
+    <div id="raw-export" className="nvc-card mt-5 p-5" data-tour="reports.raw">
       <div className="mb-1 flex items-center gap-2">
         <Database className="h-4 w-4 text-cyan-glow" />
         <h3 className="text-sm font-bold text-white">Raw data exports</h3>

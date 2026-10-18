@@ -53,6 +53,7 @@ export default function TourRunner({ chapter, terms, onFinish }: TourRunnerProps
           data: { chapter: `Chapter ${chapter.number} · ${interpolate(chapter.title, terms)}` },
           target: anchor ? () => findAnchor(anchor) : "body",
           placement: anchor ? (s.placement ?? "auto") : "center",
+          ...(s.centerScroll ? { skipScroll: true } : {}),
           before: async () => {
             const mobile = window.matchMedia(MOBILE_QUERY).matches;
             if (s.route && locationRef.current !== s.route) {
@@ -63,7 +64,25 @@ export default function TourRunner({ chapter, terms, onFinish }: TourRunnerProps
             if (anchor && s.open && !findAnchor(anchor)) {
               (await waitForAnchor(s.open, 4000))?.click();
             }
-            if (anchor) await waitForAnchor(anchor, 4000);
+            if (anchor) {
+              // Joyride scrolls the page vertically; a target inside a sideways-
+              // scrolling container (the notification matrix on a phone) also
+              // needs its container scrolled, or the card points off screen.
+              const el = await waitForAnchor(anchor, 4000);
+              // Mark the current target (read by the guide e2e to check it's on screen).
+              for (const prev of document.querySelectorAll("[data-guide-active]")) prev.removeAttribute("data-guide-active");
+              if (el) {
+                el.setAttribute("data-guide-active", "");
+                // A small target that is off screen is centred, leaving room for
+                // the card above or below it. Joyride's own scroll picks the
+                // nearest scrolling ancestor, which for a table cell is the
+                // table, not the page.
+                const r = el.getBoundingClientRect();
+                const offY = r.top < 0 || r.bottom > window.innerHeight;
+                const small = r.height < window.innerHeight * 0.4;
+                el.scrollIntoView({ block: s.centerScroll || (offY && small) ? "center" : "nearest", inline: "nearest", behavior: "auto" });
+              }
+            }
           },
         } satisfies Step;
       }),

@@ -25,6 +25,13 @@ export interface GuideStep {
   open?: AnchorId;
   route?: string;
   placement?: "top" | "bottom" | "left" | "right" | "auto" | "center";
+  /**
+   * The guide scrolls the target to the middle of the screen itself instead of
+   * leaving it to Joyride. Needed for targets inside a sideways-scrolling
+   * container (a wide table): Joyride measures against that container and
+   * scrolls the page to the wrong place.
+   */
+  centerScroll?: boolean;
 }
 
 export interface Chapter {
@@ -38,6 +45,8 @@ export interface Chapter {
 }
 
 const EVERYONE: Role[] = ["admin", "manager", "dispatcher", "project_manager"];
+/** The pages behind chapters 4–9 (Directory, Notifications, Reports, Settings) are admin-only on the server. */
+const ADMINS: Role[] = ["admin"];
 
 export const CHAPTERS: Chapter[] = [
   {
@@ -180,6 +189,255 @@ export const CHAPTERS: Chapter[] = [
         placement: "bottom",
         title: "Book a {job} from here",
         body: "New {job} opens the booking form with the date already filled in.",
+      },
+    ],
+  },
+  {
+    id: "people",
+    number: 4,
+    title: "{customers}, {workers} & coworkers",
+    summary: "Add the people you work with.",
+    roles: ADMINS,
+    steps: [
+      {
+        id: "nav",
+        anchor: "nav.people",
+        inNav: true,
+        placement: "right",
+        title: "Everyone in one place",
+        body: "People is your directory: {customers}, {workers} and office staff, each with their own history.",
+      },
+      {
+        id: "filters",
+        route: "/admin/clients",
+        anchor: "people.filters",
+        placement: "bottom",
+        title: "Filter by who they are",
+        body: "Switch between {customers}, {workers} and dispatchers. Search finds anyone by name or email.",
+      },
+      {
+        id: "add",
+        route: "/admin/clients",
+        anchor: "people.add",
+        placement: "bottom",
+        title: "Add one, or bring a list",
+        body: "Add a {customer} by hand, or use Import to bring in a spreadsheet you already have.",
+      },
+      {
+        id: "techs",
+        route: "/admin/techs",
+        anchor: "techs.add",
+        placement: "bottom",
+        title: "Invite a {worker}",
+        body: "Add {worker} emails them an invite to the ArrivePing app. Once they sign in, you can send them {jobs}.",
+      },
+      {
+        id: "office",
+        route: "/admin/techs",
+        anchor: "techs.tab.internal",
+        placement: "bottom",
+        title: "Your office team",
+        body: "Internal Team holds dispatchers and managers. Roles & Permissions sets what each role can see and change.",
+      },
+    ],
+  },
+  {
+    id: "notifications",
+    number: 5,
+    title: "Notifications",
+    summary: "Who hears about each {job}, and how.",
+    roles: ADMINS,
+    steps: [
+      {
+        id: "nav",
+        anchor: "nav.notifications",
+        inNav: true,
+        placement: "right",
+        title: "Every message, one page",
+        body: "Notifications decides who hears about each {job}, and whether by app, email or text.",
+      },
+      {
+        id: "matrix",
+        route: "/admin/notifications",
+        open: "notif.tab.rules",
+        anchor: "notif.matrix",
+        placement: "top",
+        title: "One row per milestone",
+        body: "Columns are the {customer}, the {worker} and your office. Tap a square to turn app, email or text on or off.",
+      },
+      {
+        id: "switches",
+        route: "/admin/notifications",
+        open: "notif.tab.channels",
+        anchor: "notif.masters",
+        placement: "top",
+        title: "Master switches",
+        body: "Turn email or text off for the whole company in one tap. Quiet hours, below, hold messages overnight.",
+      },
+      {
+        id: "log",
+        route: "/admin/notifications",
+        open: "notif.tab.log",
+        anchor: "notif.log",
+        placement: "top",
+        title: "Check what was sent",
+        body: "The Delivery Log lists every message: who it went to, how, and whether it was delivered.",
+      },
+    ],
+  },
+  {
+    id: "milestones",
+    number: 6,
+    title: "Milestones & messages",
+    summary: "Edit what {customers} are told at each step.",
+    roles: ADMINS,
+    steps: [
+      {
+        id: "flow",
+        route: "/admin/notifications",
+        open: "notif.tab.rules",
+        anchor: "notif.matrix",
+        placement: "top",
+        title: "How a {job} moves",
+        body: "Booked, assigned, on the way, arrived, completed. Each milestone can message the {customer}, {worker} or office.",
+      },
+      {
+        id: "edit",
+        route: "/admin/notifications",
+        open: "notif.tab.rules",
+        anchor: "notif.edit.enroute",
+        placement: "left",
+        centerScroll: true,
+        title: "Say it your way",
+        body: "Edit opens this milestone's message. Write it in your words and insert live details like the ETA link.",
+      },
+      {
+        id: "late",
+        route: "/admin/settings",
+        open: "settings.section.company",
+        anchor: "settings.running-late",
+        placement: "top",
+        title: "Running late, handled",
+        body: "When a {job} slips past this many minutes, ArrivePing flags it and can tell the {customer} for you.",
+      },
+      {
+        id: "custom",
+        route: "/admin/automation",
+        anchor: "auto.custom",
+        placement: "bottom",
+        title: "Need something more?",
+        body: "A custom rule adds your own step, like texting the office whenever an urgent {job} is booked.",
+      },
+    ],
+  },
+  {
+    id: "reply-to",
+    number: 7,
+    title: "Reply-to email",
+    summary: "Where {customer} replies land.",
+    roles: ADMINS,
+    steps: [
+      {
+        id: "sender",
+        route: "/admin/notifications",
+        open: "notif.tab.channels",
+        anchor: "email.sender",
+        placement: "top",
+        title: "Your name on every email",
+        body: "Set the name and address {customers} see when ArrivePing emails them for you.",
+      },
+      {
+        id: "reply",
+        route: "/admin/notifications",
+        open: "notif.tab.channels",
+        anchor: "email.replyto",
+        placement: "bottom",
+        title: "Replies come to you",
+        body: "When a {customer} hits Reply, it goes to this address. Use an inbox someone reads every day.",
+      },
+      {
+        id: "test",
+        route: "/admin/notifications",
+        open: "notif.tab.channels",
+        anchor: "email.test",
+        placement: "top",
+        title: "See it first",
+        body: "Send a test to yourself to see exactly what {customers} receive. It saves your changes first.",
+      },
+    ],
+  },
+  {
+    id: "reports",
+    number: 8,
+    title: "Reports",
+    summary: "Revenue, {worker} performance and trends.",
+    roles: ADMINS,
+    steps: [
+      {
+        id: "nav",
+        anchor: "nav.reports",
+        inNav: true,
+        placement: "right",
+        title: "Your numbers",
+        body: "Reports turns your {jobs} into revenue, {worker} performance, payroll and more.",
+      },
+      {
+        id: "list",
+        route: "/admin/reports",
+        anchor: "reports.list",
+        placement: "right",
+        title: "Pick a report",
+        body: "Revenue, {worker} performance, {job} status and more. The one you pick opens beside the list.",
+      },
+      {
+        id: "range",
+        route: "/admin/reports",
+        anchor: "reports.range",
+        placement: "bottom",
+        title: "Choose the period",
+        body: "Use a preset from 7 days to 12 months, or pick exact dates. Filter by {worker} or status too.",
+      },
+    ],
+  },
+  {
+    id: "export",
+    number: 9,
+    title: "Export your data",
+    summary: "Take any report or list with you.",
+    roles: ADMINS,
+    steps: [
+      {
+        id: "report",
+        route: "/admin/reports",
+        anchor: "reports.export",
+        placement: "bottom",
+        title: "Take any report with you",
+        body: "Export the report on screen as CSV, Excel or PDF, ready for your accountant.",
+      },
+      {
+        id: "raw",
+        route: "/admin/reports",
+        anchor: "reports.raw",
+        placement: "top",
+        title: "All your raw data",
+        body: "Download every {job}, {worker}, {customer} or invoice as a spreadsheet, any time. Your data is yours.",
+      },
+      {
+        id: "jobs",
+        route: "/admin/work-orders",
+        anchor: "jobs.export",
+        placement: "bottom",
+        title: "Export a filtered list",
+        body: "Filter your {jobs} first, then export just those as CSV, PDF or JSON.",
+      },
+      {
+        id: "calendar",
+        route: "/admin/settings",
+        open: "settings.section.company",
+        anchor: "settings.calendar",
+        placement: "top",
+        title: "{jobs} in your calendar",
+        body: "Subscribe to this link in Google, Apple or Outlook Calendar to see every {job} there.",
       },
     ],
   },

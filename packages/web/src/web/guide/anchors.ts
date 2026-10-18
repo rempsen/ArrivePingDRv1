@@ -31,6 +31,36 @@ export const ANCHORS = [
   "sched.new-job",
   "sched.views",
   "sched.queue",
+  // People (chapter 4)
+  "nav.people",
+  "nav.techs",
+  "people.filters",
+  "people.add",
+  "techs.add",
+  "techs.tab.internal",
+  // Notifications, milestones, reply-to (chapters 5–7)
+  "nav.notifications",
+  "notif.tab.rules",
+  "notif.tab.channels",
+  "notif.tab.log",
+  "notif.matrix",
+  "notif.edit.enroute",
+  "notif.masters",
+  "notif.log",
+  "email.sender",
+  "email.replyto",
+  "email.test",
+  "auto.custom",
+  "settings.section.company",
+  "settings.running-late",
+  "settings.calendar",
+  // Reports and exports (chapters 8–9)
+  "nav.reports",
+  "reports.list",
+  "reports.range",
+  "reports.export",
+  "reports.raw",
+  "jobs.export",
 ] as const;
 
 export type AnchorId = (typeof ANCHORS)[number];
@@ -50,6 +80,10 @@ const NAV_ROUTE_ANCHORS: Record<string, AnchorId> = {
   "/admin/scheduler": "nav.scheduler",
   "/admin/work-orders": "nav.jobs",
   "/admin/fleet": "nav.map",
+  "/admin/clients": "nav.people",
+  "/admin/techs": "nav.techs",
+  "/admin/notifications": "nav.notifications",
+  "/admin/reports": "nav.reports",
 };
 export function navAnchor(route: string): AnchorId | undefined {
   return NAV_ROUTE_ANCHORS[route];

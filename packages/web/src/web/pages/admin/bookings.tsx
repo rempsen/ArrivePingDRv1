@@ -1097,7 +1097,7 @@ function ExportMenu({
     );
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} data-tour="jobs.export">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink-2 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
