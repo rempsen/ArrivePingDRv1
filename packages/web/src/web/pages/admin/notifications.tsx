@@ -52,6 +52,7 @@ export default function AdminNotifications() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
+            data-tour={t.id === "rules" || t.id === "channels" || t.id === "log" ? `notif.tab.${t.id}` : undefined}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${
               tab === t.id ? "bg-brand text-white nvc-btn-primary" : "text-slate-400 hover:text-white hover:bg-white/5"
             }`}
@@ -111,7 +112,7 @@ function RulesMatrix() {
       <p className="text-sm text-slate-400">
         Toggle a channel for each recipient on each event. Changes save instantly and apply to the whole work-order lifecycle.
       </p>
-      <div className="overflow-x-auto rounded-2xl border border-white/5 nvc-card">
+      <div className="overflow-x-auto rounded-2xl border border-white/5 nvc-card" data-tour="notif.matrix">
         <table className="w-full min-w-[860px] text-sm">
           <thead>
             <tr className="border-b border-white/5 bg-ink/40 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -171,6 +172,7 @@ function RulesMatrix() {
                 <td className="px-4 py-3 text-center">
                   <button
                     onClick={() => setOpenEvent({ event: ev.event, label: ev.label })}
+                    data-tour={ev.event === "enroute" ? "notif.edit.enroute" : undefined}
                     title="Edit message copy"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/40 hover:text-cyan-glow"
                   >
@@ -864,13 +866,13 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
   });
 
   return (
-    <div className="rounded-2xl border border-white/5 nvc-card p-5">
+    <div className="rounded-2xl border border-white/5 nvc-card p-5" data-tour="email.sender">
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-300"><Mail className="h-4 w-4" /> Email sender</h3>
       <p className="mb-3 text-xs text-slate-500">Controls the From name, address and Reply-to on every outgoing email for this company.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="From name"><input aria-label="ArrivePing by NVC360" className={inputCls} value={f.emailFromName ?? ""} onChange={(e) => set("emailFromName", e.target.value)} placeholder="ArrivePing by NVC360" /></Field>
         <Field label="From address"><input aria-label="contact@arriveping.com" className={inputCls} value={f.emailFromAddress ?? ""} onChange={(e) => set("emailFromAddress", e.target.value)} placeholder="contact@arriveping.com" /></Field>
-        <Field label="Reply-to"><input aria-label="contact@arriveping.com" className={inputCls} value={f.emailReplyTo ?? ""} onChange={(e) => set("emailReplyTo", e.target.value)} placeholder="contact@arriveping.com" /></Field>
+        <Field label="Reply-to" tour="email.replyto"><input aria-label="contact@arriveping.com" className={inputCls} value={f.emailReplyTo ?? ""} onChange={(e) => set("emailReplyTo", e.target.value)} placeholder="contact@arriveping.com" /></Field>
         <Field label="Footer line"><input aria-label="ArrivePing by NVC360 · 423 Main St, Winnipeg" className={inputCls} value={f.emailFooter ?? ""} onChange={(e) => set("emailFooter", e.target.value)} placeholder="ArrivePing by NVC360 · 423 Main St, Winnipeg" /></Field>
       </div>
 
@@ -993,7 +995,7 @@ function EmailSenderCard({ f, set, onSave, saving, dirty }: { f: any; set: (k: s
       </div>
 
       {/* inline test send */}
-      <div className="mt-4 border-t border-white/5 pt-4">
+      <div className="mt-4 border-t border-white/5 pt-4" data-tour="email.test">
         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send a test</div>
         <div className="flex flex-wrap items-center gap-2">
           <input aria-label="dan@arriveping.com"
@@ -1082,7 +1084,7 @@ function Channels() {
       )}
 
       {/* master switches */}
-      <div className="rounded-2xl border border-white/5 nvc-card p-5">
+      <div className="rounded-2xl border border-white/5 nvc-card p-5" data-tour="notif.masters">
         <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-300">Channel master switches</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           {masters.map((m) => {
@@ -1371,7 +1373,7 @@ function DeliveryLog() {
   if (list.isLoading) return <FullLoader label="Loading log…" />;
   const rows = (list.data as any)?.deliveries ?? [];
   return (
-    <div className="overflow-x-auto rounded-2xl border border-white/5 nvc-card">
+    <div className="overflow-x-auto rounded-2xl border border-white/5 nvc-card" data-tour="notif.log">
       <table className="w-full min-w-[680px] text-sm">
         <thead>
           <tr className="border-b border-white/5 bg-ink/40 text-left text-xs uppercase tracking-wide text-slate-500">

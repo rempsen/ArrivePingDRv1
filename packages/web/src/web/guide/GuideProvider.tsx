@@ -4,7 +4,7 @@ import { useCustomerNoun, useJobNoun, useWorkerNoun } from "../lib/use-brand";
 import { useAuth } from "../hooks/use-auth";
 import { apiFetch, apiHeaders } from "../lib/api";
 import { EMPTY_ONBOARDING, mergeOnboarding, mergePatches, parseOnboarding, type OnboardingPatch, type OnboardingState } from "../../shared/onboarding";
-import { chapterById, CHAPTERS, type Chapter, type Terms } from "./registry";
+import { chapterById, CHAPTERS, type Chapter, type Role, type Terms } from "./registry";
 
 /**
  * ArrivePing Guide state.
@@ -73,7 +73,17 @@ async function fetchState(userId: string, persistedRef: { current: boolean | nul
 }
 
 export function GuideProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  // Chapters this person's role can actually open (the pages behind 4–9 are admin-only).
+  const guideRole: Role | null =
+    role === "admin" || role === "superadmin"
+      ? "admin"
+      : role === "manager" || role === "dispatcher" || role === "project_manager"
+        ? role
+        : null;
+  const chapters = useMemo(() => (guideRole ? CHAPTERS.filter((c) => c.roles.includes(guideRole)) : []), [guideRole]);
+  const chaptersRef = useRef(chapters);
+  chaptersRef.current = chapters;
   const userId = (user as { id?: string } | null)?.id ?? "anon";
   const job = useJobNoun();
   const worker = useWorkerNoun();
@@ -155,19 +165,19 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   );
 
   const startChapter = useCallback((id: string) => {
-    if (chapterById[id]) setActive(id);
+    if (chaptersRef.current.some((c) => c.id === id)) setActive(id);
   }, []);
 
-  // Deep link: ?guide=scheduler
+  // Deep link: ?guide=scheduler (once the role is known, so it can be checked).
   useEffect(() => {
+    if (!guideRole) return;
     const id = new URLSearchParams(window.location.search).get("guide");
-    if (id && chapterById[id]) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("guide");
-      window.history.replaceState(window.history.state, "", url.toString());
-      setActive(id);
-    }
-  }, []);
+    if (!id) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("guide");
+    window.history.replaceState(window.history.state, "", url.toString());
+    if (chaptersRef.current.some((c) => c.id === id)) setActive(id);
+  }, [guideRole]);
 
   const onFinish = useCallback(
     (result: ChapterStatus) => {
@@ -179,8 +189,8 @@ export function GuideProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ chapters: CHAPTERS, status, activeChapterId, startChapter, state, save, terms }),
-    [status, activeChapterId, startChapter, state, save, terms],
+    () => ({ chapters, status, activeChapterId, startChapter, state, save, terms }),
+    [chapters, status, activeChapterId, startChapter, state, save, terms],
   );
   const active = activeChapterId ? chapterById[activeChapterId] : null;
 
