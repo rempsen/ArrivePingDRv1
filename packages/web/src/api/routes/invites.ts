@@ -5,7 +5,7 @@ import * as schema from "../database/schema";
 import { and, eq } from "drizzle-orm";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
 import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
-import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { joinInviteMessage, trySendJoinCompanyInvite } from "../lib/join-invite";
 import { INTERNAL_ROLES, isAdminRole } from "../lib/permissions";
 import { auth } from "../auth";
 import { sendEmail, loadEmailBrand, resolveLogo } from "../../services/email";
@@ -88,18 +88,18 @@ export const invitesRoutes = new Hono<AppEnv>()
         status: "invited",
         invitedBy: u.id,
       });
-      await sendJoinCompanyInvite({
+      const inviteEmailed = await trySendJoinCompanyInvite({
         email: exists.email,
         name: exists.name,
         companyId: cid,
         membershipId: membership!.id,
-      }).catch((e) => console.error("join-company invite failed", e));
+      });
       return c.json(
         {
           existingAccount: true,
           status: "invited",
-          message:
-            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
+          message: joinInviteMessage(inviteEmailed),
+          inviteEmailed,
         },
         201,
       );

@@ -12,7 +12,7 @@ import {
   tx,
 } from "../middleware/auth";
 import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
-import { sendJoinCompanyInvite } from "../lib/join-invite";
+import { joinInviteMessage, trySendJoinCompanyInvite } from "../lib/join-invite";
 import { sendWelcome, unguessablePassword } from "../../services/welcome";
 import { audit } from "../lib/audit";
 import { AccessError, deactivateUser, openJobsFor, reactivateUser } from "../../services/user-access";
@@ -246,20 +246,20 @@ export const teamRoutes = new Hono<AppEnv>()
         }
       }
 
-      await sendJoinCompanyInvite({
+      const inviteEmailed = await trySendJoinCompanyInvite({
         email: existing.email,
         name: existing.name,
         companyId: company,
         membershipId: membership!.id,
-      }).catch((e) => console.error("join-company invite failed", e));
+      });
 
       return c.json(
         {
           user: { id: existing.id, name: existing.name, email, role },
           existingAccount: true,
           status: "invited",
-          message:
-            "That email already has an ArrivePing login. We've invited them to join your company — they'll keep their existing password.",
+          message: joinInviteMessage(inviteEmailed),
+          inviteEmailed,
         },
         201,
       );
@@ -486,17 +486,15 @@ export const teamRoutes = new Hono<AppEnv>()
     if (!membership) return c.json({ message: "Not found" }, 404);
     if (membership.status === "active")
       return c.json({ message: "They've already accepted — nothing to resend" }, 400);
-    try {
-      await sendJoinCompanyInvite({
-        email: target.email,
-        name: target.name,
-        companyId: cid,
-        membershipId: membership.id,
-      });
-    } catch (e) {
-      console.error("resend join-company invite failed", e);
-      return c.json({ message: "Couldn't send the email. Try again shortly." }, 502);
-    }
+    // A skipped or failed send comes back false rather than throwing; either
+    // way the admin must not be told it went.
+    const sent = await trySendJoinCompanyInvite({
+      email: target.email,
+      name: target.name,
+      companyId: cid,
+      membershipId: membership.id,
+    });
+    if (!sent) return c.json({ message: "Couldn't send the email. Try again shortly." }, 502);
     return c.json({ ok: true, email: target.email });
   })
 
