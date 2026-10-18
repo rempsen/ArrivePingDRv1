@@ -472,7 +472,7 @@ export const integrations = {
   custom: {
     title: "Custom integrations are welcome.",
     body:
-      "Running something we don't connect to yet, like an ERP, a CRM, telematics or your own software? Tell us, and we'll scope the integration with you.",
+      "Running something we don't connect to yet, like an ERP, a CRM, telematics or your own software? Tell us. We've built two-way integrations with customers' own systems, and we'll scope yours with you.",
     points: ["Available on every plan", "Included with Fleet (30+ drivers)", "QuickBooks and Xero are on our roadmap"],
     cta: {
       label: "Tell us what you use",
@@ -606,11 +606,11 @@ export const STARTER_DRIVERS = 2;
 export const pricing = {
   title: "Start free.",
   titleMuted: "Then from US$49 a month.",
-  body: "Every plan includes the dispatch board, the technician app, live customer tracking and the AI setup. Add a driver and you pay for one more driver, nothing else.",
+  body: "Every plan includes the dispatch board, the technician app, live customer tracking and the AI setup. Add a driver and you pay for one more driver, nothing else. A second dispatcher or a manager is priced the same as a driver.",
   /** Risk removers, all verified: billing-subscription.ts (monthly, no setup fee, card held until day 30). */
   assurances: ["$0 for 30 days, as many users as you like", "Cancel before day 30 and pay nothing", "No setup fee, no contract", "Billed monthly", "No GPS hardware to buy"],
   integrationsNote: { text: "Need a custom integration on Starter or Growing team? It's welcome.", link: { label: "See integrations", href: "/#integrations" } },
-  note: "All prices in US dollars, billed monthly. Live tracking is in every plan, with no hardware and no upgrade.",
+  note: "All prices in US dollars, billed monthly. Every plan includes one dispatcher license; each extra office user (a second dispatcher or a manager) is a license priced like a driver. Live tracking is in every plan, with no hardware and no upgrade.",
   tiers: [
     {
       name: "Starter",
@@ -625,7 +625,7 @@ export const pricing = {
       range: "3–29 drivers",
       price: "$30",
       unit: "per added driver / month",
-      features: ["Everything in Starter", "Dispatcher license included", "One simple rate for drivers 3–29", "Add or remove drivers month to month"],
+      features: ["Everything in Starter", "1 dispatcher license included", "One simple rate for drivers 3–29", "Extra dispatchers or managers at the driver rate"],
       cta: { label: "Sign up free", href: brand.urls.signUp },
       featured: true,
     },
@@ -634,7 +634,7 @@ export const pricing = {
       range: "30+ drivers",
       price: "$25",
       unit: "per driver / month from driver 30",
-      features: ["Everything in Growing team", "Dispatcher license included", "Custom integrations included", "Live onboarding with our team"],
+      features: ["Everything in Growing team", "1 dispatcher license included", "Custom integrations included", "Live onboarding with our team"],
       cta: { label: "Sign up free", href: brand.urls.signUp },
     },
   ],
@@ -685,7 +685,7 @@ export const faqs = [
   },
   {
     q: "How is it priced?",
-    a: "In US dollars, billed monthly. Starter is $49 a month for one dispatcher and two drivers. Drivers 3–29 are $30 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never makes your bill jump. Live tracking, the technician app and the AI setup are in every plan.",
+    a: "In US dollars, billed monthly. Starter is $49 a month for one dispatcher and two drivers, and every company starts with that same package. Drivers 3–29 are $30 each, and every driver from 30 on is $25. Each rate applies only to the drivers in its band, so adding a driver never makes your bill jump. Need a second dispatcher or a manager? Each extra office user is a license priced like a driver, and you choose whether it has dispatch or manager permissions. Live tracking, the technician app and the AI setup are in every plan.",
   },
   {
     q: "Is there a contract, setup fee or hardware cost?",
