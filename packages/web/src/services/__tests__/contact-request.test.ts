@@ -71,6 +71,9 @@ function stubFetch(url: string, init?: RequestInit): Promise<Response> {
 
 beforeAll(async () => {
   // Build the table from the real migrations, so the test also proves 0017 + 0018 apply cleanly.
+  // The test database is shared, and a suite that ran earlier may already have made this table
+  // from the schema (sample-day.test.ts creates every table), so start from nothing.
+  await (db as any).execute(`DROP TABLE IF EXISTS "contact_requests"`);
   for (const f of ["0017_contact_requests.sql", "0018_contact_request_retries.sql"]) {
     const sqlText = await Bun.file(new URL(`../../../drizzle/${f}`, import.meta.url)).text();
     for (const stmt of sqlText.split("--> statement-breakpoint").map((x) => x.trim()).filter(Boolean)) await (db as any).execute(stmt);

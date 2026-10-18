@@ -141,6 +141,13 @@
       "when": 1792280231415,
       "tag": "0019_sample_day",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792280799613,
+      "tag": "0020_platform_analytics",
+      "breakpoints": true
     }
   ]
 }

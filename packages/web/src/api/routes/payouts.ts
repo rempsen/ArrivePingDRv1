@@ -68,6 +68,10 @@ export const payoutsRoutes = new Hono<AppEnv>()
         lte(schema.bookings.scheduledAt, end),
       ),
     );
+    // Nor is a sample technician, even on a real job: they're fictional, and
+    // clearing the sample day deletes them (which would take a payout with it).
+    const sampleTechs = new Set((await t.select(schema.riders, eq(schema.riders.isSample, true))).map((r) => r.id));
+    const payable = completed.filter((b) => !b.riderId || !sampleTechs.has(b.riderId));
 
     type JobPay = {
       bookingId: string;
@@ -94,7 +98,7 @@ export const payoutsRoutes = new Hono<AppEnv>()
     // One rate lookup per tech per run, not per job.
     const rateCache = new Map<string, number>();
 
-    for (const b of completed) {
+    for (const b of payable) {
       if (!b.riderId) continue;
       // Already paid out (this period was generated before, or an overlapping
       // period covered it). Skipping here — rather than trusting the period

@@ -11,6 +11,7 @@
     "smoke": "bun run scripts/smoke-build.mjs",
     "seo:check": "bun run tools/seo-check.ts",
     "seo:check:live": "bun run tools/seo-check.ts --live",
+    "analytics:dashboard": "bun run tools/analytics-dashboard.ts",
     "dev": "vite --host",
     "start": "bun src/server.ts",
     "lint": "cd ../.. && oxlint packages/web --deny-warnings --no-error-on-unmatched-pattern",

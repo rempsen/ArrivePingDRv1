@@ -195,6 +195,7 @@ export default function AutomationPage() {
         actions={
           <button
             onClick={() => setShowNew(true)}
+            data-tour="auto.custom"
             className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/5"
           >
             <Plus className="h-4 w-4" /> Custom rule

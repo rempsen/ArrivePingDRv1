@@ -192,7 +192,7 @@ export default function AdminClients() {
         title="Directory"
         subtitle={`${list.length} account${list.length === 1 ? "" : "s"}`}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" data-tour="people.add">
             <ImportMenu
               types={["customer", "rider", "admin"]}
               activeType={role !== "all" ? (role as ImportType) : undefined}
@@ -207,7 +207,7 @@ export default function AdminClients() {
         }
       />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="people.filters">
         <div className="flex gap-1.5">
           {([
             ["all", "All"],

@@ -68,6 +68,7 @@ import { scoutStarterCatalog, scoutStarterOptionCatalog } from "../../services/c
 import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qualifying-tuning";
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
 import { inviteStaffMember, kindToRole, type StaffInviteResult } from "../lib/staff-invite";
+import { pushSignupStarted } from "../../services/hubspot-leads";
 import {
   getIndustryPreset,
   industryLabel,
@@ -168,6 +169,9 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
         companyName: b.companyName ?? "",
         phone: b.phone || undefined,
       });
+      // Make them a HubSpot lead now, so a signup that stops at the card is still visible to sales.
+      // Fire-and-forget: HubSpot must never slow down or fail the payment step.
+      void pushSignupStarted({ email: b.email, name: b.name, companyName: b.companyName ?? "", phone: b.phone || undefined });
       return c.json({ ...setup, publishableKey: STRIPE_PUBLISHABLE_KEY }, 200);
     } catch (e) {
       console.error("[onboarding] billing setup failed", e);

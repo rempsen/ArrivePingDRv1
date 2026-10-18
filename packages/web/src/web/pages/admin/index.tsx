@@ -32,6 +32,7 @@ const NotificationsPage = lazyRoute(() => import("./notifications"));
 const ApiAccessPage = lazyRoute(() => import("./api-access"));
 const IntakeFormsPage = lazyRoute(() => import("./intake-forms"));
 const CompaniesPage = lazyRoute(() => import("./companies"));
+const AnalyticsPage = lazyRoute(() => import("./analytics"));
 const MobileReleasePage = lazyRoute(() => import("./mobile-release"));
 const JobReportPage = lazyRoute(() => import("./job-report"));
 
@@ -112,6 +113,7 @@ export default function AdminApp() {
           <Route path="/admin/reviews" component={ReviewsPage} />
           <Route path="/admin/notifications" component={NotificationsPage} />
           <Route path="/admin/companies" component={CompaniesPage} />
+          <Route path="/admin/analytics" component={AnalyticsPage} />
           <Route path="/admin/mobile-release" component={MobileReleasePage} />
           <Route>
             <AdminNotFound />

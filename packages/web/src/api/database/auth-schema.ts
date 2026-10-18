@@ -76,7 +76,8 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)],
+  // updatedAt: platform analytics counts people active in a period by session use.
+  (table) => [index("session_userId_idx").on(table.userId), index("session_updatedAt_idx").on(table.updatedAt)],
 );
 
 export const account = pgTable(

@@ -55,7 +55,7 @@ function CalendarSync() {
   const d = feed.data as any;
 
   return (
-    <div className="nvc-card space-y-4 p-5">
+    <div className="nvc-card space-y-4 p-5" data-tour="settings.calendar">
       <div className="flex items-start justify-between gap-3">
         <h3 className="flex items-center gap-2 font-bold text-white">
           <Calendar className="h-4 w-4 text-brand" /> Calendar Sync
@@ -86,7 +86,7 @@ function CalendarSync() {
           <div className="space-y-1">
             <span className="block text-xs font-semibold uppercase tracking-wide text-slate-400">Subscription URL</span>
             <div className="flex items-center gap-2">
-              <a href={d.webcal} title="Click to open calendar feed" className="flex-1 truncate rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-xs text-white/70 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white">{d.webcal}</a>
+              <a href={d.webcal} title="Click to open calendar feed" className="min-w-0 flex-1 truncate rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-xs text-white/70 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white">{d.webcal}</a>
               <button
                 type="button"
                 onClick={() => copy(d.webcal, "webcal")}
@@ -300,7 +300,7 @@ function RunningLateCard({
   const threshold = Number(form.delayNoticeThresholdMins ?? 15);
   const auto = Number(form.delayNoticeAutoSendAfterMins ?? 10);
   return (
-    <div className="nvc-card space-y-4 p-5">
+    <div className="nvc-card space-y-4 p-5" data-tour="settings.running-late">
       <h3 className="flex items-center gap-2 font-bold text-white">
         <Clock3 className="h-4 w-4 text-brand" /> Running-late notices
       </h3>
@@ -468,7 +468,7 @@ function CompanySettingsTab() {
         </BtnPrimary>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-3 xl:items-start">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3 xl:items-start">
         {/* Business profile + geofencing (left, 2-wide) */}
         <div className="space-y-5 xl:col-span-2">
           <div className="nvc-card space-y-4 p-5">
@@ -996,6 +996,7 @@ export default function AdminSettings() {
           <button
             key={s.key}
             onClick={() => select(s.key)}
+            data-tour={s.key === "company" ? "settings.section.company" : undefined}
             className={cn(
               "flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition lg:w-full",
               on
@@ -1014,7 +1015,10 @@ export default function AdminSettings() {
   return (
     <PageWrap>
       <PageHead title="Settings" subtitle="Configure your workspace" />
-      <div className="grid gap-5 lg:grid-cols-[220px_1fr] lg:items-start">
+      {/* grid-cols-1, not an implicit column: on a phone the sideways-scrolling
+          section nav would otherwise widen the column to its full width and
+          push every settings form off the right edge of the screen. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr] lg:items-start">
         {LeftNav}
         <div className="min-w-0">
           {/* Embedded pages bring their own header/spacing; render bare.
