@@ -7,7 +7,14 @@
  * promises consent), only on marketing pages (never inside the product, the
  * customer tracking links or tenant booking forms), and never when the browser
  * sends Global Privacy Control.
+ *
+ * PAUSED while the cookie banner is being redesigned: with no way to give or
+ * withdraw consent on the site, nobody counts as consenting, so the tracker
+ * never loads (including for visitors who accepted the old banner). Leads still
+ * reach HubSpot server-side from the forms. To restore, add the new banner,
+ * call setConsent() from it, and set TRACKING_PAUSED to false.
  */
+export const TRACKING_PAUSED = true;
 
 export const HUBSPOT_PORTAL_ID = "342390247";
 const KEY = "ap_cookie_consent";
@@ -34,7 +41,7 @@ function storage(): Storage | null {
 /** The visitor's saved choice; GPC counts as "denied" without asking. */
 export function getConsent(): Consent | null {
   if (typeof window === "undefined") return null;
-  if (navigator.globalPrivacyControl) return "denied";
+  if (TRACKING_PAUSED || navigator.globalPrivacyControl) return "denied";
   try {
     const v = storage()?.getItem(KEY);
     return v === "granted" || v === "denied" ? v : null;
@@ -69,11 +76,6 @@ export function setConsent(c: Consent): void {
     clearHubspotCookies();
     if (loaded) location.reload();
   }
-}
-
-/** Reopen the cookie choice (footer "Cookie preferences"). */
-export function openConsent(): void {
-  window.dispatchEvent(new Event("ap-open-consent"));
 }
 
 let loaded = false;

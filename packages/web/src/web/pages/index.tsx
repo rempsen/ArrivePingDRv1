@@ -6,7 +6,7 @@ import { scrollToAnchor, useHeaderOffset } from "../site/motion/use-scrollspy";
 import { SiteHeader } from "../site/components/SiteHeader";
 import { SiteFooter } from "../site/components/SiteFooter";
 import { Audiences, Pricing, FAQ, OurStory, ClosingCTA } from "../site/sections";
-import { HeroFilm } from "../site/live/HeroFilm";
+import { HomeHero } from "../site/live/HomeHero";
 import { CustomerView } from "../site/live/CustomerView";
 import { DispatchStory } from "../site/live/DispatchStory";
 import { TechApp } from "../site/live/TechApp";
@@ -70,7 +70,7 @@ function Page() {
       </a>
       <SiteHeader ref={headerRef} dashboardHref={dashboardHref} />
       <main id="main" tabIndex={-1}>
-        <HeroFilm />
+        <HomeHero />
         <CustomerView />
         <DispatchStory />
         <TechApp />

@@ -65,11 +65,16 @@ export const hero = {
   risk: "Free for 30 days with as many users as you like. Nothing is charged until day 30, and you can cancel any time.",
   primary: { label: "Sign up free", href: brand.urls.signUp },
   secondary: { label: "See what your customer sees", href: "/#customer-view" },
-  film: {
-    large: "/media/site-hero-film-1600.mp4",
-    small: "/media/site-hero-film-960.mp4",
-    poster: "/media/site-hero-film-poster.jpg",
-    posterWebp: "/media/site-hero-film-poster.webp",
+  /**
+   * A real photo (Pexels, free licence, no attribution required): a technician
+   * stepping out of his van at a customer's home. Photo by Tima Miroshnichenko,
+   * pexels.com/photo/6195893. Graded like the trade photos; number plate blurred.
+   */
+  photo: {
+    jpg: { small: "/media/site-hero-960.jpg", large: "/media/site-hero-1920.jpg" },
+    webp: { small: "/media/site-hero-960.webp", large: "/media/site-hero-1920.webp" },
+    width: 1920,
+    height: 1280,
   },
   /** Real ArrivePing screens (sample company, people and job). */
   device: {
