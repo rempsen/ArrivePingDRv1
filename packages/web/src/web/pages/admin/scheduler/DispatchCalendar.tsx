@@ -75,7 +75,7 @@ export function DispatchCalendar(p: {
 
   const allTechs: BoardTech[] = useMemo(() => sb.board?.techs ?? [], [sb.board]);
   const skills = useMemo(() => [...new Set(allTechs.map((t) => t.skillClass).filter(Boolean))].sort(), [allTechs]);
-  const techs = skill ? allTechs.filter((t) => t.skillClass === skill) : allTechs;
+  const techs = useMemo(() => (skill ? allTechs.filter((t) => t.skillClass === skill) : allTechs), [allTechs, skill]);
   const jobs = useMemo(() => sb.board?.jobs ?? [], [sb.board]);
   const waiting = jobs
     .filter(isWaiting)
@@ -85,15 +85,17 @@ export function DispatchCalendar(p: {
   const jobsByTech = useMemo(() => {
     const m = new Map<string, BoardJob[]>();
     if (view !== "day") return m;
+    // Only the technicians on screen: their jobs drive the totals and the hours shown.
+    const shown = new Set(techs.map((t) => t.id));
     for (const j of jobs) {
-      if (!j.riderId || dayOf(j, tz) !== day) continue;
+      if (!j.riderId || !shown.has(j.riderId) || dayOf(j, tz) !== day) continue;
       const list = m.get(j.riderId) ?? [];
       list.push(j);
       m.set(j.riderId, list);
     }
     for (const list of m.values()) list.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
     return m;
-  }, [jobs, view, day, tz]);
+  }, [jobs, techs, view, day, tz]);
 
   const range = useMemo(() => timelineRange([...jobsByTech.values()].flat().map((j) => spanOf(j, tz))), [jobsByTech, tz]);
   const nowMin = day === today ? zonedMinutesOfDay(now, tz) : null;
