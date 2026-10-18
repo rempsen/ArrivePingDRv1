@@ -7,7 +7,7 @@ import { Field, inputCls } from "../components/modal";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../components/provisioning-progress";
 import { SignupReveal } from "../components/signup-reveal";
 import { SignupPayment, type BillingIds } from "../components/signup-payment";
-import { hubspotIdentify } from "../site/lib/hubspot-tracking";
+import { hubspotIdentify, openConsent } from "../site/lib/hubspot-tracking";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../services/industry-presets";
 import {
   Building2,
@@ -773,6 +773,11 @@ export default function SignupCompanyPage() {
             <Link to="/sign-in" className="inline-flex min-h-[32px] items-center px-1 font-semibold text-cyan-glow hover:underline">
               Sign in
             </Link>
+          </p>
+          <p className="mt-1 text-center text-xs text-slate-500">
+            <button type="button" onClick={openConsent} className="min-h-[32px] px-1 hover:text-slate-300 hover:underline">
+              Cookie preferences
+            </button>
           </p>
         </div>
       </div>

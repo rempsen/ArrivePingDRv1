@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
-import { trackRoute } from "./site/lib/hubspot-tracking";
+import { isTrackedPath, trackRoute } from "./site/lib/hubspot-tracking";
+import { CookieConsent } from "./site/components/CookieConsent";
 import Index from "./pages/index";
 import AuthPage from "./pages/auth";
 import { makeLanding } from "./pages/marketing/landing";
@@ -112,11 +113,11 @@ function RouteFallback() {
   );
 }
 
-/** HubSpot tracking on the marketing pages only (site/lib/hubspot-tracking.ts). */
+/** HubSpot tracking and its cookie notice, on the marketing pages and signup only (site/lib/hubspot-tracking.ts). */
 function MarketingTracking() {
   const [path] = useLocation();
   useEffect(() => trackRoute(path), [path]);
-  return null;
+  return isTrackedPath(path) ? <CookieConsent /> : null;
 }
 
 function App() {

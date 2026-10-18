@@ -36,16 +36,21 @@ function storage(): Storage | null {
   }
 }
 
+// The choice made on this page, for when the browser won't store it (private
+// mode, storage blocked): it then lasts until the visitor leaves the page.
+let chosen: Consent | null = null;
+
 /** The visitor's saved choice (null until they make one); GPC counts as "denied" without asking. */
 export function getConsent(): Consent | null {
   if (typeof window === "undefined") return null;
   if (navigator.globalPrivacyControl) return "denied";
   try {
     const v = storage()?.getItem(KEY);
-    return v === "granted" || v === "denied" ? v : null;
+    if (v === "granted" || v === "denied") return v;
   } catch {
-    return null;
+    /* fall back to this page's choice */
   }
+  return chosen;
 }
 
 /** Reopen the cookie notice (the footer's "Cookie preferences"). */
@@ -65,6 +70,7 @@ function clearHubspotCookies(): void {
 
 export function setConsent(c: Consent): void {
   const was = getConsent();
+  chosen = c;
   try {
     storage()?.setItem(KEY, c);
   } catch {

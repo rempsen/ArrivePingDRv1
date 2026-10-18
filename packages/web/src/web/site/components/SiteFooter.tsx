@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { brand, footer } from "../config";
 import { openConsent } from "../lib/hubspot-tracking";
-import { CookieConsent } from "./CookieConsent";
 import { useAnchorNav } from "./SiteHeader";
 
 /**
@@ -49,7 +48,6 @@ function FooterColumn({ heading, links }: { heading: string; links: { label: str
 export function SiteFooter() {
   return (
     <footer className="footer">
-      <CookieConsent />
       <div className="container">
         <div className="footer__grid">
           <div className="footer__brand">
