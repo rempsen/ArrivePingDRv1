@@ -398,7 +398,7 @@ export default function Profile() {
 
         <Card>
           <Pressable
-            onPress={() => coach.replay()}
+            onPress={() => session?.user?.id && coach.replay(session.user.id)}
             style={s.linkRow}
             accessibilityRole="button"
             accessibilityLabel="Show me around again"

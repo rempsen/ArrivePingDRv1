@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { getActiveCompany } from "../lib/active-company";
 import { C, R } from "../lib/theme";
 
 /**
@@ -30,84 +31,147 @@ import { C, R } from "../lib/theme";
  * measureInWindow), so it needs no native module, ships over the air, and runs
  * the same on iPhone, iPad, Android and the web build used for testing.
  *
- * Seen-state: SecureStore `tour_seen_v1` on the device, plus `tours["tech-app"]`
- * on the membership (PATCH /api/me/onboarding), so a new phone doesn't repeat it.
+ * Seen-state, per technician per company (a shared phone or a technician on
+ * two rosters gets the tour once for each): `tours["tech-app"]` on the
+ * membership (PATCH /api/me/onboarding), checked first, plus a SecureStore
+ * flag keyed by user and company for when the server can't be reached.
  */
-const SEEN_KEY = "tour_seen_v1";
+const SEEN_PREFIX = "tour_seen_v1";
 const TOUR_ID = "tech-app";
 const MISSING_ANCHOR_MS = 4000;
+/** A job is ready for the "Start Driving" tip only while that's its next action. */
+const DRIVABLE = "assigned";
 
 type AnchorId = "jobs.list" | "profile.clock" | "job.primary" | "messages.header";
 
 interface Step {
   id: "jobs" | "clock" | "drive" | "messages";
-  anchor: AnchorId;
-  route: (practiceJobId: string | null) => string;
+  /** Omitted: a centred tip with no spotlight. */
+  anchor?: AnchorId;
+  /** Omitted: stay on the current screen. */
+  route?: string;
   title: string;
   body: string;
 }
 
-const STEPS: Step[] = [
-  {
-    id: "jobs",
-    anchor: "jobs.list",
-    route: () => "/(rider)",
-    title: "Your jobs land here",
-    body: "New offers show up at the top with Accept and Decline. Tap a job to open it.",
-  },
-  {
-    id: "clock",
-    anchor: "profile.clock",
-    route: () => "/(rider)/profile",
-    title: "Go on the clock",
-    body: "Turn this on when you start work. You get offers, and the office sees where you are, only while it's on.",
-  },
-  {
-    id: "drive",
-    anchor: "job.primary",
-    route: (id) => `/job/${id}`,
-    title: "Tap when you leave",
-    body: "Start Driving texts the customer a live tracking link. This is your practice job, so nobody is texted.",
-  },
-  {
-    id: "messages",
-    anchor: "messages.header",
-    route: () => "/(rider)/messages",
-    title: "Talk to the office",
-    body: "Dispatch messages you here. Your practice job is on the Jobs tab whenever you want to try it.",
-  },
-];
+/** Where the "Start Driving" tip points: the practice job, one of their own jobs, or nowhere. */
+type DriveTarget = { id: string; practice: boolean } | null;
 
-async function readSeen(): Promise<boolean> {
+function buildSteps(drive: DriveTarget): Step[] {
+  return [
+    {
+      id: "jobs",
+      anchor: "jobs.list",
+      route: "/(rider)",
+      title: "Your jobs land here",
+      body: "New offers show up at the top with Accept and Decline. Tap a job to open it.",
+    },
+    {
+      id: "clock",
+      anchor: "profile.clock",
+      route: "/(rider)/profile",
+      title: "Go on the clock",
+      body: "Turn this on when you start work. You get offers, and the office sees where you are, only while it's on.",
+    },
+    drive
+      ? {
+          id: "drive",
+          anchor: "job.primary",
+          route: `/job/${drive.id}`,
+          title: "Tap when you leave",
+          body: drive.practice
+            ? "Start Driving texts the customer a live tracking link. This is your practice job, so nobody is texted."
+            : "Start Driving texts the customer a live tracking link, so tap it as you head out.",
+        }
+      : {
+          id: "drive",
+          title: "Tap Start Driving when you leave",
+          body: "Open a job and tap Start Driving as you head out. The customer gets a text with a live tracking link.",
+        },
+    {
+      id: "messages",
+      anchor: "messages.header",
+      route: "/(rider)/messages",
+      title: "Talk to the office",
+      body: drive?.practice
+        ? "Dispatch messages you here. Your practice job is on the Jobs tab whenever you want to try it."
+        : "Dispatch messages you here, and you can reply from this screen.",
+    },
+  ];
+}
+
+/** SecureStore keys allow letters, digits, ".", "-" and "_" only. */
+function seenKey(userId: string): string {
+  const clean = (v: string) => v.replace(/[^A-Za-z0-9._-]/g, "_");
+  return `${SEEN_PREFIX}.${clean(userId)}.${clean(getActiveCompany() || "home")}`;
+}
+/**
+ * What this phone remembers: how the tour ended ("completed" / "skipped"), so
+ * an offline finish can be reported to the server as it really happened, or
+ * "not-needed" for an experienced technician (nothing to report).
+ */
+type SeenState = "completed" | "skipped" | "not-needed";
+async function readSeen(key: string): Promise<SeenState | null> {
   try {
-    if (Platform.OS === "web") return localStorage.getItem(SEEN_KEY) === "1";
-    return (await SecureStore.getItemAsync(SEEN_KEY)) === "1";
+    const v = Platform.OS === "web" ? localStorage.getItem(key) : await SecureStore.getItemAsync(key);
+    if (v === "completed" || v === "skipped" || v === "not-needed") return v;
+    return v === "1" ? "completed" : null; // the first build stored "1"
   } catch {
-    return false;
+    return null;
   }
 }
-async function writeSeen() {
+async function writeSeen(key: string, state: SeenState) {
   try {
-    if (Platform.OS === "web") localStorage.setItem(SEEN_KEY, "1");
-    else await SecureStore.setItemAsync(SEEN_KEY, "1");
+    if (Platform.OS === "web") localStorage.setItem(key, state);
+    else await SecureStore.setItemAsync(key, state);
   } catch {
     /* best effort: the server copy still stops a repeat */
   }
+}
+
+/** The practice job if it's still waiting for Start Driving, else one of their own that is. */
+async function findDriveTarget(practiceJobId: string | null): Promise<DriveTarget> {
+  if (practiceJobId) {
+    try {
+      const res = await api.bookings[":id"].$get({ param: { id: practiceJobId } });
+      if (res.ok) {
+        const b = (await res.json()).booking as { status?: string } | null;
+        if (b?.status === DRIVABLE) return { id: practiceJobId, practice: true };
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  try {
+    const res = await api.bookings.$get();
+    if (res.ok) {
+      const list = ((await res.json()) as { bookings: { id: string; status: string; assignStatus?: string; isSample?: boolean }[] }).bookings;
+      // Real jobs only: a sample-day job never texts anyone, so it would teach the wrong thing.
+      const j = list.find((b) => !b.isSample && b.assignStatus === "accepted" && b.status === DRIVABLE);
+      if (j) return { id: j.id, practice: false };
+    }
+  } catch {
+    /* no target: the tip is shown without a spotlight */
+  }
+  return null;
 }
 
 type Rect = { x: number; y: number; w: number; h: number };
 interface Run {
   steps: Step[];
   i: number;
-  practiceJobId: string | null;
+  /** The seen-flag key this run records (user + company). */
+  key: string;
 }
 
 interface CoachApi {
   register: (id: AnchorId, node: View | null) => void;
-  /** First run: shows the tour if this technician hasn't seen it. */
-  maybeStart: () => void;
+  /** First run: shows the tour if this technician hasn't seen it at this company. */
+  maybeStart: (userId: string) => void;
   /** Profile → "Show me around again". */
-  replay: () => void;
+  replay: (userId: string) => void;
+  /** Leaving the technician screens (sign-out, company switch): close it without recording anything. */
+  cancel: () => void;
   active: boolean;
 }
 
@@ -119,6 +183,7 @@ export function useCoach(): CoachApi {
       register: () => {},
       maybeStart: () => {},
       replay: () => {},
+      cancel: () => {},
       active: false,
     }
   );
@@ -147,7 +212,15 @@ export function CoachProvider({ children }: { children: ReactNode }) {
   const [rect, setRect] = useState<Rect | null>(null);
   const [cardH, setCardH] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const startedRef = useRef(false);
+  /** user + company the first-run check has already run for. */
+  const startedKeyRef = useRef<string | null>(null);
+  /**
+   * Bumped by cancel() and by every new start. A start still waiting on the
+   * network when the person signs out or switches company finds the number
+   * changed and doesn't open, so a stale tour can't appear over sign-in or
+   * under another company.
+   */
+  const genRef = useRef(0);
   const { width, height } = useWindowDimensions();
 
   useEffect(() => {
@@ -156,6 +229,9 @@ export function CoachProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
+  const runRef = useRef(run);
+  runRef.current = run;
+
   const register = useCallback((id: AnchorId, node: View | null) => {
     if (node) anchors.current.set(id, node);
     else anchors.current.delete(id);
@@ -163,9 +239,10 @@ export function CoachProvider({ children }: { children: ReactNode }) {
 
   const finish = useCallback(
     (status: "completed" | "skipped") => {
+      const key = runRef.current?.key;
       setRun(null);
       setRect(null);
-      void writeSeen();
+      if (key) void writeSeen(key, status);
       api.me.onboarding
         .$patch({ json: { tours: { [TOUR_ID]: { status, at: new Date().toISOString() } } } })
         .catch(() => {});
@@ -174,8 +251,6 @@ export function CoachProvider({ children }: { children: ReactNode }) {
     [router],
   );
 
-  const runRef = useRef(run);
-  runRef.current = run;
   const go = useCallback(
     (delta: 1 | -1) => {
       const r = runRef.current;
@@ -189,7 +264,8 @@ export function CoachProvider({ children }: { children: ReactNode }) {
   );
 
   const begin = useCallback(
-    async (replay: boolean) => {
+    async (key: string, replay: boolean, gen: number) => {
+      const stale = () => gen !== genRef.current;
       let practiceJobId: string | null = null;
       try {
         const res = await api.me["practice-job"].$post();
@@ -198,48 +274,86 @@ export function CoachProvider({ children }: { children: ReactNode }) {
         // A technician who has already done real work here doesn't need the
         // first-run tour; they can still replay it from Profile.
         if (!replay && !out.jobId && out.reason === "experienced") {
-          await writeSeen();
+          if (!stale()) await writeSeen(key, "not-needed");
           return;
         }
       } catch {
-        /* offline or older server: tour without the practice step */
+        /* offline or older server: no practice job */
       }
       if (practiceJobId) await qc.invalidateQueries({ queryKey: ["bookings"] });
-      const steps = STEPS.filter((s) => s.id !== "drive" || practiceJobId);
-      setRun({ steps, i: 0, practiceJobId });
+      // A removed or finished practice job can't show Start Driving: use one of
+      // their own jobs that can, or show that tip without a spotlight.
+      const drive = await findDriveTarget(practiceJobId);
+      if (stale()) return;
+      setRun({ steps: buildSteps(drive), i: 0, key });
     },
     [qc],
   );
 
-  const maybeStart = useCallback(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    (async () => {
-      if (await readSeen()) return;
-      try {
-        const res = await api.me.onboarding.$get();
-        const body = (await res.json()) as { state?: { tours?: Record<string, unknown> } };
-        if (body.state?.tours?.[TOUR_ID]) {
-          await writeSeen();
-          return;
+  const maybeStart = useCallback(
+    (userId: string) => {
+      const key = seenKey(userId);
+      if (startedKeyRef.current === key) return;
+      startedKeyRef.current = key;
+      const gen = ++genRef.current;
+      const stale = () => gen !== genRef.current;
+      (async () => {
+        // The server decides when it can be reached (this membership's record);
+        // the device flag covers being offline.
+        try {
+          const res = await api.me.onboarding.$get();
+          if (res.ok) {
+            const body = (await res.json()) as { state?: { tours?: Record<string, unknown> } };
+            if (stale()) return;
+            const done = body.state?.tours?.[TOUR_ID] as { status?: "completed" | "skipped" } | undefined;
+            if (done) {
+              await writeSeen(key, done.status === "skipped" ? "skipped" : "completed");
+              return;
+            }
+            // Finished on this phone but the server never heard (offline at the
+            // end): report it now, as it happened, instead of showing it again.
+            const local = await readSeen(key);
+            if (local) {
+              if (local !== "not-needed")
+                api.me.onboarding
+                  .$patch({ json: { tours: { [TOUR_ID]: { status: local, at: new Date().toISOString() } } } })
+                  .catch(() => {});
+              return;
+            }
+            await begin(key, false, gen);
+            return;
+          }
+        } catch {
+          /* offline: fall back to the device flag */
         }
-      } catch {
-        /* can't tell: show it; finishing records it */
-      }
-      await begin(false);
-    })();
-  }, [begin]);
+        if (stale() || (await readSeen(key))) return;
+        await begin(key, false, gen);
+      })();
+    },
+    [begin],
+  );
 
-  const replay = useCallback(() => {
-    void begin(true);
-  }, [begin]);
+  const replay = useCallback(
+    (userId: string) => {
+      void begin(seenKey(userId), true, ++genRef.current);
+    },
+    [begin],
+  );
+
+  const cancel = useCallback(() => {
+    genRef.current++;
+    setRun(null);
+    setRect(null);
+    // Coming back (another company, another person) checks again.
+    startedKeyRef.current = null;
+  }, []);
 
   // Each step: go to its screen, then find the control (it may still be loading).
   const step = run ? run.steps[run.i] : null;
   useEffect(() => {
     if (!run || !step) return;
     setRect(null);
-    router.navigate(step.route(run.practiceJobId) as never);
+    if (step.route) router.navigate(step.route as never);
     let cancelled = false;
     const startedAt = Date.now();
     let timer: ReturnType<typeof setTimeout>;
@@ -255,6 +369,7 @@ export function CoachProvider({ children }: { children: ReactNode }) {
     };
     const measure = () => {
       if (cancelled) return;
+      if (!step.anchor) return setRect({ x: 0, y: 0, w: 0, h: 0 });
       const node = anchors.current.get(step.anchor);
       if (!node) return retry();
       node.measureInWindow((x, y, w, h) => {
@@ -273,7 +388,10 @@ export function CoachProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run?.i, run?.steps, width, height]);
 
-  const api_ = useMemo<CoachApi>(() => ({ register, maybeStart, replay, active: Boolean(run) }), [register, maybeStart, replay, run]);
+  const api_ = useMemo<CoachApi>(
+    () => ({ register, maybeStart, replay, cancel, active: Boolean(run) }),
+    [register, maybeStart, replay, cancel, run],
+  );
 
   return (
     <CoachCtx.Provider value={api_}>
