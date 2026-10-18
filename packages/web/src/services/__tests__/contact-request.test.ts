@@ -296,6 +296,15 @@ describe("retryContactRequests", () => {
     expect((await retryContactRequests(later(500))).checked).toBe(0);
   });
 
+  it("resumes an interrupted last attempt in one sweep only, and keeps it resumable while it runs", async () => {
+    const id = await failedLead();
+    await db.update(schema.contactRequests).set({ attempts: MAX_ATTEMPTS, lastAttemptAt: later(60) }).where(eq(schema.contactRequests.id, id));
+    failCreateTimes = 0;
+    const [a, b] = await Promise.all([retryContactRequests(later(95)), retryContactRequests(later(95))]);
+    expect(a.retried + b.retried).toBe(1);
+    expect(await row(id)).toMatchObject({ attempts: FINISHED, hubspotStatus: "synced" });
+  });
+
   it("doesn't let rows still waiting crowd due ones out of the batch", async () => {
     const waiting = Array.from({ length: 60 }, (_, i) => ({ name: `Wait ${i}`, phone: "+12045550100", hubspotStatus: "failed", emailStatus: "sent", attempts: 5, lastAttemptAt: later(50), createdAt: T0 }));
     await db.insert(schema.contactRequests).values(waiting);
