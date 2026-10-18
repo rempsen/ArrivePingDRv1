@@ -10,6 +10,7 @@ import { toCsv, toPdf, buildJobPdf, fileResponse, tenantFilePrefix, type JobUnit
 import { companyTimeZone } from "../../services/company-tz";
 import { ensureSnappedRoute } from "../../services/route-snap";
 import { log } from "../lib/logger";
+import { publishDispatch } from "../../services/realtime";
 import { fmtInZone } from "../../shared/tz";
 import type { AppEnv } from "../env";
 
@@ -605,6 +606,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const t = tx(c);
     await t.update(schema.bookings, { deletedAt: new Date() }, eq(schema.bookings.id, id));
+    void publishDispatch(tenantId(c), { kind: "job", jobId: id });
     await t.insert(schema.auditLog, {
       actorId: u.id, actorName: u.name || u.email, action: "delete",
       entityType: "booking", entityId: id, summary: "Archived (soft-deleted) work order", meta: "{}",
@@ -619,6 +621,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     const id = c.req.param("id");
     const t = tx(c);
     await t.update(schema.bookings, { deletedAt: null }, eq(schema.bookings.id, id));
+    void publishDispatch(tenantId(c), { kind: "job", jobId: id });
     await t.insert(schema.auditLog, {
       actorId: u.id, actorName: u.name || u.email, action: "update",
       entityType: "booking", entityId: id, summary: "Restored archived work order", meta: "{}",

@@ -24,6 +24,7 @@ import { companyTimeZone } from "./company-tz";
 import { zonedMinutesOfDay } from "../shared/tz";
 import { runAutomations, EVENT_TO_TRIGGER } from "./automation";
 import { scheduleReviewRequest } from "./reviews";
+import { publishDispatch } from "./realtime";
 
 export type NvcEvent =
   | "created"
@@ -466,6 +467,10 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
         (event === "declined" || event === "released") && b.declineReason ? b.declineReason : "",
       meta: { status: b.status, service: vars.service },
     });
+
+    // Every lifecycle change also refreshes open dispatch maps — sample-day
+    // jobs included, they're on the map too.
+    void publishDispatch(companyId, { kind: "job", jobId: b.id });
 
     // Sample-day jobs (services/sample-day.ts) keep their timeline but send
     // nothing: no automations, review asks, in-app/push, email, SMS or

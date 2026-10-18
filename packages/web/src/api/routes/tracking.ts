@@ -14,7 +14,7 @@ import {
 import { applyBookingStatus, pauseClock, resumeClock } from "../../services/booking-status";
 import { ensureSnappedRoute } from "../../services/route-snap";
 import { pingLimiter } from "../lib/rate-limit";
-import { publishTrack } from "../../services/realtime";
+import { publishTrack, publishDispatch } from "../../services/realtime";
 import { isAdminRole } from "../lib/permissions";
 import { LA_TOKEN_KEYS } from "../../services/apns";
 import { z } from "zod";
@@ -90,6 +90,7 @@ export const trackingRoutes = new Hono<AppEnv>()
         { lat, lng, locationUpdatedAt: new Date() },
         eq(schema.riders.id, b.riderId),
       );
+      void publishDispatch(tenantId(c), { kind: "location", techId: b.riderId, lat, lng, at: Date.now() });
     }
 
     // --- GEOFENCE: auto-arrive + clock pause/resume -------------------------

@@ -17,7 +17,7 @@ import { applyBookingStatus, resumeClock, StatusTransitionError } from "../../se
 import { putObject } from "../lib/storage";
 import { capture } from "../lib/analytics";
 import { incr } from "../lib/metrics";
-import { publishTrack } from "../../services/realtime";
+import { publishTrack, publishDispatch } from "../../services/realtime";
 import { checkServiceZone, OUTSIDE_ZONE_MESSAGE, OUTSIDE_ZONE_MESSAGE_ADMIN } from "../../services/zones";
 import { forwardGeocode } from "../../services/geocode";
 import { linkBookingToProperty } from "../../services/properties";
@@ -1003,6 +1003,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
     }
 
     await t.update(schema.bookings, set, eq(schema.bookings.id, id));
+    // Edits that fire no lifecycle event (title, address, priority, skills)
+    // still need to reach open dispatch maps.
+    void publishDispatch(co, { kind: "job", jobId: id });
 
     // keep busy status + offer flow in sync on a real reassignment
     if (newRider !== undefined && newRider !== (prev.riderId ?? "")) {

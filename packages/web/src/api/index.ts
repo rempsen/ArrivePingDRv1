@@ -27,6 +27,7 @@ import { optionCatalogRoutes } from "./routes/option-catalog";
 import { optionSelectionsRoutes } from "./routes/option-selections";
 import { messagesRoutes } from "./routes/messages";
 import { fleetRoutes } from "./routes/fleet";
+import { dispatchRoutes } from "./routes/dispatch";
 import { aiRoutes } from "./routes/ai";
 import { templatesRoutes } from "./routes/templates";
 import { automationRoutes } from "./routes/automation";
@@ -376,6 +377,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/option-catalog", optionCatalogRoutes)
   .route("/messages", messagesRoutes)
   .route("/fleet", fleetRoutes)
+  // Dispatch map v2: one-call board, ranked candidates, assign + undo, live stream.
+  .route("/dispatch", dispatchRoutes)
   .route("/ai", aiRoutes)
   .route("/templates", templatesRoutes)
   .route("/automation", automationRoutes)

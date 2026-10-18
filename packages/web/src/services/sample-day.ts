@@ -30,7 +30,7 @@ import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { attachMembership } from "../api/lib/memberships";
 import { logJobEvent, type JobEventKind } from "./job-events";
-import { publishTrack } from "./realtime";
+import { publishTrack, publishDispatch } from "./realtime";
 import { sampleEmail, samplePhone } from "../shared/sample-contact";
 
 const MIN = 60_000;
@@ -479,6 +479,9 @@ export async function sampleTick(now = new Date(), onlyCompany?: string): Promis
         { lat: pos.lat, lng: pos.lng, status, locationUpdatedAt: now, manualOffline: false },
         eq(schema.riders.id, r.id),
       );
+      // The sample day's technicians move on the dispatch map like real ones.
+      void publishDispatch(companyId, { kind: "location", techId: r.id, lat: pos.lat, lng: pos.lng, at: now.getTime() });
+      if (status !== r.status) void publishDispatch(companyId, { kind: "tech", techId: r.id });
       moved++;
     }
   }

@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { auth } from "../auth";
 import { reconcileRiderStatus } from "../../services/presence";
+import { publishDispatch } from "../../services/realtime";
 import { attachMembership, isMember, findUserByEmail, detachMembership, usersForCompany } from "../lib/memberships";
 import { sendJoinCompanyInvite } from "../lib/join-invite";
 import { sendWelcome, unguessablePassword } from "../../services/welcome";
@@ -158,6 +159,11 @@ export const ridersRoutes = new Hono<AppEnv>()
       await reconcileRiderStatus(tenantId(c), riderId);
       r = await t.selectOne(schema.riders, eq(schema.riders.id, riderId));
     }
+    // Live dispatch map: move the pin, and refresh the tech's status line.
+    if (body.lat != null && body.lng != null) {
+      void publishDispatch(tenantId(c), { kind: "location", techId: riderId, lat: body.lat, lng: body.lng, at: Date.now() });
+    }
+    if (body.status != null) void publishDispatch(tenantId(c), { kind: "tech", techId: riderId });
     return c.json({ rider: r ?? null }, 200);
   })
   // tech uploads their own headshot (self-serve, mobile). multipart field: file

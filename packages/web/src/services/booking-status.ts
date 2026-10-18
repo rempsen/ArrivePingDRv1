@@ -4,7 +4,7 @@ import { tdb } from "../api/database/tenant";
 import { fireEvent } from "./dispatch";
 import { recomputeBooking, accrueTechPay } from "./billing";
 import { reconcileRiderStatus } from "./presence";
-import { publishTrack } from "./realtime";
+import { publishTrack, publishDispatch } from "./realtime";
 import { pushLiveActivityJobUpdate } from "./apns";
 import { transitionError } from "../shared/job-status";
 
@@ -172,6 +172,10 @@ export async function applyBookingStatus(
   if (b.publicToken) {
     void publishTrack({ type: "status", token: b.publicToken, data: { status } });
   }
+
+  // Live dispatch map: the job moved on, and so did its technician's status line.
+  void publishDispatch(companyId, { kind: "job", jobId: b.id });
+  if (b.riderId) void publishDispatch(companyId, { kind: "tech", techId: b.riderId });
 
   // push Live Activity update to driver's Dynamic Island / lock screen (iOS)
   void pushLiveActivityJobUpdate({

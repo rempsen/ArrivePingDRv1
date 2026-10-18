@@ -11,6 +11,7 @@ import { PageWrap, StatusBadge } from "../../components/brand";
 import { AutoBadge, AutoBadgeCorner } from "../../components/auto-badge";
 import { PageHead } from "./shell";
 import { PRIORITY_META, STATUS_META } from "../../lib/utils";
+import { qualifies } from "../../../shared/qualify";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { EmptyState } from "../../components/empty-state";
 import {
@@ -340,7 +341,13 @@ export default function SchedulerPage() {
   const unassigned = all.filter((b) => !b.riderId && b.status !== "completed" && b.status !== "cancelled");
   // dragging job for skill highlight
   const draggedJob = dragId ? all.find((b) => b.id === dragId) : null;
-  const dragSkillClass = (draggedJob as any)?.requiredSkillClass ?? "";
+  // One rule for "qualified" everywhere (shared/qualify.ts): the job's required
+  // skill class and tags, else its service category against the tech's skills.
+  const qualifiedFor = (t: any, b: any) =>
+    qualifies(
+      { skills: t?.skills, skillClass: t?.skillClass },
+      { requiredSkillClass: b?.requiredSkillClass, requiredSkills: b?.requiredSkills, serviceCategory: b?.service?.category },
+    ).qualified;
   const byTech = (tid: string) =>
     all.filter((b) => b.riderId === tid && !["completed", "cancelled"].includes(b.status));
 
@@ -1405,9 +1412,8 @@ export default function SchedulerPage() {
                           </p>
                           <div className="max-h-44 space-y-1 overflow-y-auto">
                             {(() => {
-                              const reqSc = (b as any).requiredSkillClass ?? "";
-                              const matchedTechs = reqSc ? techs.filter((t: any) => t.skillClass === reqSc) : techs;
-                              const otherTechs = reqSc ? techs.filter((t: any) => t.skillClass !== reqSc) : [];
+                              const matchedTechs = techs.filter((t: any) => qualifiedFor(t, b));
+                              const otherTechs = techs.filter((t: any) => !qualifiedFor(t, b));
                               const renderTech = (t: any, dimmed = false) => (
                                 <button
                                   key={t.id}
@@ -1434,7 +1440,7 @@ export default function SchedulerPage() {
                               return (
                                 <>
                                   {matchedTechs.map((t: any) => renderTech(t, false))}
-                                  {otherTechs.length > 0 && reqSc && (
+                                  {otherTechs.length > 0 && (
                                     <>
                                       <p className="px-1 pt-1 text-[10px] text-slate-600">— other {nounPlural.toLowerCase()} —</p>
                                       {otherTechs.map((t: any) => renderTech(t, true))}
@@ -1562,7 +1568,7 @@ export default function SchedulerPage() {
               const over = overTech === t.id;
               const focused = focusTech === t.id;
               // dim this tile if dragging a job that requires a different skill class
-              const skillMismatch = dragSkillClass && (t as any).skillClass !== dragSkillClass;
+              const skillMismatch = !!draggedJob && !qualifiedFor(t, draggedJob);
               const statusDot =
                 t.status === "available"
                   ? "bg-emerald-400"

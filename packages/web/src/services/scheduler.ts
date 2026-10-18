@@ -124,6 +124,87 @@ async function claim(id: string): Promise<boolean> {
   return affectedRows(res) > 0;
 }
 
+type TaskRow = typeof schema.scheduledTasks.$inferSelect;
+
+/** Claim and run one task. True when this process ran it to completion. */
+async function runOne(task: TaskRow): Promise<boolean> {
+  const handler = handlers.get(task.kind);
+  if (!handler) {
+    // Unknown kind — park it rather than spinning on it every tick.
+    await sdb
+      .update(schema.scheduledTasks)
+      .set({
+        status: "failed",
+        lastError: `no handler registered for kind "${task.kind}"`,
+        completedAt: new Date(),
+      })
+      .where(eq(schema.scheduledTasks.id, task.id));
+    return false;
+  }
+
+  if (!(await claim(task.id))) return false; // lost the race, another instance has it
+
+  const attempts = task.attempts + 1;
+  try {
+    await handler({
+      id: task.id,
+      companyId: task.companyId,
+      kind: task.kind,
+      bookingId: task.bookingId,
+      propertyId: task.propertyId,
+      payload: (() => {
+        try {
+          return JSON.parse(task.payload || "{}");
+        } catch {
+          return {};
+        }
+      })(),
+    });
+    await sdb
+      .update(schema.scheduledTasks)
+      .set({ status: "done", attempts, completedAt: new Date(), lastError: "" })
+      .where(eq(schema.scheduledTasks.id, task.id));
+    return true;
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    // Retry with a widening backoff, then give up so a poison task can't
+    // block the queue forever.
+    const giveUp = attempts >= MAX_ATTEMPTS;
+    await sdb
+      .update(schema.scheduledTasks)
+      .set({
+        status: giveUp ? "failed" : "pending",
+        attempts,
+        lastError: msg.slice(0, 500),
+        runAt: giveUp
+          ? task.runAt
+          : new Date(Date.now() + attempts * 5 * 60 * 1000),
+        completedAt: giveUp ? new Date() : null,
+      })
+      .where(eq(schema.scheduledTasks.id, task.id));
+    console.error(`[scheduler] task ${task.kind} failed (attempt ${attempts})`, msg);
+    return false;
+  }
+}
+
+/**
+ * Run one task right now instead of waiting for the next tick — for work that
+ * is deferred by seconds, not minutes (the dispatch map's assignment notice
+ * waits out its Undo window). Same claim as the tick, so if the tick or
+ * another instance got there first this does nothing. If this process dies
+ * first, the tick still runs it.
+ */
+export async function runTaskNow(id: string): Promise<boolean> {
+  try {
+    const [task] = await sdb.select().from(schema.scheduledTasks).where(eq(schema.scheduledTasks.id, id)).limit(1);
+    if (!task || task.status !== "pending") return false;
+    return await runOne(task);
+  } catch (e) {
+    console.error("[scheduler] runTaskNow failed", e);
+    return false;
+  }
+}
+
 /** Run one pass over due tasks. Exported for tests / manual invocation. */
 export async function runDueTasks(now: Date = new Date()): Promise<number> {
   let ran = 0;
@@ -141,62 +222,7 @@ export async function runDueTasks(now: Date = new Date()): Promise<number> {
       .limit(BATCH);
 
     for (const task of due) {
-      const handler = handlers.get(task.kind);
-      if (!handler) {
-        // Unknown kind — park it rather than spinning on it every tick.
-        await sdb
-          .update(schema.scheduledTasks)
-          .set({
-            status: "failed",
-            lastError: `no handler registered for kind "${task.kind}"`,
-            completedAt: new Date(),
-          })
-          .where(eq(schema.scheduledTasks.id, task.id));
-        continue;
-      }
-
-      if (!(await claim(task.id))) continue; // lost the race, another instance has it
-
-      const attempts = task.attempts + 1;
-      try {
-        await handler({
-          id: task.id,
-          companyId: task.companyId,
-          kind: task.kind,
-          bookingId: task.bookingId,
-          propertyId: task.propertyId,
-          payload: (() => {
-            try {
-              return JSON.parse(task.payload || "{}");
-            } catch {
-              return {};
-            }
-          })(),
-        });
-        await sdb
-          .update(schema.scheduledTasks)
-          .set({ status: "done", attempts, completedAt: new Date(), lastError: "" })
-          .where(eq(schema.scheduledTasks.id, task.id));
-        ran++;
-      } catch (e: any) {
-        const msg = e?.message || String(e);
-        // Retry with a widening backoff, then give up so a poison task can't
-        // block the queue forever.
-        const giveUp = attempts >= MAX_ATTEMPTS;
-        await sdb
-          .update(schema.scheduledTasks)
-          .set({
-            status: giveUp ? "failed" : "pending",
-            attempts,
-            lastError: msg.slice(0, 500),
-            runAt: giveUp
-              ? task.runAt
-              : new Date(Date.now() + attempts * 5 * 60 * 1000),
-            completedAt: giveUp ? new Date() : null,
-          })
-          .where(eq(schema.scheduledTasks.id, task.id));
-        console.error(`[scheduler] task ${task.kind} failed (attempt ${attempts})`, msg);
-      }
+      if (await runOne(task)) ran++;
     }
   } catch (e) {
     console.error("[scheduler] tick failed", e);

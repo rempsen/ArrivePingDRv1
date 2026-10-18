@@ -2,6 +2,7 @@ import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
+import { publishDispatch } from "./realtime";
 
 /**
  * Booking statuses that mean a tech is genuinely occupied by an active job.
@@ -70,6 +71,7 @@ export async function reconcileRiderStatus(companyId: string, riderId: string): 
   if (rider.manualOffline) {
     if (rider.status !== "offline") {
       await t.update(schema.riders, { status: "offline" }, eq(schema.riders.id, riderId));
+      void publishDispatch(companyId, { kind: "tech", techId: riderId });
     }
     return "offline";
   }
@@ -125,6 +127,7 @@ export async function reconcileRiderStatus(companyId: string, riderId: string): 
 
   if (rider.status !== next) {
     await t.update(schema.riders, { status: next }, eq(schema.riders.id, riderId));
+    void publishDispatch(companyId, { kind: "tech", techId: riderId });
   }
   return next;
 }

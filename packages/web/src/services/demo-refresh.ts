@@ -45,6 +45,7 @@ import {
   type DemoTech,
 } from "../shared/demo-plan";
 import { zonedDayKey } from "../shared/tz";
+import { publishDispatch } from "./realtime";
 
 /** The demo company's display name — used when DEMO_TENANT_ID isn't set. */
 export const DEMO_COMPANY_NAME = "Prairie Comfort HVAC";
@@ -409,6 +410,7 @@ export async function demoTick(opts: { now?: Date; tidy?: boolean } = {}): Promi
     report.skipped = "demo tenant has no technicians, jobs or customers to work from";
     return (lastReport = report);
   }
+  const moved: { id: string; lat: number; lng: number }[] = [];
   const t = tdb(companyId);
   const slots = planWindow(ctx, now);
   const slotByKey = new Map(slots.map((s) => [s.key, s]));
@@ -529,8 +531,14 @@ export async function demoTick(opts: { now?: Date; tidy?: boolean } = {}): Promi
     }
 
     // 3. MOVE THE VANS
-    report.techsOnline = await moveTechs(tx, ctx, [...byKey.values()], slotByKey, now);
+    report.techsOnline = await moveTechs(tx, ctx, [...byKey.values()], slotByKey, now, moved);
   });
+
+  // Open dispatch maps follow the vans (after the commit, so a refetch sees it).
+  for (const m of moved) {
+    void publishDispatch(companyId, { kind: "location", techId: m.id, lat: m.lat, lng: m.lng, at: now.getTime() });
+    void publishDispatch(companyId, { kind: "tech", techId: m.id });
+  }
 
   // 4. TIDY (hourly)
   if (opts.tidy || now.getTime() - lastTidyAt >= HOUR) {
@@ -553,6 +561,7 @@ async function moveTechs(
   jobs: Booking[],
   slotByKey: Map<string, DemoSlot>,
   now: Date,
+  moved: { id: string; lat: number; lng: number }[] = [],
 ): Promise<number> {
   const t = now.getTime();
   let online = 0;
@@ -591,6 +600,7 @@ async function moveTechs(
       .update(schema.riders)
       .set({ lat: pos.lat, lng: pos.lng, locationUpdatedAt: now, status, manualOffline: false })
       .where(and(eq(schema.riders.companyId, ctx.companyId), eq(schema.riders.id, riderId)));
+    moved.push({ id: riderId, lat: pos.lat, lng: pos.lng });
     online++;
   }
   return online;

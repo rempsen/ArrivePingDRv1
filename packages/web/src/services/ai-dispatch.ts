@@ -34,6 +34,7 @@ import { tdb } from "../api/database/tenant";
 import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { fmtInZone } from "../shared/tz";
+import { qualifies } from "../shared/qualify";
 
 export const AVG_KMH = 32; // urban average
 /** Beyond this we don't trust the location data enough to recommend on distance. */
@@ -91,6 +92,9 @@ export interface RankInput {
     lng: number | null;
     priority: string;
     scheduledAt: number | null;
+    /** Explicit requirements (shared/qualify.ts). Optional so older callers still compile. */
+    requiredSkillClass?: string | null;
+    requiredSkills?: string | null;
   };
   service: { name: string; category: string; durationMins: number } | null;
   /** One-line operating context (team size, fleet, daily volume) from the
@@ -133,15 +137,20 @@ export function scoreCandidates(input: RankInput): Candidate[] {
     const hasLoc = techHasLoc && jobHasLoc;
     const rawKm = hasLoc ? distKm(t.lat!, t.lng!, job.lat!, job.lng!) : null;
     const km = rawKm != null && rawKm <= MAX_SERVICE_RADIUS_KM ? rawKm : null;
-    const skillMatch = !!(
-      service &&
-      t.skills.toLowerCase().includes(service.category.toLowerCase().split(" ")[0] ?? "")
+    // One rule for "qualified" across the map, the scheduler and this ranking
+    // (shared/qualify.ts). A tech with no skills recorded is unknown rather than
+    // unqualified: a small penalty, so a tech whose skills do match ranks first.
+    const q = qualifies(
+      { skills: t.skills, skillClass: t.skillClass },
+      { requiredSkillClass: job.requiredSkillClass, requiredSkills: job.requiredSkills, serviceCategory: service?.category },
     );
+    const skillMatch = q.qualified && q.basis !== "none";
     const avail = t.status === "available";
 
     // lower score is better. unknown location is penalised, not faked as 999.
     let score = km ?? 80; // neutral mid penalty when distance is unknown
-    if (!skillMatch) score += 30;
+    if (!q.qualified) score += 30;
+    else if (q.basis === "none") score += 10;
     if (!avail) score += 50;
     if (t.status === "offline") score += 200;
     // workload: each open stop is real friction, and a tech who won't be free

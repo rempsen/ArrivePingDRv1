@@ -12,7 +12,7 @@ import { log } from "../api/lib/logger";
 import { getRedis, getRedisSub, redisEnabled } from "../api/lib/redis";
 
 export type TrackEvent = {
-  type: "location" | "status" | "eta" | "message";
+  type: "location" | "status" | "eta" | "message" | "dispatch";
   token: string;
   data: unknown;
   at: number;
@@ -204,6 +204,39 @@ export function publishMsg(kind: MsgKind, key: string) {
 
 export function subscribeMsg(kind: MsgKind, key: string, fn: Subscriber) {
   return bus.subscribe(msgChan(kind, key), fn);
+}
+
+/**
+ * Dispatch map (Map v2) — one channel per company. Location pings carry the
+ * new position so open maps can move the pin without refetching; everything
+ * else is a signal ("technician X / job Y changed") and the map refetches its
+ * board snapshot. Same bus as tracking and messages, so it fans out across
+ * nodes through Redis when that's configured.
+ */
+export type DispatchSignal =
+  | { kind: "location"; techId: string; lat: number; lng: number; at: number }
+  | { kind: "tech"; techId: string }
+  | { kind: "job"; jobId: string };
+
+const dispatchChan = (companyId: string) => `dispatch:${companyId}`;
+
+/** Fire-and-forget safe: never throws, never blocks the write that triggered it on a slow bus. */
+export function publishDispatch(companyId: string | null | undefined, s: DispatchSignal): Promise<void> {
+  if (!companyId) return Promise.resolve();
+  try {
+    return bus
+      .publish(dispatchChan(companyId), { type: "dispatch", token: companyId, data: s, at: Date.now() })
+      .catch((err) => log.warn("realtime: dispatch publish failed", { err: (err as Error)?.message }));
+  } catch (err) {
+    log.warn("realtime: dispatch publish failed", { err: (err as Error)?.message });
+    return Promise.resolve();
+  }
+}
+
+export function subscribeDispatch(companyId: string, fn: (s: DispatchSignal) => void) {
+  return bus.subscribe(dispatchChan(companyId), (e) => {
+    if (e.type === "dispatch" && e.token === companyId && e.data && typeof e.data === "object") fn(e.data as DispatchSignal);
+  });
 }
 
 export function realtimeStats() {

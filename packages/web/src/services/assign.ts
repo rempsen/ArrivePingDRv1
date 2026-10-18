@@ -27,6 +27,12 @@ export interface AssignOptions {
   force?: boolean;
   /** Who's doing this. Automation stamps the job so the UI can badge it. */
   by?: { kind: "dispatcher"; name?: string } | { kind: "automation"; ruleId: string; ruleName: string };
+  /**
+   * Don't fire the "assigned" event (notifications + timeline) here; the caller
+   * fires it later. The dispatch map holds it for its few-second Undo window
+   * (services/dispatch-assign.ts) so an undone drop never texts anyone.
+   */
+  deferEvent?: boolean;
 }
 
 export type AssignResult =
@@ -146,6 +152,6 @@ export async function assignJob(
     });
   }
 
-  await fireEvent("assigned", bookingId);
+  if (!opts.deferEvent) await fireEvent("assigned", bookingId);
   return { ok: true, booking: b };
 }

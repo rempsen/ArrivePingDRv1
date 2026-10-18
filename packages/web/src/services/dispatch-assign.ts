@@ -1,0 +1,250 @@
+/**
+ * Assigning from the dispatch map — instantly, with Undo.
+ *
+ * Dan's call (2026-10-17): a job dropped on a technician is assigned at once
+ * and the dispatcher gets a few seconds to Undo. Two things make that honest:
+ *
+ *  1. Undo restores the job exactly as it was. The queue holds pending AND
+ *     confirmed jobs, and the generic unassign path turns both into
+ *     "confirmed". So the assign hands back a signed token carrying the
+ *     previous status; Undo verifies it and puts that status back, and only if
+ *     nothing has happened since (compare-and-set on the offer).
+ *  2. An undone drop texts nobody. Assigning normally fires the "assigned"
+ *     event at once — SMS, email and push to the technician, an email to the
+ *     customer, a line on their timeline. Here that event waits out the Undo
+ *     window (NOTIFY_GRACE_MS) as a scheduled task, run by an in-process timer
+ *     (or the scheduler's tick if this process dies first). Undo cancels it,
+ *     and the handler re-checks the job before sending anything.
+ *
+ * Every guard of a normal assignment (tenant check, terminal and in-flight
+ * protection, double-booking, time off, compare-and-set, presence) is the
+ * shared services/assign.ts — this file only adds the Undo around it.
+ */
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { and, eq, isNull } from "drizzle-orm";
+import { tdb } from "../api/database/tenant";
+import * as schema from "../api/database/schema";
+import { assignJob } from "./assign";
+import { reconcileRiderStatus } from "./presence";
+import { logJobEvent } from "./job-events";
+import { publishDispatch } from "./realtime";
+import { fireEvent } from "./dispatch";
+import { cancelTasks, registerTaskHandler, runTaskNow, scheduleTask } from "./scheduler";
+
+/** How long an Undo token stays valid. The map's toast offers it for 6 s. */
+export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
+/** How long the "assigned" notifications wait, so an Undo inside the window reaches nobody. */
+export const NOTIFY_GRACE_MS = 8_000;
+export const ASSIGNED_NOTICE_TASK = "dispatch_assigned";
+
+/** What changed on the job, for the map to patch its copy. */
+export interface JobPatch {
+  id: string;
+  status: string;
+  assignStatus: string;
+  riderId: string | null;
+}
+
+export type AssignOutcome =
+  | { ok: true; job: JobPatch; undo: string | null }
+  | { ok: false; status: 404 | 409; message: string; forceable: boolean; reason?: string };
+
+export type UndoOutcome = { ok: true; job: JobPatch } | { ok: false; status: 400 | 404 | 409 | 410; message: string };
+
+interface UndoClaims {
+  v: 1;
+  /** company */
+  c: string;
+  /** booking */
+  b: string;
+  /** rider it was offered to */
+  r: string;
+  /** previous status */
+  s: string;
+  /** previous assignStatus */
+  a: string;
+  /** expiry, ms */
+  exp: number;
+}
+
+let processKey: Buffer | null = null;
+function signingKey(): Buffer {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (secret) return createHash("sha256").update(`arriveping:dispatch-undo:${secret}`).digest();
+  // No secret (local dev): a per-process key. Undo still works on this server.
+  return (processKey ??= randomBytes(32));
+}
+
+export function signUndo(claims: UndoClaims): string {
+  const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const mac = createHmac("sha256", signingKey()).update(body).digest("base64url");
+  return `${body}.${mac}`;
+}
+
+export function readUndo(token: unknown, now = Date.now()): UndoClaims | "invalid" | "expired" {
+  if (typeof token !== "string" || token.length > 2_000) return "invalid";
+  const parts = token.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return "invalid";
+  const [body, mac] = parts as [string, string];
+  const want = createHmac("sha256", signingKey()).update(body).digest();
+  const got = Buffer.from(mac, "base64url");
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return "invalid";
+  let c: UndoClaims;
+  try {
+    c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as UndoClaims;
+  } catch {
+    return "invalid";
+  }
+  const strings = [c?.c, c?.b, c?.r, c?.s, c?.a];
+  if (!c || c.v !== 1 || strings.some((x) => typeof x !== "string") || typeof c.exp !== "number") return "invalid";
+  if (now > c.exp) return "expired";
+  return c;
+}
+
+const patchOf = (b: typeof schema.bookings.$inferSelect): JobPatch => ({
+  id: b.id,
+  status: b.status,
+  assignStatus: b.assignStatus,
+  riderId: b.riderId,
+});
+
+// The timer is injectable so tests can run the deferred notice on demand.
+type GraceTimer = (run: () => void, ms: number) => void;
+const realTimer: GraceTimer = (run, ms) => {
+  const h = setTimeout(run, ms);
+  (h as { unref?: () => void }).unref?.();
+};
+let graceTimer: GraceTimer = realTimer;
+/** Tests only: capture the deferred-notice callback instead of waiting for it. */
+export function _setGraceTimerForTests(fn: GraceTimer | null) {
+  graceTimer = fn ?? realTimer;
+}
+
+async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string) {
+  const id = await scheduleTask({
+    companyId,
+    kind: ASSIGNED_NOTICE_TASK,
+    runAt: Date.now() + NOTIFY_GRACE_MS,
+    bookingId,
+    payload: { riderId },
+  });
+  // Couldn't queue it: tell people now rather than never.
+  if (!id) {
+    await fireEvent("assigned", bookingId);
+    return;
+  }
+  graceTimer(() => void runTaskNow(id), NOTIFY_GRACE_MS);
+}
+
+registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {
+  const riderId = typeof task.payload.riderId === "string" ? task.payload.riderId : "";
+  if (!task.bookingId || !riderId) return;
+  const b = await tdb(task.companyId).selectOne(schema.bookings, eq(schema.bookings.id, task.bookingId));
+  // Undone, given to someone else or archived in the meantime: nothing to announce.
+  if (!b || b.deletedAt || b.riderId !== riderId) return;
+  if (b.assignStatus !== "offered" && b.assignStatus !== "accepted") return;
+  await fireEvent("assigned", task.bookingId);
+});
+
+async function techName(companyId: string, riderId: string): Promise<string> {
+  const t = tdb(companyId);
+  const [row] = await t.transaction((tx) =>
+    tx
+      .select({ name: schema.user.name })
+      .from(schema.riders)
+      .innerJoin(schema.user, eq(schema.user.id, schema.riders.userId))
+      .where(t.scope(schema.riders, eq(schema.riders.id, riderId)))
+      .limit(1),
+  );
+  return (row?.name ?? "").trim();
+}
+
+export async function dispatchAssign(
+  companyId: string,
+  input: { bookingId: string; riderId: string; force?: boolean; by: string },
+  now = Date.now(),
+): Promise<AssignOutcome> {
+  const t = tdb(companyId);
+  const prev = await t.selectOne(schema.bookings, eq(schema.bookings.id, input.bookingId));
+  if (!prev || prev.deletedAt) return { ok: false, status: 404, message: "Work order not found", forceable: false };
+
+  // Undo is for taking a job back off the board's queue. Moving a job from one
+  // technician to another is a deliberate reassignment, notified at once.
+  const undoable = !prev.riderId;
+  const r = await assignJob(companyId, input.bookingId, input.riderId, {
+    force: input.force,
+    by: { kind: "dispatcher", name: input.by },
+    deferEvent: undoable,
+  });
+  if (!r.ok) {
+    if (r.code === "tech_not_found" || r.code === "job_not_found") return { ok: false, status: 404, message: r.message, forceable: false };
+    return { ok: false, status: 409, message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) };
+  }
+
+  let undo: string | null = null;
+  if (undoable) {
+    undo = signUndo({
+      v: 1,
+      c: companyId,
+      b: input.bookingId,
+      r: input.riderId,
+      s: prev.status,
+      a: prev.assignStatus,
+      exp: now + UNDO_TOKEN_TTL_MS,
+    });
+    await deferAssignedNotice(companyId, input.bookingId, input.riderId);
+    // fireEvent (which normally refreshes open maps) is waiting, so say it here.
+    void publishDispatch(companyId, { kind: "job", jobId: input.bookingId });
+  }
+  return { ok: true, job: patchOf(r.booking), undo };
+}
+
+export async function undoAssign(companyId: string, token: unknown, by: string, now = Date.now()): Promise<UndoOutcome> {
+  const c = readUndo(token, now);
+  if (c === "invalid") return { ok: false, status: 400, message: "That Undo isn't valid any more." };
+  if (c === "expired") return { ok: false, status: 410, message: "Too late to undo — open the job to change it." };
+  if (c.c !== companyId) return { ok: false, status: 404, message: "Work order not found" };
+
+  const t = tdb(companyId);
+  const B = schema.bookings;
+  // Only an offer nobody has acted on yet: same tech, still offered, still
+  // assigned, not archived. Anything else means the world moved on.
+  const [b] = await t.update(
+    B,
+    {
+      riderId: null,
+      status: c.s,
+      assignStatus: c.a,
+      assignedAt: null,
+      acceptedAt: null,
+      autoAssignedRuleId: "",
+      autoAssignedAt: null,
+    },
+    and(eq(B.id, c.b), eq(B.riderId, c.r), eq(B.assignStatus, "offered"), eq(B.status, "assigned"), isNull(B.deletedAt)),
+  );
+  if (!b) {
+    const cur = await t.selectOne(B, eq(B.id, c.b));
+    if (!cur || cur.deletedAt) return { ok: false, status: 404, message: "Work order not found" };
+    if (cur.riderId === c.r && cur.assignStatus === "accepted") {
+      const name = await techName(companyId, c.r);
+      return { ok: false, status: 409, message: `${name || "The technician"} already accepted this job — open it to change the assignment.` };
+    }
+    return { ok: false, status: 409, message: "This job changed since you assigned it — open it to see where it is now." };
+  }
+
+  await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK });
+  await reconcileRiderStatus(companyId, c.r);
+  await logJobEvent({
+    companyId,
+    bookingId: c.b,
+    kind: "note_added",
+    actorRole: "dispatch",
+    actorName: by,
+    label: "Assignment undone",
+    detail: `${by || "Dispatch"} undid the assignment from the map.`,
+    customerVisible: false,
+  });
+  void publishDispatch(companyId, { kind: "job", jobId: c.b });
+  void publishDispatch(companyId, { kind: "tech", techId: c.r });
+  return { ok: true, job: patchOf(b) };
+}

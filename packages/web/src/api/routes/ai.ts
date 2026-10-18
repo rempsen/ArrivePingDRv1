@@ -82,6 +82,8 @@ export const aiRoutes = new Hono<AppEnv>()
         lng: b.lng,
         priority: b.priority,
         scheduledAt: b.scheduledAt ? Number(b.scheduledAt) : null,
+        requiredSkillClass: b.requiredSkillClass,
+        requiredSkills: b.requiredSkills,
       },
       service: svc
         ? { name: svc.name, category: svc.category, durationMins: svc.durationMins }
