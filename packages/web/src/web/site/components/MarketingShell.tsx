@@ -6,6 +6,7 @@ import { useHeaderOffset } from "../motion/use-scrollspy";
 import { usePageMeta } from "../seo/head";
 import { SiteHeader } from "./SiteHeader";
 import { SiteFooter } from "./SiteFooter";
+import { homeFor } from "../../lib/home";
 
 /** Header, footer, reveal motion and page metadata shared by the public content pages. */
 export function MarketingShell({ path, children }: { path: string; children: ReactNode }) {
@@ -20,7 +21,7 @@ function Shell({ path, children }: { path: string; children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const { isAuthed, role } = useAuth();
-  const dashboardHref = isAuthed ? (role === "admin" ? "/admin" : role === "rider" ? "/rider" : "/app") : undefined;
+  const dashboardHref = isAuthed ? homeFor(role) : undefined;
 
   useReveal(rootRef);
   useHeaderOffset(headerRef, rootRef);

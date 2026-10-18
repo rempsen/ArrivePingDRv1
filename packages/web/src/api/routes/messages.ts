@@ -4,7 +4,7 @@ import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and, or, isNull, inArray, notInArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { isOfficeRole } from "../lib/office-access";
 import { usersForCompany } from "../lib/memberships";
 import { sendSms, trackingUrl } from "../../services/sms";
 import { sendPush } from "../../services/push";
@@ -17,7 +17,7 @@ type SessionUser = { id: string; role?: string; name: string };
 
 function roleLabel(role?: string): "client" | "tech" | "dispatch" {
   if (role === "rider") return "tech";
-  if (isAdminRole(role)) return "dispatch";
+  if (isOfficeRole(role)) return "dispatch";
   return "client";
 }
 

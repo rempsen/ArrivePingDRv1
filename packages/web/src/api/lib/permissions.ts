@@ -179,18 +179,5 @@ export function resolvePerms(
   return new Set(roleDefaults[role] ?? DEFAULT_ROLE_PERMS[role] ?? []);
 }
 
-/** Does the permission set satisfy the required key? "*" = all. */
-export function permAllows(perms: Set<string>, required: string): boolean {
-  if (perms.has("*")) return true;
-  if (perms.has(required)) return true;
-  // module-wildcard e.g. "catalog:*"
-  const [mod] = required.split(":");
-  if (perms.has(`${mod}:*`)) return true;
-  // edit implies view; create/delete imply view too
-  if (required.endsWith(":view")) {
-    for (const a of ["create", "edit", "delete", "manage"]) {
-      if (perms.has(`${mod}:${a}`)) return true;
-    }
-  }
-  return false;
-}
+/** Does the permission set satisfy the required key? (Shared with the dashboard.) */
+export { permAllows } from "../../shared/office-pages";

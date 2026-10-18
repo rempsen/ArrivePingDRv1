@@ -181,6 +181,9 @@ export const teamRoutes = new Hono<AppEnv>()
     const b = c.req.valid("json");
     const me = c.get("user") as SessionUser;
     const { name, email, password, phone, role, staffType, managerId } = b;
+    // Office staff are added by an admin; a manager can add field staff.
+    if (!isAdminRole(me.role) && role !== FIELD_STAFF_ROLE)
+      return c.json({ message: "Only an admin can add office staff" }, 403);
     // Only a superadmin can mint admin-tier employees.
     if (isAdminRole(role) && !isSuperadmin(me.role))
       return c.json(
@@ -339,6 +342,15 @@ export const teamRoutes = new Hono<AppEnv>()
     const updates: Record<string, any> = {};
     for (const k of ["name", "email", "phone"] as const) {
       if (b[k] !== undefined) updates[k] = b[k];
+    }
+    // Roles and sign-in emails are an admin's call. A manager who could change
+    // a teammate's email could reset that password and take the account over,
+    // and one who could hand out roles could promote themselves via a friend.
+    if (!isAdminRole(me.role)) {
+      if (b.role !== undefined && b.role !== targetRole)
+        return c.json({ message: "Only an admin can change someone's role" }, 403);
+      if (updates.email && updates.email !== target.email)
+        return c.json({ message: "Only an admin can change someone's sign-in email" }, 403);
     }
     // A duplicate email hit the unique index and surfaced as a bare 500.
     if (updates.email && updates.email !== target.email) {

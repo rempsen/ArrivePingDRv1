@@ -15,8 +15,9 @@ import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
-import { requireAuth, loadMemberships, tenantId } from "../middleware/auth";
-import { isSuperadmin } from "../lib/permissions";
+import { requireAuth, loadMemberships, loadRoleDefaults, tenantId } from "../middleware/auth";
+import { isAdminRole, isSuperadmin, resolvePerms } from "../lib/permissions";
+import { isOfficeRole } from "../lib/office-access";
 import { detachMembership } from "../lib/memberships";
 import { deleteOwnAccount, deletionBlockers } from "../../services/account-deletion";
 import { AccessError } from "../../services/user-access";
@@ -208,6 +209,21 @@ export const meRoutes = new Hono<AppEnv>()
    * Every company this person can act as, with the role they hold at each and
    * a display name for the picker.
    */
+  /**
+   * What this person can do in the company they're acting as: their role there
+   * and resolved dashboard permissions ("*" for admins). The dashboard uses it
+   * to show only the sections their role includes (lib/office-access.ts).
+   */
+  .get("/access", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as { role?: string; permissions?: string | null };
+    const perms = resolvePerms(me, await loadRoleDefaults());
+    return c.json({
+      role: me.role ?? "customer",
+      admin: isAdminRole(me.role),
+      office: isOfficeRole(me.role),
+      permissions: [...perms].sort(),
+    });
+  })
   .get("/companies", requireAuth, async (c) => {
     const me = c.get("user") as unknown as SessionUser;
     const active = (c.get("companyId") as string) ?? "default";

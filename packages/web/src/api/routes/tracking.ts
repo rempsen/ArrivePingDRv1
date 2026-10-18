@@ -3,7 +3,7 @@ import { PRACTICE_SLOT, slotOf } from "../../services/sample-day";
 import type { Context } from "hono";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, tx, tenantId } from "../middleware/auth";
+import { officeCan, requireAuth, tx, tenantId } from "../middleware/auth";
 import { tripEngine, EN_ROUTE_STATUSES } from "../../services/trip-engine";
 import {
   haversineKm,
@@ -15,7 +15,6 @@ import { applyBookingStatus, pauseClock, resumeClock } from "../../services/book
 import { ensureSnappedRoute } from "../../services/route-snap";
 import { pingLimiter } from "../lib/rate-limit";
 import { publishTrack, publishDispatch } from "../../services/realtime";
-import { isAdminRole } from "../lib/permissions";
 import { LA_TOKEN_KEYS } from "../../services/apns";
 import { z } from "zod";
 import { jsonBody, latitude, longitude } from "../lib/validate";
@@ -263,8 +262,8 @@ export const trackingRoutes = new Hono<AppEnv>()
   // job is still en route). Staff-only: this is an internal ops view, not
   // the customer-facing live-tracking page.
   .get("/:bookingId/route-history", requireAuth, async (c) => {
-    const u = c.get("user") as { role?: string };
-    if (!isAdminRole(u?.role) && u?.role !== "dispatcher") return c.json({ message: "Forbidden" }, 403);
+    const u = c.get("user") as { role?: string; permissions?: string | null };
+    if (!(await officeCan(u, "work_orders:view"))) return c.json({ message: "Forbidden" }, 403);
     const bookingId = c.req.param("bookingId");
     const t = tx(c);
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));

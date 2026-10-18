@@ -3,8 +3,8 @@ import { sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { requireAuth, loadMemberships } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { officeCan, requireAuth, loadMemberships } from "../middleware/auth";
+import { isOfficeRole } from "../lib/office-access";
 import { buildCalendar, type CalEvent } from "../../services/ics";
 import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
@@ -29,7 +29,8 @@ const baseUrl = publicOrigin;
 /** Resolve the set of bookings a given user should see on their calendar. */
 async function bookingsForUser(u: { id: string; role: string | null; companyId: string }) {
   const t = tdb(u.companyId);
-  if (isAdminRole(u.role)) {
+  // The office's feed is the whole schedule.
+  if (await officeCan({ role: u.role }, "scheduler:view")) {
     return t.select(schema.bookings);
   }
   if (u.role === "rider") {
@@ -167,7 +168,7 @@ export const calendarRoutes = new Hono<AppEnv>()
     const base = baseUrl(c);
     const events = await Promise.all(scoped.map((x) => eventFor(x.booking, base, x.companyId)));
     const calName =
-      isAdminRole(u.role)
+      isOfficeRole(u.role)
         ? "ArrivePing — Dispatch Schedule"
         : u.role === "rider"
           ? `ArrivePing — ${u.name}'s Jobs`
