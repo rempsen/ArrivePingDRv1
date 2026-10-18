@@ -31,8 +31,10 @@ import {
   deleteMilestone,
   fireMilestone,
   getMilestone,
+  hasEmailDesign,
   listMilestones,
   milestoneMeta,
+  milestoneRules,
   updateMilestone,
   type CustomMilestone,
   type MilestoneMessages,
@@ -212,11 +214,17 @@ const RECIPIENT_WORD: Record<MilestoneRecipient, string> = {
   office: "the office",
 };
 
-/** A recipient ticked with nothing written is a mistake worth saying out loud. */
-function messagesProblem(messages: MilestoneMessages | undefined): string | null {
+/**
+ * A recipient ticked with nothing written is a mistake worth saying out loud,
+ * unless a branded email is designed for them (`designed`): that is the message.
+ */
+function messagesProblem(
+  messages: MilestoneMessages | undefined,
+  designed: ReadonlySet<string> = new Set(),
+): string | null {
   for (const r of MILESTONE_RECIPIENTS) {
     const m = messages?.[r];
-    if (m?.on && !m.text.trim()) return `Write the message for ${RECIPIENT_WORD[r]}, or untick them.`;
+    if (m?.on && !m.text.trim() && !designed.has(r)) return `Write the message for ${RECIPIENT_WORD[r]}, or untick them.`;
   }
   return null;
 }
@@ -232,6 +240,7 @@ async function milestoneView(t: ReturnType<typeof tx>, m: CustomMilestone) {
         {
           on: !!rule && rule.enabled && (rule.inApp || rule.email || rule.sms || rule.webhook),
           text: rule?.template ?? "",
+          designed: hasEmailDesign(rule?.emailDesign),
         },
       ];
     }),
@@ -603,7 +612,12 @@ export const notifConfigRoutes = new Hono<AppEnv>()
   })
   .patch("/custom/:id", requireAdmin, jsonBody(MilestonePatch), async (c) => {
     const body = c.req.valid("json");
-    const problem = messagesProblem(body.messages);
+    const designed = new Set(
+      (await milestoneRules(tenantId(c), c.req.param("id")))
+        .filter((r) => hasEmailDesign(r.emailDesign))
+        .map((r) => r.recipient),
+    );
+    const problem = messagesProblem(body.messages, designed);
     if (problem) return c.json({ message: problem }, 400);
     try {
       const { messages, ...fields } = body;

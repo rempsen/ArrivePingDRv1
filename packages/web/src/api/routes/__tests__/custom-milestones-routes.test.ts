@@ -122,7 +122,7 @@ describe("custom milestones API", () => {
     id = milestone.id;
     expect(milestone.summary).toBe("When the tech ticks “Water restored”");
     expect(milestone.event).toBe(`custom:${id}`);
-    expect(milestone.messages.client).toEqual({ on: true, text: "Water is back on, {{firstName}}." });
+    expect(milestone.messages.client).toEqual({ on: true, text: "Water is back on, {{firstName}}.", designed: false });
     expect(milestone.messages.tech.on).toBe(false);
     // Writing a milestone of your own counts as making the messages yours.
     const launch = await computeLaunchChecklist(CO);
@@ -204,6 +204,15 @@ describe("custom milestones API", () => {
     expect(res.status).toBe(200);
     const { milestone } = (await res.json()) as any;
     expect([milestone.name, milestone.enabled, milestone.messages.office.on]).toEqual(["Water back on", false, true]);
+    // A recipient whose message is a designed email can stay on with no text.
+    await db
+      .update(schema.notificationRules)
+      .set({ emailDesign: JSON.stringify([{ type: "text", text: "Hi" }]), email: true, template: "" })
+      .where(eq(schema.notificationRules.event, `custom:${id}`));
+    const view = (await (await call("GET", "/custom")).json()) as any;
+    expect(view.milestones[0].messages.tech).toMatchObject({ designed: true });
+    const designedOnly = await call("PATCH", `/custom/${id}`, { name: "Water back on", messages: { tech: { on: true, text: "" } } });
+    expect(designedOnly.status).toBe(200);
     expect((await call("PATCH", `/custom/${id}`, { trigger: "after_complete" })).status).toBe(400);
     expect((await call("PATCH", `/custom/${id}`, {})).status).toBe(400);
   });
