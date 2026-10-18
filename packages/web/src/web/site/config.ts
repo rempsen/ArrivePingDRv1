@@ -92,7 +92,8 @@ export const footageLabel = "ArrivePing app"; // screen-reader text; the visible
 /* ------------------------------------------------------------------ */
 
 export const hero = {
-  eyebrow: "AI-powered field service software and client communications",
+  /** The three value propositions in the pill above the headline, with a blinking dot between each. */
+  pillars: ["Plan with visibility.", "Assign and track.", "Communicate."],
   title: "The right tech, at the door, right when you said.",
   /** Both audiences, equal weight: the team and the homeowner. */
   promise: [

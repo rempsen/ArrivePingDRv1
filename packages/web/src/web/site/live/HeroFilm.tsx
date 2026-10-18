@@ -85,10 +85,14 @@ export function HeroFilm() {
 
       <div className="container lv-hero__inner">
         <div className="lv-hero__copy">
-          <span className="lv-hero__badge enter">
-            <span className="lv-livedot" aria-hidden="true" />
-            {hero.eyebrow}
-          </span>
+          <p className="lv-hero__badge enter">
+            {hero.pillars.map((p, i) => (
+              <span key={p} className="lv-hero__pillar">
+                {i > 0 ? <span className={`lv-livedot lv-hero__sep lv-hero__sep--${i}`} aria-hidden="true" /> : null}
+                {p}
+              </span>
+            ))}
+          </p>
           <h1 id="hero-title" className="lv-hero__title enter enter--2">
             {hero.title}
           </h1>
