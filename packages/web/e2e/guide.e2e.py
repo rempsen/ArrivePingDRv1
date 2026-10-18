@@ -76,7 +76,7 @@ def help_panel(page, vp_name):
     page.goto(f"{BASE_URL}/admin", wait_until="networkidle")
     page.locator('[data-tour="guide.button"]:visible').first.click()
     expect(panel(page)).to_be_visible(timeout=10_000)
-    search = panel(page).get_by_role("searchbox", name="Search help articles")
+    search = panel(page).get_by_role("searchbox", name=re.compile("help articles"))
     expect(search).to_be_focused()
     expect(panel(page).get_by_role("region", name="Guided tours").get_by_role("button")).to_have_count(len(CHAPTERS))
     page.wait_for_timeout(300)

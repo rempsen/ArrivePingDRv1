@@ -66,6 +66,7 @@ import { supportMessageRoutes } from "./routes/support-message";
 import { contactRequestRoutes } from "./routes/contact-request";
 import { punchlistRoutes } from "./routes/punchlist";
 import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
+import { guideAskRoutes } from "./routes/guide-ask";
 import { demoHealth } from "../services/demo-refresh";
 
 
@@ -402,7 +403,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/superadmin", superadminRoutes)
   .route("/mobile-release", mobileReleaseRoutes)
   .route("/punchlist", punchlistRoutes)
-  .route("/onboarding", onboardingRoutes);
+  .route("/onboarding", onboardingRoutes)
+  .route("/guide", guideAskRoutes);
 
 export type AppType = typeof app;
 export default app;
