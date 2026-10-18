@@ -97,7 +97,7 @@ function QueueCard(p: {
     <div
       ref={setNodeRef}
       {...listeners}
-      className={`group rounded-xl border p-2.5 transition ${p.canPlace ? "cursor-grab active:cursor-grabbing" : ""} ${p.on ? "border-emerald-live bg-emerald-live/[0.07]" : "border-white/10 bg-ink-3/60 hover:border-brand/40"}`}
+      className={`group rounded-xl border p-2.5 transition ${p.canPlace ? "cursor-grab select-none active:cursor-grabbing" : ""} ${p.on ? "border-emerald-live bg-emerald-live/[0.07]" : "border-white/10 bg-ink-3/60 hover:border-brand/40"}`}
       style={{ opacity: isDragging ? 0.4 : 1 }}
     >
       <div className="flex items-start gap-2">
