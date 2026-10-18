@@ -6,7 +6,7 @@ Runs the Expo web build of the technician app in Chromium at real device
 sizes (iPhone SE, iPhone 13, Pixel 7, iPad Pro 11 portrait and landscape),
 talking to a running ArrivePing server. For each device a brand-new
 technician is created, signs in and checks that:
-  1. the four tips appear in order (Jobs, On the clock, Start Driving on the
+  1. the four tips appear in order (Jobs, Sign in, Start Driving on the
      practice job, Messages), each spotlighting its control with the card on
      screen and clear of the spotlight;
   2. the first tip points at the practice job, and tip 3 is on its screen;
@@ -129,7 +129,7 @@ def server(page, path):
     )
 
 
-TIPS = [("Your jobs land here", "practice"), ("Go on the clock", None), ("Tap when you leave", "job"), ("Talk to the office", None)]
+TIPS = [("Your jobs land here", "practice"), ("Sign in when you start", None), ("Tap when you leave", "job"), ("Talk to the office", None)]
 
 serve()
 with sync_playwright() as p:

@@ -21,6 +21,7 @@ import { useCustomerNoun } from "../../lib/use-brand";
 import { useNotifySummary, NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { companyAlertText } from "../../components/company-alert";
 import { CoachAnchor } from "../../components/coach-tour";
+import { ShiftButton } from "../../components/shift-button";
 import { isPracticeJob, isSampleJob } from "../../lib/practice";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
@@ -305,6 +306,15 @@ export default function Jobs() {
           </Anchored>
         )}
       </ScrollView>
+
+      {/* Sign in / Sign out for the shift, always in reach above the tab bar. */}
+      <View style={s.shiftDock} pointerEvents="box-none">
+        <View style={s.shiftSlot}>
+          <CoachAnchor id="jobs.clock">
+            <ShiftButton />
+          </CoachAnchor>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -428,7 +438,10 @@ const s = StyleSheet.create({
   },
   elsewhereTitle: { color: C.text, fontSize: 14, fontWeight: "800" },
   elsewhereSub: { color: C.red, fontSize: 12, fontWeight: "600", marginTop: 2 },
-  scroll: { ...WIDE, padding: 16, gap: 22, paddingBottom: 40 },
+  // Room at the bottom so the last job isn't hidden under the Sign in button.
+  scroll: { ...WIDE, padding: 16, gap: 22, paddingBottom: 120 },
+  shiftDock: { position: "absolute", left: 0, right: 0, bottom: 16, alignItems: "center", paddingHorizontal: 20 },
+  shiftSlot: { width: "100%", maxWidth: 360 },
   section: { color: C.sub, fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
   jobTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   svc: { color: C.text, fontSize: 16, fontWeight: "700" },
