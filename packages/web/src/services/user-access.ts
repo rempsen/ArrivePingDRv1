@@ -9,9 +9,14 @@
  *   riders.approval     = 'suspended'  (driverSeatCount counts only 'active')
  * and Reactivate reverses all three.
  *
- * Seats: a seat is a FIELD-STAFF member (membership role 'rider'). Office
- * staff may have a rider profile (so they can be assigned jobs) but are never
- * billed, so deactivating them never changes the plan.
+ * Seats (licenses) follow billing-subscription.ts: every active field-staff
+ * member (membership role 'rider', non-sample rider profile) is a license,
+ * and so is every active office user (admin, manager, dispatcher, project
+ * manager) after the first, whose dispatcher license is included in every
+ * plan. So reactivating a field user, or a second office user, can need a
+ * seat; deactivating either can lower the plan, but never below the one
+ * included office user. Office users with a rider profile count once, as
+ * office.
  *
  * Every mutation validates first and writes inside one tenant transaction;
  * the Stripe quantity update (setSeats) runs after the commit, as it does for
@@ -22,10 +27,19 @@ import { tdb } from "../api/database/tenant";
 import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { OPEN_STATUSES } from "../shared/job-status";
-import { isAdminRole, isSuperadmin } from "../api/lib/permissions";
+import { isAdminRole, isSuperadmin, ROLE_LABELS } from "../api/lib/permissions";
 import { audit } from "../api/lib/audit";
 import { queueCompanySync } from "./hubspot-sync";
-import { setSeats } from "./billing-subscription";
+import {
+  setSeats,
+  billableSeatCounts,
+  billableFromCounts,
+  fieldSeatMembers,
+  officeSeatMembers,
+  officeRemovable,
+  isFieldSeat,
+  isOfficeSeat,
+} from "./billing-subscription";
 import { fireEvent } from "./dispatch";
 
 /** Swappable for tests (a Stripe outage is simulated by making setSeats throw). */
@@ -49,17 +63,20 @@ export type Actor = { id: string; role?: string; name?: string };
 export type OpenJob = { id: string; title: string; scheduledAt: string; status: string };
 export type SeatCandidate = {
   userId: string;
-  riderId: string;
+  /** Their rider profile; null for an office user who can't be assigned jobs. */
+  riderId: string | null;
   name: string;
   email: string;
-  staffType: "driver" | "technician";
+  /** "office" = an extra office user (dispatcher, manager, project manager). */
+  staffType: "driver" | "technician" | "office";
+  /** Office users only: their role as shown in the app ("Dispatcher"). */
+  roleLabel: string | null;
   lastActiveAt: string | null;
   openJobs: number;
 };
 /** userId to move the jobs to, or null = back to the unassigned board. */
 export type ReassignTarget = string | null;
 
-const FIELD_ROLE = "rider";
 const OPEN = [...OPEN_STATUSES] as string[];
 
 export type Member = { membership: typeof schema.memberships.$inferSelect; user: typeof schema.user.$inferSelect; rider: typeof schema.riders.$inferSelect | null };
@@ -93,51 +110,84 @@ export async function openJobsFor(companyId: string, userId: string): Promise<Op
   return openJobsForRider(companyId, rider.id);
 }
 
-/** Active field staff who count as seats, least recently active first (never-active first). */
-export async function seatCandidates(companyId: string): Promise<SeatCandidate[]> {
+/**
+ * Who can be chosen in Settings → Billing to lower the plan: everyone whose
+ * deactivation takes a license off the bill.
+ *  - Billed field staff, least recently active first (never-active first).
+ *    Sample-day techs aren't billed, so they aren't listed.
+ *  - Then office users (dispatchers, managers, project managers) by name.
+ *    Not the acting admin, and not admin-level accounts: only a superadmin
+ *    may deactivate those, one at a time from the Team page where the
+ *    last-admin check runs. The included dispatcher license always stays,
+ *    so at most officeRemovable(office) of them can come off (downsize
+ *    enforces it; the picker gets the number from the route).
+ */
+export async function seatCandidates(companyId: string, actor?: Pick<Actor, "id">): Promise<SeatCandidate[]> {
   const t = tdb(companyId);
-  const members = await t.select(schema.memberships, and(eq(schema.memberships.role, FIELD_ROLE), eq(schema.memberships.status, "active")));
-  if (!members.length) return [];
-  const riders = await t.select(schema.riders, eq(schema.riders.approval, "active"));
-  const riderByUser = new Map(riders.map((r) => [r.userId, r]));
-  const users = await sdb.select().from(schema.user).where(inArray(schema.user.id, members.map((m) => m.userId)));
+  const fieldRows = await fieldSeatMembers(companyId);
+  const officeRows = (await officeSeatMembers(companyId)).filter((o) => o.user.id !== actor?.id && !isAdminRole(o.membership.role));
+  if (!fieldRows.length && !officeRows.length) return [];
+
+  const riderByUser = new Map<string, typeof schema.riders.$inferSelect>();
+  for (const f of fieldRows) riderByUser.set(f.membership.userId, f.rider);
+  // An office user's rider profile (if they take jobs), whatever its approval:
+  // planDeactivation moves their open jobs by it.
+  const officeIds = officeRows.map((o) => o.user.id);
+  if (officeIds.length) for (const r of await t.select(schema.riders, inArray(schema.riders.userId, officeIds))) riderByUser.set(r.userId, r);
+
+  const fieldIds = [...new Set(fieldRows.map((f) => f.membership.userId))];
+  const users = fieldIds.length ? await sdb.select().from(schema.user).where(inArray(schema.user.id, fieldIds)) : [];
   const userById = new Map(users.map((u) => [u.id, u]));
+  for (const o of officeRows) userById.set(o.user.id, o.user);
+
   const openCounts = new Map<string, number>();
-  const riderIds = riders.map((r) => r.id);
+  const riderIds = [...riderByUser.values()].map((r) => r.id);
   if (riderIds.length) {
     const open = await t.select(schema.bookings, and(inArray(schema.bookings.riderId, riderIds), inArray(schema.bookings.status, OPEN), isNull(schema.bookings.deletedAt)));
     for (const b of open) if (b.riderId) openCounts.set(b.riderId, (openCounts.get(b.riderId) ?? 0) + 1);
   }
-  const out: SeatCandidate[] = [];
-  for (const m of members) {
-    const r = riderByUser.get(m.userId);
+
+  const field: SeatCandidate[] = [];
+  const seen = new Set<string>();
+  for (const { membership: m, rider: r } of fieldRows) {
     const u = userById.get(m.userId);
-    if (!r || !u) continue;
-    out.push({
+    if (!u || seen.has(m.userId)) continue;
+    seen.add(m.userId);
+    field.push({
       userId: m.userId,
       riderId: r.id,
       name: u.name,
       email: u.email,
       staffType: m.staffType === "driver" ? "driver" : "technician",
+      roleLabel: null,
       lastActiveAt: r.locationUpdatedAt ? r.locationUpdatedAt.toISOString() : null,
       openJobs: openCounts.get(r.id) ?? 0,
     });
   }
-  return out.sort((a, b) => {
+  field.sort((a, b) => {
     if (a.lastActiveAt === b.lastActiveAt) return a.name.localeCompare(b.name);
     if (a.lastActiveAt === null) return -1;
     if (b.lastActiveAt === null) return 1;
     return a.lastActiveAt < b.lastActiveAt ? -1 : 1;
   });
-}
 
-async function activeFieldStaffCount(companyId: string): Promise<number> {
-  const t = tdb(companyId);
-  const members = await t.select(schema.memberships, and(eq(schema.memberships.role, FIELD_ROLE), eq(schema.memberships.status, "active")));
-  if (!members.length) return 0;
-  const riders = await t.select(schema.riders, eq(schema.riders.approval, "active"));
-  const active = new Set(riders.map((r) => r.userId));
-  return members.filter((m) => active.has(m.userId)).length;
+  const office: SeatCandidate[] = officeRows
+    .map(({ membership: m, user: u }) => {
+      const r = riderByUser.get(u.id) ?? null;
+      return {
+        userId: u.id,
+        riderId: r?.id ?? null,
+        name: u.name,
+        email: u.email,
+        staffType: "office" as const,
+        roleLabel: ROLE_LABELS[m.role] ?? m.role,
+        lastActiveAt: r?.locationUpdatedAt ? r.locationUpdatedAt.toISOString() : null,
+        openJobs: r ? (openCounts.get(r.id) ?? 0) : 0,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return [...field, ...office];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -294,13 +344,24 @@ export async function reactivateUser(companyId: string, actor: Actor, userId: st
   const [co] = await t.raw.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   let seats = Math.max(1, co?.billingSeats ?? 1);
   let seatAdded = false;
-  const isField = (member.membership.role ?? member.user.role) === FIELD_ROLE;
-  if (isField) {
-    const active = await activeFieldStaffCount(companyId);
-    if (active >= seats) {
+  // Will they take a license once they're back? Billed field staff always do.
+  // An office user does too, unless nobody else in the office is active: then
+  // they are the dispatcher license every plan includes.
+  const role = member.membership.role ?? member.user.role;
+  const asField = isFieldSeat(role, member.rider);
+  const asOffice = !asField && isOfficeSeat(role, member.user);
+  if (asField || asOffice) {
+    const now = await billableSeatCounts(companyId);
+    const after = billableFromCounts(now.field + (asField ? 1 : 0), now.office + (asOffice ? 1 : 0));
+    if (after > now.billable && after > seats) {
       if (!opts.addSeat) {
         const monthlyDelta = monthlyPrice(seats + 1).total - monthlyPrice(seats).total;
-        throw new AccessError(409, "seat_required", `Reactivating ${member.user.name} needs 1 more user on your plan.`, { seatsNeeded: 1, monthlyDelta });
+        throw new AccessError(409, "seat_required", `Reactivating ${member.user.name} needs 1 more user on your plan.`, {
+          seatsNeeded: 1,
+          monthlyDelta,
+          // Lets the dialog say why an office user needs a license.
+          ...(asOffice ? { office: true } : {}),
+        });
       }
       seats = (await deps.setSeats(companyId, seats + 1)).seats;
       seatAdded = true;
@@ -335,13 +396,28 @@ export async function downsize(
 ): Promise<{ seats: number; deactivated: string[] }> {
   const ids = Array.from(new Set(input.deactivate));
   if (!ids.length) throw new AccessError(400, "nothing_to_do", "Choose at least one user to deactivate.");
-  const candidates = new Set((await seatCandidates(companyId)).map((c) => c.userId));
+  const candidates = new Map((await seatCandidates(companyId, actor)).map((c) => [c.userId, c]));
   const notSeat = ids.find((id) => !candidates.has(id));
-  if (notSeat) throw new AccessError(400, "not_a_seat", "Only active field staff count towards your plan and can be chosen here.");
-  const active = candidates.size;
-  const expected = Math.max(1, active - ids.length);
+  if (notSeat) throw new AccessError(400, "not_a_seat", "Only people who count towards your plan can be chosen here.");
+  // The plan after: each field user is one license off; each office user is
+  // one off too, as long as the included dispatcher license is still in use.
+  const counts = await billableSeatCounts(companyId);
+  const officeOff = ids.filter((id) => candidates.get(id)!.staffType === "office").length;
+  const fieldOff = ids.length - officeOff;
+  if (officeOff > officeRemovable(counts.office)) {
+    throw new AccessError(400, "office_included", "Keep at least one office user: every plan includes one dispatcher license.", {
+      activeOffice: counts.office,
+      officeRemovable: officeRemovable(counts.office),
+    });
+  }
+  const expected = Math.max(1, billableFromCounts(counts.field - fieldOff, counts.office - officeOff));
   if (input.seats !== expected) {
-    throw new AccessError(409, "stale", "Your team changed since this opened. Refresh and try again.", { activeDrivers: active, expectedSeats: expected });
+    throw new AccessError(409, "stale", "Your team changed since this opened. Refresh and try again.", {
+      activeDrivers: counts.field,
+      activeOffice: counts.office,
+      billableUsers: counts.billable,
+      expectedSeats: expected,
+    });
   }
   const deactivating = new Set(ids);
   const plans: Plan[] = [];

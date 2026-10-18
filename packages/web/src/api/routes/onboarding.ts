@@ -51,6 +51,7 @@ import {
   startTrialSubscription,
   cancelSubscriptionQuietly,
   setSeats,
+  plannedSeatsFor,
   TRIAL_DAYS,
 } from "../../services/billing-subscription";
 import { notifySelfServeSignup } from "../../services/signup-notify";
@@ -622,9 +623,11 @@ without it unless the user explicitly says to skip/finish everything.
   Ask AT MINIMUM (call save_qualifying_baseline as soon as each is answered,
   don't wait to batch them):
     1. How many ${snap.settings.workerNoun.toLowerCase()}s will use ArrivePing? (technicianCount)
-       Say it plainly: this is the number of users on their plan — the
-       first month is free whatever the number, and they can change it any
-       time in Settings → Billing.
+       Say it plainly: each of them is a user on their plan — one
+       dispatcher license is included, and each extra dispatcher or manager
+       is one more user priced like a ${snap.settings.workerNoun.toLowerCase()}. The first month is free
+       whatever the number, and they can change it any time in Settings →
+       Billing.
     2. How many vehicles in the fleet? (vehicleCount)
     3. Roughly how many ${snap.settings.jobNoun.toLowerCase()}s/calls per day? (jobsPerDay)
     4. Do they sell/offer routine maintenance plans (recurring service
@@ -996,11 +999,22 @@ correction like that — it reads like you weren't listening.`;
             if (!saved.length) return { saved: [] };
             await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
             // The user count IS the plan: put it on the subscription right away.
+            // technicianCount is field staff only; office users already active
+            // here (the signup admin, a manager made at provisioning) add a
+            // license each after the included dispatcher one. Office staff
+            // invited later in this chat are picked up by syncSeats before the
+            // first invoice, the same way extra technicians are.
             let seats: number | undefined;
+            let extraOffice = 0;
             if (typeof input.technicianCount === "number" && input.technicianCount > 0) {
-              seats = (await setSeats(cid, input.technicianCount).catch(() => ({ seats: undefined }))).seats;
+              const planned = await plannedSeatsFor(cid, input.technicianCount).catch(() => ({ seats: input.technicianCount!, extraOffice: 0 }));
+              extraOffice = planned.extraOffice;
+              seats = (await setSeats(cid, planned.seats).catch(() => ({ seats: undefined }))).seats;
             }
-            return { saved, ...(seats ? { planSeats: seats, note: `Plan set to ${seats} user${seats === 1 ? "" : "s"}; first month free.` } : {}) };
+            const note = seats
+              ? `Plan set to ${seats} user${seats === 1 ? "" : "s"}${extraOffice > 0 ? ` (${input.technicianCount} field staff + ${extraOffice} extra office user${extraOffice === 1 ? "" : "s"}; one dispatcher license is included)` : ""}; first month free.`
+              : "";
+            return { saved, ...(seats ? { planSeats: seats, note } : {}) };
           },
         }),
         save_icp_qualifying_answer: tool({

@@ -15,6 +15,8 @@ import {
   startPaymentMethodChange,
   confirmPaymentMethodChange,
   closeAccount,
+  billableSeatCounts,
+  officeRemovable,
 } from "../../services/billing-subscription";
 import { AccessError, downsize, seatCandidates } from "../../services/user-access";
 import { db } from "../database";
@@ -32,9 +34,17 @@ export const billingRoutes = new Hono<AppEnv>()
     return c.json({ ok: true, ...r }, 200);
   })
 
-  // Lowering seats below the active driver count: pick who comes off. One
-  // request reassigns their open jobs, deactivates them and sets the seats.
-  .get("/seat-candidates", requireAdmin, async (c) => c.json({ candidates: await seatCandidates(tenantId(c)) }, 200))
+  // Lowering seats below the billable count (field staff + extra office
+  // users): pick who comes off. One request reassigns their open jobs,
+  // deactivates them and sets the seats. officeRemovable caps how many office
+  // users can be picked, so the included dispatcher license stays in use.
+  .get("/seat-candidates", requireAdmin, async (c) => {
+    const cid = tenantId(c);
+    const me = c.get("user") as { id: string };
+    const candidates = await seatCandidates(cid, me);
+    const { office } = await billableSeatCounts(cid);
+    return c.json({ candidates, officeRemovable: officeRemovable(office) }, 200);
+  })
   .post(
     "/downsize",
     requireAdmin,

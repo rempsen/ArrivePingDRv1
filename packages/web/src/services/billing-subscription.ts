@@ -5,24 +5,37 @@
  *
  * The deal, as sold on /get-started: 30 days free with as many users as you
  * like, card on file, cancel before day 30 and you're never charged. After
- * that, the public price list (web/site/config.ts): $49 base covering the
- * first 2 drivers, $30 per driver for drivers 3–29, $25 per driver from 30.
+ * that, the public price list (web/site/config.ts): $49 Starter covering the
+ * first 2 licenses, $30 per license for licenses 3–29, $25 per license from 30.
  *
- * Modelled as ONE graduated-tier price whose quantity is the driver count,
+ * Who is billed (billableSeatCounts): every tenant gets the same package,
+ * one dispatcher license plus two field licenses for the $49. A second
+ * dispatcher, or a manager, is bought exactly like a driver's license. So
+ *   billable = active field staff + max(0, active office users - 1)
+ * - Field staff: membership role "rider" and active, with an active,
+ *   non-sample rider profile (the driver count this file always billed).
+ * - Office users: an active membership as admin | manager | dispatcher |
+ *   project_manager whose user is not deleted, not platform staff
+ *   (superadmin) and not a sample person.
+ * The first office user is the included dispatcher license. There is one
+ * membership per person per company, so an office user who also has a rider
+ * profile (to be assigned jobs) counts once, as office.
+ *
+ * Modelled as ONE graduated-tier price whose quantity is the license count,
  * so Stripe does the band maths and the invoice matches monthlyPrice() in
  * config.ts to the cent:
  *   tier 1: up to 2   → $49 flat, $0/unit
  *   tier 2: up to 29  → $30/unit
  *   tier 3: 30+       → $25/unit
  * Seats are re-counted right before each invoice (`invoice.upcoming`
- * webhook), never pro-rated mid-month, so a tenant pays for the drivers
+ * webhook), never pro-rated mid-month, so a tenant pays for the licenses
  * they have on the day they're billed.
  *
  * Nothing here throws into the signup path: a Stripe failure is reported to
  * the caller as a typed result so the form can show it.
  */
 import type Stripe from "stripe";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import { db, sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { getStripe, stripeEnabled } from "./stripe";
@@ -184,39 +197,129 @@ export function mapStatus(s: Stripe.Subscription.Status): BillingStatus {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Who counts as a license (see the header)                                   */
+/* -------------------------------------------------------------------------- */
+
+const FIELD_SEAT_ROLE = "rider";
+/** Membership roles that are office users. Each active one is a license; the first is included. */
+export const OFFICE_SEAT_ROLES = ["admin", "manager", "dispatcher", "project_manager"] as const;
+/** Every plan includes one dispatcher license. */
+export const INCLUDED_OFFICE_SEATS = 1;
+/** User roles that never take a license even with an office membership: gone, or platform staff. */
+const NON_BILLABLE_USER_ROLES = ["deleted", "superadmin"];
+
+export type SeatCounts = {
+  /** Active field staff (technicians and drivers). */
+  field: number;
+  /** Active office users (admins, managers, dispatchers, project managers), including the one that's included. */
+  office: number;
+  /** What the tenant is billed for: field + max(0, office - 1). */
+  billable: number;
+};
+
+/** The billing rule itself: every field license, plus each office user after the included one. */
+export function billableFromCounts(field: number, office: number): number {
+  return Math.max(0, field) + Math.max(0, office - INCLUDED_OFFICE_SEATS);
+}
+
+/** How many office users can come off before only the included dispatcher license is left. */
+export function officeRemovable(office: number): number {
+  return Math.max(0, office - INCLUDED_OFFICE_SEATS);
+}
+
+// The SQL predicates below and the two JS predicates after them must say the
+// same thing: the SQL counts who is active now, the JS decides whether one
+// person (e.g. about to be reactivated) would count.
+const fieldSeatJoin = and(eq(schema.memberships.userId, schema.riders.userId), eq(schema.memberships.companyId, schema.riders.companyId));
+function fieldSeatWhere(companyId: string) {
+  return and(
+    eq(schema.riders.companyId, companyId),
+    eq(schema.riders.approval, "active"),
+    eq(schema.riders.isSample, false), // sample-day techs are never billed
+    eq(schema.memberships.role, FIELD_SEAT_ROLE),
+    eq(schema.memberships.status, "active"),
+  );
+}
+const officeSeatJoin = eq(schema.user.id, schema.memberships.userId);
+function officeSeatWhere(companyId: string) {
+  return and(
+    eq(schema.memberships.companyId, companyId),
+    eq(schema.memberships.status, "active"),
+    inArray(schema.memberships.role, [...OFFICE_SEAT_ROLES]),
+    or(isNull(schema.user.role), notInArray(schema.user.role, NON_BILLABLE_USER_ROLES)),
+    eq(schema.user.isSample, false),
+  );
+}
+
+/** Would this person take a field license once active? (Same rule as fieldSeatWhere.) */
+export function isFieldSeat(membershipRole: string | null | undefined, rider: { isSample: boolean } | null | undefined): boolean {
+  return membershipRole === FIELD_SEAT_ROLE && !!rider && !rider.isSample;
+}
+
+/** Would this person take an office license once active? (Same rule as officeSeatWhere.) */
+export function isOfficeSeat(membershipRole: string | null | undefined, user: { role: string | null; isSample: boolean }): boolean {
+  return (OFFICE_SEAT_ROLES as readonly string[]).includes(membershipRole ?? "") && !NON_BILLABLE_USER_ROLES.includes(user.role ?? "") && !user.isSample;
+}
+
+/** Active field staff who are billed, with their rider profiles. */
+export async function fieldSeatMembers(companyId: string) {
+  return sdb
+    .select({ membership: schema.memberships, rider: schema.riders })
+    .from(schema.riders)
+    .innerJoin(schema.memberships, fieldSeatJoin)
+    .where(fieldSeatWhere(companyId));
+}
+
+/** Active office users who hold a license (the included one among them), with their user rows. */
+export async function officeSeatMembers(companyId: string) {
+  return sdb
+    .select({ membership: schema.memberships, user: schema.user })
+    .from(schema.memberships)
+    .innerJoin(schema.user, officeSeatJoin)
+    .where(officeSeatWhere(companyId));
+}
+
+/** Field, office and billable license counts for a company, right now. */
+export async function billableSeatCounts(companyId: string): Promise<SeatCounts> {
+  const field = await driverSeatCount(companyId);
+  const [o] = await sdb.select({ n: count() }).from(schema.memberships).innerJoin(schema.user, officeSeatJoin).where(officeSeatWhere(companyId));
+  const office = Number(o?.n ?? 0);
+  return { field, office, billable: billableFromCounts(field, office) };
+}
+
 /**
- * Users that count as seats: FIELD staff (membership role "rider", membership
- * active) whose rider approval is active. Office staff may carry a rider
- * profile so they can be assigned jobs, but they are never billed.
+ * The plan for a stated number of field staff (the onboarding chat asks only
+ * "how many technicians?"), plus a license for each office user already
+ * active beyond the included one.
+ */
+export async function plannedSeatsFor(companyId: string, fieldCount: number): Promise<{ seats: number; extraOffice: number }> {
+  const { office } = await billableSeatCounts(companyId);
+  return { seats: Math.max(1, billableFromCounts(fieldCount, office)), extraOffice: officeRemovable(office) };
+}
+
+/**
+ * Active FIELD staff that are billed: membership role "rider" and active,
+ * rider approval active, not a sample-day tech. This is only the field part
+ * of the bill; billableSeatCounts adds the extra office users.
  */
 export async function driverSeatCount(companyId: string): Promise<number> {
-  const [row] = await sdb
-    .select({ n: count() })
-    .from(schema.riders)
-    .innerJoin(schema.memberships, and(eq(schema.memberships.userId, schema.riders.userId), eq(schema.memberships.companyId, schema.riders.companyId)))
-    .where(
-      and(
-        eq(schema.riders.companyId, companyId),
-        eq(schema.riders.approval, "active"),
-        eq(schema.riders.isSample, false), // sample-day techs are never billed
-        eq(schema.memberships.role, "rider"),
-        eq(schema.memberships.status, "active"),
-      ),
-    );
+  const [row] = await sdb.select({ n: count() }).from(schema.riders).innerJoin(schema.memberships, fieldSeatJoin).where(fieldSeatWhere(companyId));
   return Number(row?.n ?? 0);
 }
 
 /**
- * Put the current driver count on the subscription so the next invoice bills
- * it. Called from the `invoice.upcoming` webhook (a few days before each
- * renewal, and before the trial ends) and from the daily sweep as a backstop.
+ * Put the current license count on the subscription so the next invoice
+ * bills it. Called from the `invoice.upcoming` webhook (a few days before
+ * each renewal, and before the trial ends).
  */
 export async function syncSeats(companyId: string): Promise<{ seats: number; updated: boolean }> {
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   if (!co?.billingSubscriptionId || !stripeEnabled) return { seats: 0, updated: false };
-  // The tenant chooses their seat count in Settings → Billing; the active
-  // driver count only ever raises it (you can't run 5 drivers on 3 seats).
-  const seats = Math.max(1, co.billingSeats || 1, await driverSeatCount(companyId));
+  // The tenant chooses their seat count in Settings → Billing; the billable
+  // count (field staff + extra office users) only ever raises it (you can't
+  // run 5 licenses on 3 seats).
+  const seats = Math.max(1, co.billingSeats || 1, (await billableSeatCounts(companyId)).billable);
   const stripe = getStripe();
   const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId);
   const item = sub.items.data[0];
@@ -261,8 +364,15 @@ export interface BillingSummary {
   configured: boolean;
   status: BillingStatus;
   seats: number;
+  /** Active field staff (each one a license). */
   activeDrivers: number;
-  /** Active drivers above the paid seat count; > 0 means the tenant must choose who to deactivate to lower seats. */
+  /** Active office users (admins, managers, dispatchers, project managers), the included one among them. */
+  activeOffice: number;
+  /** Office licenses that come with every plan (1). */
+  includedOffice: number;
+  /** What the tenant is billed for: activeDrivers + max(0, activeOffice - includedOffice). */
+  billableUsers: number;
+  /** Billable users above the paid seat count; > 0 means the tenant must choose who to deactivate to lower seats. */
   excessActive: number;
   monthlyTotal: number;
   breakdown: string;
@@ -284,15 +394,18 @@ function subscriptionItem(sub: Stripe.Subscription) {
 /** Everything the Billing tab shows. Reads Stripe for the live subscription and card. */
 export async function billingSummary(companyId: string): Promise<BillingSummary> {
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
-  const activeDrivers = await driverSeatCount(companyId);
+  const counts = await billableSeatCounts(companyId);
   const seats = Math.max(1, co?.billingSeats || 1);
   const price = monthlyPrice(seats);
   const base: BillingSummary = {
     configured: Boolean(co?.billingSubscriptionId && stripeEnabled),
     status: (co?.billingStatus as BillingStatus) ?? "none",
     seats,
-    activeDrivers,
-    excessActive: Math.max(0, activeDrivers - seats),
+    activeDrivers: counts.field,
+    activeOffice: counts.office,
+    includedOffice: INCLUDED_OFFICE_SEATS,
+    billableUsers: counts.billable,
+    excessActive: Math.max(0, counts.billable - seats),
     monthlyTotal: price.total,
     breakdown: price.breakdown,
     plan: price.plan,
@@ -334,7 +447,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
       ...base,
       status: mapStatus(sub.status),
       seats: Math.max(1, item?.quantity ?? seats),
-      excessActive: Math.max(0, activeDrivers - Math.max(1, item?.quantity ?? seats)),
+      excessActive: Math.max(0, counts.billable - Math.max(1, item?.quantity ?? seats)),
       ...(item?.quantity ? { ...monthlyPrice(item.quantity), monthlyTotal: monthlyPrice(item.quantity).total } : {}),
       trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : base.trialEndsAt,
       trialDaysLeft: sub.trial_end ? Math.max(0, Math.ceil((sub.trial_end * 1000 - Date.now()) / 86_400_000)) : base.trialDaysLeft,

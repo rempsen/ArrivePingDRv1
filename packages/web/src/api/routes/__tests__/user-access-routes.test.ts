@@ -133,13 +133,29 @@ describe("GET /billing/seat-candidates", () => {
   it("lists field staff", async () => {
     const res = await call("/billing/seat-candidates");
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { candidates: { userId: string }[] };
+    const json = (await res.json()) as { candidates: { userId: string }[]; officeRemovable: number };
     expect(json.candidates.map((c) => c.userId).sort()).toEqual(["uar-r1", "uar-r2", "uar-r3"]);
+    // The admin is the only office user: their dispatcher license is included.
+    expect(json.officeRemovable).toBe(0);
+  });
+
+  it("lists an extra office user, with how many can come off", async () => {
+    const s = (db as any).$client;
+    await s.execute({ sql: 'INSERT INTO "user" (id, name, email, role, company_id, email_verified) VALUES (?,?,?,?,?,TRUE)', args: ["uar-disp", "uar-disp", "uar-disp@t.test", "dispatcher", CO] });
+    await s.execute({ sql: "INSERT INTO memberships (id, user_id, company_id, role, status) VALUES (?,?,?,?,?)", args: ["m-uar-disp", "uar-disp", CO, "dispatcher", "active"] });
+    const json = (await (await call("/billing/seat-candidates")).json()) as { candidates: { userId: string; staffType: string; roleLabel: string | null; riderId: string | null }[]; officeRemovable: number };
+    expect(json.candidates.find((c) => c.userId === "uar-disp")).toMatchObject({ staffType: "office", roleLabel: "Dispatcher", riderId: null });
+    expect(json.candidates.some((c) => c.userId === "uar-admin")).toBe(false);
+    expect(json.officeRemovable).toBe(1);
+    const sum = (await (await call("/billing/summary")).json()) as Record<string, number>;
+    expect(sum).toMatchObject({ seats: 2, activeDrivers: 3, activeOffice: 2, includedOffice: 1, billableUsers: 4, excessActive: 2 });
   });
 
   it("summary reports excessActive", async () => {
     const res = await call("/billing/summary");
-    expect(((await res.json()) as { excessActive: number }).excessActive).toBe(1);
+    const json = (await res.json()) as Record<string, number>;
+    expect(json.excessActive).toBe(1);
+    expect(json).toMatchObject({ activeDrivers: 3, activeOffice: 1, includedOffice: 1, billableUsers: 3 });
   });
 });
 
