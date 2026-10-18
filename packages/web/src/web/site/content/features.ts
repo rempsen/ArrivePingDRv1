@@ -20,7 +20,7 @@ export const featuresMeta = {
   description:
     "Every ArrivePing feature in one place: custom work orders, GPS tracking of the drive, mileage and travel time, automatic on-site time, photos, signatures, Stripe payments, customer texts and exports.",
   summary:
-    "A tour of ArrivePing features by stage of the job: create the work order, track the drive and the visit with automatic geofence time, capture the work, keep customers informed, price the job and pay your team, start with AI-built workflows, and export your data.",
+    "A tour of ArrivePing features by stage of the job: create the work order, track the drive and the visit with automatic geofence time, capture the work, keep customers informed, price the job and pay your team, start with AI-built workflows and your customers imported, and export your data.",
 };
 
 export const hero = {
@@ -103,6 +103,7 @@ export const chapters: Chapter[] = [
     tiles: [
       { icon: "spark", title: "Four AI-built workflows", text: "Everyone who signs up gets at least four workflows generated from their own website." },
       { icon: "book", title: "18 industries of know-how", text: "Best practices and workflows from the NVC360 and ArrivePing research on 18 industries, built in." },
+      { icon: "import", title: "Bring your customers and team", text: "Upload the customer list or technician roster you already have as a CSV or Excel file, or fill in our template, and everyone is added at once. Or send us the file and we import it for you." },
     ],
   },
   {

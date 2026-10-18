@@ -682,6 +682,10 @@ export const faqs = [
     a: "Yes. Job events go to Zapier, Make or your own webhook; calendars subscribe in Google, Outlook or Apple; customers and technicians import from CSV or Excel; jobs, customers and invoices export to CSV, Excel or PDF; and payments run through your own Stripe account. Custom integrations are welcome on every plan and included with Fleet. QuickBooks and Xero are on our roadmap.",
   },
   {
+    q: "Can we bring over our existing customers and technicians?",
+    a: "Yes, all at once. Upload the CSV or Excel file you already have, from your old software or your own spreadsheet, or download our template, fill it in and upload it. Customers aren't contacted when they're imported, and technicians get an email to set their password. Prefer not to do it yourself? Send us the file and we'll import it for you.",
+  },
+  {
     q: "Does it replace our scheduling or invoicing tools?",
     a: "It can. ArrivePing includes scheduling, dispatch, work orders with your own fields, and an invoice for every job that customers can pay by card once you connect Stripe. Many teams keep their accounting and payroll software and use ArrivePing for the day's work and customer updates.",
   },
