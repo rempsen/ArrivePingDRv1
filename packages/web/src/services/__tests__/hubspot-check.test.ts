@@ -84,6 +84,15 @@ describe("checkHubspot", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("isn't ok when the key's account and scopes can't be confirmed", async () => {
+    tokenInfo = { status: 403, body: { message: "forbidden" } };
+    const r = await checkHubspot();
+    expect(r.checks.find((c) => c.name === "Token")!.status).toBe("warn");
+    expect(r.checks.every((c) => c.status !== "fail")).toBe(true);
+    expect(r.ok).toBe(false);
+    expect(r.nextSteps.join(" ")).toContain("Couldn't confirm which HubSpot account");
+  });
+
   it("catches a bad owner id and a missing ticket stage", async () => {
     ownerStatus = 404;
     process.env.HUBSPOT_TICKET_STAGE = "9";
