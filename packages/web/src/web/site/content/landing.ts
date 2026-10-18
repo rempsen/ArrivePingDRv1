@@ -24,7 +24,7 @@ export const COMPETITORS_VERIFIED = "October 7, 2026";
  * Central time, which Google treats as an unreliable lastmod).
  * Bump it when page copy changes, not when the site is merely rebuilt.
  */
-export const CONTENT_UPDATED = "2026-10-17";
+export const CONTENT_UPDATED = "2026-10-18";
 
 export type Cell = string | { text: string; href?: string };
 
@@ -436,6 +436,7 @@ const jobberSources = [
 const hcpSources = [
   { label: "Housecall Pro pricing", href: "https://www.housecallpro.com/pricing/" },
   { label: "Housecall Pro vehicle GPS tracking", href: "https://www.housecallpro.com/features/vehicle-gps-tracking/" },
+  { label: "Housecall Pro employee GPS tracking (help centre)", href: "https://help.housecallpro.com/en/articles/2810583-employee-gps-tracking-hcp-map" },
   { label: "Housecall Pro dispatching", href: "https://www.housecallpro.com/features/dispatching-software/" },
 ];
 
@@ -506,7 +507,7 @@ const housecallPro: LandingPage = {
   meta: {
     title: "ArrivePing vs Housecall Pro: GPS, ETA Texts & Pricing",
     description:
-      "ArrivePing vs Housecall Pro compared: vehicle GPS add-on vs phone-based tracking, on-my-way tracking links, automatic dispatch and published pricing.",
+      "ArrivePing vs Housecall Pro compared: customer tracking links without a vehicle GPS add-on, phone-based tracking, automatic dispatch and published pricing.",
   },
   eyebrow: "Housecall Pro alternative",
   h1: "ArrivePing vs Housecall Pro",
@@ -524,7 +525,7 @@ const housecallPro: LandingPage = {
       rows: [
         { label: "Starting price", cells: [AP_PRICE_CELL, { text: "Basic $59/mo billed annually or $79/mo monthly (1 user)", href: "https://www.housecallpro.com/pricing/" }] },
         { label: "Pricing model", cells: ["Per driver, graduated", { text: "Plans by tier (1, 5 or 8 users); Max adds users at $35/mo each", href: "https://www.housecallpro.com/pricing/" }] },
-        { label: "Vehicle / tech tracking", cells: ["Phone-based, from the technician app; no devices", { text: "Vehicle GPS is a paid add-on at $20 per vehicle per month with an OBD-II plug-in device", href: "https://www.housecallpro.com/features/vehicle-gps-tracking/" }] },
+        { label: "Vehicle / tech tracking", cells: ["Phone-based, from the technician app; no devices", { text: "Employee GPS from the tech's phone on the office map (listed in the Essentials plan); vehicle GPS is a paid add-on at $20 per vehicle per month with an OBD-II plug-in device", href: "https://www.housecallpro.com/pricing/" }] },
         { label: "Customer tracking link", cells: ["Live tracking page with ETA and text/call, in every plan", { text: "On-my-way text with a live map link, as part of vehicle GPS tracking", href: "https://www.housecallpro.com/features/vehicle-gps-tracking/" }] },
         { label: "Automatic assignment", cells: ["Auto-assigns by distance, skills, availability and workload", { text: "Drag-and-drop dispatching; we found no automatic assignment described", href: "https://www.housecallpro.com/features/dispatching-software/" }] },
         { label: "Setup", cells: ["AI setup agent; most teams dispatch within an hour", "14-day free trial"] },
@@ -544,7 +545,8 @@ const housecallPro: LandingPage = {
   }, HARDWARE_FAQ, PRICE_FAQ, SETUP_FAQ],
   related: ["/compare/jobber", "/compare/servicetitan", "/fleet-tracking", "/pricing"],
   sources: hcpSources,
-  verified: COMPETITORS_VERIFIED,
+  // Re-checked on its own after the shared date: Essentials' phone-based employee GPS was missing.
+  verified: "October 18, 2026",
 };
 
 const serviceTitan: LandingPage = {

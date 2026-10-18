@@ -91,8 +91,11 @@ The first three covers in this format were too alike: same angle, same warm gold
 | no-call-no-show (replaced 2026-10-18) | man 20s–30s, contractor in hard hat and hi-vis vest, clipboard; real Pexels photo | none (real "Your technician has arrived!" card overlaid, lower right) | home's front doorway, white siding | bright daylight, neutral | eye level from the porch, subject centre-right |
 | last-mile | woman 30s, homeowner | right | front porch, van on street | golden hour, warm | over-shoulder from left |
 | phone-vs-vehicle-gps-tracking | woman 30s, technician | left (into dash mount) | van cab, residential street | rainy overcast, cool desaturated | through open passenger door, subject right |
+| field-service-software-cost | no person: rows of hi-vis vests and hard hats on a rack; real Pexels photo (inline: an office user at a warehouse desk; an aerial grid of vans) | none | equipment room, indoors | dark interior, hard artificial light, high-contrast orange and blue | eye level, straight on, symmetrical |
 
-Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left, two van-cab shots in a row, and another front door or porch (three covers are now at the door). Good next options: no person at all (trucks at a dock, a dispatcher's screen), night or fluorescent light, an older technician, a construction site, a dispatch office.
+Next cover must avoid: golden hour, warm grade, homeowner holding a phone in the right hand, over-shoulder-from-left, two van-cab shots in a row, another front door or porch (three covers are now at the door), and another still life of gear with no person (field-service-software-cost). Good next options: an older technician at work, a construction site, a dispatch office, night under streetlights, an overhead or drone view.
+
+The blog index has many covers built from app mock-ups on a dark gradient with a big statistic, and several AI-generated people holding phones. Prefer real photographs that show the reader's world from a new angle (the gear, the office, the fleet, the job) over another rendered screen.
 
 Real stock photos are fine instead of a generated image: Pexels (Pexels License: free for commercial use, edits allowed) is what the site already uses. Credit the photographer and photo URL in an HTML comment at the top of the post, and paint out house numbers, street signs and brand logos. Combining a photo with a real app screenshot works well, shown as a floating card rather than faked into someone's hand.
 

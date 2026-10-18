@@ -282,6 +282,8 @@
   font-size: 18px;
   line-height: 1.75;
   color: var(--ink-secondary);
+  /* Long source URLs wrap instead of pushing the page sideways on phones. */
+  overflow-wrap: break-word;
 }
 .site .post__body > * + * {
   margin-top: 1.1em;
