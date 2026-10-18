@@ -396,6 +396,13 @@
   text-transform: uppercase;
   color: var(--ink-muted);
 }
+.site .ap-cv__lede {
+  margin: 14px 0 0;
+  max-width: 40ch;
+  font: 500 clamp(20px, 2.2vw, 26px) / 1.3 var(--font-display, var(--font-body));
+  color: var(--ink);
+  text-wrap: balance;
+}
 .site .ap-cv__stats {
   list-style: none;
   margin: 24px 0 0;

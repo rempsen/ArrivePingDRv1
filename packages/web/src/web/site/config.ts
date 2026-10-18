@@ -137,6 +137,9 @@ export const customerView = {
       },
     },
   ],
+  /** The ethos, said once: the want is old (the oldest survey below is from 2014); the fix is new. */
+  whyLede:
+    "Customers have wanted this for 12 years. ArrivePing makes it easy, quick and inexpensive.",
   /** Sourced figures only: every number links to the original survey. */
   stats: [
     {
