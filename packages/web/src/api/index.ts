@@ -81,8 +81,8 @@ const ALLOW_ALL = CORS_ORIGINS.includes("*");
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // High-frequency or irrelevant writes that never change CRM-visible data.
-// `guide` (Ask ArrivePing) and `me/guide-events` (Guide analytics) are POSTs
-// that change nothing.
+// `guide`: Ask ArrivePing is a POST that changes nothing (Codex on #44);
+// `me/guide-events`: Guide analytics, likewise.
 const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections|guide|me\/guide-events)(\/|$)/;
 
 const app = new Hono<{ Variables: Variables }>()
