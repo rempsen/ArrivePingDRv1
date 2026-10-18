@@ -27,15 +27,18 @@ export function MonthLoad(p: { load: DayLoad | undefined; month: string; today: 
           {p.load.days.map((d) => {
             const inMonth = d.day.slice(0, 7) === p.month;
             // Capacity is the people working that day: days off come out of it.
-            const cap = Math.max(1, d.techs ?? techs) * 480;
-            const pctBooked = Math.round((d.bookedMins / cap) * 100);
+            // Nobody working (a holiday): no capacity, rather than a pretend technician.
+            const cap = (d.techs ?? techs) * 480;
+            const teamOff = cap === 0;
+            const pctBooked = teamOff ? (d.bookedMins > 0 ? 100 : 0) : Math.round((d.bookedMins / cap) * 100);
+            const status = teamOff ? (d.bookedMins > 0 ? "Team off · work booked" : "Team off") : d.jobs === 0 ? "Nothing booked" : `${pctBooked}% booked`;
             const isToday = d.day === p.today;
             return (
               <button
                 key={d.day}
                 type="button"
                 onClick={() => p.onOpenDay(d.day)}
-                aria-label={`${dayTitle(d.day, { weekday: "long", month: "long", day: "numeric" })}: ${d.jobs} jobs, ${pctBooked}% booked. Open the week.`}
+                aria-label={`${dayTitle(d.day, { weekday: "long", month: "long", day: "numeric" })}: ${d.jobs} jobs, ${status}. Open the week.`}
                 className={`flex min-h-[92px] flex-col gap-2 rounded-xl border p-2.5 text-left hover:brightness-125 ${inMonth ? "border-white/10 bg-ink-3/60" : "border-white/[0.05] bg-ink-2/60 opacity-60"}`}
               >
                 <span className="flex w-full items-center justify-between">
@@ -45,9 +48,9 @@ export function MonthLoad(p: { load: DayLoad | undefined; month: string; today: 
                   {d.jobs > 0 && <span className="text-[11px] text-slate-400">{d.jobs} jobs</span>}
                 </span>
                 <span className="h-1.5 w-full overflow-hidden rounded bg-white/10">
-                  <span className="block h-full" style={{ width: `${Math.min(100, pctBooked)}%`, background: LOAD_COLOR[loadLevel(d.bookedMins, cap)] }} />
+                  <span className="block h-full" style={{ width: `${Math.min(100, pctBooked)}%`, background: LOAD_COLOR[teamOff ? (d.bookedMins > 0 ? "over" : "ok") : loadLevel(d.bookedMins, cap)] }} />
                 </span>
-                <span className="text-[11px] text-slate-500">{d.jobs === 0 ? "Nothing booked" : `${pctBooked}% booked`}</span>
+                <span className="text-[11px] text-slate-500">{status}</span>
               </button>
             );
           })}

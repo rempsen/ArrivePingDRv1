@@ -36,8 +36,10 @@ export function WeekCapacity(p: {
             {days.map((d) => {
               const booked = p.techs.reduce((s, t) => s + bookedMinutes(techDayJobs(p.jobs, t.id, d, p.tz)), 0);
               const off = new Set(p.timeOff.filter((o) => o.day === d).map((o) => o.techId));
-              const cap = Math.max(1, p.techs.filter((t) => !off.has(t.id)).length) * 480;
-              const pctBooked = Math.round((booked / cap) * 100);
+              const cap = p.techs.filter((t) => !off.has(t.id)).length * 480;
+              // Nobody working that day: say so, rather than inventing a technician.
+              const teamOff = cap === 0;
+              const pctBooked = teamOff ? (booked > 0 ? 100 : 0) : Math.round((booked / cap) * 100);
               const isToday = d === p.today;
               return (
                 <div key={d} className={`relative border-l border-white/10 ${isToday ? "bg-brand/[0.08] shadow-[inset_0_2px_0_var(--color-brand)]" : ""}`}>
@@ -52,9 +54,9 @@ export function WeekCapacity(p: {
                     </span>
                     <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
                       <span className="h-1 flex-1 overflow-hidden rounded bg-white/10">
-                        <span className="block h-full" style={{ width: `${Math.min(100, pctBooked)}%`, background: LOAD_COLOR[loadLevel(booked, cap)] }} />
+                        <span className="block h-full" style={{ width: `${Math.min(100, pctBooked)}%`, background: LOAD_COLOR[teamOff ? (booked > 0 ? "over" : "ok") : loadLevel(booked, cap)] }} />
                       </span>
-                      {pctBooked}%
+                      {teamOff ? "Off" : `${pctBooked}%`}
                     </span>
                   </button>
                   <button
