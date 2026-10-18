@@ -1,0 +1,885 @@
+/* ==========================================================================
+   Opening third: shared device pieces, "What your customer sees",
+   "Three taps" (technician app) and the merged "Getting started" section.
+
+   Motion rules (same contract as live.css):
+   - Everything is visible at rest. Entrance animations use `both` fill and
+     end on the resting frame; they are one-shot, so they keep running even
+     when the section's data-play is "off" (prerendered HTML ships "off").
+   - Scroll-driven effects (animation-timeline: view()) are progressive
+     enhancement: only with support, only with prefers-reduced-motion:
+     no-preference, and never when the visitor's reduced flag is set.
+   ========================================================================== */
+
+.site [data-play] .enter,
+.site [data-play] .enter--stage,
+.site [data-play] .ap-once,
+.site [data-play] .ap-tech__phones {
+  animation-play-state: running !important;
+}
+@keyframes ap-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ap-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ap-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Phone frame ----------
+   Sized by its container: the wrapper is an inline-size container and the
+   phone fills --pw % of it (default 100). Screens are the app's real
+   1206 × 2622 screenshots at 680 px, so the screen radius is 12.5 % / 5.75 %. */
+.site .ap-phone {
+  --pw: 100;
+  position: relative;
+  padding: 9px;
+  padding: calc(var(--pw) * 0.034cqi);
+  border-radius: 42px;
+  border-radius: calc(var(--pw) * 0.15cqi);
+  background: linear-gradient(150deg, #3b4556 0%, #121722 20%, #0a0e15 72%, #2a3342 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 14%),
+    inset 0 0 0 4px #05070b,
+    0 2px 4px rgb(0 0 0 / 30%),
+    0 34px 70px -14px rgb(0 0 0 / 60%);
+}
+.site .ap-phone > img,
+.site .ap-phone > .ap-sms,
+.site .ap-phone__screen {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12.5% / 5.75%;
+}
+.site .ap-phone__screen {
+  position: relative;
+  overflow: hidden;
+}
+.site .ap-phone__screen > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.site .ap-phone--hero {
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 16%),
+    inset 0 0 0 4px #05070b,
+    0 0 0 1px rgb(56 189 248 / 18%),
+    0 40px 90px -18px rgb(0 0 0 / 75%),
+    0 0 120px rgb(14 165 233 / 16%);
+}
+/* Top of the phone only; the empty lower half of the screen fades away. */
+.site .ap-phone--crop {
+  aspect-ratio: 0.72;
+  overflow: hidden;
+  padding-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
+}
+
+/* ---------- iOS notification (glass) ---------- */
+.site .ap-notif {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 15px 13px 12px;
+  border-radius: 24px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(36 42 56 / 60%);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 24px 54px rgb(0 0 0 / 50%);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-body);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site .ap-notif {
+    background: rgb(30 36 48 / 94%);
+  }
+}
+.site .ap-notif__app {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #67f27a 0%, #22c043 100%);
+}
+.site .ap-notif__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.site .ap-notif__from {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.site .ap-notif__when {
+  font-size: 12.5px;
+  color: rgb(255 255 255 / 62%);
+}
+.site .ap-notif__body {
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.36;
+  color: rgb(255 255 255 / 92%);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- iOS Messages screen (HTML), sized in container units ---------- */
+.site .ap-sms {
+  aspect-ratio: 680 / 1478;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-body);
+}
+.site .ap-sms__status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 12cqi;
+  padding: 1.2cqi 7cqi 0 10cqi;
+  font-size: 3.9cqi;
+  font-weight: 600;
+}
+.site .ap-sms__island {
+  width: 27cqi;
+  height: 7.6cqi;
+  border-radius: 99px;
+  background: #0b0b0d;
+}
+.site .ap-sms__icons svg {
+  display: block;
+  width: 11cqi;
+  height: auto;
+}
+.site .ap-sms__head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.6cqi;
+  padding: 1cqi 0 3.4cqi;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+.site .ap-sms__back {
+  position: absolute;
+  left: 5.5cqi;
+  top: 4.4cqi;
+  line-height: 0;
+}
+.site .ap-sms__back svg {
+  width: 2.6cqi;
+  height: auto;
+}
+.site .ap-sms__avatar {
+  width: 13cqi;
+  height: 13cqi;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #a6acb8 0%, #7c8391 100%);
+}
+.site .ap-sms__avatar svg {
+  width: 7.4cqi;
+  height: auto;
+}
+.site .ap-sms__name {
+  padding: 0.8cqi 2.6cqi;
+  border-radius: 99px;
+  background: rgb(255 255 255 / 10%);
+  font-size: 3.1cqi;
+  font-weight: 500;
+}
+.site .ap-sms__thread {
+  display: flex;
+  flex-direction: column;
+  gap: 3cqi;
+  padding: 4.5cqi 4cqi;
+}
+.site .ap-sms__meta {
+  text-align: center;
+  font-size: 2.9cqi;
+  line-height: 1.35;
+  color: #8e8e93;
+}
+.site .ap-sms__bubble {
+  align-self: flex-start;
+  max-width: 80%;
+  padding: 2.4cqi 3.6cqi;
+  border-radius: 5cqi;
+  background: #262629;
+  font-size: 4cqi;
+  line-height: 1.3;
+  color: #fff;
+}
+.site .ap-sms__link {
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+  overflow-wrap: anywhere;
+}
+
+/* ==========================================================================
+   What your customer sees (light section)
+   ========================================================================== */
+.site .ap-cv {
+  --canvas: #f4f1eb;
+  --surface: #ffffff;
+  --ink: #0b1220;
+  --ink-secondary: #3d4859;
+  --ink-muted: #687386;
+  --line: rgb(11 18 32 / 11%);
+  --line-strong: rgb(11 18 32 / 20%);
+  --accent: #0284c7;
+  --focus: #0369a1;
+  position: relative;
+  overflow-x: clip;
+  padding-block: clamp(56px, 7vw, 96px) clamp(56px, 8vw, 104px);
+  background: var(--canvas);
+  color: var(--ink);
+}
+.site .ap-cv a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.site .ap-cv__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 20px clamp(32px, 5vw, 72px);
+  align-items: end;
+}
+.site .ap-cv__head .h-section {
+  font-size: clamp(32px, 3.7vw, 52px);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+.site .ap-cv__head .lede {
+  margin-top: 0;
+  color: var(--ink-secondary);
+}
+.site .ap-cv__privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 70%);
+  border: 1px solid var(--line);
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.site .ap-cv__privacy svg {
+  flex: none;
+  margin-top: 1px;
+  color: #047857;
+}
+
+.site .ap-cv__steps {
+  list-style: none;
+  margin: clamp(44px, 6vw, 72px) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(20px, 3vw, 44px);
+}
+.site .ap-cv__step {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.site .ap-cv__device {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 320px;
+  margin-inline: auto;
+}
+.site .ap-cv__device .ap-phone {
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 14%),
+    inset 0 0 0 4px #05070b,
+    0 2px 6px rgb(11 18 32 / 18%),
+    0 34px 60px -24px rgb(11 18 32 / 45%);
+}
+.site .ap-cv__text {
+  max-width: 340px;
+  margin-inline: auto;
+  width: 100%;
+}
+.site .ap-cv__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0369a1;
+}
+.site .ap-cv__n {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: inline-grid;
+  place-items: center;
+  font: 700 12px/1 var(--font-heading);
+  letter-spacing: 0;
+}
+.site .ap-cv__text h3 {
+  margin-top: 10px;
+  font-size: 21px;
+  line-height: 1.25;
+  font-weight: 650;
+}
+.site .ap-cv__text p {
+  margin-top: 6px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}
+.site .ap-cv__cap {
+  margin-top: 28px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.site .ap-cv__why {
+  margin-top: clamp(56px, 7vw, 96px);
+  padding-top: 28px;
+  border-top: 1px solid var(--line-strong);
+}
+.site .ap-cv__whyhead {
+  font: 600 13px/1.2 var(--font-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.site .ap-cv__stats {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px clamp(24px, 4vw, 56px);
+}
+.site .ap-cv__stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.site .ap-cv__val {
+  font: 800 clamp(64px, 8vw, 116px)/0.86 var(--font-heading);
+  letter-spacing: -0.055em;
+  color: var(--ink);
+}
+.site .ap-cv__lbl {
+  max-width: 30ch;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--ink);
+}
+.site .ap-cv__src {
+  align-self: flex-start;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  text-decoration: underline;
+  text-decoration-color: rgb(11 18 32 / 25%);
+  text-underline-offset: 3px;
+}
+.site .ap-cv__src:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+@media (max-width: 900px) {
+  .site .ap-cv__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Phones become a swipeable row; the next one peeks in from the edge. */
+  .site .ap-cv__steps {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: min(76%, 300px);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--pad);
+    margin-inline: calc(var(--pad) * -1);
+    padding: 4px var(--pad) 12px;
+    scrollbar-width: none;
+  }
+  .site .ap-cv__steps::-webkit-scrollbar {
+    display: none;
+  }
+  .site .ap-cv__step {
+    scroll-snap-align: start;
+  }
+  .site .ap-cv__device,
+  .site .ap-cv__text {
+    max-width: none;
+  }
+  .site .ap-cv__cap {
+    text-align: left;
+  }
+  .site .ap-cv__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .ap-cv__stats li {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: 4px 18px;
+    align-items: center;
+  }
+  .site .ap-cv__val {
+    grid-row: span 2;
+    font-size: clamp(56px, 17vw, 76px);
+  }
+}
+
+/* ==========================================================================
+   Three taps (technician app)
+   ========================================================================== */
+.site .ap-tech__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 500px);
+  gap: clamp(36px, 6vw, 88px);
+  align-items: center;
+}
+.site .ap-taps {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.site .ap-tap {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 26px 164px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 18px;
+  row-gap: 3px;
+  align-items: center;
+  padding: 14px 18px 14px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color 200ms var(--ease-out),
+    background-color 200ms var(--ease-out);
+}
+.site .ap-tap:hover {
+  border-color: var(--line-strong);
+}
+.site .ap-tap[aria-pressed="true"] {
+  border-color: rgb(56 189 248 / 50%);
+  background: #0c1828;
+}
+.site .ap-tap:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.site .ap-tap__n {
+  grid-row: 1 / span 2;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  display: grid;
+  place-items: center;
+  font: 700 12px/1 var(--font-heading);
+  color: var(--ink-secondary);
+}
+.site .ap-tap[aria-pressed="true"] .ap-tap__n {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.site .ap-tap__btn {
+  grid-row: 1 / span 2;
+  line-height: 0;
+}
+.site .ap-tap__btn img {
+  display: block;
+  width: 100%;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 13px;
+}
+.site .ap-tap__t {
+  align-self: end;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .ap-tap__b {
+  align-self: start;
+  grid-column: 3;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.site .ap-tap__timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: ap-timer 3.8s linear both;
+}
+@keyframes ap-timer {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.site .ap-facts {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 28px;
+}
+.site .ap-facts li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.site .ap-facts svg {
+  color: var(--p-cyan-300);
+  margin-top: 1px;
+}
+.site .ap-facts strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .ap-facts strong + span {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+.site .ap-tech__stage {
+  margin: 0;
+}
+.site .ap-tech__phones {
+  position: relative;
+  container-type: inline-size;
+  aspect-ratio: 0.8;
+}
+.site .ap-tech__phone {
+  --pw: 60;
+  position: absolute;
+  top: 0;
+  width: 60%;
+  transition:
+    transform 640ms var(--ease-out),
+    filter 640ms var(--ease-out);
+}
+.site .ap-tech__phone--0 {
+  left: 0;
+}
+.site .ap-tech__phone--1 {
+  right: 0;
+}
+.site .ap-tech__phones[data-front="0"] .ap-tech__phone--0,
+.site .ap-tech__phones[data-front="1"] .ap-tech__phone--1 {
+  z-index: 2;
+}
+.site .ap-tech__phones[data-front="0"] .ap-tech__phone--1 {
+  transform: translate(2%, 9%) scale(0.88);
+  filter: brightness(0.5) saturate(0.7);
+}
+.site .ap-tech__phones[data-front="1"] .ap-tech__phone--0 {
+  transform: translate(-2%, 9%) scale(0.88);
+  filter: brightness(0.5) saturate(0.7);
+}
+.site .ap-tech__spot {
+  position: absolute;
+  left: calc(var(--x) - var(--w) / 2);
+  top: calc(var(--y) - var(--h) / 2);
+  width: var(--w);
+  height: var(--h);
+  border-radius: 12px;
+  border-radius: 3.6cqi;
+  border: 2px solid #7dd3fc;
+  box-shadow:
+    0 0 0 4px rgb(56 189 248 / 22%),
+    0 0 26px rgb(56 189 248 / 55%);
+  pointer-events: none;
+  animation: ap-spot 1.8s var(--ease-out) infinite;
+}
+@keyframes ap-spot {
+  0% {
+    opacity: 0;
+    transform: scale(1.14);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.35;
+  }
+}
+.site .ap-tech__cap {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+@media (max-width: 980px) {
+  /* Heading, then the phones, then the taps: the copy column dissolves into the grid. */
+  .site .ap-tech__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .site .ap-tech__copy {
+    display: contents;
+  }
+  .site .ap-tech__head {
+    order: 1;
+  }
+  .site .ap-tech__stage {
+    order: 2;
+    width: min(100%, 420px);
+    margin-inline: auto;
+  }
+  .site .ap-taps {
+    order: 3;
+    margin-top: 0;
+  }
+  .site .ap-facts {
+    order: 4;
+    margin-top: 0;
+  }
+}
+@media (max-width: 560px) {
+  .site .ap-tap {
+    grid-template-columns: 26px 118px minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 10px;
+    padding: 14px;
+  }
+  .site .ap-tap__n,
+  .site .ap-tap__btn {
+    grid-row: 1;
+  }
+  .site .ap-tap__btn img {
+    height: 40px;
+    border-radius: 11px;
+  }
+  .site .ap-tap__t {
+    grid-row: 1;
+    align-self: center;
+    font-size: 15px;
+    line-height: 1.3;
+  }
+  .site .ap-tap__b {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+  .site .ap-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ==========================================================================
+   Getting started (merged): dial → agent demo → trial and price → your tools
+   ========================================================================== */
+.site .lv-fh-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px 40px;
+  align-items: end;
+}
+.site .lv-fh-head .lede {
+  margin: 0;
+}
+.site .lv-fh-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.site .lv-fh-demo {
+  margin-top: clamp(48px, 6vw, 80px);
+  padding-top: clamp(32px, 4vw, 44px);
+  border-top: 1px solid var(--line);
+}
+.site .lv-fh-demo__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 32px;
+}
+.site .lv-fh-demo__head h3 {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.site .lv-fh-demo__head p {
+  max-width: 520px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.site .lv-sa-embed .lv-sa {
+  margin-top: 20px;
+}
+.site .lv-fh-cta {
+  margin-top: clamp(40px, 5vw, 56px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 32px;
+  padding: 26px 28px;
+  border-radius: 16px;
+  border: 1px solid rgb(56 189 248 / 32%);
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgb(14 165 233 / 15%) 0%, transparent 55%),
+    var(--surface);
+}
+.site .lv-fh-cta__price {
+  font: 700 clamp(22px, 2.4vw, 30px)/1.2 var(--font-heading);
+  letter-spacing: -0.025em;
+  color: #fff;
+}
+.site .lv-fh-cta__detail {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--ink-secondary);
+}
+.site .lv-fh-cta .btn {
+  min-height: 48px;
+  padding-inline: 22px;
+  font-size: 16px;
+}
+@media (max-width: 1000px) {
+  .site .lv-fh-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .site .lv-fh-cta {
+    padding: 22px 20px;
+  }
+  .site .lv-fh-cta .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* ==========================================================================
+   Scroll-driven enhancement (no JS; static where unsupported)
+   ========================================================================== */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .site:not([data-reduced="true"]) .ap-cv__device {
+      animation: ap-sd-lift linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 38%;
+    }
+    .site:not([data-reduced="true"]) .ap-cv__step:nth-child(2) .ap-cv__device {
+      animation-range: entry 15% cover 44%;
+    }
+    .site:not([data-reduced="true"]) .ap-cv__step:nth-child(3) .ap-cv__device {
+      animation-range: entry 25% cover 50%;
+    }
+    .site:not([data-reduced="true"]) .ap-cv__stats li {
+      animation: ap-sd-in linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 30%;
+    }
+    .site:not([data-reduced="true"]) .ap-tech__phones {
+      animation: ap-sd-tilt linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 45%;
+    }
+  }
+}
+@keyframes ap-sd-lift {
+  from {
+    transform: translateY(80px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ap-sd-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ap-sd-tilt {
+  from {
+    transform: perspective(1400px) rotateX(12deg) translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

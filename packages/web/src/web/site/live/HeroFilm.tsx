@@ -1,44 +1,44 @@
 import { useEffect, useRef, useState, type JSX } from "react";
-import { hero, heroFeed } from "../config";
+import { hero } from "../config";
 import { useAnchorNav } from "../components/SiteHeader";
 import { usePlayback } from "../motion/playback";
 import { PauseButton, useLivePlay } from "./shared";
 
 /**
- * C · Cinematic hero. A seamless film loop of a technician arriving at a home,
- * with a live activity feed that builds the five steps of one job:
- * fleet visibility → work order → auto-assignment → technician app → customer ETA.
+ * Hero. A film loop of a technician arriving at a home sits behind the copy;
+ * in front, the same moment on real ArrivePing screens: Jordan's technician
+ * app on the way, and on Dana's phone the on-the-way text and her live ETA.
+ *
+ * The copy answers the four buyer objections (hardware, setup time, training,
+ * price) and states the trial terms before the buttons.
  */
 
-const icons: Record<(typeof heroFeed)[number]["icon"], JSX.Element> = {
-  live: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <circle cx="9" cy="9" r="3" fill="#10b981" />
-      <circle cx="9" cy="9" r="7" stroke="#10b981" strokeWidth="1.5" opacity="0.6" />
-    </svg>
-  ),
-  order: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <rect x="3" y="2" width="12" height="14" rx="2" stroke="#7dd3fc" strokeWidth="1.5" />
-      <path d="M6 6.5h6M6 9.5h6M6 12.5h3" stroke="#7dd3fc" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  ),
-  assign: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <circle cx="9" cy="9" r="6.5" stroke="#7dd3fc" strokeWidth="1.5" />
-      <circle cx="9" cy="9" r="2.5" fill="#7dd3fc" />
-      <path d="M9 .5v3M9 14.5v3M.5 9h3M14.5 9h3" stroke="#7dd3fc" strokeWidth="1.5" />
-    </svg>
-  ),
+type AssuranceIcon = (typeof hero.assurances)[number]["icon"];
+
+const stroke = { stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round", fill: "none" } as const;
+
+const assuranceIcons: Record<AssuranceIcon, JSX.Element> = {
   phone: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <rect x="5" y="1.5" width="8" height="15" rx="2" stroke="#7dd3fc" strokeWidth="1.5" />
-      <path d="M7.5 13.5h3" stroke="#7dd3fc" strokeWidth="1.5" strokeLinecap="round" />
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <rect x="6" y="2" width="10" height="18" rx="2.5" {...stroke} />
+      <path d="M9.5 16.8h3" {...stroke} />
     </svg>
   ),
-  customer: (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h9A2.5 2.5 0 0 1 16 4.5v6a2.5 2.5 0 0 1-2.5 2.5H8l-4 3v-3H4.5A2.5 2.5 0 0 1 2 10.5z" stroke="#6ee7b7" strokeWidth="1.5" strokeLinejoin="round" />
+  clock: (
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <circle cx="11" cy="11" r="8.5" {...stroke} />
+      <path d="M11 6.5V11l3 2" {...stroke} />
+    </svg>
+  ),
+  tap: (
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <path d="M9 10.5V4.8a1.6 1.6 0 1 1 3.2 0v5.2l3.7.9a2 2 0 0 1 1.5 2.3l-.8 4.3a2 2 0 0 1-2 1.6H11a2 2 0 0 1-1.6-.8L6 14.3a1.5 1.5 0 0 1 2.1-2.1L9 13" {...stroke} />
+    </svg>
+  ),
+  tag: (
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <path d="M3 4.5V10l8.6 8.6a1.6 1.6 0 0 0 2.3 0l4.7-4.7a1.6 1.6 0 0 0 0-2.3L10 3H4.5A1.5 1.5 0 0 0 3 4.5z" {...stroke} />
+      <circle cx="7.2" cy="7.2" r="1.3" fill="currentColor" />
     </svg>
   ),
 };
@@ -49,6 +49,7 @@ export function HeroFilm() {
   const { reduced } = usePlayback();
   const video = useRef<HTMLVideoElement>(null);
   const [src, setSrc] = useState<string | null>(null);
+  const d = hero.device;
 
   // Pick the cut after mount (small screens get the 960 px file).
   useEffect(() => {
@@ -91,35 +92,85 @@ export function HeroFilm() {
           <h1 id="hero-title" className="lv-hero__title enter enter--2">
             {hero.title}
           </h1>
-          <p className="lv-hero__lede enter enter--3">{hero.body}</p>
-          <div className="lv-hero__ctas enter enter--3">
-            <a href={hero.primary.href} className="btn btn--primary beam" onClick={(e) => go(e, hero.primary.href)}>
-              {hero.primary.label}
-            </a>
-            <a href={hero.secondary.href} className="btn btn--secondary" onClick={(e) => go(e, hero.secondary.href)}>
-              {hero.secondary.label}
-            </a>
-          </div>
-          <p className="lv-hero__fine enter enter--3">{hero.fine}</p>
-        </div>
-
-        <div>
-          <p className="lv-feed__label" id="hero-feed-label">
-            {hero.feedLabel}
+          <p className="lv-hero__promise enter enter--3">
+            {hero.promise.map((p) => (
+              <span key={p.who}>
+                <strong>{p.who}</strong> {p.rest}
+              </span>
+            ))}
           </p>
-          <ol className="lv-feed" aria-labelledby="hero-feed-label">
-            {heroFeed.map((n, i) => (
-              <li key={n.title} className={`lv-note lv-n${i + 1}${n.done ? " lv-note--done" : ""}`}>
-                <span className={`lv-note__ico${n.icon === "live" || n.icon === "customer" ? " lv-note__ico--green" : ""}`}>{icons[n.icon]}</span>
+
+          <ul className="lv-assure enter enter--3">
+            {hero.assurances.map((a) => (
+              <li key={a.label}>
+                <span className="lv-assure__ico">{assuranceIcons[a.icon]}</span>
                 <span>
-                  <span className="lv-note__t">{n.title}</span>
-                  <span className="lv-note__b">{n.body}</span>
+                  <strong>{a.label}</strong>
+                  <span>{a.sub}</span>
                 </span>
-                {n.eta ? <span className="lv-note__eta">{n.eta}</span> : <span className="lv-note__when">{n.when}</span>}
               </li>
             ))}
-          </ol>
+          </ul>
+
+          <div className="lv-hero__act enter enter--3">
+            <p className="lv-hero__risk">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="7.25" fill="rgb(16 185 129 / 18%)" stroke="#34d399" strokeWidth="1.5" />
+                <path d="M5 8.2l2 1.9 4-4.1" fill="none" stroke="#34d399" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {hero.risk}
+            </p>
+            <div className="lv-hero__ctas">
+              <a href={hero.primary.href} className="btn btn--primary beam" onClick={(e) => go(e, hero.primary.href)}>
+                {hero.primary.label}
+              </a>
+              <a href={hero.secondary.href} className="btn btn--secondary" onClick={(e) => go(e, hero.secondary.href)}>
+                {hero.secondary.label}
+                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                  <path d="M7 2.5v9M3 7.5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </a>
+            </div>
+          </div>
         </div>
+
+        <figure className="lv-stage" aria-labelledby="hero-stage-cap">
+          <div className="lv-stage__tech ap-once">
+            <span className="lv-stage__who">
+              <span className="lv-stage__dot" aria-hidden="true" />
+              {d.techLabel}
+            </span>
+            <div className="ap-phone ap-phone--hero">
+              <img src={d.tech.src} width={d.tech.width} height={d.tech.height} alt={d.tech.alt} decoding="async" fetchPriority="high" />
+            </div>
+          </div>
+
+          <div className="lv-stage__cust">
+            <span className="lv-stage__who lv-stage__who--cust ap-once">
+              <span className="lv-stage__dot" aria-hidden="true" />
+              {d.custLabel}
+            </span>
+            <div className="ap-notif lv-stage__notif ap-once">
+              <span className="ap-notif__app" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 22 22">
+                  <path d="M11 3.5c4.7 0 8.3 2.9 8.3 6.6s-3.6 6.6-8.3 6.6c-.9 0-1.8-.1-2.6-.3L4.6 18.3l1.1-3.4c-1.8-1.2-3-3-3-4.8 0-3.7 3.6-6.6 8.3-6.6z" fill="#fff" />
+                </svg>
+              </span>
+              <div>
+                <div className="ap-notif__row">
+                  <strong className="ap-notif__from">{d.sms.from}</strong>
+                  <span className="ap-notif__when">now</span>
+                </div>
+                <p className="ap-notif__body">{d.sms.body}</p>
+              </div>
+            </div>
+            <img className="lv-stage__eta ap-once" src={d.eta.src} width={d.eta.width} height={d.eta.height} alt={d.eta.alt} decoding="async" />
+          </div>
+
+          <figcaption id="hero-stage-cap" className="lv-stage__cap">
+            {d.caption}
+          </figcaption>
+        </figure>
       </div>
 
       <PauseButton className="lv-hero__pause" />

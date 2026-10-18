@@ -94,56 +94,173 @@ export const footageLabel = "ArrivePing app"; // screen-reader text; the visible
 export const hero = {
   eyebrow: "AI-powered field service software and client communications",
   title: "The right tech, at the door, right when you said.",
-  body:
-    "ArrivePing shows your whole team live, sends each job to the closest qualified technician, and keeps your customer updated with a live ETA. No more calls asking where the technician is.",
+  /** Both audiences, equal weight: the team and the homeowner. */
+  promise: [
+    { who: "Your team", rest: "always knows the next job." },
+    { who: "Your customers", rest: "always know when you'll arrive, with a text and a live map instead of a phone call." },
+  ],
+  /** The four objections a buyer has before clicking, answered before the button. */
+  assurances: [
+    { icon: "phone", label: "No GPS hardware", sub: "Runs on the phones your team carries" },
+    { icon: "clock", label: "Live in under an hour", sub: "An AI agent does the setup" },
+    { icon: "tap", label: "Three taps for technicians", sub: "Accept, Start Driving, I've Arrived" },
+    { icon: "tag", label: "From US$49 a month", sub: "1 dispatcher + 2 drivers" },
+  ],
+  risk: "Free for 30 days with as many users as you like. Nothing is charged until day 30, and you can cancel any time.",
   primary: { label: "Sign up free", href: brand.urls.signUp },
-  secondary: { label: "See how it works", href: brand.urls.how },
-  fine: "30 days free, as many users as you like · No charge until day 30 · Cancel any time",
-  feedLabel: "One job, start to finish",
+  secondary: { label: "See what your customer sees", href: "/#customer-view" },
   film: {
     large: "/media/site-hero-film-1600.mp4",
     small: "/media/site-hero-film-960.mp4",
     poster: "/media/site-hero-film-poster.jpg",
     posterWebp: "/media/site-hero-film-poster.webp",
   },
-  summary:
-    "Illustrative appointment status shared between the business, the technician and the customer.",
+  /** Real ArrivePing screens (sample company, people and job). */
+  device: {
+    tech: {
+      src: "/img/site/app/tech-enroute.webp",
+      width: 680,
+      height: 1478,
+      alt: "The ArrivePing technician app on an iPhone: Jordan is on the way to Dana Reyes at 214 Waverley St, 3 minutes away, with Navigate, Text ETA and I've Arrived buttons.",
+    },
+    eta: {
+      src: "/img/site/app/crop-eta.webp",
+      width: 560,
+      height: 128,
+      alt: "Dana's tracking page: 3 min estimated arrival, 0.9 km away, live.",
+    },
+    techLabel: "Jordan, your technician",
+    custLabel: "Dana, your customer",
+    sms: {
+      from: "+1 (204) 555-0142",
+      /** ArrivePing's default on-the-way text to the customer (services/dispatch.ts defaultMessage, "enroute"). */
+      body: "Prairie Comfort HVAC: Your technician Jordan Park is on the way! ETA ~3 min. Track live, see ETA & message them: https://arriveping.com/t/7k2q9x",
+    },
+    caption: "Real ArrivePing screens and default text · sample company and people",
+  },
 };
 
-/** C · hero activity feed — one illustrative job (sample company and people). */
-export type HeroFeedItem = {
-  icon: "live" | "order" | "assign" | "phone" | "customer";
-  title: string;
-  body: string;
-  when?: string;
-  eta?: string;
-  done?: boolean;
+/** What the homeowner gets: a full-width module, deliberately unlike the dark sections around it. */
+export const customerView = {
+  eyebrow: "For your customers",
+  title: "What your customer sees.",
+  titleMuted: "No app, no account, no phone tag.",
+  body:
+    "The moment your technician taps Start Driving, your customer gets a text with a link to a live page: who's coming, an ETA that updates as they drive, and one-tap text or call.",
+  privacy:
+    "Location appears only after the technician starts driving to that job, and disappears the moment they arrive.",
+  steps: [
+    {
+      kicker: "The text",
+      title: "Sent the moment they set off",
+      body: "Your company name, the technician's name, the ETA and a live link. Nothing to install.",
+      screen: { kind: "sms" as const },
+    },
+    {
+      kicker: "The live page",
+      title: "An ETA, not a four-hour window",
+      body: "Opens in any phone browser and updates as the technician drives.",
+      screen: {
+        kind: "img" as const,
+        src: "/img/site/app/cust-track.webp",
+        width: 680,
+        height: 1478,
+        alt: "The customer's live tracking page in a phone browser: 3 min estimated arrival, 0.9 km away, destination 214 Waverley St, and a job timeline showing the request received, the technician assigned and the technician on the way.",
+      },
+    },
+    {
+      kicker: "The technician",
+      title: "Call or text, without the office",
+      body: "Messages stay on the job, so the office can see what was said.",
+      screen: {
+        kind: "img" as const,
+        src: "/img/site/app/cust-contact.webp",
+        width: 680,
+        height: 1478,
+        alt: "The customer's page showing technician Jordan Park, rated 4.9, with Call and Text buttons, and a message thread: Jordan is about 3 minutes out and bringing a new igniter; the customer replies that the side door is open.",
+      },
+    },
+  ],
+  /** Sourced figures only: every number links to the original survey. */
+  stats: [
+    {
+      value: "89%",
+      label: "of consumers want to see their technician coming, with a live arrival time",
+      source: "CSG survey of 400 U.S. consumers, 2014",
+      href: "https://ir.csgi.com/press-releases/press-release-details/2014/CSG-Releases-Survey-Results-on-In-Home-Customer-Service/default.aspx",
+    },
+    {
+      value: "74%",
+      label: "check a text within five minutes of getting it",
+      source: "SimpleTexting survey of 1,000 U.S. consumers, 2026",
+      href: "https://simpletexting.com/blog/texting-and-sms-marketing-statistics/",
+    },
+    {
+      value: "70%",
+      label: "would recommend a company just because the appointment was on time",
+      source: "IBOPE Zogby for TOA Technologies, 1,026 U.S. adults, 2011",
+      href: "https://www.fieldtechnologiesonline.com/doc/toa-technologies-cost-of-waiting-survey-0001",
+    },
+  ],
+  caption: "The text is ArrivePing's default on-the-way wording; the setup agent can rewrite it in your voice. Both pages are real ArrivePing screens with a sample company, people and job.",
 };
-export const heroFeed: readonly HeroFeedItem[] = [
-  { icon: "live", title: "Everyone on the map", body: "Technicians, drivers and equipment, live", when: "9:08" },
-  { icon: "order", title: "Work order created", body: "No heat · furnace · needs a gas fitter", when: "9:10" },
-  { icon: "assign", title: "Auto-assigned to Marcus", body: "Closest qualified tech who's free · 0.9 km", when: "9:10" },
-  { icon: "phone", title: "Marcus accepted", body: "Address, gate code and notes on his phone", when: "9:11" },
-  { icon: "customer", title: "Dana is tracking Marcus", body: "Live ETA, with text or call in one tap", eta: "3 min", done: true },
-];
 
-/** B · live ops bento — the five capabilities at a glance. */
-export const bento = {
-  eyebrow: "One app, every step",
-  title: "Everything your team needs.",
-  titleMuted: "Live, in one place.",
-  body: "The office, the technician and the customer all work from the same job, so everyone sees the same thing at the same time.",
+/** The technician side: minimal training, shown with the app's real buttons. */
+export const techApp = {
+  eyebrow: "For your technicians",
+  title: "Three taps.",
+  titleMuted: "That's the training.",
+  body:
+    "The job lands on the phone your technician already carries, with the address, notes, time and price. There's nothing to install in the van.",
+  taps: [
+    {
+      button: { src: "/img/site/app/btn-accept.webp", width: 363, height: 96, alt: "Accept" },
+      screen: 0,
+      spot: { x: 28.4, y: 53.7, w: 39.7, h: 4.7 },
+      title: "Accept the job",
+      body: "New work orders arrive as offers. One tap to take it, one to pass.",
+    },
+    {
+      button: { src: "/img/site/app/btn-start-driving.webp", width: 345, height: 96, alt: "Start Driving" },
+      screen: 1,
+      spot: { x: 18.2, y: 17, w: 28.5, h: 3 },
+      title: "Start Driving",
+      body: "Your customer gets their text and live link, and the office sees the technician en route.",
+    },
+    {
+      button: { src: "/img/site/app/btn-arrived.webp", width: 668, height: 96, alt: "I've Arrived" },
+      screen: 1,
+      spot: { x: 49.9, y: 83, w: 91.6, h: 5.8 },
+      title: "I've Arrived",
+      body: "Usually automatic: a geofence checks the technician in at the address and starts the on-site clock. The button is the backup.",
+    },
+  ],
+  facts: [
+    { title: "No GPS devices", body: "Location comes from the technician app, so there's no tracker to buy or wire in." },
+    { title: "Off the clock means off", body: "Technicians share their location only while they're on the clock." },
+  ],
+  screens: [
+    {
+      src: "/img/site/app/tech-offer.webp",
+      width: 680,
+      height: 1478,
+      alt: "The technician app's job list: a new offer for Dana Reyes at 214 Waverley St, tonight at 9:15 PM, $189, with Accept and Decline buttons.",
+    },
+    {
+      src: "/img/site/app/tech-enroute.webp",
+      width: 680,
+      height: 1478,
+      alt: "The technician app on the way to the job: Navigate, sharing live location with the customer, 3 minutes away, and the I've Arrived button.",
+    },
+  ],
+  caption: "Real ArrivePing technician app · sample company and people",
 };
 
 /** Getting started (option 1): the setup agent builds a workspace from a website. Sample result. */
+/** The setup agent demo, embedded in "Getting started" (firstHour). */
 export const setupAgent = {
-  eyebrow: "Getting started",
-  title: "Live in under an hour.",
-  titleMuted: "Our setup agent does the heavy lifting.",
-  body: "Give it your website. The agent reads it, then builds your workspace: your brand, services, priced catalog, job templates, intake forms and customer texts. Most teams dispatch their first job within the hour.",
   defaultSite: "prairiecomforthvac.com",
   run: "Run setup agent",
-  cta: { label: "Start your setup", href: brand.urls.getStarted },
   note: "Sample result for an HVAC company. Your workspace is built from your own website.",
   steps: [
     { text: (site: string) => `Reading ${site} · home, services and about pages`, t: "0:06" },
@@ -157,19 +274,30 @@ export const setupAgent = {
   done: { text: "Workspace ready. Next: a short setup chat and team invites.", t: "1:52" },
 };
 
-/** Getting started (option 2): the first-hour clock and "keep your tools". Times are typical, not guaranteed. */
+/** Getting started: one section. The first-hour dial leads; the setup agent run is the proof. Times are typical, not guaranteed. */
 export const firstHour = {
-  title: "Your first hour with ArrivePing.",
-  titleMuted: "An AI agent does most of it.",
-  body: "No consultants, no weeks of setup. Our setup agent builds your workspace from your website, asks a few questions about how you work, and has you dispatching jobs before the hour is up.",
+  eyebrow: "Getting started",
+  title: "Live in under an hour.",
+  titleMuted: "An AI agent does the setup.",
+  body: "No consultants, no hardware to install, no weeks of setup. Give the agent your website, answer a few questions about how you work, and dispatch your first job before the hour is up.",
   milestones: [
     { at: "0 min", title: "Paste your website", body: "That's the only form you fill in." },
     { at: "2 min", title: "Workspace built for you", body: "Brand, services, priced catalog, job templates, intake forms and customer texts." },
     { at: "15 min", title: "Short setup chat", body: "The agent asks 5–10 questions about your crews, jobs and pricing, then tunes everything." },
-    { at: "25 min", title: "Team invited", body: "Technicians and dispatchers get a text and email to join." },
+    { at: "25 min", title: "Team invited", body: "Technicians get a text and email to join, then use the ArrivePing app on the phone they already carry. No devices to buy." },
     { at: "40 min", title: "Bring your data", body: "Import customers and technicians straight from a spreadsheet." },
     { at: "Under 60", title: "First job dispatched", body: "Your customer gets a text and a live ETA." },
   ],
+  demo: {
+    title: "Watch the agent build a workspace",
+    body: "Type any website and run it. This is a labelled sample; your workspace is built from your own site.",
+  },
+  cta: {
+    label: "Start your 30-day free trial",
+    href: brand.urls.signUp,
+    price: "30 days free, then from US$49 a month",
+    detail: "1 dispatcher + 2 drivers · each added driver is US$30 a month, less from driver 30",
+  },
   tools: {
     title: "Keep the tools you already use",
     body: "ArrivePing runs scheduling, work order assignment, tracking and customer updates. It doesn't ask you to replace your accounting, payroll or CRM.",
@@ -196,27 +324,6 @@ export const dispatchStory = {
     { title: "Keep the customer in the loop", body: "A text, then a live tracking page with the ETA and one-tap text or call. No phone tag.", at: 68 },
   ],
 } as const;
-
-export const benefits = [
-  {
-    title: "Customers know what's happening",
-    body: "A text or email link opens a live arrival page — no app, no account. The arrival window and technician status stay current.",
-    icon: "customer",
-    stat: "1 in 3 customers comment on live tracking & ETA",
-  },
-  {
-    title: "Dispatchers see every arrival",
-    body: "One board shows who is assigned, who is travelling and who has arrived, so the day can be adjusted before it slips.",
-    icon: "board",
-    stat: "20% average reduction in field labour costs",
-  },
-  {
-    title: "Technicians stay coordinated",
-    body: "The mobile app shares status as the technician heads out and arrives, without extra phone calls back to the office.",
-    icon: "technician",
-    stat: "48% of rework is caused by miscommunication",
-  },
-] as const;
 
 export const chapters = [
   {
