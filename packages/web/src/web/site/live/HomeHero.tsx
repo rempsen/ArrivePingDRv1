@@ -50,7 +50,7 @@ export function HomeHero() {
   const ph = hero.photo;
 
   return (
-    <section className="lv lv-hero" ref={ref} data-play={play} aria-labelledby="hero-title">
+    <section className="lv lv-hero lv-hero--home" ref={ref} data-play={play} aria-labelledby="hero-title">
       <div className="lv-hero__film lv-hero__film--photo" aria-hidden="true">
         <div className="lv-hero__kb">
           <picture>

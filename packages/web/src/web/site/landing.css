@@ -284,3 +284,63 @@
   line-height: 1.5;
   color: var(--ink-muted);
 }
+
+/* Phones: a two-column table needed sideways scrolling, and the competitor's
+   column started off screen, so "Side by side" showed one side. Each row
+   becomes a card: the feature, then each product's answer under its name. */
+@media (max-width: 640px) {
+  .site .lp-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: none;
+  }
+  .site .lp-table {
+    min-width: 0;
+    display: block;
+  }
+  .site .lp-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .site .lp-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .site .lp-table tr {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .site .lp-table tbody th {
+    display: block;
+    width: auto;
+    padding: 14px 16px 10px;
+    border-bottom: 0;
+    font-size: 15.5px;
+  }
+  .site .lp-table td {
+    display: block;
+    padding: 10px 16px 14px;
+    border-bottom: 0;
+    border-top: 1px solid var(--line);
+  }
+  .site .lp-table td[data-col]::before {
+    content: attr(data-col);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  .site .lp-table__ours[data-col]::before {
+    color: var(--accent);
+  }
+}

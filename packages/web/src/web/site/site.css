@@ -2840,3 +2840,115 @@
     padding: 22px;
   }
 }
+
+/* ==========================================================================
+   Phones
+   Touch targets: Apple's minimum is 44 x 44 pt, and the header button and
+   menu, the price chips, the driver stepper, breadcrumbs and footer links
+   were 19-36 px tall. Type: one lede size. Pricing: the assurances read as a
+   checklist instead of floating pills, and the three plans sit side by side
+   in a swipeable row (the next plan peeks in) instead of three full screens.
+   ========================================================================== */
+@media (max-width: 760px) {
+  .site .btn--sm {
+    min-height: 44px;
+  }
+  .site .header__menu {
+    min-width: 44px;
+  }
+  .site .estimator__chip {
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 14px;
+  }
+  .site .estimator__stepper button {
+    width: 44px;
+    height: 44px;
+  }
+  .site .footer__bottom-links a,
+  .site .footer__link-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .site .footer__bottom {
+    row-gap: 4px;
+  }
+  .site .lp-crumbs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -12px;
+  }
+  .site .help-article__all {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+@media (max-width: 560px) {
+  .site .lede {
+    font-size: 16px;
+  }
+  .site .pricing__assure {
+    display: grid;
+    gap: 12px;
+    max-width: 440px;
+    padding: 18px 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .site .pricing__assure li {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    gap: 10px;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .site .pricing__assure svg {
+    flex: none;
+  }
+  .site .tiers {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 84%;
+    gap: 12px;
+    max-width: none;
+    margin: 28px calc(-1 * var(--pad)) 0;
+    padding: 4px var(--pad) 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--pad);
+    scrollbar-width: none;
+  }
+  .site .tiers::-webkit-scrollbar {
+    display: none;
+  }
+  .site .tier {
+    padding: 22px;
+    scroll-snap-align: start;
+  }
+  /* A first-time visitor's cookie notice covered the second hero button;
+     tighter, it leaves the headline and both buttons in view. */
+  .site .consent {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    padding: 14px 16px 12px;
+  }
+  .site .consent__title {
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+  .site .consent__text {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .site .consent__actions {
+    margin-top: 10px;
+  }
+}

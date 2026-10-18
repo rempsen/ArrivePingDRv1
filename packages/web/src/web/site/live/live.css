@@ -498,6 +498,137 @@
     bottom: 14px;
   }
 }
+/* Phones: the desktop hero is copy on the left over the photo, the phones on
+   the right. Stacked, the photo sat behind the copy (the technician hidden
+   under the headline) and the phones came after the four assurances, a full
+   screen down. Here the hero is one grid: the headline, promise and buttons on
+   plain navy, then the photo as a full-bleed band with the phones on it, then
+   the assurances. The film, shade and pause button are absolutely placed in
+   the band's grid row, so it needs no extra markup. */
+@media (max-width: 560px) {
+  .site .lv-hero--home {
+    display: grid;
+    grid-template-columns: var(--pad) minmax(0, 1fr) var(--pad);
+    align-content: start;
+    row-gap: 0;
+    min-height: 0;
+    padding-block: 24px 40px;
+  }
+  .site .lv-hero--home .lv-hero__inner,
+  .site .lv-hero--home .lv-hero__copy {
+    display: contents;
+  }
+  .site .lv-hero--home .lv-hero__inner > *,
+  .site .lv-hero--home .lv-hero__copy > * {
+    grid-column: 2;
+  }
+  .site .lv-hero--home .lv-hero__badge { grid-row: 1; }
+  .site .lv-hero--home .lv-hero__title { grid-row: 2; margin-top: 16px; }
+  .site .lv-hero--home .lv-hero__promise { grid-row: 3; margin-top: 14px; }
+  .site .lv-hero--home .lv-hero__act { grid-row: 4; margin-top: 22px; }
+  .site .lv-hero--home .lv-stage { grid-row: 5; }
+  .site .lv-hero--home .lv-assure { grid-row: 6; }
+  /* explicit end lines: an absolutely placed item's "auto" end is the
+     container's edge, not the next line */
+  .site .lv-hero--home .lv-hero__film,
+  .site .lv-hero--home .lv-hero__shade {
+    grid-row: 5 / 6;
+    grid-column: 1 / -1;
+  }
+  .site .lv-hero--home .lv-hero__pause {
+    grid-row: 5 / 6;
+    grid-column: 1 / -1;
+    right: var(--pad);
+    bottom: 14px;
+  }
+
+  .site .lv-hero--home .lv-hero__promise {
+    gap: 6px;
+  }
+  /* buttons first, the trial terms under them */
+  .site .lv-hero--home .lv-hero__act {
+    flex-direction: column-reverse;
+    gap: 14px;
+  }
+  .site .lv-hero--home .lv-hero__ctas {
+    gap: 10px;
+  }
+  .site .lv-hero--home .lv-hero__ctas .btn {
+    flex: 1 1 100%;
+    min-height: 50px;
+    font-size: 16px;
+  }
+  .site .lv-hero--home .lv-hero__risk {
+    font-size: 13.5px;
+    color: #b9c8d8;
+  }
+
+  /* The band: the technician on the left of the photo, his phone on the
+     right, the customer's text laid over the phone's lower half. */
+  .site .lv-hero--home .lv-hero__film--photo img {
+    object-position: 38% 28%;
+  }
+  .site .lv-hero--home .lv-hero__kb {
+    animation: none;
+  }
+  .site .lv-hero--home .lv-hero__shade,
+  .site .lv-hero--home .lv-hero__shade--day {
+    background:
+      linear-gradient(180deg, #05080f 0%, rgb(5 8 15 / 0%) 16%, rgb(5 8 15 / 0%) 46%, rgb(5 8 15 / 72%) 78%, #05080f 100%),
+      linear-gradient(90deg, rgb(5 8 15 / 0%) 40%, rgb(5 8 15 / 38%) 100%);
+  }
+  .site .lv-hero--home .lv-stage {
+    margin-top: 28px;
+    padding-block: 36px 64px;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .site .lv-hero--home .lv-stage__tech {
+    grid-column: 1;
+    justify-self: end;
+    /* explicit width: the phone wrapper is a size container, so it can't size from content */
+    width: min(56vw, 236px);
+    gap: 10px;
+  }
+  /* fade the phone's lower half so the text card sits on calm ground */
+  .site .lv-hero--home .lv-stage__tech .ap-phone--hero {
+    -webkit-mask-image: linear-gradient(180deg, #000 50%, transparent 80%);
+    mask-image: linear-gradient(180deg, #000 50%, transparent 80%);
+  }
+  .site .lv-hero--home .lv-stage__cust {
+    grid-column: 1;
+    grid-row: 2;
+    width: min(100%, 340px);
+    margin: -150px 0 0;
+    gap: 8px;
+  }
+  .site .lv-hero--home .lv-stage__eta {
+    width: 74%;
+    border-radius: 14px;
+  }
+  .site .lv-hero--home .lv-stage__cap {
+    justify-self: start;
+    margin-top: 14px;
+    max-width: 62%;
+  }
+
+  /* the four assurances, after the picture */
+  .site .lv-hero--home .lv-assure {
+    margin-top: 0;
+    gap: 18px 16px;
+    padding: 20px 0;
+  }
+  .site .lv-hero--home .lv-assure li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .site .lv-hero--home .lv-assure strong {
+    font-size: 15px;
+  }
+  .site .lv-hero--home .lv-assure strong + span {
+    font-size: 13px;
+  }
+}
 @media (max-width: 380px) {
   /* one line on a 360 px phone too (323 px wide); below that it wraps */
   .site .lv-hero__badge {
@@ -759,3 +890,11 @@
   }
 }
 
+
+/* Phones: the pause buttons are touch targets too (44 px). */
+@media (max-width: 760px) {
+  .site .lv-pause {
+    min-height: 44px;
+    padding: 0 16px;
+  }
+}

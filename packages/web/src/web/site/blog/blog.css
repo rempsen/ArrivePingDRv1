@@ -482,3 +482,57 @@
   font-weight: 600;
   color: var(--ink);
 }
+
+/* Phones: after the featured post, a compact list (thumbnail beside the
+   title) instead of a stack of full-width cards, which made the index two
+   and a half times as long as on desktop. The summary stays on the featured
+   post and on each article page. */
+@media (max-width: 560px) {
+  .site .post-grid {
+    gap: 12px;
+  }
+  .site .post-grid .post-card__link {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+    padding: 12px;
+  }
+  .site .post-grid .post-cover {
+    aspect-ratio: 1;
+    border-radius: 10px;
+  }
+  .site .post-grid .post-cover--art {
+    padding: 8px;
+  }
+  .site .post-grid .post-cover--art::before {
+    width: 120px;
+    height: 120px;
+    right: -36px;
+    top: -36px;
+  }
+  .site .post-grid .post-cover--art span {
+    display: none;
+  }
+  .site .post-grid .post-card__body {
+    gap: 6px;
+    padding: 2px 4px 2px 0;
+  }
+  .site .post-grid .post-card__cat {
+    font-size: 12.5px;
+  }
+  .site .post-grid .post-card__title {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+  .site .post-grid .post-card__desc {
+    display: none;
+  }
+  .site .post-grid .post-card__meta {
+    margin-top: 2px;
+    font-size: 12.5px;
+  }
+  .site .blog-cats a {
+    min-height: 44px;
+  }
+}

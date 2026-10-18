@@ -639,7 +639,8 @@
 .site .ap-tech__phones {
   position: relative;
   container-type: inline-size;
-  aspect-ratio: 0.8;
+  /* tall enough for the front phone (1.3x the width) and the tilted one behind */
+  aspect-ratio: 0.72;
 }
 .site .ap-tech__phone {
   --pw: 60;

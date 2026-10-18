@@ -317,7 +317,9 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
                     <tr key={r.label}>
                       <th scope="row">{r.label}</th>
                       {r.cells.map((c, i) => (
-                        <td key={i} className={i === 0 ? "lp-table__ours" : undefined}>
+                        // data-col: on phones each row becomes a card and the
+                        // cells are labelled with their column (landing.css).
+                        <td key={i} className={i === 0 ? "lp-table__ours" : undefined} data-col={s.columns[i + 1] || undefined}>
                           <CellView cell={c} />
                         </td>
                       ))}
