@@ -311,3 +311,33 @@
     padding-top: calc(58vw - 8px);
   }
 }
+
+/* Phones: two phones side by side were 170 px wide, their text 5-7 px. On a
+   phone they sit in a swipeable row at a readable size, the second peeking in. */
+@media (max-width: 560px) {
+  .site .tr-day__media {
+    max-width: none;
+  }
+  .site .tr-day__phones {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 68%;
+    gap: 14px;
+    margin-inline: calc(-1 * var(--pad));
+    padding: 4px var(--pad) 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--pad);
+    scrollbar-width: none;
+  }
+  .site .tr-day__phones::-webkit-scrollbar {
+    display: none;
+  }
+  .site .tr-day__phone {
+    scroll-snap-align: start;
+  }
+  .site .tr-day__phone--2 {
+    margin-top: 0;
+  }
+}

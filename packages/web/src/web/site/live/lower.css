@@ -539,3 +539,10 @@
   }
 }
 
+
+/* Phones: the board's tabs at a 44 px touch height. */
+@media (max-width: 760px) {
+  .site .ap-office__tab {
+    min-height: 44px;
+  }
+}
