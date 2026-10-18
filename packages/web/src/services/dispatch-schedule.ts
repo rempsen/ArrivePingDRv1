@@ -55,6 +55,11 @@ registerTaskHandler(RESCHEDULED_NOTICE_TASK, async (task) => {
   // Archived or closed, or back where everyone was last told: nothing to say.
   if (!b || b.deletedAt || isTerminalStatus(b.status)) return;
   if (new Date(b.scheduledAt).getTime() === new Date(from).getTime()) return;
+  // Each notice is for one time (`at`). If the job has moved since, a newer
+  // notice is waiting for that move, so this one stays quiet (even when the
+  // two race: a move landing while this one is already running).
+  const at = typeof task.payload.at === "string" ? task.payload.at : null;
+  if (at && new Date(b.scheduledAt).getTime() !== new Date(at).getTime()) return;
   await fireEvent("rescheduled", task.bookingId);
 });
 
@@ -76,9 +81,9 @@ const fromOf = (task: { payload: string }) => {
 };
 
 /** Hold one "rescheduled" notice for the job, replacing any that is waiting. */
-async function holdRescheduled(companyId: string, bookingId: string, from: string): Promise<boolean> {
+async function holdRescheduled(companyId: string, bookingId: string, from: string, at: string): Promise<boolean> {
   await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
-  return holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId, payload: { from }, fallback: "rescheduled" });
+  return holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId, payload: { from, at }, fallback: "rescheduled" });
 }
 
 export async function dispatchSchedule(
@@ -135,7 +140,7 @@ export async function dispatchSchedule(
   if (!waiting.assigned) {
     // Carry forward the time people were last told, if an earlier move is still waiting.
     const told = waiting.rescheduled.map(fromOf).find((f) => f) ?? from.toISOString();
-    held = await holdRescheduled(companyId, prev.id, told);
+    held = await holdRescheduled(companyId, prev.id, told, to.toISOString());
   }
   void publishDispatch(companyId, { kind: "job", jobId: prev.id });
 
@@ -192,10 +197,12 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
   const told = waiting.rescheduled.map(fromOf).find((f) => f);
   if (told) {
     // Back where people were last told: the waiting notice has nothing to say.
+    // Otherwise it now announces the time the job went back to.
     if (new Date(told).getTime() === new Date(c.f).getTime()) await cancelTasks({ bookingId: c.b, kind: RESCHEDULED_NOTICE_TASK });
+    else await holdRescheduled(companyId, c.b, told, c.f);
   } else if (!waiting.assigned) {
     // The move was already announced; announce the time it went back to.
-    await holdRescheduled(companyId, c.b, c.t);
+    await holdRescheduled(companyId, c.b, c.t, c.f);
   }
   await logJobEvent({
     companyId,

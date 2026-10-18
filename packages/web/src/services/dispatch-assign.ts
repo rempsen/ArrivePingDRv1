@@ -350,7 +350,13 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   // assignment had replaced, else the time when it was assigned). It says
   // something only if the job is somewhere else now, e.g. moved meanwhile.
   const told = c.n ?? c.w;
-  if (told) await holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId: c.b, payload: { from: told }, fallback: "rescheduled" });
+  if (told)
+    await holdNotice(companyId, {
+      kind: RESCHEDULED_NOTICE_TASK,
+      bookingId: c.b,
+      payload: { from: told, at: new Date(b.scheduledAt).toISOString() },
+      fallback: "rescheduled",
+    });
   await reconcileRiderStatus(companyId, c.r);
   await logJobEvent({
     companyId,

@@ -159,6 +159,22 @@ describe("dispatchSchedule + undo", () => {
     expect(await events(id)).not.toContain("rescheduled");
   });
 
+  it("a notice for an earlier move stays quiet once the job has moved again", async () => {
+    // As if the first move's notice was already running when the second move landed.
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const base = (await row(id)).scheduledAt;
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 30), by: "Dana" }, NOW.getTime());
+    const [first] = await tasks(id);
+    await db.update(schema.scheduledTasks).set({ status: "running" }).where(eq(schema.scheduledTasks.id, first!.id));
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 60), by: "Dana" }, NOW.getTime());
+    // the running one finishes now, the new one after its window
+    await db.update(schema.scheduledTasks).set({ status: "pending" }).where(eq(schema.scheduledTasks.id, first!.id));
+    const { runTaskNow } = await import("../scheduler");
+    await runTaskNow(first!.id);
+    await flushNotices();
+    expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(1);
+  });
+
   it("an Undo after the move was announced announces the time it went back to", async () => {
     const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
     const r = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 45), by: "Dana" }, NOW.getTime());
