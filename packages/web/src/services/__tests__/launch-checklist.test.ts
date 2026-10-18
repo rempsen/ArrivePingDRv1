@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeAll } from "bun:test";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -67,12 +68,38 @@ describe("launch checklist", () => {
     expect((await state())["first-job"]).toBe(true);
   });
 
-  it("an invited technician is 'waiting' until they sign in", async () => {
+  it("inviting office staff doesn't put the technician step in waiting", async () => {
+    await db.insert(schema.techInvites).values({ id: "lc-inv-office", companyId: CO, email: "dispatch@real.test", role: "dispatcher", status: "pending" } as any);
+    expect((await state())["invite-tech"]).toBe(false);
+  });
+
+  it("an existing login invited as a technician is 'waiting'", async () => {
+    await db.insert(schema.user).values({ id: "lc-tech-x", companyId: "other-co", name: "Shared Tech", email: "lc-tech-x@real.test", role: "rider" } as any);
+    await db.insert(schema.memberships).values({ id: "lc-m-tech-x", userId: "lc-tech-x", companyId: CO, role: "rider", status: "invited" } as any);
+    await db.insert(schema.riders).values({ id: "lc-r-tech-x", companyId: CO, userId: "lc-tech-x" } as any);
+    expect((await state())["invite-tech"]).toBe("waiting");
+    // Their sessions from the other company don't count while still invited here.
+    await db.insert(schema.session).values({ id: "lc-s-tech-x", userId: "lc-tech-x", token: "lc-t-tech-x", userAgent: "ArrivePing/1.0 CFNetwork", expiresAt: new Date(NOW.getTime() + 864e5) } as any);
+    expect((await state())["invite-tech"]).toBe("waiting");
+  });
+
+  it("a new technician is 'waiting' until they sign in themselves, not when the server provisions them", async () => {
     await db.insert(schema.user).values({ id: "lc-tech", companyId: CO, name: "Real Tech", email: "lc-tech@real.test", role: "rider" } as any);
     await db.insert(schema.memberships).values({ id: "lc-m-tech", userId: "lc-tech", companyId: CO, role: "rider", status: "active" } as any);
     await db.insert(schema.riders).values({ id: "lc-r-tech", companyId: CO, userId: "lc-tech" } as any);
     expect((await state())["invite-tech"]).toBe("waiting");
-    await db.insert(schema.session).values({ id: "lc-s-tech", userId: "lc-tech", token: "lc-t-tech", expiresAt: new Date(NOW.getTime() + 864e5) } as any);
+    // Adding a technician signs the new login in on the server: no user agent.
+    await db.insert(schema.session).values({ id: "lc-s-prov", userId: "lc-tech", token: "lc-t-prov", userAgent: "", expiresAt: new Date(NOW.getTime() + 864e5) } as any);
+    expect((await state())["invite-tech"]).toBe("waiting");
+    // They sign in on their phone.
+    await db.insert(schema.session).values({ id: "lc-s-tech", userId: "lc-tech", token: "lc-t-tech", userAgent: "ArrivePing/1.0 CFNetwork/1568 Darwin/24.0.0", expiresAt: new Date(NOW.getTime() + 864e5) } as any);
+    expect((await state())["invite-tech"]).toBe(true);
+  });
+
+  it("a push token on the technician's phone also counts as signed in", async () => {
+    await db.delete(schema.session).where(eq(schema.session.id, "lc-s-tech"));
+    expect((await state())["invite-tech"]).toBe("waiting");
+    await db.insert(schema.pushTokens).values({ id: "lc-pt", companyId: CO, userId: "lc-tech", token: "ExponentPushToken[lc]" } as any);
     expect((await state())["invite-tech"]).toBe(true);
   });
 
