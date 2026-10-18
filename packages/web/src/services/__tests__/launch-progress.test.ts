@@ -108,19 +108,21 @@ describe("stage and nudge rules", () => {
 });
 
 describe("the sweep", () => {
-  // Other test files share this in-memory database (bun runs them in one
-  // process) and seed companies of their own, so only this file's are counted.
-  const ours = (to: string) => to.endsWith("@new.test") || to.endsWith("@internal.test") || to.endsWith("@old.test");
   const sent: { to: string; subject: string; headers?: Record<string, string> }[] = [];
   const alerts: string[] = [];
   const stageChanges: string[] = [];
   const deps = {
+    // Other test files share this in-memory database (bun runs them in one
+    // process) and seed companies of their own: the sweep is scoped to this
+    // file's companies so it neither emails nor modifies theirs. The internal
+    // and old companies are in the list on purpose: the sweep must still skip them.
+    companyIds: ["lp-new", "lp-internal", "lp-old"],
     send: (async (o: any) => {
-      if (ours(o.to)) sent.push({ to: o.to, subject: o.subject, headers: o.headers });
+      sent.push({ to: o.to, subject: o.subject, headers: o.headers });
       return { ok: true };
     }) as any,
-    slack: (async (co: { id: string; name: string }) => {
-      if (co.id.startsWith("lp-")) alerts.push(co.name);
+    slack: (async (co: { name: string }) => {
+      alerts.push(co.name);
       return true;
     }) as any,
     onStageChange: (id: string) => stageChanges.push(id),
@@ -167,6 +169,9 @@ describe("the sweep", () => {
     // Internal and old companies are left alone.
     const [int] = await db.select().from(schema.companies).where(eq(schema.companies.id, "lp-internal"));
     expect(int!.launchProgress).toBeNull();
+    // …and no other test's company was touched.
+    const touched = (await db.select().from(schema.companies)).filter((c) => c.launchProgress && c.id !== "lp-new");
+    expect(touched.map((c) => c.id)).toEqual([]);
     await lp.sweepLaunch(new Date(NOW.getTime() + H), deps);
     expect(sent.length).toBe(2);
   });

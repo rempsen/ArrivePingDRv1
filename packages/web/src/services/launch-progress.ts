@@ -18,7 +18,7 @@
  * and what was already sent, in `companies.launch_progress`.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
@@ -242,6 +242,8 @@ export async function postStallAlert(
 // ── The sweep ──────────────────────────────────────────────────────────────
 
 export interface SweepDeps {
+  /** Only these companies (a one-off run for a tenant, or a test's own fixtures). */
+  companyIds?: string[];
   send?: typeof sendEmail;
   slack?: typeof postStallAlert;
   onStageChange?: (companyId: string) => void;
@@ -255,7 +257,14 @@ export async function sweepLaunch(now = new Date(), deps: SweepDeps = {}) {
   const companies = await sdb
     .select()
     .from(schema.companies)
-    .where(and(gte(schema.companies.createdAt, since), eq(schema.companies.status, "active"), eq(schema.companies.isInternal, false)));
+    .where(
+      and(
+        gte(schema.companies.createdAt, since),
+        eq(schema.companies.status, "active"),
+        eq(schema.companies.isInternal, false),
+        deps.companyIds ? inArray(schema.companies.id, deps.companyIds) : undefined,
+      ),
+    );
   const out = { companies: companies.length, items: 0, emails: 0, alerts: 0 };
 
   for (const co of companies) {
