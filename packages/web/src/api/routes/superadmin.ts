@@ -124,6 +124,12 @@ export const superadminRoutes = new Hono<AppEnv>()
     const report = await demoTick({ tidy: true });
     return c.json({ report, health: await demoHealth() });
   })
+  // HubSpot key health (services/hubspot-check.ts): portal, scopes, one read per
+  // object, owner and ticket stage. Read-only; never returns the token.
+  .get("/hubspot-check", requireSuperadmin, async (c) => {
+    const { checkHubspot } = await import("../../services/hubspot-check");
+    return c.json(await checkHubspot(), 200);
+  })
   .get("/google-smoke", requireSuperadmin, async (c) => {
     const choice = c.req.query("key") === "current" ? "current" : "new";
     const report = await runGoogleSmoke({ choice, includeRaw: c.req.query("raw") === "1" });

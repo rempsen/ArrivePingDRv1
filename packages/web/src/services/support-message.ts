@@ -27,7 +27,13 @@ export interface SupportMessage {
   message: string;
   /** Path of the help page the visitor sent it from, e.g. /support/billing */
   page?: string;
+  /** Website it came from (default arriveping.com; nvc360.com for the company site's support form). */
+  site?: string;
+  /** "ArrivePing lead source" for a sender who is new to HubSpot (default SUPPORT_LEAD_SOURCE). */
+  source?: string;
 }
+
+const siteOf = (m: SupportMessage) => m.site || "arriveping.com";
 
 /** Slack caps a text object at 3,000 characters. */
 const SLACK_TEXT_MAX = 2_900;
@@ -52,7 +58,7 @@ export function supportRows(m: SupportMessage): [string, string][] {
     ["Email", m.email],
     ["Company", m.company || "—"],
     ["About", m.topic || "—"],
-    ["Sent from", m.page || "Help Center"],
+    ["Sent from", siteOf(m) === "arriveping.com" ? m.page || "Help Center" : `${siteOf(m)}${m.page || ""}`],
   ];
 }
 
@@ -76,7 +82,7 @@ export function slackPayload(m: SupportMessage) {
         elements: [
           {
             type: "mrkdwn",
-            text: `Sent from arriveping.com. They aren't in our Slack: reply by email to <mailto:${slackEsc(m.email)}|${slackEsc(m.email)}> (a copy is in the support inbox).`,
+            text: `Sent from ${slackEsc(siteOf(m))}. They aren't in our Slack: reply by email to <mailto:${slackEsc(m.email)}|${slackEsc(m.email)}> (a copy is in the support inbox).`,
           },
         ],
       },
@@ -113,7 +119,8 @@ export type EmailOutcome = "sent" | "skipped" | "failed";
 export async function emailSupport(m: SupportMessage): Promise<EmailOutcome> {
   const to = process.env.SUPPORT_MESSAGE_TO?.trim() || "support@nvc360.com";
   const rows = supportRows(m);
-  const text = [`Support message from the ArrivePing Help Center`, "", ...rows.map(([k, v]) => `${k}: ${v}`), "", m.message, "", `Reply to this email to answer ${m.name}.`].join("\n");
+  const from = siteOf(m) === "arriveping.com" ? "the ArrivePing Help Center" : siteOf(m);
+  const text = [`Support message from ${from}`, "", ...rows.map(([k, v]) => `${k}: ${v}`), "", m.message, "", `Reply to this email to answer ${m.name}.`].join("\n");
   const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Inter,sans-serif;color:#202226;line-height:1.5">
   <h2 style="margin:0 0 16px;font-size:18px">Support message from ${htmlEsc(m.name)}</h2>
   <table cellpadding="0" cellspacing="0" style="border-collapse:collapse">
@@ -163,7 +170,7 @@ export function ticketContent(m: SupportMessage): string {
     `From: ${m.name} <${m.email}>`,
     m.company ? `Company: ${m.company}` : "",
     m.topic ? `About: ${m.topic}` : "",
-    `Sent from: arriveping.com${m.page || "/support"}`,
+    `Sent from: ${siteOf(m)}${m.page || "/support"}`,
   ]
     .filter((l, i) => l !== "" || i === 1)
     .join("\n");
@@ -173,7 +180,7 @@ export function ticketContent(m: SupportMessage): string {
 export async function postSupportToHubspot(m: SupportMessage): Promise<"synced" | "skipped" | "failed"> {
   if (!hubspotEnabled()) return "skipped";
   try {
-    const { contactId } = await findOrCreateLeadContact({ name: m.name, email: m.email, company: m.company, source: SUPPORT_LEAD_SOURCE });
+    const { contactId } = await findOrCreateLeadContact({ name: m.name, email: m.email, company: m.company, source: m.source || SUPPORT_LEAD_SOURCE });
     await createSupportTicket({ subject: ticketSubject(m), content: ticketContent(m), contactId });
     return "synced";
   } catch (e) {
