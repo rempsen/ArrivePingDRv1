@@ -68,7 +68,7 @@ export function HomeHero() {
           </picture>
         </div>
       </div>
-      <div className="lv-hero__shade" aria-hidden="true" />
+      <div className="lv-hero__shade lv-hero__shade--day" aria-hidden="true" />
 
       <div className="container lv-hero__inner">
         <div className="lv-hero__copy">
