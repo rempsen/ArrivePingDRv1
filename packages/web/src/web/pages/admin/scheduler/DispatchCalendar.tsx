@@ -7,7 +7,7 @@
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -281,8 +281,11 @@ export function DispatchCalendar(p: {
   );
 
   // ---- drag and drop ----
+  // Mouse and touch separately: a mouse drags after a short move; a finger
+  // drags after a press-and-hold, so a quick swipe still scrolls the queue
+  // and the timeline (a pointer sensor would claim the swipe and lose it).
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 250, tolerance: 8 },
     }),
