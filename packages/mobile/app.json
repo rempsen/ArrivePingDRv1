@@ -60,7 +60,7 @@
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "scheme": [
       "arriveping",
       "homeserve"
@@ -112,7 +112,7 @@
       "@sentry/react-native",
       "expo-audio"
     ],
-    "runtimeVersion": "1.0.2",
+    "runtimeVersion": "1.0.3",
     "updates": {
       "url": "https://u.expo.dev/6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"
     }

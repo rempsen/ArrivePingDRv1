@@ -21,17 +21,10 @@ import { useNotifySummary, companyCount } from "../../lib/notify-summary";
 import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../../components/company-alert";
 import { DeleteAccountSheet } from "../../components/delete-account-sheet";
 import { CoachAnchor, useCoach } from "../../components/coach-tour";
+import { useShift } from "../../lib/shift";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
-
-/**
- * The presence states the API's PATCH /riders/me actually accepts, derived from
- * the Hono client rather than hand-copied, so widening or narrowing the server
- * enum (routes/riders.ts RIDER_STATUSES) surfaces here as a type error instead
- * of a runtime 400.
- */
-type RiderStatus = NonNullable<Parameters<typeof api.riders.me.$patch>[0]>["json"]["status"];
 
 export default function Profile() {
   const coach = useCoach();
@@ -100,28 +93,8 @@ export default function Profile() {
     },
   });
 
-  const setStatus = useMutation({
-    mutationFn: async (status: RiderStatus) => {
-      const res = await api.riders.me.$patch({ json: { status } });
-      if (!res.ok) throw new Error("Failed");
-      return (await res.json()).rider;
-    },
-    onSuccess: (_rider, status) => {
-      // Stop native background GPS tracking immediately on going Offline —
-      // don't wait for the rider layout's own query refetch. The layout's
-      // useLocationHeartbeat(onShift) effect will also pick this up once
-      // ["me"] refetches, but stopping here is instant instead of depending
-      // on network/query timing.
-      if (status === "offline") {
-        stopLocationSharing().catch(() => {});
-        // Off the clock means nothing of ours should remain on the Lock Screen
-        // or in the Dynamic Island. iOS keeps a Live Activity alive until the
-        // app ends it, so going offline has to tear it down explicitly.
-        endAllLiveActivities().catch(() => {});
-      }
-      qc.invalidateQueries({ queryKey: ["me"] });
-    },
-  });
+  // The same shift as the Sign in button on Jobs (lib/shift.ts).
+  const shift = useShift();
 
   async function pickPhoto() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -265,17 +238,14 @@ export default function Profile() {
               </Text>
             </View>
             <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                setStatus.mutate(onShift ? "offline" : "available");
-              }}
+              onPress={shift.toggle}
               style={[s.toggle, onShift && s.toggleOn]}
               accessibilityRole="switch"
               accessibilityLabel="On the clock"
-              accessibilityState={{ checked: onShift, busy: setStatus.isPending }}
+              accessibilityState={{ checked: onShift, busy: shift.pending }}
               accessibilityHint={onShift ? "Double tap to go off shift" : "Double tap to go on shift"}
             >
-              {setStatus.isPending ? (
+              {shift.pending ? (
                 <ActivityIndicator color={onShift ? "#03130d" : C.sub} size="small" />
               ) : (
                 <View style={[s.knob, onShift && s.knobOn]} />

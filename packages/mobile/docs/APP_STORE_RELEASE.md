@@ -10,7 +10,7 @@ Everything builds on Expo's servers (EAS); nothing needs Xcode locally.
 | App name | **ArrivePing** |
 | Bundle ID (permanent) | `com.nvc360.uberize` (+ `com.nvc360.uberize.LiveActivity`) |
 | Apple Team | `86S82A9ZPS` · App Store Connect app id `6776464675` |
-| Marketing version | `app.json → expo.version` (**1.0.2**); build number auto-increments on EAS (`appVersionSource: remote`) |
+| Marketing version | `app.json → expo.version` (**1.0.3**); build number auto-increments on EAS (`appVersionSource: remote`) |
 | iPad | supported (`supportsTablet: true`, all orientations, Split View allowed) |
 | Background modes | `location`, `remote-notification`; APNs entitlement `production` |
 | Permissions | location always/when-in-use, camera, photo library, microphone (voice notes), Face ID — strings in `app.json` |
@@ -51,8 +51,8 @@ you invite must be the one signed in to the TestFlight app on the phone.
 
 1. Bump `expo.version` **and** `expo.runtimeVersion` together in `app.json`
    (they must match so OTA updates only reach builds that can run them).
-2. Ship to TestFlight and smoke-test on a phone **and an iPad**: sign in, go
-   On the clock, open a job, Live Activity appears, photo + signature, go
+2. Ship to TestFlight and smoke-test on a phone **and an iPad**: sign in, tap
+   the big **Sign in** button on Jobs (red → green, On the clock), open a job, Live Activity appears, photo + signature, go
    offline, Profile → legal links open, Delete my account shows its confirm
    sheet (cancel it).
 3. In App Store Connect → App Store tab → the version: select the build, check

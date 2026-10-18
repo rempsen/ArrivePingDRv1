@@ -42,7 +42,7 @@ const MISSING_ANCHOR_MS = 4000;
 /** A job is ready for the "Start Driving" tip only while that's its next action. */
 const DRIVABLE = "assigned";
 
-type AnchorId = "jobs.list" | "profile.clock" | "job.primary" | "messages.header";
+type AnchorId = "jobs.list" | "jobs.clock" | "profile.clock" | "job.primary" | "messages.header";
 
 interface Step {
   id: "jobs" | "clock" | "drive" | "messages";
@@ -68,10 +68,10 @@ function buildSteps(drive: DriveTarget): Step[] {
     },
     {
       id: "clock",
-      anchor: "profile.clock",
-      route: "/(rider)/profile",
-      title: "Go on the clock",
-      body: "Turn this on when you start work. You get offers, and the office sees where you are, only while it's on.",
+      anchor: "jobs.clock",
+      route: "/(rider)",
+      title: "Sign in when you start",
+      body: "Tap Sign in when you start work; it turns green. You get offers, and the office sees where you are, only while it's green. Tap again to sign out.",
     },
     drive
       ? {
