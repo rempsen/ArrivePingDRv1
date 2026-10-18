@@ -78,6 +78,8 @@ interface UndoClaims {
   o?: string;
   /** A move notice this assignment replaced: the time people were last told, to announce again if it's undone. */
   n?: string;
+  /** The job's time when it was assigned (ISO): if it has moved since, Undo announces where it is now. */
+  w?: string;
   /** expiry, ms */
   exp: number;
 }
@@ -139,7 +141,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
-  if (c.k !== "time" && [c.d, c.o, c.n].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
+  if (c.k !== "time" && [c.d, c.o, c.n, c.w].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (c.k === "time" && c.r !== undefined && typeof c.r !== "string") return "invalid";
   if (now > c.exp) return "expired";
   return c;
@@ -287,6 +289,7 @@ export async function dispatchAssign(
       ...(was.declineReason ? { d: was.declineReason } : {}),
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
       ...(toldFrom ? { n: toldFrom } : {}),
+      w: from.toISOString(),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     // Already announced (the notice couldn't be held): no Undo to offer.
@@ -342,9 +345,12 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   }
 
   await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK });
-  // The move notice this assignment had replaced goes back to waiting; it
-  // announces the time only if it still differs from what people were told.
-  if (c.n) await holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId: c.b, payload: { from: c.n }, fallback: "rescheduled" });
+  // The assignment's notice would have given the time. With it gone, a move
+  // notice waits instead: from what people were last told (a move notice the
+  // assignment had replaced, else the time when it was assigned). It says
+  // something only if the job is somewhere else now, e.g. moved meanwhile.
+  const told = c.n ?? c.w;
+  if (told) await holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId: c.b, payload: { from: told }, fallback: "rescheduled" });
   await reconcileRiderStatus(companyId, c.r);
   await logJobEvent({
     companyId,

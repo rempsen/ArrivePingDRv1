@@ -13,7 +13,7 @@
  */
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { fireEvent } from "./dispatch";
 import { reconcileRiderStatus } from "./presence";
 import { findAvailabilityBlock } from "./availability";
@@ -143,6 +143,9 @@ export async function assignJob(
     and(
       eq(schema.bookings.id, bookingId),
       eq(schema.bookings.status, prev.status),
+      // ...and the assignee we checked: two dispatchers reassigning at once
+      // can't overwrite each other.
+      prev.riderId ? eq(schema.bookings.riderId, prev.riderId) : isNull(schema.bookings.riderId),
       // Moving it too: only from the time we checked.
       ...(opts.scheduledAt ? [eq(schema.bookings.scheduledAt, prev.scheduledAt)] : []),
     ),

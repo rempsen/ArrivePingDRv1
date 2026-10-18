@@ -275,6 +275,20 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
   });
 
+  it("an assignment undone after a later move announces the new time", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO);
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    // moved while the assigned notice waits: that notice would have said the time
+    const m = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    expect(m.ok).toBe(true);
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("rescheduled");
+    expect(kinds).not.toContain("assigned");
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();
