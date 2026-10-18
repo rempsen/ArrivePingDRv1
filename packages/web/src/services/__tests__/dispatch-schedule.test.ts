@@ -190,6 +190,20 @@ describe("dispatchSchedule + undo", () => {
     expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(1);
   });
 
+  it("an Undo while the move's notice is mid-flight sends no needless correction", async () => {
+    const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const r = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 45), by: "Dana" }, NOW.getTime());
+    const [notice] = await tasks(id);
+    // claimed by the scheduler, not yet sent, when the Undo lands
+    await db.update(schema.scheduledTasks).set({ status: "running" }).where(eq(schema.scheduledTasks.id, notice!.id));
+    expect(await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: true, notified: false });
+    await db.update(schema.scheduledTasks).set({ status: "pending" }).where(eq(schema.scheduledTasks.id, notice!.id));
+    const { runTaskNow } = await import("../scheduler");
+    await runTaskNow(notice!.id); // it reads the restored time and stays quiet
+    await flushNotices();
+    expect(await events(id)).not.toContain("rescheduled");
+  });
+
   it("an Undo after the move was announced announces the time it went back to", async () => {
     const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
     const r = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 45), by: "Dana" }, NOW.getTime());

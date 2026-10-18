@@ -75,6 +75,9 @@ registerTaskHandler(RESCHEDULED_NOTICE_TASK, async (task) => {
     await holdNotice(task.companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId: task.bookingId, payload: { ...task.payload, waits: waits + 1 }, fallback: "rescheduled" });
     return;
   }
+  // A correction after an Undo: only if the move it corrects was announced.
+  const correcting = typeof task.payload.ifToldSince === "string" ? new Date(task.payload.ifToldSince) : null;
+  if (correcting && !(await toldSince(task.companyId, task.bookingId, correcting))) return;
   // ...and if it went out after this move, it already said the new time.
   const movedAt = typeof task.payload.movedAt === "string" ? new Date(task.payload.movedAt) : null;
   if (movedAt) {
@@ -84,6 +87,13 @@ registerTaskHandler(RESCHEDULED_NOTICE_TASK, async (task) => {
   }
   await fireEvent("rescheduled", task.bookingId);
 });
+
+/** Whether a "rescheduled" message went out for this job at or after `since`. */
+async function toldSince(companyId: string, bookingId: string, since: Date): Promise<boolean> {
+  const E = schema.jobEvents;
+  const rows = await tdb(companyId).select(E, and(eq(E.bookingId, bookingId), eq(E.kind, "rescheduled"), gte(E.createdAt, since)));
+  return rows.length > 0;
+}
 
 /** Move notices for this job still waiting out their Undo window. */
 async function pendingNotices(companyId: string, bookingId: string) {
@@ -102,9 +112,14 @@ const fromOf = (task: { payload: string }) => {
 };
 
 /** Hold one "rescheduled" notice for the job, replacing any that is waiting. */
-async function holdRescheduled(companyId: string, bookingId: string, from: string, at: string): Promise<boolean> {
+async function holdRescheduled(companyId: string, bookingId: string, from: string, at: string, ifToldSince?: string): Promise<boolean> {
   await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
-  return holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId, payload: { from, at, movedAt: new Date().toISOString() }, fallback: "rescheduled" });
+  return holdNotice(companyId, {
+    kind: RESCHEDULED_NOTICE_TASK,
+    bookingId,
+    payload: { from, at, movedAt: new Date().toISOString(), ...(ifToldSince ? { ifToldSince } : {}) },
+    fallback: "rescheduled",
+  });
 }
 
 export async function dispatchSchedule(
@@ -173,6 +188,7 @@ export async function dispatchSchedule(
     f: from.toISOString(),
     t: to.toISOString(),
     r: prev.riderId ?? "",
+    m: new Date().toISOString(),
     exp: now + UNDO_TOKEN_TTL_MS,
   });
   return { ok: true, job: patchOf(b), undo };
@@ -220,8 +236,9 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
     if (new Date(told).getTime() === new Date(c.f).getTime()) await cancelTasks({ bookingId: c.b, kind: RESCHEDULED_NOTICE_TASK });
     else await holdRescheduled(companyId, c.b, told, c.f);
   } else {
-    // The move was already announced; announce the time it went back to.
-    await holdRescheduled(companyId, c.b, c.t, c.f);
+    // No notice waiting: it went out, or is going out right now. A correction
+    // waits its turn and speaks only if the move was in fact announced.
+    await holdRescheduled(companyId, c.b, c.t, c.f, c.m);
   }
   await logJobEvent({
     companyId,
@@ -234,8 +251,9 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
     customerVisible: false,
   });
   void publishDispatch(companyId, { kind: "job", jobId: c.b });
-  // No waiting notice means the move had already been announced.
-  return { ok: true, job: { id: b.id, status: b.status, assignStatus: b.assignStatus, riderId: b.riderId }, notified: !told };
+  // Had the move been announced? Its message is in the job's history if so.
+  const notified = !told && (c.m ? await toldSince(companyId, c.b, new Date(c.m)) : true);
+  return { ok: true, job: { id: b.id, status: b.status, assignStatus: b.assignStatus, riderId: b.riderId }, notified };
 }
 
 /** Undo either kind of token. */

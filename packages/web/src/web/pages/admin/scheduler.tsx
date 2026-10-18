@@ -82,10 +82,10 @@ export default function SchedulerPage() {
   };
 
   // The calendar works from the dispatch board, so it hands over an id; the
-  // work-order modal wants the full booking.
+  // work-order modal wants the full booking, fetched fresh.
   const openJobById = async (id: string) => {
-    const known = (bookings.data?.bookings ?? []).find((b: any) => b.id === id);
-    if (known) return openJob(known);
+    // Always the job as it is now: the Board tab's list isn't refreshed while
+    // the calendar is open, and the form saves every field it was given.
     try {
       const r = (await ok(await api.bookings[":id"].$get({ param: { id } }))) as { booking: any };
       openJob(r.booking);
