@@ -80,7 +80,8 @@ const ALLOW_ALL = CORS_ORIGINS.includes("*");
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // High-frequency or irrelevant writes that never change CRM-visible data.
-const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections)(\/|$)/;
+// `guide`: Ask ArrivePing is a POST that changes nothing (Codex on #44).
+const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections|guide)(\/|$)/;
 
 const app = new Hono<{ Variables: Variables }>()
   // request id + per-request logger (correlation across the request lifecycle)
