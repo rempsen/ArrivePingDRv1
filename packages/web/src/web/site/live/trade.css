@@ -71,6 +71,12 @@
   gap: 10px;
   animation: ap-drop 640ms var(--ease-out) 700ms both;
 }
+/* before hydration the root has no data-reduced yet, so honour the OS setting directly */
+@media (prefers-reduced-motion: reduce) {
+  .site .lv-trade-note {
+    animation: none;
+  }
+}
 .site .lv-trade-note__cap {
   font-size: 12px;
   line-height: 1.45;
