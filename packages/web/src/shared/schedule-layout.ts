@@ -122,6 +122,8 @@ export interface SlotTech {
   qualified: boolean;
   /** On shift and not on a break or day off. */
   available: boolean;
+  /** Not before this (minutes since midnight): when a live job really finishes. */
+  earliestMin?: number;
   dayJobs: ReadonlyArray<{ startMin: number; endMin: number } & Point>;
 }
 
@@ -157,7 +159,7 @@ export function rankSlots(input: {
     for (let i = 0; i <= jobs.length; i++) {
       const next = jobs[i] ?? null;
       const drive = driveMinutes(prev, job);
-      const from = Math.max(input.earliestMin, range.startMin, prev ? prev.endMin + (drive ?? 15) : 0);
+      const from = Math.max(input.earliestMin, t.earliestMin ?? 0, range.startMin, prev ? prev.endMin + (drive ?? 15) : 0);
       const startMin = Math.ceil(from / 15) * 15;
       // They have to get from this job to the next one in time, too.
       const limit = next ? next.startMin - Math.max(SLACK_MINS, driveMinutes(job, next) ?? SLACK_MINS) : range.endMin;

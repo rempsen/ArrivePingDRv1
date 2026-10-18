@@ -30,8 +30,9 @@ import { ASSIGNED_NOTICE_TASK, holdNotice, readAnyUndo, signUndo, undoAssign, UN
 import { logJobEvent } from "./job-events";
 import { publishDispatch } from "./realtime";
 import { cancelTasks, registerTaskHandler } from "./scheduler";
+import { RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
 
-export const RESCHEDULED_NOTICE_TASK = "dispatch_rescheduled";
+export { RESCHEDULED_NOTICE_TASK } from "./dispatch-notice-kinds";
 /** The longest range the Month view asks for (six weeks). */
 export const MAX_LOAD_DAYS = 42;
 

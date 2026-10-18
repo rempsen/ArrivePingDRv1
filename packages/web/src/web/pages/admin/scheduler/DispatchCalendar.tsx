@@ -96,12 +96,18 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
     if (!placing || view !== "day" || day < today) return [];
     return rankSlots({
       job: { durationMins: durationOf(placing), lat: placing.lat, lng: placing.lng },
-      techs: techs.map((t) => ({
-        id: t.id,
-        qualified: qualifiedFor(t, placing),
-        available: !(day === today && t.status === "offline") && !offToday.has(t.id),
-        dayJobs: (jobsByTech.get(t.id) ?? []).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
-      })),
+      techs: techs.map((t) => {
+        // Today, someone on a job that's running long is free when it really ends.
+        const free = day === today && t.freeAt ? new Date(t.freeAt) : null;
+        const freeLater = free != null && zonedDayKey(free, tz) > day;
+        return {
+          id: t.id,
+          qualified: qualifiedFor(t, placing),
+          available: !(day === today && t.status === "offline") && !offToday.has(t.id) && !freeLater,
+          ...(free && !freeLater ? { earliestMin: Math.ceil((zonedMinutesOfDay(free, tz) + 15) / 15) * 15 } : {}),
+          dayJobs: (jobsByTech.get(t.id) ?? []).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
+        };
+      }),
       earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,
       range,
     });

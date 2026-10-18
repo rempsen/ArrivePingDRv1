@@ -182,6 +182,19 @@ describe("dispatchSchedule + undo", () => {
     expect(kinds).not.toContain("rescheduled");
   });
 
+  it("a reassignment announced at once replaces the held reschedule notice", async () => {
+    const { assignJob } = await import("../assign");
+    const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "offered" });
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater((await row(id)).scheduledAt, 30), by: "Dana" }, NOW.getTime());
+    const r = await assignJob(CO, id, `${CO}-t2`, { by: { kind: "dispatcher", name: "Dana" } });
+    expect(r.ok).toBe(true);
+    expect((await tasks(id)).map((t) => t.status)).toEqual(["cancelled"]);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("assigned");
+    expect(kinds).not.toContain("rescheduled");
+  });
+
   it("checks the time against the technician the job is about to go to", async () => {
     const theirs = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
     const mine = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });

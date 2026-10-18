@@ -102,6 +102,9 @@ export const dispatchRoutes = new Hono<AppEnv>()
   .post("/assign", requireAdmin, jsonBody(AssignBody), async (c) => {
     const u = c.get("user") as SessionUser;
     const { bookingId, riderId, force, scheduledAt } = c.req.valid("json");
+    // Moving the time as well is scheduling (see /schedule).
+    if (scheduledAt && !(await officeCan(u, "scheduler:edit")))
+      return c.json({ message: "Your role doesn't include this. Ask an admin on your account." }, 403);
     const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, scheduledAt, by: u.name });
     if (!r.ok) {
       if (r.status === 404) return c.json({ message: r.message }, 404);
@@ -128,9 +131,14 @@ export const dispatchRoutes = new Hono<AppEnv>()
     // A token that no longer reads (expired, garbled) gets its own message from
     // undoAny for anyone who could have made either kind.
     const claims = readAnyUndo(token);
-    const needs = typeof claims === "string" ? ["work_orders:edit", "scheduler:edit"] : [claims.k === "time" ? "scheduler:edit" : "work_orders:edit"];
-    let allowed = false;
-    for (const p of needs) if (!allowed) allowed = await officeCan(u, p);
+    // An assignment that also moved the time needs both to be put back.
+    const allOf =
+      typeof claims === "string" ? null : claims.k === "time" ? ["scheduler:edit"] : claims.f ? ["work_orders:edit", "scheduler:edit"] : ["work_orders:edit"];
+    let allowed: boolean;
+    if (allOf) {
+      allowed = true;
+      for (const p of allOf) if (allowed) allowed = await officeCan(u, p);
+    } else allowed = (await officeCan(u, "work_orders:edit")) || (await officeCan(u, "scheduler:edit"));
     if (!allowed) return c.json({ message: "Your role doesn't include this. Ask an admin on your account." }, 403);
     const r = await undoAny(tenantId(c), token, u.name);
     if (!r.ok) return c.json({ message: r.message }, r.status);

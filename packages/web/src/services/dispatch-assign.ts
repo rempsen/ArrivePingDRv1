@@ -30,12 +30,13 @@ import { logJobEvent } from "./job-events";
 import { publishDispatch } from "./realtime";
 import { fireEvent } from "./dispatch";
 import { cancelTasks, registerTaskHandler, runTaskNow, scheduleTask } from "./scheduler";
+import { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
 
 /** How long an Undo token stays valid. The map's toast offers it for 6 s. */
 export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
 /** How long the "assigned" notifications wait, so an Undo inside the window reaches nobody. */
 export const NOTIFY_GRACE_MS = 8_000;
-export const ASSIGNED_NOTICE_TASK = "dispatch_assigned";
+export { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
 
 /** What changed on the job, for the map to patch its copy. */
 export interface JobPatch {
