@@ -7,9 +7,19 @@ updated: "2026-10-13"
 author: "Dan Rosenblat"
 category: "customer-communication"
 tags: ["no call no show", "missed appointment", "service window", "customer communication", "on-my-way text", "online reviews", "field service"]
-image: "/blog/img/no-call-no-show-cover.webp"
-imageAlt: "A homeowner at a kitchen table checking the time on his phone beside an empty driveway seen through the window, with a service van visible on a live map on the phone screen"
+image: "/blog/img/no-call-no-show-arrived-cover.webp"
+imageAlt: "A contractor in a hard hat and safety vest at a home's front door with a clipboard, beside the ArrivePing customer tracking card that reads \"Your technician has arrived!\" with the technician's name and Call and Text buttons"
 ---
+
+<!--
+  Cover (public/blog/img/no-call-no-show-arrived-cover.webp): a real photograph from
+  Pexels (Pexels License: free for commercial use, edits allowed, no attribution
+  required; we credit anyway). Cropped to 16:9, the house number painted out, light
+  grade. The card is the "has arrived" card from a real capture of the ArrivePing
+  customer tracking page (/t/:token) for a sample job in the arrived state, where the
+  technician's location is no longer shared.
+    RDNE Stock project  https://www.pexels.com/photo/8293673/
+-->
 
 A no-call, no-show is the most expensive event in a service company's week. The customer gave up a workday to be home: in the most-cited study of service waiting, half of Americans burned a sick day or vacation day to wait for an appointment, and more than a quarter lost wages ([TOA Technologies / IBOPE Zogby, 2011](https://www.fieldtechnologiesonline.com/doc/toa-technologies-cost-of-waiting-survey-0001)). When nobody comes and nobody calls, that customer does not reschedule. They write the review, call a competitor, and take their next ten jobs with them.
 
