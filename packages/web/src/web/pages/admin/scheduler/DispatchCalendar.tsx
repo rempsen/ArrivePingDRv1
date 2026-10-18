@@ -71,7 +71,15 @@ export function DispatchCalendar(p: {
   const today = zonedDayKey(now, tz);
   const monthStart = mondayOf(`${day.slice(0, 7)}-01`);
   const load = useDayLoad(monthStart, 42, view === "month");
-  const placer = usePlace({ overlay: sb.overlay, refresh: sb.refresh, tz }, p.confirm);
+  const placer = usePlace(
+    {
+      overlay: sb.overlay,
+      refresh: sb.refresh,
+      tz,
+      techName: (id) => (sb.board?.techs.find((t) => t.id === id)?.name ?? "").trim().split(/\s+/)[0] ?? "",
+    },
+    p.confirm,
+  );
 
   const allTechs: BoardTech[] = useMemo(() => sb.board?.techs ?? [], [sb.board]);
   const skills = useMemo(() => [...new Set(allTechs.map((t) => t.skillClass).filter(Boolean))].sort(), [allTechs]);

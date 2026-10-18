@@ -26,6 +26,7 @@ import { fetchBoard, fetchLoad, postAssign, postSchedule, postUndo } from "../..
 import { openDispatchStream } from "../../../features/dispatch/data/stream";
 import type { Board, BoardJob } from "../../../features/dispatch/data/types";
 import { instantFor } from "../../../../shared/schedule-layout";
+import { isInFlightStatus } from "../../../../shared/job-status";
 import { applyLocations } from "../../../../shared/board-patch";
 
 export interface ScheduleToast {
@@ -135,7 +136,10 @@ export function useDayLoad(from: string, days: number, enabled: boolean) {
 }
 
 /** Placing jobs, the toasts that report it, and Undo. */
-export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Promise<void>; tz: string }, confirm: ConfirmFn) {
+export function usePlace(
+  api: { overlay(o: Overlay): () => void; refresh(): Promise<void>; tz: string; /** First name of a technician, for messages. */ techName(id: string | null): string },
+  confirm: ConfirmFn,
+) {
   const [toasts, setToasts] = useState<ScheduleToast[]>([]);
   const seq = useRef(0);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
@@ -197,6 +201,17 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
           if (r === null) return;
           if (r.undo) tokens.push(r.undo);
         } else if (reassign) {
+          // No Undo for this, so ask first. (A job someone is on the way to or
+          // working gets the server's own, more specific question instead.)
+          if (!isInFlightStatus(job.status)) {
+            const from = live.current.techName(job.riderId);
+            const yes = await confirm({
+              title: `Move this job to ${firstName(techName)}?`,
+              message: `${from ? `${from} comes off it and ` : ""}${firstName(techName)} is notified right away. This can't be undone from here.`,
+              confirmLabel: "Reassign",
+            });
+            if (!yes) return;
+          }
           // One request: the new technician and the time together, checked at
           // the new time, in one conditional write. It notifies at once and has
           // no Undo, like a reassignment on the map.
