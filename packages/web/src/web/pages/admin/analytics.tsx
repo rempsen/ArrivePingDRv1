@@ -243,7 +243,11 @@ function loadFilters(): Filters {
   const base: Filters = { preset: "30d", customStart: "", customEnd: "", tenant: "", industry: "", billing: "", test: false };
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return { ...base, ...(JSON.parse(raw) as Partial<Filters>) };
+    if (raw) {
+      const f = { ...base, ...(JSON.parse(raw) as Partial<Filters>) };
+      // A company and an industry/plan don't combine (see FilterBar); the company wins.
+      return f.tenant ? { ...f, industry: "", billing: "" } : f;
+    }
   } catch {
     /* storage blocked: defaults */
   }
