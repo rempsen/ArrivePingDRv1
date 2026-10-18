@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Compass, ExternalLink, LifeBuoy, PlayCircle, Search, X } from "lucide-react";
+import { ArrowLeft, Check, Compass, ExternalLink, FlaskConical, LifeBuoy, PlayCircle, Search, X } from "lucide-react";
+import { useAuth } from "../hooks/use-auth";
+import { useAddSampleDay, useSampleDay } from "./SampleDayBanner";
 import { DialogPanel } from "../components/dialog-panel";
 import { dismiss } from "../lib/utils";
 import { articleBySlug, categoryById, popularSlugs, support, type ArticleBlock } from "../site/support/articles";
@@ -36,6 +38,11 @@ const ARTICLE_TOUR: Record<string, string> = {
 
 export default function GuidePanel({ onClose }: { onClose: () => void }) {
   const { chapters, status, startChapter, terms } = useGuide();
+  const { role } = useAuth();
+  const sample = useSampleDay();
+  const addSample = useAddSampleDay();
+  // Admins can bring back a sample day after clearing it (services/sample-day.ts).
+  const canAddSample = (role === "admin" || role === "superadmin") && sample.data && !sample.data.active;
   const [q, setQ] = useState("");
   const [slug, setSlug] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -179,6 +186,31 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
                   })}
                 </ul>
               </section>
+
+              {canAddSample && (
+                <section aria-labelledby="guide-sample-h" className="mt-6">
+                  <h3 id="guide-sample-h" className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    Practice
+                  </h3>
+                  <button
+                    type="button"
+                    disabled={addSample.isPending}
+                    onClick={() => {
+                      onClose();
+                      addSample.mutate();
+                    }}
+                    className="flex w-full items-start gap-3 rounded-[0.5rem] px-2.5 py-2 text-left hover:bg-white/[0.05] disabled:opacity-60"
+                  >
+                    <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-100">Add a sample day</span>
+                      <span className="block text-xs text-slate-500">
+                        {interpolate("Pretend {workers}, {customers} and {jobs} to practise on. Nobody is messaged.", terms)}
+                      </span>
+                    </span>
+                  </button>
+                </section>
+              )}
 
               <section aria-labelledby="guide-popular-h" className="mt-6">
                 <h3 id="guide-popular-h" className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">

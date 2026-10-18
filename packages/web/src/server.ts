@@ -14,6 +14,7 @@ import "./services/maintenance";
 import { sweepTimeTriggers } from "./services/automation";
 import { sweepDelays } from "./services/delay-watch";
 import { demoTick } from "./services/demo-refresh";
+import { sampleTick } from "./services/sample-day";
 import { log, captureException } from "./api/lib/logger";
 import { initRealtimeBus } from "./services/realtime";
 import { initRateLimitStore } from "./api/lib/rate-limit";
@@ -109,6 +110,13 @@ setInterval(() => {
 void oncePerTick("demo-refresh", () => demoTick({ tidy: true }));
 setInterval(() => {
   void oncePerTick("demo-refresh", () => demoTick());
+}, 60 * 1000);
+
+// Sample day (services/sample-day.ts): keep each new company's sample
+// technicians "online" and drive the on-the-way sample van, so the map and its
+// tracking page move. Writes positions only; it can never notify anyone.
+setInterval(() => {
+  void oncePerTick("sample-day", () => sampleTick());
 }, 60 * 1000);
 
 // Auto-poll pending/verifying email sending domains and flip to verified.

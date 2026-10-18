@@ -54,8 +54,10 @@ import { reportsRoutes } from "./routes/reports";
 import { apiKeysRoutes } from "./routes/api-keys";
 import { mcpRoutes } from "./routes/mcp";
 import { meRoutes } from "./routes/me";
+import { sampleDayRoutes } from "./routes/sample-day";
 import { teamRoutes } from "./routes/team";
 import { superadminRoutes } from "./routes/superadmin";
+import { platformAnalyticsRoutes } from "./routes/platform-analytics";
 import { mobileReleaseRoutes } from "./routes/mobile-release";
 import { formsRoutes } from "./routes/forms";
 import { publicFormsRoutes } from "./routes/public-forms";
@@ -394,7 +396,9 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/forms", formsRoutes)
   .route("/mcp", mcpRoutes)
   .route("/me", meRoutes)
+  .route("/sample-day", sampleDayRoutes)
   .route("/team", teamRoutes)
+  .route("/superadmin/analytics", platformAnalyticsRoutes)
   .route("/superadmin", superadminRoutes)
   .route("/mobile-release", mobileReleaseRoutes)
   .route("/punchlist", punchlistRoutes)

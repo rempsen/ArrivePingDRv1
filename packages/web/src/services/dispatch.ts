@@ -467,6 +467,12 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
       meta: { status: b.status, service: vars.service },
     });
 
+    // Sample-day jobs (services/sample-day.ts) keep their timeline but send
+    // nothing: no automations, review asks, in-app/push, email, SMS or
+    // webhooks. Office admins are real people and would otherwise be told
+    // about a pretend job.
+    if (b.isSample) return;
+
     // Automation rules + the post-completion review ask. Both are strictly
     // best-effort side effects: a failure here must never stop the real
     // notifications below from going out.

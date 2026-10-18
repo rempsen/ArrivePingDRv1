@@ -18,6 +18,9 @@ export const user = pgTable("user", {
     .notNull(),
   role: text("role").default("customer"),
   phone: text("phone"),
+  // Sample-day person (services/sample-day.ts): fictional customer or
+  // technician with an undeliverable .invalid email and a 555-01xx phone.
+  isSample: boolean("is_sample").notNull().default(false),
   // --- Multi-tenancy: every user belongs to exactly one company (tenant). ---
   companyId: text("company_id").notNull().default("default"),
   // --- CRM client record fields ---
@@ -73,7 +76,8 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)],
+  // updatedAt: platform analytics counts people active in a period by session use.
+  (table) => [index("session_userId_idx").on(table.userId), index("session_updatedAt_idx").on(table.updatedAt)],
 );
 
 export const account = pgTable(
