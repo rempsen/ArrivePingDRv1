@@ -146,34 +146,22 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("ap:guide", onGuide);
   }, []);
 
-  // superadmins get a "Companies" (tenant registry) entry at the bottom of Operations.
+  // Super admins get their cross-tenant tools in their own section, right
+  // under Operations, so it's clear these act on every company, not this one.
   const groups: NavGroup[] =
     role === "superadmin"
-      ? NAV_GROUPS.map((g, i) =>
-          i === 0
-            ? {
-                ...g,
-                items: [
-                  ...g.items,
-                  {
-                    to: "/admin/companies",
-                    label: "Companies",
-                    icon: Building2,
-                  },
-                  {
-                    to: "/admin/analytics",
-                    label: "Analytics",
-                    icon: ChartNoAxesCombined,
-                  },
-                  {
-                    to: "/admin/mobile-release",
-                    label: "Push to TestFlight",
-                    icon: Rocket,
-                  },
-                ],
-              }
-            : g,
-        )
+      ? [
+          NAV_GROUPS[0]!,
+          {
+            heading: "Super Admin",
+            items: [
+              { to: "/admin/companies", label: "Companies", icon: Building2 },
+              { to: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined },
+              { to: "/admin/mobile-release", label: "Push to TestFlight", icon: Rocket },
+            ],
+          },
+          ...NAV_GROUPS.slice(1),
+        ]
       : NAV_GROUPS;
 
   // close the mobile drawer whenever the route changes

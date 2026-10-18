@@ -379,3 +379,20 @@ describe("query text", () => {
     }
   });
 });
+
+describe("company filter", () => {
+  it("lists every open company for the picker, test ones flagged, closed ones left out", async () => {
+    const { companies } = await A.catalog();
+    const fx = companies.filter((c) => c.id.endsWith("-fx"));
+    expect(fx).toEqual([
+      { id: "acme-fx", name: "Acme Fixture", internal: false },
+      { id: "bolt-fx", name: "Bolt Fixture", internal: false },
+      { id: "demo-fx", name: "Demo Fixture", internal: true },
+    ]);
+  });
+
+  it("narrows the numbers to the picked company, even a test one", async () => {
+    expect((await A.headline({ ...SEPT, tenant: "acme-fx" })).tenants).toBe(1);
+    expect((await A.headline({ ...SEPT, tenant: "demo-fx" })).tenants).toBe(1);
+  });
+});

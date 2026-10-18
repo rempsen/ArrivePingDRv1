@@ -164,6 +164,8 @@ interface TenantRow {
 interface Catalog {
   firstDay: string | null;
   industries: { id: string; label: string }[];
+  /** Open companies for the company filter; absent from an older server. */
+  companies?: { id: string; name: string; internal: boolean }[];
   billingStatuses: string[];
   metrics: {
     id: string;
@@ -191,6 +193,8 @@ interface Filters {
   preset: Preset;
   customStart: string;
   customEnd: string;
+  /** One company id, or "" for every company. */
+  tenant: string;
   industry: string;
   billing: string;
   test: boolean;
@@ -236,7 +240,7 @@ const PRESETS: { value: Preset; label: string; title: string }[] = [
 
 const STORE_KEY = "ap.analytics.filters.v1";
 function loadFilters(): Filters {
-  const base: Filters = { preset: "30d", customStart: "", customEnd: "", industry: "", billing: "", test: false };
+  const base: Filters = { preset: "30d", customStart: "", customEnd: "", tenant: "", industry: "", billing: "", test: false };
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) return { ...base, ...(JSON.parse(raw) as Partial<Filters>) };
@@ -306,18 +310,26 @@ function Analytics() {
   const qs = useMemo(() => {
     const p = new URLSearchParams({ start, end, grain });
     if (filters.test) p.set("test", "1");
+    if (filters.tenant) p.set("tenant", filters.tenant);
     if (filters.industry) p.set("industry", filters.industry);
     if (filters.billing) p.set("billing", filters.billing);
     return p.toString();
-  }, [start, end, grain, filters.test, filters.industry, filters.billing]);
+  }, [start, end, grain, filters.test, filters.tenant, filters.industry, filters.billing]);
 
   const set = (patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch }));
+
+  // A remembered company that has since been closed or deleted: back to all companies.
+  const companyList = catalog.data?.companies;
+  useEffect(() => {
+    if (filters.tenant && companyList && !companyList.some((c) => c.id === filters.tenant)) setFilters((f) => ({ ...f, tenant: "" }));
+  }, [companyList, filters.tenant]);
+  const tenantName = filters.tenant ? companyList?.find((c) => c.id === filters.tenant)?.name : undefined;
 
   return (
     <div className="p-5 md:p-8">
       <PageHead
         title="Analytics"
-        subtitle="Live platform metrics across every company on ArrivePing."
+        subtitle={tenantName ? `Live metrics for ${tenantName} only.` : "Live platform metrics across every company on ArrivePing."}
         actions={
           <Segmented
             ariaLabel="View"
@@ -407,6 +419,21 @@ function FilterBar({
           />
         </div>
       )}
+      <select
+        id="an-tenant"
+        aria-label="Company"
+        value={filters.tenant}
+        onChange={(e) => set({ tenant: e.target.value })}
+        className={`${selectCls} max-w-[16rem]`}
+      >
+        <option value="">All companies</option>
+        {catalog?.companies?.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+            {c.internal ? " (test)" : ""}
+          </option>
+        ))}
+      </select>
       <select
         id="an-industry"
         aria-label="Industry"

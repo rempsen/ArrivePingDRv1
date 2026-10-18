@@ -12,7 +12,7 @@
  * itself every minute, and several superadmins looking at the same range
  * shouldn't each re-run the aggregates.
  */
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { sdb } from "../../api/database";
 import * as schema from "../../api/database/schema";
 import { INDUSTRY_LABELS, industryLabel } from "../industry-presets";
@@ -261,9 +261,17 @@ export async function catalog() {
       .filter(Boolean)
       .map((id) => ({ id, label: industryName(id) }))
       .sort((a, b) => a.label.localeCompare(b.label));
+    // Every open company, for the dashboard's company filter (test ones flagged).
+    const companies = (
+      await sdb
+        .select({ id: schema.companies.id, name: schema.companies.name, internal: schema.companies.isInternal })
+        .from(schema.companies)
+        .where(ne(schema.companies.status, "closed"))
+    ).sort((a, b) => a.name.localeCompare(b.name));
     return {
       firstDay: first?.first_day ?? null,
       industries,
+      companies,
       billingStatuses: ["trialing", "active", "past_due", "canceled", "none"],
       metrics: METRICS.map((m) => ({
         id: m.id,
