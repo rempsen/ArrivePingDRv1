@@ -12,6 +12,7 @@
  */
 
 import { construction, delivery, electrical, hvac, plumbing, property } from "./trades";
+import { monthlyPrice } from "../config";
 
 export const COMPETITORS_VERIFIED = "October 7, 2026";
 
@@ -363,7 +364,7 @@ const pricingPage: LandingPage = {
     "No demo needed to see a price. Every plan includes the dispatch board, the technician app and live customer arrival pages.",
   answer: {
     q: "How much does ArrivePing cost?",
-    a: `${PRICE_LINE} The rates work like tax brackets: each applies only to the drivers in its band. For example, 10 drivers cost $289 a month and 30 drivers cost $827 a month.`,
+    a: `${PRICE_LINE} The rates work like tax brackets: each applies only to the drivers in its band. For example, 10 drivers cost $${monthlyPrice(10).total} a month and 30 drivers cost $${monthlyPrice(30).total} a month.`,
   },
   sections: [{ kind: "pricing" }],
   faqs: [PRICE_FAQ, {
