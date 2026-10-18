@@ -4,10 +4,12 @@
  * Office-only (requireAdmin on every route; technicians never reach it).
  *
  *   GET  /settings        { mapV2Default } — should this company open Map v2 by default
- *   GET  /board?day=      one snapshot: technicians, the day's jobs, waiting jobs (4 reads)
+ *   GET  /board?day=&days=  one snapshot: technicians, the day's (or up to 7 days') jobs, waiting jobs (4 reads)
+ *   GET  /load?from=&days=  jobs and booked minutes per day, up to 42 days (the calendar's Month view)
+ *   POST /schedule        { bookingId, scheduledAt, force? } → { job, undo } | 404 | 409 — a calendar move
  *   GET  /candidates?jobs=a,b   ranked technicians per job, up to 20 jobs (5 reads)
  *   POST /assign          { bookingId, riderId, force? } → { job, undo } | 404 | 409
- *   POST /undo            { token } → { job }
+ *   POST /undo            { token } → { job } — undoes an assign or a calendar move
  *   GET  /stream          server-sent events that keep an open map fresh
  *
  * The stream replaces polling. It carries signals, not data: `locations`
@@ -23,12 +25,13 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database";
 import * as schema from "../database/schema";
-import { requireAdmin, tenantId } from "../middleware/auth";
+import { officeCan, requireAdmin, tenantId } from "../middleware/auth";
 import { jsonBody, id as idField, ValidationError } from "../lib/validate";
 import type { AppEnv } from "../env";
-import { loadBoard } from "../../services/dispatch-board";
+import { loadBoard, MAX_BOARD_DAYS } from "../../services/dispatch-board";
 import { loadCandidates, MAX_CANDIDATE_JOBS } from "../../services/dispatch-candidates";
-import { dispatchAssign, undoAssign } from "../../services/dispatch-assign";
+import { dispatchAssign, MAX_UNDO_TOKEN, readAnyUndo } from "../../services/dispatch-assign";
+import { dispatchSchedule, loadDayLoad, MAX_LOAD_DAYS, undoAny } from "../../services/dispatch-schedule";
 import { subscribeDispatch, type DispatchSignal } from "../../services/realtime";
 
 type SessionUser = { id: string; role?: string; name: string };
@@ -38,10 +41,27 @@ const AssignBody = z.object({
   riderId: idField("Technician"),
   /** The dispatcher confirmed the clash card ("Assign anyway?"). */
   force: z.boolean().optional(),
+  /** Asked separately: "already booked / off then — send them anyway?" (see AssignOptions.forceBusy). */
+  forceBusy: z.boolean().optional(),
+  /** The assignee the dispatcher saw; the request is refused if it has changed. */
+  expectRiderId: idField("Technician").nullable().optional(),
+  /** Also move it to this time (the calendar), in the same write and the same Undo. */
+  scheduledAt: z.string().datetime({ message: "Time must be an ISO date-time", offset: true }).optional(),
 });
-const UndoBody = z.object({ token: z.string({ message: "Undo token is required" }).min(1, "Undo token is required").max(2_000) });
+const ScheduleBody = z.object({
+  bookingId: idField("Job"),
+  scheduledAt: z.string({ message: "Time is required" }).datetime({ message: "Time must be an ISO date-time", offset: true }),
+  /** The dispatcher confirmed "Move it there anyway?". */
+  force: z.boolean().optional(),
+});
+const UndoBody = z.object({ token: z.string({ message: "Undo token is required" }).min(1, "Undo token is required").max(MAX_UNDO_TOKEN) });
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+const NOT_IN_ROLE = "Your role doesn't include this. Ask an admin on your account.";
+const forbidden = (c: { json(body: unknown, status: 403): Response }) => c.json({ message: NOT_IN_ROLE }, 403);
+/** The board feeds the dispatch map (work orders) and the calendar (scheduler). */
+const readsBoard = async (u: SessionUser) => (await officeCan(u, "work_orders:view")) || (await officeCan(u, "scheduler:view"));
 
 /** Stream tuning: one flush a second; a ping after ~20 quiet seconds. */
 const TICK_MS = 1_000;
@@ -60,9 +80,22 @@ export const dispatchRoutes = new Hono<AppEnv>()
   })
 
   .get("/board", requireAdmin, async (c) => {
+    if (!(await readsBoard(c.get("user") as SessionUser))) return forbidden(c);
     const day = c.req.query("day");
     if (day && !DAY.test(day)) throw new ValidationError({ day: "Day must look like 2026-10-17" }, "day: Day must look like 2026-10-17");
-    return c.json(await loadBoard(tenantId(c), { day: day || null }), 200);
+    const days = Number(c.req.query("days") ?? 1);
+    if (!Number.isInteger(days) || days < 1 || days > MAX_BOARD_DAYS)
+      throw new ValidationError({ days: `Days must be 1 to ${MAX_BOARD_DAYS}` }, `days: Days must be 1 to ${MAX_BOARD_DAYS}`);
+    return c.json(await loadBoard(tenantId(c), { day: day || null, days }), 200);
+  })
+
+  .get("/load", requireAdmin, async (c) => {
+    const from = c.req.query("from") ?? "";
+    if (!DAY.test(from)) throw new ValidationError({ from: "From must look like 2026-10-17" }, "from: From must look like 2026-10-17");
+    const days = Number(c.req.query("days") ?? 42);
+    if (!Number.isInteger(days) || days < 1 || days > MAX_LOAD_DAYS)
+      throw new ValidationError({ days: `Days must be 1 to ${MAX_LOAD_DAYS}` }, `days: Days must be 1 to ${MAX_LOAD_DAYS}`);
+    return c.json(await loadDayLoad(tenantId(c), { from, days }), 200);
   })
 
   .get("/candidates", requireAdmin, async (c) => {
@@ -76,8 +109,22 @@ export const dispatchRoutes = new Hono<AppEnv>()
 
   .post("/assign", requireAdmin, jsonBody(AssignBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    const { bookingId, riderId, force } = c.req.valid("json");
-    const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, by: u.name });
+    const { bookingId, riderId, force, forceBusy, scheduledAt, expectRiderId } = c.req.valid("json");
+    // Moving the time as well is scheduling (see /schedule).
+    if (scheduledAt && !(await officeCan(u, "scheduler:edit")))
+      return forbidden(c);
+    const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, forceBusy, scheduledAt, expectRiderId, by: u.name });
+    if (!r.ok) {
+      if (r.status === 404) return c.json({ message: r.message }, 404);
+      return c.json({ message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) }, 409);
+    }
+    return c.json({ job: r.job, undo: r.undo }, 200);
+  })
+
+  .post("/schedule", requireAdmin, jsonBody(ScheduleBody), async (c) => {
+    const u = c.get("user") as SessionUser;
+    const { bookingId, scheduledAt, force } = c.req.valid("json");
+    const r = await dispatchSchedule(tenantId(c), { bookingId, scheduledAt, force, by: u.name });
     if (!r.ok) {
       if (r.status === 404) return c.json({ message: r.message }, 404);
       return c.json({ message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) }, 409);
@@ -87,12 +134,27 @@ export const dispatchRoutes = new Hono<AppEnv>()
 
   .post("/undo", requireAdmin, jsonBody(UndoBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    const r = await undoAssign(tenantId(c), c.req.valid("json").token, u.name);
+    const token = c.req.valid("json").token;
+    // Undoing a time move is scheduling; undoing an assignment is dispatching.
+    // A token that no longer reads (expired, garbled) gets its own message from
+    // undoAny for anyone who could have made either kind.
+    const claims = readAnyUndo(token);
+    // An assignment that also moved the time needs both to be put back.
+    const allOf =
+      typeof claims === "string" ? null : claims.k === "time" ? ["scheduler:edit"] : claims.f ? ["work_orders:edit", "scheduler:edit"] : ["work_orders:edit"];
+    let allowed: boolean;
+    if (allOf) {
+      allowed = true;
+      for (const p of allOf) if (allowed) allowed = await officeCan(u, p);
+    } else allowed = (await officeCan(u, "work_orders:edit")) || (await officeCan(u, "scheduler:edit"));
+    if (!allowed) return forbidden(c);
+    const r = await undoAny(tenantId(c), token, u.name);
     if (!r.ok) return c.json({ message: r.message }, r.status);
-    return c.json({ job: r.job }, 200);
+    return c.json({ job: r.job, notified: r.notified }, 200);
   })
 
   .get("/stream", requireAdmin, async (c) => {
+    if (!(await readsBoard(c.get("user") as SessionUser))) return forbidden(c);
     const co = tenantId(c);
     return streamSSE(c, async (stream) => {
       let closed = false;

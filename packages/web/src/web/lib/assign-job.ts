@@ -37,39 +37,69 @@ export async function assignJob(opts: {
   techName?: string;
   confirm: ConfirmFn;
 }): Promise<AssignResult> {
-  const post = async (force?: boolean) =>
-    ok(
-      await api.bookings[":id"].assign.$post({
-        param: { id: opts.bookingId },
-        json: force ? { riderId: opts.riderId, force: true } : { riderId: opts.riderId },
-      }),
-    );
+  // This route has one override for both questions, so either answer forces it.
+  return withAssignConfirm(
+    async (f) =>
+      ok(
+        await api.bookings[":id"].assign.$post({
+          param: { id: opts.bookingId },
+          json: f.inflight || f.busy ? { riderId: opts.riderId, force: true } : { riderId: opts.riderId },
+        }),
+      ),
+    opts.confirm,
+    opts.techName,
+  );
+}
 
-  try {
-    await post();
-    return { cancelled: false };
-  } catch (e) {
-    const body =
-      e instanceof ApiError
-        ? (e.body as { forceable?: boolean; reason?: string } | undefined)
-        : undefined;
-    if (!(e instanceof ApiError) || e.status !== 409 || !body?.forceable) throw e;
+/** Which refusals the dispatcher has agreed to override. */
+export interface AssignOverrides {
+  /** Take the job off a live visit / re-offer it. */
+  inflight: boolean;
+  /** Double booking or time off. */
+  busy: boolean;
+}
 
-    const busy = body.reason === "overlap" || body.reason === "timeoff";
-    const yes = await opts.confirm({
-      title: busy
-        ? "Send them anyway?"
-        : opts.techName
-          ? `Reassign this job to ${opts.techName}?`
-          : "Reassign this job?",
-      message: busy
-        ? `${e.message} You can dispatch them anyway — check they can actually make it.`
-        : `${e.message} Their drive time and on-site clock for this visit will be cleared, and the new technician has to accept the job.`,
-      confirmLabel: busy ? "Dispatch anyway" : "Reassign",
-    });
-    if (!yes) return { cancelled: true };
+/**
+ * The confirmation half of assignJob, for any request that assigns: run it, and
+ * on a forceable 409 ask the question that fits the reason, then run it again
+ * with that override. A request that checks the two separately (the dispatch
+ * calendar's /api/dispatch/assign) can be refused twice, once for each, and
+ * each is asked once.
+ */
+export async function withAssignConfirm(
+  post: (overrides: AssignOverrides) => Promise<unknown>,
+  confirm: ConfirmFn,
+  techName?: string,
+): Promise<AssignResult> {
+  const forced: AssignOverrides = { inflight: false, busy: false };
+  for (;;) {
+    try {
+      await post(forced);
+      return { cancelled: false };
+    } catch (e) {
+      const body =
+        e instanceof ApiError
+          ? (e.body as { forceable?: boolean; reason?: string } | undefined)
+          : undefined;
+      if (!(e instanceof ApiError) || e.status !== 409 || !body?.forceable) throw e;
 
-    await post(true);
-    return { cancelled: false };
+      const busy = body.reason === "overlap" || body.reason === "timeoff";
+      // Already agreed to this one and refused again: don't ask in a loop.
+      if (busy ? forced.busy : forced.inflight) throw e;
+      const yes = await confirm({
+        title: busy
+          ? "Send them anyway?"
+          : techName
+            ? `Reassign this job to ${techName}?`
+            : "Reassign this job?",
+        message: busy
+          ? `${e.message} You can dispatch them anyway — check they can actually make it.`
+          : `${e.message} Their drive time and on-site clock for this visit will be cleared, and the new technician has to accept the job.`,
+        confirmLabel: busy ? "Dispatch anyway" : "Reassign",
+      });
+      if (!yes) return { cancelled: true };
+      if (busy) forced.busy = true;
+      else forced.inflight = true;
+    }
   }
 }

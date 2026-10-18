@@ -143,6 +143,9 @@ export async function loadCandidates(
           status: B.status,
           scheduledAt: B.scheduledAt,
           startedAt: B.startedAt,
+          clockState: B.clockState,
+          accumulatedMs: B.accumulatedMs,
+          lastResumeAt: B.lastResumeAt,
           etaMins: B.etaMins,
           durationMins: schema.services.durationMins,
         })
@@ -197,7 +200,16 @@ export async function loadCandidates(
         const mine = (byTech.get(tech.id) ?? []).filter((o) => o.id !== job.id);
         const inField = mine.filter((o) => IN_FIELD.includes(o.status));
         const freeAt = freeAtFor(
-          inField.map((o) => ({ status: o.status, scheduledAt: o.scheduledAt, startedAt: o.startedAt, durationMins: o.durationMins, etaMins: o.etaMins })),
+          inField.map((o) => ({
+            status: o.status,
+            scheduledAt: o.scheduledAt,
+            startedAt: o.startedAt,
+            durationMins: o.durationMins,
+            etaMins: o.etaMins,
+            clockState: o.clockState,
+            accumulatedMs: o.accumulatedMs,
+            lastResumeAt: o.lastResumeAt,
+          })),
           nowMs,
         );
         return [tech.id, { mine, inField, freeAt }] as const;

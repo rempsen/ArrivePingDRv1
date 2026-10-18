@@ -11,6 +11,9 @@
 import type { Board, BoardJob, BoardTech } from "../services/dispatch-board";
 import { IN_FLIGHT_STATUSES } from "./job-status";
 
+/** A location older than this greys the technician's pin ("last seen 12 min ago"). */
+export const STALE_LOCATION_MS = 10 * 60_000;
+
 export interface LocationFrame {
   techId: string;
   lat: number;

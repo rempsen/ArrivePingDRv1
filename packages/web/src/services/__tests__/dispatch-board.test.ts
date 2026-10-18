@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -98,6 +99,7 @@ beforeAll(async () => {
   await job(CO, "b-unplaced", { lat: 43.6532, lng: -79.3832 });
   // 23:30 on Oct 17 in Winnipeg is already Oct 18 in UTC.
   await job(CO, "b-late-evening", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: new Date("2026-10-18T04:30:00Z") });
+  await job(CO, "b-two-days-on", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: at(50 * HOUR) });
   await job(OTHER, "b-other", { status: "pending" });
 });
 
@@ -166,6 +168,38 @@ describe("loadBoard", () => {
     expect((await loadBoard(CO, { now: NOW, day: "17/10/2026" })).day).toBe("2026-10-17");
   });
 
+  it("covers several days for the calendar's week view", async () => {
+    const one = await loadBoard(CO, { now: NOW });
+    expect(one.days).toBe(1);
+    expect(one.jobs.some((j) => j.id === "b-two-days-on")).toBe(false);
+    const three = await loadBoard(CO, { now: NOW, days: 3 });
+    expect(three.day).toBe("2026-10-17");
+    expect(three.days).toBe(3);
+    expect(three.jobs.map((j) => j.id)).toEqual(expect.arrayContaining(["b-day", "b-late-evening", "b-two-days-on"]));
+    // asking for more than a week is capped, not an unbounded read
+    expect((await loadBoard(CO, { now: NOW, days: 30 })).days).toBe(7);
+  });
+
+  it("marks jobs an automation rule assigned", async () => {
+    await db.update(schema.bookings).set({ autoAssignedRuleId: "rule-1" }).where(eq(schema.bookings.id, "b-day"));
+    const b = await loadBoard(CO, { now: NOW });
+    expect(b.jobs.find((j) => j.id === "b-day")!.autoAssignedRuleId).toBe("rule-1");
+    expect(b.jobs.find((j) => j.id === "b-day-later")!.autoAssignedRuleId).toBe("");
+    await db.update(schema.bookings).set({ autoAssignedRuleId: "" }).where(eq(schema.bookings.id, "b-day"));
+  });
+
+  it("lists the days off in range, in company time", async () => {
+    // Noon Winnipeg on the 18th; and one on the 25th, outside a 3-day board.
+    await db.insert(schema.techShifts).values([
+      { companyId: CO, riderId: `${CO}-t1`, kind: "timeoff", date: new Date("2026-10-18T17:00:00Z") },
+      { companyId: CO, riderId: `${CO}-t1`, kind: "shift", date: new Date("2026-10-17T17:00:00Z") },
+      { companyId: CO, riderId: `${CO}-t2`, kind: "timeoff", date: new Date("2026-10-25T17:00:00Z") },
+    ]);
+    const b = await loadBoard(CO, { now: NOW, days: 3 });
+    expect(b.timeOff).toEqual([{ techId: `${CO}-t1`, day: "2026-10-18" }]);
+    expect((await loadBoard(OTHER, { now: NOW, days: 3 })).timeOff).toEqual([]);
+  });
+
   it("never shows another company's technicians or jobs", async () => {
     const b = await loadBoard(CO, { now: NOW });
     expect(b.jobs.some((j) => j.id === "b-other")).toBe(false);
@@ -206,8 +240,8 @@ describe("loadBoard", () => {
       expect(big.techs).toHaveLength(50);
       expect(big.jobs).toHaveLength(200);
       expect(bigReads).toBe(smallReads);
-      // the spy really saw the reads: settings, technicians, jobs, company
-      expect(smallReads).toBe(4);
+      // the spy really saw the reads: settings, technicians, jobs, company, time off
+      expect(smallReads).toBe(5);
     } finally {
       client.query = origQuery;
       client.transaction = origTx;
@@ -249,5 +283,13 @@ describe("freeAtFor", () => {
   it("counts down a job in progress, never below five minutes", () => {
     expect(freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 20 * MIN, durationMins: 60, etaMins: null }], now)).toBe(now + 40 * MIN);
     expect(freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 3 * HOUR, durationMins: 60, etaMins: null }], now)).toBe(now + 5 * MIN);
+    // 10 minutes worked, then paused for two hours: 50 minutes still to do.
+    expect(
+      freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 130 * MIN, durationMins: 60, etaMins: null, clockState: "paused", accumulatedMs: 10 * MIN, lastResumeAt: now - 130 * MIN }], now),
+    ).toBe(now + 50 * MIN);
+    // running again for 5 more minutes after 10 banked
+    expect(
+      freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 60 * MIN, durationMins: 60, etaMins: null, clockState: "running", accumulatedMs: 10 * MIN, lastResumeAt: now - 5 * MIN }], now),
+    ).toBe(now + 45 * MIN);
   });
 });

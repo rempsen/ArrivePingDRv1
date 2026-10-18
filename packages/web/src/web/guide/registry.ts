@@ -162,7 +162,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "sched.mode",
         placement: "bottom",
         title: "Two ways to plan",
-        body: "Board shows a lane per {worker}. Calendar shows the day, week or month at a glance.",
+        body: "Board shows a lane per {worker}. Calendar puts every {worker} on a row with the day's hours across, so you see who's free at a glance.",
       },
       {
         id: "views",
@@ -171,7 +171,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "sched.views",
         placement: "bottom",
         title: "Zoom in or out",
-        body: "Switch between Day, Week, Work Week and Month. Try Week now.",
+        body: "Day shows each {worker}'s hours. Week shows how full each {worker}'s days are. Month shows how busy the team is. Try Week now.",
       },
       {
         id: "queue",
@@ -180,7 +180,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "sched.queue",
         placement: "right",
         title: "Nothing slips through",
-        body: "The Work Queue lists every {job} still waiting for a {worker}. Open one to give it a time and a {worker}.",
+        body: "To schedule lists every {job} still waiting for a {worker}. Drag one onto a row, or press Find a slot and pick one of the best fits.",
       },
       {
         id: "new",

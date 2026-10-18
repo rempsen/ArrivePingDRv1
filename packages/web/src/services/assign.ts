@@ -13,7 +13,7 @@
  */
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { fireEvent } from "./dispatch";
 import { reconcileRiderStatus } from "./presence";
 import { findAvailabilityBlock } from "./availability";
@@ -25,6 +25,12 @@ export type Booking = typeof schema.bookings.$inferSelect;
 export interface AssignOptions {
   /** Dispatcher override: pull a tech off a live job / ignore availability clashes. */
   force?: boolean;
+  /**
+   * When set, the availability check is its own override: `force` then only
+   * covers taking the job off a live visit, and a clash at the new time is
+   * still asked about unless this is true. (The dispatch calendar asks both.)
+   */
+  forceBusy?: boolean;
   /** Who's doing this. Automation stamps the job so the UI can badge it. */
   by?: { kind: "dispatcher"; name?: string } | { kind: "automation"; ruleId: string; ruleName: string };
   /**
@@ -33,10 +39,23 @@ export interface AssignOptions {
    * (services/dispatch-assign.ts) so an undone drop never texts anyone.
    */
   deferEvent?: boolean;
+  /**
+   * Put the job at this time in the same write (the dispatch calendar drops a
+   * queued job on a technician at a time). Availability is checked at this
+   * time, not the old one.
+   */
+  scheduledAt?: Date;
+  /**
+   * The assignee the caller saw (null = in the queue). If it changed before
+   * this read, the request is refused as a race rather than quietly turning a
+   * queue drop into a reassignment.
+   */
+  expectRiderId?: string | null;
 }
 
 export type AssignResult =
-  | { ok: true; booking: Booking }
+  /** `previous` is the row as checked and replaced by this write. */
+  | { ok: true; booking: Booking; previous: Booking }
   | {
       ok: false;
       code: "tech_not_found" | "job_not_found" | "blocked" | "already_accepted" | "unavailable" | "raced";
@@ -64,6 +83,9 @@ export async function assignJob(
   const prev = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
   if (!prev) return { ok: false, code: "job_not_found", message: "Work order not found", forceable: false };
 
+  if (opts.expectRiderId !== undefined && (prev.riderId ?? null) !== opts.expectRiderId)
+    return { ok: false, code: "raced", message: "This job just changed — pull it up again to see where it is now.", forceable: false };
+
   // Terminal and in-flight jobs are protected (see assignBlockedReason).
   // `forceable` tells the dispatch UI whether this refusal is a "are you sure"
   // (a tech is mid-job) or a hard no (the job is completed/cancelled).
@@ -85,10 +107,10 @@ export async function assignJob(
   // Is this tech actually free then? Double-booking + time off. Forceable,
   // because a real dispatcher overrides both for good reasons — automation
   // never passes force, so a rule can't double-book anyone.
-  if (!force) {
+  if (opts.forceBusy === undefined ? !force : !opts.forceBusy) {
     const busy = await findAvailabilityBlock(companyId, {
       riderId,
-      scheduledAt: prev.scheduledAt,
+      scheduledAt: opts.scheduledAt ?? prev.scheduledAt,
       bookingId,
       serviceId: prev.serviceId,
     });
@@ -108,6 +130,7 @@ export async function assignJob(
     autoAssignedRuleId: auto ? auto.ruleId : "",
     autoAssignedAt: auto ? new Date() : null,
   };
+  if (opts.scheduledAt) set.scheduledAt = opts.scheduledAt;
   // Handing a live job to someone else: the new tech must not inherit the
   // previous tech's drive time, arrival or running on-site clock (that time is
   // billable and belongs to the first visit, not to this one).
@@ -124,7 +147,15 @@ export async function assignJob(
   const [b] = await t.update(
     schema.bookings,
     set,
-    and(eq(schema.bookings.id, bookingId), eq(schema.bookings.status, prev.status)),
+    and(
+      eq(schema.bookings.id, bookingId),
+      eq(schema.bookings.status, prev.status),
+      // ...and the assignee we checked: two dispatchers reassigning at once
+      // can't overwrite each other.
+      prev.riderId ? eq(schema.bookings.riderId, prev.riderId) : isNull(schema.bookings.riderId),
+      // Moving it too: only from the time we checked.
+      ...(opts.scheduledAt ? [eq(schema.bookings.scheduledAt, prev.scheduledAt)] : []),
+    ),
   );
   if (!b)
     return {
@@ -153,5 +184,5 @@ export async function assignJob(
   }
 
   if (!opts.deferEvent) await fireEvent("assigned", bookingId);
-  return { ok: true, booking: b };
+  return { ok: true, booking: b, previous: prev };
 }

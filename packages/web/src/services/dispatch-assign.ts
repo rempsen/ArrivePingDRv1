@@ -29,13 +29,18 @@ import { reconcileRiderStatus } from "./presence";
 import { logJobEvent } from "./job-events";
 import { publishDispatch } from "./realtime";
 import { fireEvent } from "./dispatch";
-import { cancelTasks, registerTaskHandler, runTaskNow, scheduleTask } from "./scheduler";
+import { cancelTasks, registerTaskHandler } from "./scheduler";
+import { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
+import { currentMoveGen, holdNotice, noteMove, noteMoveUndone } from "./dispatch-notices";
 
 /** How long an Undo token stays valid. The map's toast offers it for 6 s. */
 export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
-/** How long the "assigned" notifications wait, so an Undo inside the window reaches nobody. */
-export const NOTIFY_GRACE_MS = 8_000;
-export const ASSIGNED_NOTICE_TASK = "dispatch_assigned";
+export { NOTIFY_GRACE_MS, holdNotice, _setGraceTimerForTests } from "./dispatch-notices";
+export { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
+/** The longest decline/release reason an Undo can restore (the decline form's limit). */
+const MAX_KEPT_REASON = 2_000;
+/** Longest Undo token accepted: room for that reason even in 4-byte text, base64'd. */
+export const MAX_UNDO_TOKEN = 12_000;
 
 /** What changed on the job, for the map to patch its copy. */
 export interface JobPatch {
@@ -49,10 +54,13 @@ export type AssignOutcome =
   | { ok: true; job: JobPatch; undo: string | null }
   | { ok: false; status: 404 | 409; message: string; forceable: boolean; reason?: string };
 
-export type UndoOutcome = { ok: true; job: JobPatch } | { ok: false; status: 400 | 404 | 409 | 410; message: string };
+/** `notified`: the notice had already gone out before the Undo, so people heard about the change. */
+export type UndoOutcome = { ok: true; job: JobPatch; notified: boolean } | { ok: false; status: 400 | 404 | 409 | 410; message: string };
 
 interface UndoClaims {
   v: 1;
+  /** kind: an assignment from the queue (the default, and every token issued before kinds existed) */
+  k?: "assign";
   /** company */
   c: string;
   /** booking */
@@ -63,9 +71,42 @@ interface UndoClaims {
   s: string;
   /** previous assignStatus */
   a: string;
+  /** When the drop also moved the time: scheduledAt before and after, ISO. */
+  f?: string;
+  t?: string;
+  /** What the queue entry said before: why it came back (declineReason) and when it was last offered (assignedAt, ISO). */
+  d?: string;
+  o?: string;
+  /** When the drop moved the time: when (ISO), to tell whether its notice went out before an Undo. */
+  m?: string;
+  /** ...and that move's generation: Undo only while it's still the latest move. */
+  q?: string;
+  /** This offer's assignedAt (ISO): Undo takes back this offer, not a later one to the same technician. */
+  g?: string;
   /** expiry, ms */
   exp: number;
 }
+
+/** A time move on the calendar (services/dispatch-schedule.ts). */
+export interface TimeUndoClaims {
+  v: 1;
+  k: "time";
+  c: string;
+  b: string;
+  /** scheduledAt before the move, ISO */
+  f: string;
+  /** scheduledAt after the move, ISO */
+  t: string;
+  /** The technician it was moved for ("" when unassigned); Undo only for them. */
+  r?: string;
+  /** When the move was made (ISO): did its notice go out after this? */
+  m?: string;
+  /** The move's notice generation: Undo only while this is still the latest move. */
+  q?: string;
+  exp: number;
+}
+
+export type AnyUndoClaims = UndoClaims | TimeUndoClaims;
 
 let processKey: Buffer | null = null;
 function signingKey(): Buffer {
@@ -75,28 +116,40 @@ function signingKey(): Buffer {
   return (processKey ??= randomBytes(32));
 }
 
-export function signUndo(claims: UndoClaims): string {
+export function signUndo(claims: AnyUndoClaims): string {
   const body = Buffer.from(JSON.stringify(claims)).toString("base64url");
   const mac = createHmac("sha256", signingKey()).update(body).digest("base64url");
   return `${body}.${mac}`;
 }
 
+/** An assignment token, for undoAssign. A time-move token reads as invalid here. */
 export function readUndo(token: unknown, now = Date.now()): UndoClaims | "invalid" | "expired" {
-  if (typeof token !== "string" || token.length > 2_000) return "invalid";
+  const c = readAnyUndo(token, now);
+  if (typeof c === "string") return c;
+  return c.k === "time" ? "invalid" : c;
+}
+
+/** Either kind of token, verified and unexpired. */
+export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "invalid" | "expired" {
+  if (typeof token !== "string" || token.length > MAX_UNDO_TOKEN) return "invalid";
   const parts = token.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return "invalid";
   const [body, mac] = parts as [string, string];
   const want = createHmac("sha256", signingKey()).update(body).digest();
   const got = Buffer.from(mac, "base64url");
   if (got.length !== want.length || !timingSafeEqual(got, want)) return "invalid";
-  let c: UndoClaims;
+  let c: AnyUndoClaims;
   try {
-    c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as UndoClaims;
+    c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as AnyUndoClaims;
   } catch {
     return "invalid";
   }
-  const strings = [c?.c, c?.b, c?.r, c?.s, c?.a];
-  if (!c || c.v !== 1 || strings.some((x) => typeof x !== "string") || typeof c.exp !== "number") return "invalid";
+  if (!c || c.v !== 1 || typeof c.exp !== "number") return "invalid";
+  const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
+  if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
+  if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
+  if (c.k !== "time" && [c.d, c.o, c.m, c.g, c.q].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
+  if (c.k === "time" && [c.r, c.m, c.q].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (now > c.exp) return "expired";
   return c;
 }
@@ -108,32 +161,9 @@ const patchOf = (b: typeof schema.bookings.$inferSelect): JobPatch => ({
   riderId: b.riderId,
 });
 
-// The timer is injectable so tests can run the deferred notice on demand.
-type GraceTimer = (run: () => void, ms: number) => void;
-const realTimer: GraceTimer = (run, ms) => {
-  const h = setTimeout(run, ms);
-  (h as { unref?: () => void }).unref?.();
-};
-let graceTimer: GraceTimer = realTimer;
-/** Tests only: capture the deferred-notice callback instead of waiting for it. */
-export function _setGraceTimerForTests(fn: GraceTimer | null) {
-  graceTimer = fn ?? realTimer;
-}
-
-async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string) {
-  const id = await scheduleTask({
-    companyId,
-    kind: ASSIGNED_NOTICE_TASK,
-    runAt: Date.now() + NOTIFY_GRACE_MS,
-    bookingId,
-    payload: { riderId },
-  });
-  // Couldn't queue it: tell people now rather than never.
-  if (!id) {
-    await fireEvent("assigned", bookingId);
-    return;
-  }
-  graceTimer(() => void runTaskNow(id), NOTIFY_GRACE_MS);
+/** `offer`: the assignedAt this offer wrote (ISO), so the notice speaks only for this offer. */
+async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string, offer: string | null): Promise<boolean> {
+  return holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId, ...(offer ? { offer } : {}) }, fallback: "assigned" });
 }
 
 registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {
@@ -143,6 +173,10 @@ registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {
   // Undone, given to someone else or archived in the meantime: nothing to announce.
   if (!b || b.deletedAt || b.riderId !== riderId) return;
   if (b.assignStatus !== "offered" && b.assignStatus !== "accepted") return;
+  // A later offer to the same technician (declined or taken back, then offered
+  // again) has its own notice; this one was for an earlier offer.
+  const offer = typeof task.payload.offer === "string" ? task.payload.offer : null;
+  if (offer && (!b.assignedAt || new Date(b.assignedAt).getTime() !== new Date(offer).getTime())) return;
   await fireEvent("assigned", task.bookingId);
 });
 
@@ -161,7 +195,16 @@ async function techName(companyId: string, riderId: string): Promise<string> {
 
 export async function dispatchAssign(
   companyId: string,
-  input: { bookingId: string; riderId: string; force?: boolean; by: string },
+  input: {
+    bookingId: string;
+    riderId: string;
+    force?: boolean;
+    forceBusy?: boolean;
+    scheduledAt?: string;
+    /** The assignee the dispatcher saw (a reassignment): refused if it changed since. */
+    expectRiderId?: string | null;
+    by: string;
+  },
   now = Date.now(),
 ): Promise<AssignOutcome> {
   const t = tdb(companyId);
@@ -171,28 +214,52 @@ export async function dispatchAssign(
   // Undo is for taking a job back off the board's queue. Moving a job from one
   // technician to another is a deliberate reassignment, notified at once.
   const undoable = !prev.riderId;
+  const to = input.scheduledAt ? new Date(input.scheduledAt) : null;
   const r = await assignJob(companyId, input.bookingId, input.riderId, {
     force: input.force,
+    // A queue drop stays a queue drop, and a reassignment takes the job from
+    // the technician the dispatcher saw: if either changed meanwhile, refuse.
+    ...(undoable ? { expectRiderId: null } : input.expectRiderId !== undefined ? { expectRiderId: input.expectRiderId } : {}),
+    ...(input.forceBusy !== undefined ? { forceBusy: input.forceBusy } : {}),
     by: { kind: "dispatcher", name: input.by },
     deferEvent: undoable,
+    ...(to ? { scheduledAt: to } : {}),
   });
   if (!r.ok) {
     if (r.code === "tech_not_found" || r.code === "job_not_found") return { ok: false, status: 404, message: r.message, forceable: false };
     return { ok: false, status: 409, message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) };
   }
 
+  // The token restores exactly what this write replaced (assignJob's own read),
+  // not this function's earlier look at the job.
+  const was = r.previous;
   let undo: string | null = null;
+  // A reason too long to carry back can't be restored exactly: no Undo then
+  // (the notice still waits out the window, so nothing is sent early).
+  const restorable = (was.declineReason ?? "").length <= MAX_KEPT_REASON;
+  const from = new Date(was.scheduledAt);
+  const moved = new Date(r.booking.scheduledAt).getTime() !== from.getTime();
+  // A new time is announced on its own ("rescheduled"), apart from the
+  // assignment: tenants set the two messages up separately.
+  const moveGen = moved ? await noteMove(companyId, input.bookingId, { from, to: new Date(r.booking.scheduledAt) }) : null;
+  const moveHeld = !moved || moveGen !== null;
   if (undoable) {
     undo = signUndo({
       v: 1,
       c: companyId,
       b: input.bookingId,
       r: input.riderId,
-      s: prev.status,
-      a: prev.assignStatus,
+      s: was.status,
+      a: was.assignStatus,
+      ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString(), m: new Date().toISOString(), ...(moveGen ? { q: moveGen } : {}) } : {}),
+      ...(was.declineReason ? { d: was.declineReason } : {}),
+      ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
+      ...(r.booking.assignedAt ? { g: new Date(r.booking.assignedAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
-    await deferAssignedNotice(companyId, input.bookingId, input.riderId);
+    // Already announced (a notice couldn't be held): no Undo to offer.
+    const offer = r.booking.assignedAt ? new Date(r.booking.assignedAt).toISOString() : null;
+    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId, offer)) || !moveHeld || !restorable) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.
     void publishDispatch(companyId, { kind: "job", jobId: input.bookingId });
   }
@@ -207,6 +274,10 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
 
   const t = tdb(companyId);
   const B = schema.bookings;
+  // A drop that moved the time: only while that move is still the latest
+  // (moved away and back since, the time matches but the decision doesn't).
+  if (c.q && (await currentMoveGen(companyId, c.b)) !== c.q)
+    return { ok: false, status: 409, message: "This job changed since you assigned it — open it to see where it is now." };
   // Only an offer nobody has acted on yet: same tech, still offered, still
   // assigned, not archived. Anything else means the world moved on.
   const [b] = await t.update(
@@ -215,12 +286,25 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
       riderId: null,
       status: c.s,
       assignStatus: c.a,
-      assignedAt: null,
+      // Back as it was in the queue, including why it came back.
+      assignedAt: c.o ? new Date(c.o) : null,
+      declineReason: c.d ?? "",
       acceptedAt: null,
       autoAssignedRuleId: "",
       autoAssignedAt: null,
+      ...(c.f ? { scheduledAt: new Date(c.f) } : {}),
     },
-    and(eq(B.id, c.b), eq(B.riderId, c.r), eq(B.assignStatus, "offered"), eq(B.status, "assigned"), isNull(B.deletedAt)),
+    and(
+      eq(B.id, c.b),
+      eq(B.riderId, c.r),
+      eq(B.assignStatus, "offered"),
+      eq(B.status, "assigned"),
+      isNull(B.deletedAt),
+      // A drop that also moved the time puts both back, or neither.
+      ...(c.t ? [eq(B.scheduledAt, new Date(c.t))] : []),
+      // This offer, not a later one to the same technician.
+      ...(c.g ? [eq(B.assignedAt, new Date(c.g))] : []),
+    ),
   );
   if (!b) {
     const cur = await t.selectOne(B, eq(B.id, c.b));
@@ -232,7 +316,11 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
     return { ok: false, status: 409, message: "This job changed since you assigned it — open it to see where it is now." };
   }
 
-  await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK });
+  // Nothing left to cancel: the notice already went (or is going) out.
+  const assignNotified = (await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK })) === 0;
+  // The drop's time change, if any, is undone like any move.
+  const moveNotified = c.f && c.t ? await noteMoveUndone(companyId, c.b, { f: c.f, t: c.t, m: c.m }) : false;
+  const notified = assignNotified || moveNotified;
   await reconcileRiderStatus(companyId, c.r);
   await logJobEvent({
     companyId,
@@ -246,5 +334,5 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   });
   void publishDispatch(companyId, { kind: "job", jobId: c.b });
   void publishDispatch(companyId, { kind: "tech", techId: c.r });
-  return { ok: true, job: patchOf(b) };
+  return { ok: true, job: patchOf(b), notified };
 }

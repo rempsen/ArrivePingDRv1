@@ -23,10 +23,11 @@ import { DEFAULT_TZ, namedDayBounds, safeTimeZone, zonedDayKey } from "../shared
 import { IN_FLIGHT_STATUSES, TERMINAL_STATUSES } from "../shared/job-status";
 import { jobMinutes } from "../shared/availability";
 import { parseSkills } from "../shared/qualify";
+import { addDays } from "../shared/schedule-layout";
+import { STALE_LOCATION_MS } from "../shared/board-patch";
 
 export const BOARD_JOB_LIMIT = 3000;
-/** A location older than this greys the technician's pin ("last seen 12 min ago"). */
-export const STALE_LOCATION_MS = 10 * 60_000;
+export { STALE_LOCATION_MS } from "../shared/board-patch";
 
 /** bookings.lat/lng default to downtown Toronto when an address never geocoded. */
 const DEFAULT_JOB_POINT = { lat: 43.6532, lng: -79.3832 };
@@ -85,11 +86,15 @@ export interface BoardJob {
   /** The running-late watch flagged it. */
   late: boolean;
   isSample: boolean;
+  /** Set when an automation rule assigned it (shown as the "A" badge); "" otherwise. */
+  autoAssignedRuleId: string;
 }
 
 export interface Board {
-  /** The day shown, YYYY-MM-DD in company time. */
+  /** The day shown, YYYY-MM-DD in company time (the first of them when `days` > 1). */
   day: string;
+  /** How many days from `day` the jobs cover (the calendar's week view asks for 7). */
+  days: number;
   tz: string;
   workerNoun: string;
   jobNoun: string;
@@ -101,6 +106,8 @@ export interface Board {
   generatedAt: string;
   techs: BoardTech[];
   jobs: BoardJob[];
+  /** Days off in the range (company-time days), so the calendar doesn't suggest them. */
+  timeOff: Array<{ techId: string; day: string }>;
 }
 
 /** The minimum a job needs for the "free at" estimate. */
@@ -110,6 +117,10 @@ export interface FreeAtJob {
   startedAt: Date | string | number | null;
   durationMins: number | null;
   etaMins: number | null;
+  /** The on-site clock, when the job uses it: paused time isn't work done. */
+  clockState?: string | null;
+  accumulatedMs?: number | null;
+  lastResumeAt?: Date | string | number | null;
 }
 
 const ms = (v: Date | string | number | null | undefined): number | null => {
@@ -132,8 +143,15 @@ export function freeAtFor(jobs: readonly FreeAtJob[], now: number): number | nul
     const dur = jobMinutes(j.durationMins);
     let remaining: number;
     const started = ms(j.startedAt);
-    if ((j.status === "in_progress" || j.status === "onsite" || j.status === "paused") && started != null) {
-      remaining = Math.max(5, dur - (now - started) / 60_000);
+    const clock = j.clockState === "running" || j.clockState === "paused";
+    if ((j.status === "in_progress" || j.status === "onsite" || j.status === "paused") && (clock || started != null)) {
+      // Work done: the on-site clock when it's in use (a paused stretch isn't
+      // work), else the wall time since they started.
+      const resumed = ms(j.lastResumeAt);
+      const workedMs = clock
+        ? (j.accumulatedMs ?? 0) + (j.clockState === "running" && resumed != null ? Math.max(0, now - resumed) : 0)
+        : now - started!;
+      remaining = Math.max(5, dur - workedMs / 60_000);
     } else if (j.status === "enroute") {
       remaining = (j.etaMins ?? 10) + dur;
     } else {
@@ -155,7 +173,10 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-export async function loadBoard(companyId: string, opts: { day?: string | null; now?: Date } = {}): Promise<Board> {
+/** The most days one board read covers (the calendar's week view). */
+export const MAX_BOARD_DAYS = 7;
+
+export async function loadBoard(companyId: string, opts: { day?: string | null; days?: number; now?: Date } = {}): Promise<Board> {
   const now = opts.now ?? new Date();
   const t = tdb(companyId);
 
@@ -163,7 +184,9 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
   const settings = await t.selectOne(schema.companySettings);
   const tz = safeTimeZone(settings?.timezone ?? DEFAULT_TZ);
   const day = opts.day && /^\d{4}-\d{2}-\d{2}$/.test(opts.day) ? opts.day : zonedDayKey(now, tz);
-  const { start, end } = namedDayBounds(day, tz);
+  const days = Math.min(MAX_BOARD_DAYS, Math.max(1, Math.floor(opts.days ?? 1)));
+  const { start } = namedDayBounds(day, tz);
+  const { end } = namedDayBounds(days > 1 ? addDays(day, days - 1) : day, tz);
   const dayEnd = new Date(end.getTime() + 1); // exclusive
 
   const customer = alias(schema.user, "dispatch_customer");
@@ -172,7 +195,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
   const waiting = and(isNull(B.riderId), notInArray(B.status, [...TERMINAL_STATUSES]));
   const live = inArray(B.status, [...IN_FLIGHT_STATUSES]);
 
-  const [techRows, jobRows, company] = await Promise.all([
+  const [techRows, jobRows, company, offRows] = await Promise.all([
     // 2. Technicians with their names. Deactivated ones can't be dispatched.
     t.transaction((tx) =>
       tx
@@ -210,12 +233,16 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
           address: B.address,
           scheduledAt: B.scheduledAt,
           startedAt: B.startedAt,
+          clockState: B.clockState,
+          accumulatedMs: B.accumulatedMs,
+          lastResumeAt: B.lastResumeAt,
           riderId: B.riderId,
           requiredSkillClass: B.requiredSkillClass,
           requiredSkills: B.requiredSkills,
           etaMins: B.etaMins,
           delayFlaggedAt: B.delayFlaggedAt,
           isSample: B.isSample,
+          autoAssignedRuleId: B.autoAssignedRuleId,
           serviceName: schema.services.name,
           category: schema.services.category,
           durationMins: schema.services.durationMins,
@@ -235,7 +262,25 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
       .from(schema.companies)
       .where(eq(schema.companies.id, companyId))
       .then((r) => r[0] ?? null),
+    // 5. Time off in the range (a day either side covers every zone offset).
+    t.select(
+      schema.techShifts,
+      and(
+        eq(schema.techShifts.kind, "timeoff"),
+        gte(schema.techShifts.date, new Date(start.getTime() - 48 * 3_600_000)),
+        lt(schema.techShifts.date, new Date(dayEnd.getTime() + 48 * 3_600_000)),
+      ),
+    ),
   ]);
+  const rangeDays = new Set(Array.from({ length: days }, (_, i) => addDays(day, i)));
+  const timeOff = [
+    ...new Map(
+      offRows
+        .map((s) => ({ techId: s.riderId, day: zonedDayKey(new Date(s.date), tz) }))
+        .filter((o) => rangeDays.has(o.day))
+        .map((o) => [`${o.techId}|${o.day}`, o] as const),
+    ).values(),
+  ];
 
   const truncated = jobRows.length > BOARD_JOB_LIMIT;
   const rows = truncated ? jobRows.slice(0, BOARD_JOB_LIMIT) : jobRows;
@@ -271,6 +316,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         etaMins: r.etaMins,
         late: r.delayFlaggedAt != null && !TERMINAL_STATUSES.includes(r.status as never),
         isSample: r.isSample,
+        autoAssignedRuleId: r.autoAssignedRuleId ?? "",
       };
     })
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
@@ -295,7 +341,16 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         .filter((j) => !IN_FIELD.includes(j.status))
         .sort((a, b) => Number(new Date(a.scheduledAt)) - Number(new Date(b.scheduledAt)));
       const freeAt = freeAtFor(
-        inField.map((j) => ({ status: j.status, scheduledAt: j.scheduledAt, startedAt: j.startedAt, durationMins: j.durationMins, etaMins: j.etaMins })),
+        inField.map((j) => ({
+          status: j.status,
+          scheduledAt: j.scheduledAt,
+          startedAt: j.startedAt,
+          durationMins: j.durationMins,
+          etaMins: j.etaMins,
+          clockState: j.clockState,
+          accumulatedMs: j.accumulatedMs,
+          lastResumeAt: j.lastResumeAt,
+        })),
         nowMs,
       );
       const locMs = ms(r.locationUpdatedAt);
@@ -324,6 +379,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
 
   return {
     day,
+    days,
     tz,
     workerNoun: settings?.workerNoun || "Technician",
     jobNoun: settings?.jobNoun || "Job",
@@ -333,5 +389,6 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
     generatedAt: now.toISOString(),
     techs,
     jobs,
+    timeOff,
   };
 }

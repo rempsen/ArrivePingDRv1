@@ -27,6 +27,8 @@ function colDdl(col: PgColumn, withPk: boolean): string {
     : typeof dflt === "string" ? `'${dflt.replace(/'/g, "''")}'`
     : typeof dflt === "boolean" ? (dflt ? "TRUE" : "FALSE")
     : typeof dflt === "number" ? String(dflt)
+    // sql`now()` defaults (createdAt and friends): notices compare against them.
+    : dflt && typeof dflt === "object" && "queryChunks" in dflt && col.getSQLType().startsWith("timestamp") ? "now()"
     : null;
   if (lit !== null) parts.push(`DEFAULT ${lit}`);
   return parts.join(" ");
@@ -38,6 +40,9 @@ async function ensureTable(table: PgTable) {
   for (const c of cfg.columns) {
     if (c.primary) continue;
     await s.execute(`ALTER TABLE "${cfg.name}" ADD COLUMN IF NOT EXISTS ${colDdl(c, false)}`);
+    // Another test file may have made this table first without the now()
+    // default; the notice handlers compare event times, so make sure it's there.
+    if (colDdl(c, false).endsWith("DEFAULT now()")) await s.execute(`ALTER TABLE "${cfg.name}" ALTER COLUMN "${c.name}" SET DEFAULT now()`);
   }
 }
 
@@ -85,10 +90,20 @@ afterAll(() => da._setGraceTimerForTests(null));
 
 /** Run the deferred "assigned" notices that are due. */
 async function flushNotices() {
-  const runs = pending.splice(0);
-  for (const r of runs) r();
-  // runTaskNow is async inside the timer callback; give it a moment.
-  await new Promise((r) => setTimeout(r, 150));
+  // A notice may hold another (a move notice waiting for an assignment
+  // notice), so keep going until nothing new is queued.
+  for (let round = 0; round < 8 && pending.length > 0; round++) {
+    const runs = pending.splice(0);
+    for (const r of runs) r();
+    // runTaskNow is async inside the timer callback: wait until every notice
+    // that started has finished (a slow CI box can take a while).
+    await new Promise((r) => setTimeout(r, 50));
+    for (let i = 0; i < 100; i++) {
+      const running = await db.select().from(schema.scheduledTasks).where(eq(schema.scheduledTasks.status, "running"));
+      if (running.length === 0) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
 }
 
 describe("dispatchAssign + undoAssign", () => {
@@ -105,7 +120,7 @@ describe("dispatchAssign + undoAssign", () => {
     expect((await tasks(id)).map((t) => t.status)).toEqual(["pending"]);
 
     const u = await da.undoAssign(CO, r.undo, "Dana", NOW.getTime() + 3_000);
-    expect(u).toEqual({ ok: true, job: { id, status: "pending", assignStatus: "none", riderId: null } });
+    expect(u).toEqual({ ok: true, job: { id, status: "pending", assignStatus: "none", riderId: null }, notified: false });
     const after = await row(id);
     expect(after).toMatchObject({ riderId: null, status: "pending", assignStatus: "none", assignedAt: null });
     expect((await tasks(id)).map((t) => t.status)).toEqual(["cancelled"]);
@@ -176,6 +191,189 @@ describe("dispatchAssign + undoAssign", () => {
     expect(r).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
     const forced = await da.dispatchAssign(CO, { bookingId: second, riderId: `${CO}-t2`, by: "Dana", force: true }, NOW.getTime());
     expect(forced.ok).toBe(true);
+    await flushNotices();
+  });
+
+  it("assigns at a new time in one write, checked at that time, and Undo puts both back", async () => {
+    // t2 is busy at the job's current time, free at the new one.
+    const blocker = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const id = await job(CO, { scheduledAt: (await row(blocker)).scheduledAt });
+    const before = (await row(id)).scheduledAt;
+    const to = new Date(before.getTime() + 4 * HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t2`, scheduledAt: to, by: "Dana" }, NOW.getTime());
+    expect(r.ok).toBe(true);
+    expect((await row(id)).scheduledAt.toISOString()).toBe(to);
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+    const u = await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime());
+    expect(u.ok).toBe(true);
+    expect((await row(id)).riderId).toBeNull();
+    expect((await row(id)).scheduledAt.toISOString()).toBe(before.toISOString());
+    await flushNotices();
+    expect(await events(id)).not.toContain("assigned");
+  });
+
+  it("reassigns and moves in one write, checked for the new technician at the new time", async () => {
+    const theirs = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const target = (await row(theirs)).scheduledAt.toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: target, by: "Dana" }, NOW.getTime());
+    expect(r).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+    const later = new Date(new Date(target).getTime() + 3 * HOUR).toISOString();
+    const ok = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: later, by: "Dana" }, NOW.getTime());
+    expect(ok.ok && ok.undo).toBeNull();
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
+    expect((await row(id)).scheduledAt.toISOString()).toBe(later);
+    expect(await events(id)).toContain("assigned");
+  });
+
+  it("still checks the new time when taking a job off a live visit", async () => {
+    const theirs = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const live = await job(CO, { riderId: `${CO}-t2`, status: "enroute", assignStatus: "accepted" });
+    const target = (await row(theirs)).scheduledAt.toISOString();
+    const first = await da.dispatchAssign(CO, { bookingId: live, riderId: `${CO}-t1`, scheduledAt: target, forceBusy: false, by: "Dana" }, NOW.getTime());
+    expect(first).toMatchObject({ ok: false, status: 409, forceable: true });
+    expect((first as { reason?: string }).reason).toBeUndefined();
+    const second = await da.dispatchAssign(CO, { bookingId: live, riderId: `${CO}-t1`, scheduledAt: target, force: true, forceBusy: false, by: "Dana" }, NOW.getTime());
+    expect(second).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
+    const third = await da.dispatchAssign(CO, { bookingId: live, riderId: `${CO}-t1`, scheduledAt: target, force: true, forceBusy: true, by: "Dana" }, NOW.getTime());
+    expect(third.ok).toBe(true);
+    expect((await row(live)).riderId).toBe(`${CO}-t1`);
+  });
+
+  it("Undo restores why a declined job came back to the queue", async () => {
+    const offeredAt = new Date(NOW.getTime() - HOUR);
+    const id = await job(CO, { status: "confirmed", assignStatus: "declined", declineReason: "Truck in the shop", assignedAt: offeredAt });
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect((await row(id)).declineReason).toBe("");
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    const back = await row(id);
+    expect(back.declineReason).toBe("Truck in the shop");
+    expect(back.assignedAt?.toISOString()).toBe(offeredAt.toISOString());
+    expect(back.assignStatus).toBe("declined");
+    await flushNotices();
+  });
+
+  it("a move still waiting is announced alongside a queue assignment", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    // the technician hands it back, and it goes straight out again
+    await db.update(schema.bookings).set({ riderId: null, status: "confirmed", assignStatus: "released" }).where(eq(schema.bookings.id, id));
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect(r.ok).toBe(true);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("assigned");
+    expect(kinds.filter((k) => k === "rescheduled")).toHaveLength(1);
+  });
+
+  it("undoing that assignment brings the move notice back", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    await db.update(schema.bookings).set({ riderId: null, status: "confirmed", assignStatus: "released" }).where(eq(schema.bookings.id, id));
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("rescheduled");
+    expect(kinds).not.toContain("assigned");
+  });
+
+  it("carries a long decline reason back in full", async () => {
+    const reason = "Customer asked for a different technician. ".repeat(40).trim();
+    const id = await job(CO, { status: "confirmed", assignStatus: "declined", declineReason: reason });
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    expect((await row(id)).declineReason).toBe(reason);
+    await flushNotices();
+  });
+
+  it("an assignment undone after a later move announces the new time", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO);
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    // moved while the assigned notice waits: that notice would have said the time
+    const m = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    expect(m.ok).toBe(true);
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    await flushNotices();
+    const kinds = await events(id);
+    expect(kinds).toContain("rescheduled");
+    expect(kinds).not.toContain("assigned");
+  });
+
+  it("won't take back a later offer to the same technician", async () => {
+    const id = await job(CO);
+    const first = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    // given to someone else, then offered to the same technician again
+    await db.update(schema.bookings).set({ assignedAt: new Date(Date.now() + 60_000) }).where(eq(schema.bookings.id, id));
+    expect(await da.undoAssign(CO, first.ok ? first.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
+    await flushNotices();
+  });
+
+  it("undoing an assign-and-move after its notice went out tells them the time went back", async () => {
+    const id = await job(CO);
+    const to = new Date((await row(id)).scheduledAt.getTime() + 2 * HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: to, by: "Dana" }, NOW.getTime());
+    await flushNotices(); // the "assigned" notice goes out with the new time
+    expect(await events(id)).toContain("assigned");
+    expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: true, notified: true });
+    await flushNotices();
+    // the move went out with the assignment; the correction follows the Undo
+    expect((await events(id)).filter((k) => k === "rescheduled")).toHaveLength(2);
+  });
+
+  it("a queue drop that finds the job already assigned is refused, not turned into a reassignment", async () => {
+    const { assignJob } = await import("../assign");
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "offered" });
+    const r = await assignJob(CO, id, `${CO}-t1`, { expectRiderId: null, by: { kind: "dispatcher", name: "Dana" } });
+    expect(r).toMatchObject({ ok: false, code: "raced" });
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+  });
+
+  it("won't undo an assign-and-move after the job was moved away and back", async () => {
+    const ds = await import("../dispatch-schedule");
+    const id = await job(CO);
+    const base = (await row(id)).scheduledAt;
+    const b = new Date(base.getTime() + HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: b, by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: new Date(base.getTime() + 2 * HOUR).toISOString(), by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: b, by: "Dana" }, NOW.getTime());
+    expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
+    await flushNotices();
+  });
+
+  it("a reassignment is refused if the job went to someone else meanwhile", async () => {
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "offered" });
+    // the dispatcher saw t1 on it
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, expectRiderId: `${CO}-t9`, by: "Dana" }, NOW.getTime());
+    expect(r).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+  });
+
+  it("an earlier offer's notice stays quiet when the same technician is offered the job again", async () => {
+    const id = await job(CO);
+    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    // declined, then offered to the same technician again before the first notice ran
+    await db.update(schema.bookings).set({ riderId: null, status: "confirmed", assignStatus: "declined" }).where(eq(schema.bookings.id, id));
+    await new Promise((r) => setTimeout(r, 5)); // the second offer is a later moment
+    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    await flushNotices();
+    expect((await events(id)).filter((k) => k === "assigned")).toHaveLength(1);
+  });
+
+  it("won't put the time back on its own once the technician accepted", async () => {
+    const id = await job(CO);
+    const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: to, by: "Dana" }, NOW.getTime());
+    await db.update(schema.bookings).set({ assignStatus: "accepted", acceptedAt: new Date() }).where(eq(schema.bookings.id, id));
+    expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).scheduledAt.toISOString()).toBe(to);
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
     await flushNotices();
   });
 

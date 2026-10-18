@@ -1,16 +1,15 @@
-import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { useState } from "react";
 import { useConfirm } from "../../components/confirm-dialog";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
 import { assignJob } from "../../lib/assign-job";
-import { runWithForceConfirm } from "../../lib/force-confirm";
 import { FullLoader } from "../../components/loader";
 import { PageWrap, StatusBadge } from "../../components/brand";
-import { AutoBadge, AutoBadgeCorner } from "../../components/auto-badge";
+import { AutoBadge } from "../../components/auto-badge";
 import { PageHead } from "./shell";
-import { PRIORITY_META, STATUS_META } from "../../lib/utils";
+import { PRIORITY_META } from "../../lib/utils";
 import { qualifies } from "../../../shared/qualify";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { EmptyState } from "../../components/empty-state";
@@ -24,8 +23,6 @@ import {
   Pencil,
   Trash2,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   LayoutGrid,
   CalendarDays,
   Loader2,
@@ -37,30 +34,7 @@ import { useWorkerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
 import { TechAvatar } from "../../components/tech-avatar";
 import { tourAttr } from "../../guide/anchors";
 import { groupTechJobs, jobClock, type ListJob } from "../../../shared/tech-job-groups";
-
-type CalView = "day" | "week" | "workweek" | "month";
-
-const CAL_VIEWS: Array<{ key: CalView; label: string }> = [
-  { key: "day", label: "Day" },
-  { key: "week", label: "Week" },
-  { key: "workweek", label: "Work Week" },
-  { key: "month", label: "Month" },
-];
-
-function startOfWeek(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  x.setDate(x.getDate() - x.getDay());
-  return x;
-}
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+import { DispatchCalendar } from "./scheduler/DispatchCalendar";
 
 /** "~3258 min late" is unreadable; dispatchers think in hours and days. */
 function fmtLate(mins: number): string {
@@ -73,20 +47,6 @@ function fmtLate(mins: number): string {
   const hh = h % 24;
   return hh ? `~${d} d ${hh} h late` : `~${d} d late`;
 }
-
-/** Compact clock for narrow calendar chips: "8:00a", "1:30p". */
-function fmtShort(mins: number): string {
-  const h = Math.floor(mins / 60) % 24;
-  const m = mins % 60;
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")}${h >= 12 ? "p" : "a"}`;
-}
-
-/** Week view keeps at most this many side-by-side lanes per day; anything
- *  past that collapses into a "+N" pill that opens the Day view, where
- *  there's room to read every chip. Day view has the full width, so it
- *  lays every lane out. */
-const WEEK_MAX_LANES = 3;
 
 export default function SchedulerPage() {
   const confirm = useConfirm();
@@ -109,9 +69,8 @@ export default function SchedulerPage() {
   const [skillFilter, setSkillFilter] = useState<string>("");
   const [focusTech, setFocusTech] = useState<string | null>(null);
   const [mode, setMode] = useState<"board" | "calendar">("calendar");
-  const [calView, setCalView] = useState<CalView>("week");
-  const [anchor, setAnchor] = useState(() => new Date());
   const [newDate, setNewDate] = useState<Date | null>(null);
+  const [newRider, setNewRider] = useState<string | undefined>(undefined);
   const [editJob, setEditJob] = useState<any | null>(null);
   const [, navigate] = useLocation();
   // Completed jobs are historical now — open the read-only report instead
@@ -122,14 +81,31 @@ export default function SchedulerPage() {
     else setEditJob(b);
   };
 
+  // The calendar works from the dispatch board, so it hands over an id; the
+  // work-order modal wants the full booking, fetched fresh.
+  const openJobById = async (id: string) => {
+    // Always the job as it is now: the Board tab's list isn't refreshed while
+    // the calendar is open, and the form saves every field it was given.
+    try {
+      const r = (await ok(await api.bookings[":id"].$get({ param: { id } }))) as { booking: any };
+      openJob(r.booking);
+    } catch {
+      /* the global error toast has already said why */
+    }
+  };
+
+  // The Board tab's full lists. The calendar reads the dispatch board and its
+  // live stream instead, so these load only while the Board tab is open.
   const bookings = useQuery({
     queryKey: ["bookings"],
     queryFn: async () => ok(await api.bookings.$get()),
     refetchInterval: 8000,
+    enabled: mode === "board",
   });
   const riders = useQuery({
     queryKey: ["riders"],
     queryFn: async () => ok(await api.riders.$get()),
+    enabled: mode === "board",
   });
 
   const skillClassesQ = useQuery({
@@ -183,160 +159,7 @@ export default function SchedulerPage() {
     if (ok) del.mutate(b.id);
   };
 
-  // Dropping a card on a new day/time can put the assigned tech in two places at
-  // once, or on a day they booked off. The server refuses with a forceable 409;
-  // this turns it into one question instead of a silent double booking.
-  const reschedule = useMutation({
-    mutationFn: async ({ id, scheduledAt }: { id: string; scheduledAt: string }) =>
-      runWithForceConfirm(
-        async (force) =>
-          ok(
-            await api.bookings[":id"].schedule.$post({
-              param: { id },
-              json: force ? { scheduledAt, force: true } : { scheduledAt },
-            }),
-          ),
-        confirm,
-        { title: "Move it there anyway?", confirmLabel: "Move it" },
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["bookings"] }),
-  });
-
-  // calendar drag-and-drop: drop an unscheduled job onto a day -> set its date
-  const [calDragId, setCalDragId] = useState<string | null>(null);
-  const [overDay, setOverDay] = useState<string | null>(null);
-  // live half-hour time preview while dragging over a week/day column
-  const [hoverTime, setHoverTime] = useState<{ key: string; mins: number } | null>(null);
-
-  // day time window the column represents (6:00 AM -> 9:00 PM) — widened from
-  // the old 7-8 window so early/late field-service jobs get real real-estate
-  // instead of being squeezed off-screen.
-  const DAY_START_MIN = 6 * 60;
-  const DAY_END_MIN = 21 * 60;
-  const DAY_SPAN_MIN = DAY_END_MIN - DAY_START_MIN;
-  // pixels-per-hour for the week/day grid. This is the single dial that makes
-  // the calendar the size it should be: at 88px/hr the 15-hour window renders
-  // ~1,320px tall — roughly 3x the old flat 420px stack — so there's real room
-  // for hour gridlines, a live now-line, and full job detail per slot.
-  const HOUR_PX = 88;
-  const GRID_PX = (DAY_SPAN_MIN / 60) * HOUR_PX;
-  const hourMarks = Array.from(
-    { length: DAY_SPAN_MIN / 60 + 1 },
-    (_, k) => DAY_START_MIN + k * 60,
-  );
-
-  // live "now" line — ticks every 30s so a dispatcher watching the board sees
-  // it actually crawl down the day instead of freezing at page-load time.
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-
-  // Measured width of the week/day grid so each chip can pick a layout that
-  // actually fits its pixels (full / medium / narrow) instead of wrapping
-  // badges and time ranges character-by-character in a 30px lane.
-  // Callback ref (not useEffect) because the grid mounts only after the
-  // bookings query resolves — an effect keyed on view/mode would miss it.
-  const gridObs = useRef<ResizeObserver | null>(null);
-  const [gridWidth, setGridWidth] = useState(0);
-  const gridRef = (el: HTMLDivElement | null) => {
-    gridObs.current?.disconnect();
-    gridObs.current = null;
-    if (!el) return;
-    setGridWidth(el.clientWidth);
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setGridWidth(el.clientWidth));
-    ro.observe(el);
-    gridObs.current = ro;
-  };
-  useEffect(() => () => gridObs.current?.disconnect(), []);
-
-  // map a cursor Y within a day column to a snapped half-hour time (minutes from midnight)
-  function timeFromOffset(el: HTMLElement, clientY: number): number {
-    const rect = el.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
-    const raw = DAY_START_MIN + frac * DAY_SPAN_MIN;
-    const snapped = Math.round(raw / 30) * 30; // 30-min blocks
-    return Math.min(DAY_END_MIN, Math.max(DAY_START_MIN, snapped));
-  }
-
-  function fmtMins(mins: number): string {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    const ampm = h >= 12 ? "PM" : "AM";
-    const h12 = h % 12 === 0 ? 12 : h % 12;
-    return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
-  }
-
-  // Lay overlapping jobs on a day out into side-by-side lanes (like a real
-  // calendar) instead of one blind vertical stack — greedy interval-lane
-  // assignment, then a pairwise pass to size each chip to how many lanes its
-  // own overlap cluster actually needs.
-  function layoutDayJobs(jobs: any[], maxLanes = Infinity) {
-    const items = jobs
-      .map((b) => {
-        const start = new Date(b.scheduledAt as any).getTime();
-        const durMin = b.service?.durationMins || 60;
-        return { b, start, end: start + durMin * 60_000, durMin, lane: 0 };
-      })
-      // earliest first; on a tie the longer job takes the leftmost lane so the
-      // short ones nest beside it instead of forcing an extra column.
-      .sort((a, b) => a.start - b.start || b.durMin - a.durMin);
-    const laneEnds: number[] = [];
-    for (const it of items) {
-      let assigned = laneEnds.findIndex((end) => end <= it.start);
-      if (assigned === -1) {
-        assigned = laneEnds.length;
-        laneEnds.push(it.end);
-      } else {
-        laneEnds[assigned] = it.end;
-      }
-      it.lane = assigned;
-    }
-    return items.map((it) => {
-      let cols = it.lane + 1;
-      for (const other of items) {
-        if (other !== it && other.start < it.end && it.start < other.end) {
-          cols = Math.max(cols, other.lane + 1);
-        }
-      }
-      // Over the lane cap, the last visible lane is reserved for the "+N"
-      // overflow pill and every job that would have landed there or beyond
-      // is folded into it.
-      const overflow = cols > maxLanes;
-      const visibleCols = overflow ? maxLanes : cols;
-      const hidden = overflow && it.lane >= maxLanes - 1;
-      return { ...it, cols: visibleCols, hidden };
-    });
-  }
-
-  // drop onto a day -> default 9:00 AM (month view / no time grid)
-  function dropOnDay(d: Date) {
-    if (calDragId) {
-      const dt = new Date(d);
-      dt.setHours(9, 0, 0, 0);
-      reschedule.mutate({ id: calDragId, scheduledAt: dt.toISOString() });
-    }
-    setCalDragId(null);
-    setOverDay(null);
-    setHoverTime(null);
-  }
-
-  // drop onto a week/day column at a precise half-hour block
-  function dropOnDayAtTime(d: Date, mins: number) {
-    if (calDragId) {
-      const dt = new Date(d);
-      dt.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
-      reschedule.mutate({ id: calDragId, scheduledAt: dt.toISOString() });
-    }
-    setCalDragId(null);
-    setOverDay(null);
-    setHoverTime(null);
-  }
-
-  if (bookings.isLoading || riders.isLoading)
+  if (mode === "board" && (bookings.isLoading || riders.isLoading))
     return <FullLoader label="Loading scheduler…" />;
 
   const all = bookings.data?.bookings ?? [];
@@ -362,67 +185,16 @@ export default function SchedulerPage() {
     setOverTech(null);
   }
 
-  // ---- calendar helpers ----
-  const scheduled = all.filter(
-    (b) => b.scheduledAt && !["cancelled"].includes(b.status),
-  );
-  const jobsOn = (d: Date) =>
-    scheduled
-      .filter((b) => sameDay(new Date(b.scheduledAt as any), d))
-      .sort(
-        (a, b) =>
-          new Date(a.scheduledAt as any).getTime() -
-          new Date(b.scheduledAt as any).getTime(),
-      );
-
-  function shift(dir: number) {
-    const x = new Date(anchor);
-    if (calView === "day") x.setDate(x.getDate() + dir);
-    else if (calView === "week" || calView === "workweek") x.setDate(x.getDate() + dir * 7);
-    else x.setMonth(x.getMonth() + dir);
-    setAnchor(x);
-  }
-
-  let calDays: Date[] = [];
-  if (calView === "day") calDays = [new Date(anchor)];
-  else if (calView === "week" || calView === "workweek") {
-    // Work Week drops the weekend: Monday through Friday of the anchor's week.
-    const s = startOfWeek(anchor);
-    const work = calView === "workweek";
-    calDays = Array.from({ length: work ? 5 : 7 }, (_, i) => {
-      const d = new Date(s);
-      d.setDate(s.getDate() + i + (work ? 1 : 0));
-      return d;
-    });
-  } else {
-    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-    const gridStart = startOfWeek(first);
-    calDays = Array.from({ length: 42 }, (_, i) => {
-      const d = new Date(gridStart);
-      d.setDate(gridStart.getDate() + i);
-      return d;
-    });
-  }
-
-  const calLabel =
-    calView === "month"
-      ? anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })
-      : calView === "day"
-        ? anchor.toLocaleDateString(undefined, {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          })
-        : `${calDays[0]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${calDays[calDays.length - 1]!.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-
-  const today = new Date();
-
   return (
     <PageWrap wide>
       <WorkOrderModal
         open={newDate !== null}
         defaultDate={newDate ?? undefined}
-        onClose={() => setNewDate(null)}
+        defaultRiderId={newRider}
+        onClose={() => {
+          setNewDate(null);
+          setNewRider(undefined);
+        }}
       />
       <WorkOrderModal
         open={editJob !== null}
@@ -476,12 +248,7 @@ export default function SchedulerPage() {
             {((risk.data as any).risks as any[]).slice(0, 4).map((r) => (
               <button
                 key={r.bookingId}
-                onClick={() => {
-                  const b = (bookings.data?.bookings ?? []).find(
-                    (x: any) => x.id === r.bookingId,
-                  );
-                  if (b) setEditJob(b);
-                }}
+                onClick={() => void openJobById(r.bookingId)}
                 className="flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left text-xs hover:bg-white/5"
               >
                 <span className="font-semibold text-slate-200">
@@ -501,791 +268,14 @@ export default function SchedulerPage() {
       )}
 
       {mode === "calendar" ? (
-        <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-        {/* far-left work queue — every active job still missing a tech, drag
-            onto a day to set its date */}
-        <div {...tourAttr("sched.queue")} className="nvc-card flex h-fit flex-col">
-          <div className="flex items-center gap-2 border-b border-white/5 px-4 py-3">
-            <Inbox className="h-4 w-4 text-amber-warn" />
-            <h2 className="font-bold text-white">Work Queue</h2>
-            <span className="ml-auto rounded-full bg-amber-warn/15 px-2 py-0.5 text-xs font-bold text-amber-warn">
-              {unassigned.length}
-            </span>
-          </div>
-          <div className="space-y-2 p-3">
-            {unassigned.length === 0 ? (
-              <p className="py-8 text-center text-xs text-slate-500">
-                All caught up — every active job is scheduled and assigned.
-              </p>
-            ) : (
-              unassigned.map((b) => (
-                <div
-                  key={b.id}
-                  draggable
-                  // oxlint-disable-next-line prefer-tag-over-role -- a draggable div cannot be a <button>
-                  role="button"
-                  tabIndex={0}
-                  title="Click to open and set a date"
-                  // Dragging is the only way to schedule from this queue on a
-                  // desktop, and it is unavailable on touch — so tapping the
-                  // card opens the work order, where the date field works
-                  // everywhere. Guarded on calDragId so a completed drag does
-                  // not also open the modal.
-                  onClick={() => {
-                    if (!calDragId) openJob(b);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openJob(b);
-                    }
-                  }}
-                  onDragStart={() => setCalDragId(b.id)}
-                  onDragEnd={() => {
-                    setCalDragId(null);
-                    setOverDay(null);
-                  }}
-                  className={`group cursor-grab rounded-xl border border-white/10 bg-ink-3/60 p-2.5 transition hover:border-brand/40 active:cursor-grabbing ${
-                    calDragId === b.id ? "dragging" : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {/* The grab handle promises drag-to-schedule, so it only
-                        appears at the widths where dragging actually works. */}
-                    <GripVertical className="mt-0.5 hidden h-4 w-4 shrink-0 text-slate-600 group-hover:text-slate-400 lg:block" />
-                    <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
-                        <span className="truncate">{b.title || b.service?.name}</span>
-                        <AutoBadge booking={b} />
-                      </p>
-                      <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {b.address || "No address"}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {b.priority && (
-                          <span
-                            className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-bold"
-                            style={{
-                              color: PRIORITY_META[b.priority]?.color,
-                              background: `${PRIORITY_META[b.priority]?.color}22`,
-                            }}
-                          >
-                            {PRIORITY_META[b.priority]?.label}
-                          </span>
-                        )}
-                        {!b.scheduledAt && (
-                          <span className="inline-block rounded-full bg-amber-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-warn">
-                            No date
-                          </span>
-                        )}
-                        {!b.riderId && (
-                          <span className="inline-block rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-bold text-brand">
-                            Unassigned
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <p className="border-t border-white/5 px-3 py-2 text-[10px] text-slate-600">
-            <span className="hidden lg:inline">
-              Drag a card onto any calendar day to schedule it for 9:00 AM, then assign a tech from the Board.
-            </span>
-            <span className="lg:hidden">
-              Tap a card to open it and set its date, then assign a tech from the Board.
-            </span>
-          </p>
-        </div>
-
-        <div className="nvc-card overflow-hidden">
-          <div className="flex flex-wrap items-center gap-3 border-b border-white/5 px-4 py-3">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => shift(-1)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => shift(1)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setAnchor(new Date())}
-                className="ml-1 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5"
-              >
-                Today
-              </button>
-            </div>
-            <h3 className="font-display text-base font-bold text-white">
-              {calLabel}
-            </h3>
-            <div {...tourAttr("sched.views")} className="ml-auto flex rounded-lg border border-white/10 bg-ink-2 p-0.5">
-              {CAL_VIEWS.map(({ key: v, label }) => (
-                <button
-                  key={v}
-                  type="button"
-                  aria-pressed={calView === v}
-                  onClick={() => setCalView(v)}
-                  className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold ${calView === v ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Desktop calendar grids. Seven columns inside a 390px phone gives
-              each day about 44px — a job chip there is two or three truncated
-              characters, and the month cell's "+2 more" hides everything real.
-              Below lg the same data renders as the agenda further down. */}
-          {calView === "month" ? (
-            <div className="hidden grid-cols-7 lg:grid">
-              {DOW.map((d) => (
-                <div
-                  key={d}
-                  className="border-b border-white/5 px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-                >
-                  {d}
-                </div>
-              ))}
-              {calDays.map((d, i) => {
-                const jobs = jobsOn(d);
-                const inMonth = d.getMonth() === anchor.getMonth();
-                const dayKey = d.toISOString().slice(0, 10);
-                return (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      const dt = new Date(d);
-                      dt.setHours(9, 0, 0, 0);
-                      setNewDate(dt);
-                    }}
-                    onDragOver={(e) => {
-                      if (!calDragId) return;
-                      e.preventDefault();
-                      setOverDay(dayKey);
-                    }}
-                    onDragLeave={() => setOverDay((v) => (v === dayKey ? null : v))}
-                    onDrop={() => dropOnDay(d)}
-                    className={`min-h-[176px] border-b border-r border-white/5 p-2 text-left transition hover:bg-white/[0.03] ${inMonth ? "" : "opacity-40"} ${overDay === dayKey ? "drop-active" : ""}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`inline-grid h-7 w-7 place-items-center rounded-full text-sm font-semibold ${sameDay(d, today) ? "bg-brand text-white" : "text-slate-400"}`}
-                      >
-                        {d.getDate()}
-                      </span>
-                      {jobs.length > 0 && (
-                        <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">
-                          {jobs.length} job{jobs.length === 1 ? "" : "s"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 space-y-1">
-                      {jobs.slice(0, 5).map((b) => (
-                        <div tabIndex={0}
-                          key={b.id}
-                          // nested clickable chip inside an already-clickable
-                          // day cell — a real <button> can't be nested here.
-                          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
-                          role="button"
-                          title="Click to edit"
-                          aria-label={`Edit job ${b.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openJob(b);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              openJob(b);
-                            }
-                          }}
-                          className="group/chip flex cursor-pointer items-center gap-1.5 truncate rounded-md border-l-2 px-1.5 py-1 text-[11px] font-medium text-white hover:brightness-125"
-                          style={{
-                            borderColor: PRIORITY_META[b.priority]?.color ?? "#3b82f6",
-                            background: `${PRIORITY_META[b.priority]?.color ?? "#3b82f6"}22`,
-                          }}
-                        >
-                          {b.rider && (
-                            <TechAvatar
-                              name={b.rider.name}
-                              photoUrl={(b.rider as any).photoUrl}
-                              color={b.rider.color}
-                              className="h-4 w-4 shrink-0"
-                              textClassName="text-[8px]"
-                            />
-                          )}
-                          <span className="truncate">
-                            <span className="font-bold text-cyan-glow">
-                              {new Date(
-                                b.scheduledAt as any,
-                              ).toLocaleTimeString([], {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
-                            </span>{" "}
-                            {b.title || b.service?.name}
-                          </span>
-                          <AutoBadge booking={b} size="xs" />
-                          {canArchive && (
-                            <button
-                              type="button"
-                              aria-label={`Delete ${jobLower}`}
-                              title="Delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeJob(b);
-                              }}
-                              className="ml-auto hidden shrink-0 rounded p-0.5 text-white/70 hover:bg-black/30 hover:text-rose-300 group-hover/chip:block"
-                            >
-                              <Trash2 className="h-2.5 w-2.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {jobs.length > 5 && (
-                        <p className="px-1 text-[10px] text-slate-500">
-                          +{jobs.length - 5} more
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="hidden lg:block">
-              {/* sticky day-of-week header row, aligned over the time gutter */}
-              <div
-                className="sticky top-0 z-20 grid border-b border-white/5 bg-ink-2"
-                style={{
-                  gridTemplateColumns: `52px repeat(${calDays.length}, 1fr)`,
-                }}
-              >
-                <div />
-                {calDays.map((d, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      const dt = new Date(d);
-                      dt.setHours(9, 0, 0, 0);
-                      setNewDate(dt);
-                    }}
-                    className="flex items-center justify-between border-l border-white/5 px-2 py-2 hover:bg-white/[0.03]"
-                  >
-                    <span className="text-[11px] font-semibold uppercase text-slate-500">
-                      {DOW[d.getDay()]}
-                    </span>
-                    <span
-                      className={`grid h-6 w-6 place-items-center rounded-full text-xs font-semibold ${sameDay(d, today) ? "bg-brand text-white" : "text-slate-300"}`}
-                    >
-                      {d.getDate()}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* scrollable hourly body — tall enough to show real gridlines
-                  and full job detail, capped so the page doesn't run forever */}
-              <div className="max-h-[760px] overflow-y-auto">
-                <div
-                  ref={gridRef}
-                  className="relative grid"
-                  style={{
-                    gridTemplateColumns: `52px repeat(${calDays.length}, 1fr)`,
-                    height: `${GRID_PX}px`,
-                  }}
-                >
-                  {/* time gutter: hour labels, shared by every day column */}
-                  <div className="relative">
-                    {hourMarks.map((mins) => (
-                      <div
-                        key={mins}
-                        className="absolute right-1.5 -translate-y-1/2 text-[10px] font-medium text-slate-500"
-                        style={{ top: `${((mins - DAY_START_MIN) / 60) * HOUR_PX}px` }}
-                      >
-                        {fmtMins(mins)}
-                      </div>
-                    ))}
-                  </div>
-
-                  {calDays.map((d, i) => {
-                    const jobs = jobsOn(d);
-                    const laid = layoutDayJobs(
-                      jobs,
-                      calView === "week" || calView === "workweek" ? WEEK_MAX_LANES : Infinity,
-                    );
-                    const colPx = gridWidth > 0 ? (gridWidth - 52) / calDays.length : 0;
-                    // hidden jobs, grouped by start time -> one "+N" pill each
-                    const overflowGroups = new Map<number, typeof laid>();
-                    for (const it of laid) {
-                      if (!it.hidden) continue;
-                      const g = overflowGroups.get(it.start) ?? [];
-                      g.push(it);
-                      overflowGroups.set(it.start, g);
-                    }
-                    const dayKey = d.toISOString().slice(0, 10);
-                    const isToday = sameDay(d, today);
-                    return (
-                      // day column is a click/drag-drop time-slot target, not a
-                      // keyboard-navigable control on its own — every job it contains
-                      // is already its own focusable, keyboard-operable element.
-                      // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-                      <div
-                        key={i}
-                        onClick={(e) => {
-                          if (e.target !== e.currentTarget || calDragId) return;
-                          const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);
-                          const dt = new Date(d);
-                          dt.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
-                          setNewDate(dt);
-                        }}
-                        onDragOver={(e) => {
-                          if (!calDragId) return;
-                          e.preventDefault();
-                          setOverDay(dayKey);
-                          setHoverTime({
-                            key: dayKey,
-                            mins: timeFromOffset(e.currentTarget as HTMLElement, e.clientY),
-                          });
-                        }}
-                        onDragLeave={() => {
-                          setOverDay((v) => (v === dayKey ? null : v));
-                          setHoverTime((v) => (v?.key === dayKey ? null : v));
-                        }}
-                        onDrop={(e) => {
-                          const mins = timeFromOffset(e.currentTarget as HTMLElement, e.clientY);
-                          dropOnDayAtTime(d, mins);
-                        }}
-                        title={`Click a time to add a ${jobLower} there`}
-                        className={`relative cursor-pointer border-l border-white/5 transition ${overDay === dayKey ? "drop-active" : ""}`}
-                      >
-                        {/* persistent hour / half-hour gridlines — always on,
-                            not just while dragging, so the grid reads as a
-                            real calendar at rest */}
-                        <div className="pointer-events-none absolute inset-0">
-                          {Array.from({ length: DAY_SPAN_MIN / 30 + 1 }, (_, k) => {
-                            const mins = DAY_START_MIN + k * 30;
-                            const onHour = mins % 60 === 0;
-                            return (
-                              <div
-                                key={k}
-                                className={`absolute left-0 right-0 border-t ${onHour ? "border-white/[0.07]" : "border-white/[0.03]"}`}
-                                style={{ top: `${(k * 30 / 60) * HOUR_PX}px` }}
-                              />
-                            );
-                          })}
-                        </div>
-
-                        {/* live "now" line */}
-                        {isToday && nowMins >= DAY_START_MIN && nowMins <= DAY_END_MIN && (
-                          <div
-                            className="pointer-events-none absolute left-0 right-0 z-10 flex items-center gap-1"
-                            style={{ top: `${((nowMins - DAY_START_MIN) / 60) * HOUR_PX}px` }}
-                          >
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
-                            <div className="h-px flex-1 bg-rose-400/70" />
-                          </div>
-                        )}
-
-                        {/* live drag placement indicator */}
-                        {calDragId && hoverTime?.key === dayKey && (
-                          <div
-                            className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
-                            style={{
-                              top: `${((hoverTime.mins - DAY_START_MIN) / 60) * HOUR_PX}px`,
-                            }}
-                          >
-                            <div className="h-0.5 flex-1 bg-brand" />
-                            <span className="rounded bg-brand px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
-                              {fmtMins(hoverTime.mins)}
-                            </span>
-                          </div>
-                        )}
-
-                        {jobs.length === 0 ? (
-                          <div className="pointer-events-none absolute inset-x-1.5 top-1.5 rounded-lg border border-dashed border-white/10 py-1.5 text-center text-[10px] text-slate-600">
-                            Click a time to add
-                          </div>
-                        ) : (
-                          <>
-                          {laid.filter((it) => !it.hidden).map(({ b, start, durMin, lane, cols }) => {
-                            const startOfDay = new Date(start);
-                            const startMinsOfDay = startOfDay.getHours() * 60 + startOfDay.getMinutes();
-                            const clampedStart = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, startMinsOfDay));
-                            const topPx = ((clampedStart - DAY_START_MIN) / 60) * HOUR_PX;
-                            const rawHeightPx = (Math.min(durMin, DAY_END_MIN - clampedStart) / 60) * HOUR_PX;
-                            const heightPx = Math.max(rawHeightPx, 30);
-                            const widthPct = 100 / cols;
-                            const leftPct = lane * widthPct;
-                            // pixel width this chip really gets -> pick a layout
-                            // that fits. 0 before the first measurement; treat
-                            // that as "full" so SSR/first paint isn't skeletal.
-                            const chipPx = colPx > 0 ? colPx / cols - 4 : 999;
-                            const density: "full" | "medium" | "narrow" =
-                              chipPx >= 150 ? "full" : chipPx >= 84 ? "medium" : "narrow";
-                            const oneLine = heightPx < 54;
-                            // under ~52px even "1:35p" clips — drop the suffix
-                            const tiny = chipPx < 52;
-                            const startLabel =
-                              density === "full" ? fmtMins(startMinsOfDay)
-                              : tiny ? fmtShort(startMinsOfDay).replace(/[ap]$/, "")
-                              : fmtShort(startMinsOfDay);
-                            // narrow chips clip with a soft fade instead of an
-                            // ellipsis eating 2 of 5 visible characters
-                            const fade: CSSProperties = {
-                              overflow: "hidden",
-                              whiteSpace: "nowrap",
-                              maskImage: "linear-gradient(to right, #000 72%, transparent 100%)",
-                              WebkitMaskImage: "linear-gradient(to right, #000 72%, transparent 100%)",
-                            };
-                            const statusColor = STATUS_META[b.status]?.color ?? "#64748b";
-                            const statusLabel = STATUS_META[b.status]?.label ?? b.status;
-                            const techFirst = b.rider?.name ? String(b.rider.name).split(" ")[0] : "";
-                            const tip = [
-                              `${fmtMins(startMinsOfDay)} – ${fmtMins(startMinsOfDay + durMin)}`,
-                              b.title || b.service?.name,
-                              b.customer?.name,
-                              statusLabel,
-                              b.rider?.name ? `${noun}: ${b.rider.name}` : `Unassigned`,
-                            ]
-                              .filter(Boolean)
-                              .join("\n");
-                            return (
-                              <div tabIndex={0}
-                                key={b.id}
-                                // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
-                                role="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openJob(b);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    openJob(b);
-                                  }
-                                }}
-                                title={tip}
-                                className="group/chip absolute z-[5] cursor-pointer overflow-hidden rounded-md border-l-2 bg-ink-3/95 text-left shadow-sm ring-1 ring-white/[0.06] transition hover:z-20 hover:bg-ink-3 hover:ring-white/15"
-                                style={{
-                                  top: `${topPx}px`,
-                                  height: `${heightPx}px`,
-                                  left: `calc(${leftPct}% + 2px)`,
-                                  width: `calc(${widthPct}% - 4px)`,
-                                  borderColor: PRIORITY_META[b.priority]?.color ?? "#3b82f6",
-                                  padding:
-                                    tiny ? "3px 3px" : density === "narrow" || oneLine ? "3px 4px" : density === "medium" ? "4px 6px" : "6px 8px",
-                                }}
-                              >
-                                <AutoBadgeCorner booking={b} />
-                                {canArchive && density !== "narrow" && (
-                                  <button
-                                    type="button"
-                                    aria-label={`Delete ${jobLower}`}
-                                    title="Delete"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeJob(b);
-                                    }}
-                                    className="absolute right-1 top-1 hidden rounded p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 group-hover/chip:block"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
-                                )}
-                                {oneLine ? (
-                                  <p
-                                    className="pr-1 text-[10px] font-semibold leading-tight text-white"
-                                    style={density === "narrow" ? fade : undefined}
-                                  >
-                                    <span className="font-bold text-cyan-glow">{startLabel}</span>{" "}
-                                    {b.title || b.service?.name}
-                                  </p>
-                                ) : density === "narrow" ? (
-                                  <>
-                                    <p className="flex items-center gap-1 text-[10px] font-bold leading-tight text-cyan-glow" style={fade}>
-                                      {!tiny && (
-                                        <span
-                                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                                          style={{ background: statusColor }}
-                                          aria-label={statusLabel}
-                                        />
-                                      )}
-                                      {startLabel}
-                                    </p>
-                                    <p className="text-[10px] font-semibold leading-tight text-white" style={fade}>
-                                      {b.title || b.service?.name}
-                                    </p>
-                                    {b.rider && heightPx >= 66 && (
-                                      <TechAvatar
-                                        name={b.rider.name}
-                                        photoUrl={(b.rider as any).photoUrl}
-                                        color={b.rider.color}
-                                        className="mt-1 h-4 w-4"
-                                        textClassName="text-[7px]"
-                                      />
-                                    )}
-                                  </>
-                                ) : density === "medium" ? (
-                                  <>
-                                    <p className="flex items-center gap-1 truncate text-[10px] font-bold leading-tight text-cyan-glow">
-                                      <span
-                                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                                        style={{ background: statusColor }}
-                                        aria-label={statusLabel}
-                                      />
-                                      <span className="truncate">
-                                        {fmtShort(startMinsOfDay)} – {fmtShort(startMinsOfDay + durMin)}
-                                      </span>
-                                    </p>
-                                    <p className="truncate text-[11px] font-semibold leading-snug text-white">
-                                      {b.title || b.service?.name}
-                                    </p>
-                                    {b.customer?.name && heightPx >= 70 && (
-                                      <p className="truncate text-[10px] leading-tight text-slate-500">
-                                        {b.customer.name}
-                                      </p>
-                                    )}
-                                    {b.rider && heightPx >= 86 && (
-                                      <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-semibold text-slate-300">
-                                        <TechAvatar
-                                          name={b.rider.name}
-                                          photoUrl={(b.rider as any).photoUrl}
-                                          color={b.rider.color}
-                                          className="h-3.5 w-3.5 shrink-0"
-                                          textClassName="text-[7px]"
-                                        />
-                                        <span className="truncate">{techFirst}</span>
-                                      </span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <>
-                                    <p className="truncate text-[10px] font-bold leading-tight text-cyan-glow">
-                                      {fmtMins(startMinsOfDay)} – {fmtMins(startMinsOfDay + durMin)}
-                                    </p>
-                                    <p className="truncate pr-4 text-xs font-semibold text-white">
-                                      {b.title || b.service?.name}
-                                    </p>
-                                    {b.customer?.name && (
-                                      <p className="truncate text-[10px] text-slate-500">
-                                        {b.customer.name}
-                                      </p>
-                                    )}
-                                    {heightPx >= 88 && (
-                                      <div className="mt-1 flex flex-nowrap items-center gap-1 overflow-hidden">
-                                        <StatusBadge status={b.status} />
-                                        {b.rider && (
-                                          <span className="flex min-w-0 items-center gap-1 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">
-                                            <TechAvatar
-                                              name={b.rider.name}
-                                              photoUrl={(b.rider as any).photoUrl}
-                                              color={b.rider.color}
-                                              className="h-3.5 w-3.5 shrink-0"
-                                              textClassName="text-[7px]"
-                                            />
-                                            <span className="truncate">{b.rider.name}</span>
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {/* "+N" overflow pills: the lanes the week column
-                              couldn't fit. One pill per start time, in the
-                              reserved last lane; click = open that day. */}
-                          {[...overflowGroups.entries()].map(([start, group]) => {
-                            const st = new Date(start);
-                            const startMinsOfDay = st.getHours() * 60 + st.getMinutes();
-                            const clampedStart = Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, startMinsOfDay));
-                            const topPx = ((clampedStart - DAY_START_MIN) / 60) * HOUR_PX;
-                            const cols = group[0]!.cols;
-                            const widthPct = 100 / cols;
-                            const leftPct = (cols - 1) * widthPct;
-                            // span the longest hidden job so the lane still
-                            // reads as "busy" for its whole duration
-                            const longest = Math.max(...group.map((g) => g.durMin));
-                            const heightPx = Math.max(
-                              30,
-                              (Math.min(longest, DAY_END_MIN - clampedStart) / 60) * HOUR_PX,
-                            );
-                            const names = group
-                              .map((g) => `${fmtMins(startMinsOfDay)} ${g.b.title || g.b.service?.name || jobNoun}`)
-                              .join("\n");
-                            return (
-                              <button
-                                type="button"
-                                key={`more-${start}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setAnchor(new Date(d));
-                                  setCalView("day");
-                                }}
-                                title={`${group.length} more — open the day to see them:\n${names}`}
-                                className="absolute z-[6] flex items-start justify-center rounded-md border border-dashed border-white/15 bg-ink-2/80 pt-1.5 text-[10px] font-bold text-slate-300 shadow-sm transition hover:border-brand/60 hover:bg-ink-2 hover:text-white"
-                                style={{
-                                  top: `${topPx}px`,
-                                  height: `${heightPx}px`,
-                                  left: `calc(${leftPct}% + 2px)`,
-                                  width: `calc(${widthPct}% - 4px)`,
-                                }}
-                              >
-                                +{group.length}
-                              </button>
-                            );
-                          })}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Phone agenda: the same calDays range, but only the days that
-              actually have work, each one full width. Day/Week/Month still
-              change what you're looking at — the range and the header label are
-              shared with the desktop grid, so switching widths never changes
-              which jobs you see. Drag-to-schedule is desktop-only (HTML5 drag
-              events never fire from touch), so every card here is a plain tap. */}
-          <div className="divide-y divide-white/5 lg:hidden">
-            {(() => {
-              const withJobs = calDays.filter(
-                (d) => jobsOn(d).length > 0 || (calView === "day" && sameDay(d, anchor)),
-              );
-              if (withJobs.length === 0)
-                return (
-                  <div className="p-4">
-                    <EmptyState
-                      compact
-                      icon={CalendarDays}
-                      title="Nothing scheduled"
-                      hint={
-                        calView === "month"
-                          ? `No ${jobsLower} this month. Tap New ${jobNoun} to add one.`
-                          : `No ${jobsLower} in this range. Use the arrows above to look at another date.`
-                      }
-                    />
-                  </div>
-                );
-              return withJobs.map((d) => {
-                const jobs = jobsOn(d);
-                // The month grid spans 42 days, so it always shows a few days
-                // from the neighbouring months. The desktop grid dims those
-                // cells; without the same cue here a job from July reads as a
-                // job in June.
-                const outOfMonth = calView === "month" && d.getMonth() !== anchor.getMonth();
-                return (
-                  <div key={d.toISOString()} className={outOfMonth ? "opacity-60" : ""}>
-                    <div className="flex items-center gap-2 bg-ink-2/60 px-4 py-2">
-                      <span
-                        className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold ${sameDay(d, today) ? "bg-brand text-white" : "bg-white/5 text-slate-300"}`}
-                      >
-                        {d.getDate()}
-                      </span>
-                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        {d.toLocaleDateString(undefined, {
-                          weekday: "short",
-                          month: "short",
-                        })}
-                      </span>
-                      <span className="text-[11px] text-slate-600">
-                        {jobs.length} job{jobs.length === 1 ? "" : "s"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const dt = new Date(d);
-                          dt.setHours(9, 0, 0, 0);
-                          setNewDate(dt);
-                        }}
-                        aria-label={`Add a ${jobLower} on ${d.toDateString()}`}
-                        className="-mr-2 ml-auto grid h-11 w-11 place-items-center rounded-full text-slate-400 hover:bg-white/5 hover:text-white"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {jobs.length === 0 ? (
-                      <p className="px-4 py-4 text-xs text-slate-600">
-                        Nothing scheduled for this day yet.
-                      </p>
-                    ) : (
-                      <ul>
-                        {jobs.map((b) => (
-                          <li
-                            key={b.id}
-                            className="flex items-start gap-3 border-l-2 px-4 py-3"
-                            style={{
-                              borderColor: PRIORITY_META[b.priority]?.color ?? "#3b82f6",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => openJob(b)}
-                              className="min-w-0 flex-1 text-left"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-cyan-glow">
-                                  {new Date(b.scheduledAt as any).toLocaleTimeString([], {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                                <StatusBadge status={b.status} />
-                                <AutoBadge booking={b} />
-                              </div>
-                              <p className="mt-0.5 font-semibold leading-snug text-slate-100">
-                                {b.title || b.service?.name}
-                              </p>
-                              {b.customer?.name && (
-                                <p className="text-xs text-slate-500">{b.customer.name}</p>
-                              )}
-                              {b.address && (
-                                <p className="mt-0.5 flex items-start gap-1 text-xs leading-snug text-slate-500">
-                                  <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
-                                  {/* Wrapped, not truncated: half a postal code
-                                      is no more useful than no address. */}
-                                  <span className="line-clamp-2">{b.address}</span>
-                                </p>
-                              )}
-                            </button>
-                            {canArchive && (
-                              <button
-                                type="button"
-                                onClick={() => removeJob(b)}
-                                aria-label={`Delete ${jobLower}`}
-                                title={`Delete ${jobLower}`}
-                                className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-rose-500/10 hover:text-rose-400"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        </div>
-        </div>
+        <DispatchCalendar
+          confirm={confirm}
+          onOpenJob={openJobById}
+          onNewJob={(at, riderId) => {
+            setNewRider(riderId);
+            setNewDate(at);
+          }}
+        />
       ) : (
       <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
         {/* unassigned queue */}

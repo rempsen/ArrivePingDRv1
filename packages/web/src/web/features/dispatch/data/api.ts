@@ -20,8 +20,23 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const fetchSettings = () => call<{ mapV2Default: boolean }>("/settings");
 
-export const fetchBoard = (day?: string | null, signal?: AbortSignal) =>
-  call<Board>(`/board${day ? `?day=${encodeURIComponent(day)}` : ""}`, { signal });
+export const fetchBoard = (day?: string | null, signal?: AbortSignal, days = 1) => {
+  const q = new URLSearchParams();
+  if (day) q.set("day", day);
+  if (days > 1) q.set("days", String(days));
+  const qs = q.toString();
+  return call<Board>(`/board${qs ? `?${qs}` : ""}`, { signal });
+};
+
+/** Jobs and booked minutes per company-time day (the calendar's Month view). */
+export interface DayLoad {
+  tz: string;
+  techs: number;
+  /** techs: available that day (the team less anyone off). */
+  days: Array<{ day: string; jobs: number; bookedMins: number; techs?: number }>;
+}
+export const fetchLoad = (from: string, days: number, signal?: AbortSignal) =>
+  call<DayLoad>(`/load?from=${encodeURIComponent(from)}&days=${days}`, { signal });
 
 export async function fetchCandidates(ids: readonly string[], signal?: AbortSignal): Promise<Record<string, DispatchCandidate[]>> {
   if (ids.length === 0) return {};
@@ -33,6 +48,12 @@ export interface AssignInput {
   bookingId: string;
   riderId: string;
   force?: boolean;
+  /** Override a double booking / day off separately from `force` (the calendar). */
+  forceBusy?: boolean;
+  /** The assignee the dispatcher saw; refused if it changed since. */
+  expectRiderId?: string | null;
+  /** ISO instant: also move it there, under the same Undo (the calendar). */
+  scheduledAt?: string;
 }
 export interface AssignResponse {
   job: JobPatch;
@@ -41,7 +62,20 @@ export interface AssignResponse {
 }
 
 export const postAssign = (input: AssignInput) => call<AssignResponse>("/assign", { method: "POST", body: JSON.stringify(input) });
-export const postUndo = (token: string) => call<{ job: JobPatch }>("/undo", { method: "POST", body: JSON.stringify({ token }) });
+export interface ScheduleInput {
+  bookingId: string;
+  /** ISO instant */
+  scheduledAt: string;
+  force?: boolean;
+}
+export interface ScheduleResponse {
+  job: JobPatch & { scheduledAt: string };
+  /** Present when the move changed the time and can be undone. */
+  undo: string | null;
+}
+export const postSchedule = (input: ScheduleInput) => call<ScheduleResponse>("/schedule", { method: "POST", body: JSON.stringify(input) });
+/** `notified`: the notice had already gone out, so people heard about the change before it was undone. */
+export const postUndo = (token: string) => call<{ job: JobPatch; notified?: boolean }>("/undo", { method: "POST", body: JSON.stringify({ token }) });
 
 /** A 409 from /assign: the sentence to show, and whether "Assign anyway" may override it. */
 export interface Refusal {
