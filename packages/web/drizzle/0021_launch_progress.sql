@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "launch_progress" text;

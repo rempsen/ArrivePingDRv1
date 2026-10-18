@@ -67,7 +67,15 @@ export type AnalyticsEvent =
   | "guide.chapter_skipped"
   | "guide.sample_cleared"
   | "guide.sample_added"
-  | "guide.practice_job_created";
+  | "guide.practice_job_created"
+  | "guide.checklist_item_completed"
+  | "guide.activated"
+  | "guide.nudge_sent"
+  | "guide.chapter_started"
+  | "guide.step_viewed"
+  | "guide.step_missing"
+  | "guide.ask_question"
+  | "guide.ask_action";
 
 /**
  * Capture a business event. Fire-and-forget: never throws, never blocks the

@@ -1,4 +1,6 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { trackGuide } from "./events";
+import type { ChapterSource } from "../../shared/guide-events";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCustomerNoun, useJobNoun, useWorkerNoun } from "../lib/use-brand";
 import { useAuth } from "../hooks/use-auth";
@@ -25,7 +27,7 @@ interface GuideContextValue {
   chapters: Chapter[];
   status: Record<string, ChapterStatus | undefined>;
   activeChapterId: string | null;
-  startChapter: (id: string) => void;
+  startChapter: (id: string, source?: ChapterSource) => void;
   /** The full stored record (Welcome answers etc.); null until loaded. */
   state: OnboardingState | null;
   save: (patch: OnboardingPatch) => Promise<void>;
@@ -164,8 +166,10 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     [qc, userId, company],
   );
 
-  const startChapter = useCallback((id: string) => {
-    if (chaptersRef.current.some((c) => c.id === id)) setActive(id);
+  const startChapter = useCallback((id: string, source: ChapterSource = "panel") => {
+    if (!chaptersRef.current.some((c) => c.id === id)) return;
+    trackGuide({ name: "guide.chapter_started", chapter: id, source });
+    setActive(id);
   }, []);
 
   // Deep link: ?guide=scheduler (once the role is known, so it can be checked).
@@ -176,7 +180,10 @@ export function GuideProvider({ children }: { children: ReactNode }) {
     const url = new URL(window.location.href);
     url.searchParams.delete("guide");
     window.history.replaceState(window.history.state, "", url.toString());
-    if (chaptersRef.current.some((c) => c.id === id)) setActive(id);
+    if (chaptersRef.current.some((c) => c.id === id)) {
+      trackGuide({ name: "guide.chapter_started", chapter: id, source: "deeplink" });
+      setActive(id);
+    }
   }, [guideRole]);
 
   const onFinish = useCallback(

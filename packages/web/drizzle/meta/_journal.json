@@ -148,6 +148,13 @@
       "when": 1792280799613,
       "tag": "0020_platform_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792287098557,
+      "tag": "0021_launch_progress",
+      "breakpoints": true
     }
   ]
 }
