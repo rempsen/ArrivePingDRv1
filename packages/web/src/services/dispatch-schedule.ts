@@ -113,8 +113,15 @@ export async function dispatchSchedule(
   const from = new Date(prev.scheduledAt);
   if (from.getTime() === to.getTime()) return { ok: true, job: patchOf(prev), undo: null };
 
-  const [b] = await t.update(schema.bookings, { scheduledAt: to }, eq(schema.bookings.id, prev.id));
-  if (!b) return { ok: false, status: 404, message: "Work order not found", forceable: false };
+  // Compare-and-set on what was checked: a job finished, cancelled or moved in the
+  // meantime is left alone.
+  const B = schema.bookings;
+  const [b] = await t.update(
+    B,
+    { scheduledAt: to },
+    and(eq(B.id, prev.id), eq(B.status, prev.status), eq(B.scheduledAt, prev.scheduledAt), isNull(B.deletedAt)),
+  );
+  if (!b) return { ok: false, status: 409, message: "This job just changed — pull it up again to see where it is now.", forceable: false };
 
   const waiting = await pendingNotices(companyId, prev.id);
   if (!waiting.assigned) {

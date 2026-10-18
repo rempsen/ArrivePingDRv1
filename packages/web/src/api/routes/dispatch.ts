@@ -41,6 +41,8 @@ const AssignBody = z.object({
   riderId: idField("Technician"),
   /** The dispatcher confirmed the clash card ("Assign anyway?"). */
   force: z.boolean().optional(),
+  /** Also move it to this time (the calendar), in the same write and the same Undo. */
+  scheduledAt: z.string().datetime({ message: "Time must be an ISO date-time", offset: true }).optional(),
 });
 const ScheduleBody = z.object({
   bookingId: idField("Job"),
@@ -99,8 +101,8 @@ export const dispatchRoutes = new Hono<AppEnv>()
 
   .post("/assign", requireAdmin, jsonBody(AssignBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    const { bookingId, riderId, force } = c.req.valid("json");
-    const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, by: u.name });
+    const { bookingId, riderId, force, scheduledAt } = c.req.valid("json");
+    const r = await dispatchAssign(tenantId(c), { bookingId, riderId, force, scheduledAt, by: u.name });
     if (!r.ok) {
       if (r.status === 404) return c.json({ message: r.message }, 404);
       return c.json({ message: r.message, forceable: r.forceable, ...(r.reason ? { reason: r.reason } : {}) }, 409);

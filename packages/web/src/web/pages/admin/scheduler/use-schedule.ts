@@ -12,10 +12,10 @@
  * from one technician to another is a reassignment: it asks first, notifies at
  * once and has no Undo (the same rule as the dispatch map).
  *
- * A drop is all or nothing. When it takes two requests, whichever can be undone
- * goes first, and is undone if the second is declined or fails: from the queue
- * that's the assignment (then the time); for a reassignment it's the time (then
- * the reassignment, which can't be taken back).
+ * A drop is all or nothing. From the queue the technician and the time go in
+ * one request with one Undo. A reassignment to a new time takes two: the time
+ * goes first (it can be undone) and is taken back if the reassignment, which
+ * can't be, is declined or fails.
  */
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -189,14 +189,15 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
       };
       try {
         if (fromQueue) {
-          // Assign first (its notice says the time), then the time.
-          const r = await runWithForceConfirm((force) => postAssign({ bookingId: job.id, riderId: techId, force }), confirm, {
-            title: `Assign to ${firstName(techName)} anyway?`,
-            confirmLabel: "Assign anyway",
-          });
+          // One request: the technician and the time together, checked at the new
+          // time, with one Undo that puts both back.
+          const r = await runWithForceConfirm(
+            (force) => postAssign({ bookingId: job.id, riderId: techId, force, ...(moved ? { scheduledAt: at } : {}) }),
+            confirm,
+            { title: `Assign to ${firstName(techName)} anyway?`, confirmLabel: "Assign anyway" },
+          );
           if (r === null) return;
           if (r.undo) tokens.push(r.undo);
-          if (moved && !(await moveTime(job.id, at, tokens))) return void (await rollBack());
         } else if (reassign) {
           // A reassignment can't be undone, so the time goes first (checked against
           // the new technician) and is taken back if the reassignment doesn't happen.

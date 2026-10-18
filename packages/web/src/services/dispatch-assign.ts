@@ -65,6 +65,9 @@ interface UndoClaims {
   s: string;
   /** previous assignStatus */
   a: string;
+  /** When the drop also moved the time: scheduledAt before and after, ISO. */
+  f?: string;
+  t?: string;
   /** expiry, ms */
   exp: number;
 }
@@ -123,6 +126,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   if (!c || c.v !== 1 || typeof c.exp !== "number") return "invalid";
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
+  if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
   if (now > c.exp) return "expired";
   return c;
 }
@@ -198,7 +202,7 @@ async function techName(companyId: string, riderId: string): Promise<string> {
 
 export async function dispatchAssign(
   companyId: string,
-  input: { bookingId: string; riderId: string; force?: boolean; by: string },
+  input: { bookingId: string; riderId: string; force?: boolean; scheduledAt?: string; by: string },
   now = Date.now(),
 ): Promise<AssignOutcome> {
   const t = tdb(companyId);
@@ -208,10 +212,14 @@ export async function dispatchAssign(
   // Undo is for taking a job back off the board's queue. Moving a job from one
   // technician to another is a deliberate reassignment, notified at once.
   const undoable = !prev.riderId;
+  const from = new Date(prev.scheduledAt);
+  const to = input.scheduledAt ? new Date(input.scheduledAt) : null;
+  const moves = !!to && to.getTime() !== from.getTime();
   const r = await assignJob(companyId, input.bookingId, input.riderId, {
     force: input.force,
     by: { kind: "dispatcher", name: input.by },
     deferEvent: undoable,
+    ...(moves && to ? { scheduledAt: to } : {}),
   });
   if (!r.ok) {
     if (r.code === "tech_not_found" || r.code === "job_not_found") return { ok: false, status: 404, message: r.message, forceable: false };
@@ -227,6 +235,7 @@ export async function dispatchAssign(
       r: input.riderId,
       s: prev.status,
       a: prev.assignStatus,
+      ...(moves && to ? { f: from.toISOString(), t: to.toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     await deferAssignedNotice(companyId, input.bookingId, input.riderId);
@@ -256,8 +265,17 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
       acceptedAt: null,
       autoAssignedRuleId: "",
       autoAssignedAt: null,
+      ...(c.f ? { scheduledAt: new Date(c.f) } : {}),
     },
-    and(eq(B.id, c.b), eq(B.riderId, c.r), eq(B.assignStatus, "offered"), eq(B.status, "assigned"), isNull(B.deletedAt)),
+    and(
+      eq(B.id, c.b),
+      eq(B.riderId, c.r),
+      eq(B.assignStatus, "offered"),
+      eq(B.status, "assigned"),
+      isNull(B.deletedAt),
+      // A drop that also moved the time puts both back, or neither.
+      ...(c.t ? [eq(B.scheduledAt, new Date(c.t))] : []),
+    ),
   );
   if (!b) {
     const cur = await t.selectOne(B, eq(B.id, c.b));

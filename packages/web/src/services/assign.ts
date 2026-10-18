@@ -33,6 +33,12 @@ export interface AssignOptions {
    * (services/dispatch-assign.ts) so an undone drop never texts anyone.
    */
   deferEvent?: boolean;
+  /**
+   * Put the job at this time in the same write (the dispatch calendar drops a
+   * queued job on a technician at a time). Availability is checked at this
+   * time, not the old one.
+   */
+  scheduledAt?: Date;
 }
 
 export type AssignResult =
@@ -88,7 +94,7 @@ export async function assignJob(
   if (!force) {
     const busy = await findAvailabilityBlock(companyId, {
       riderId,
-      scheduledAt: prev.scheduledAt,
+      scheduledAt: opts.scheduledAt ?? prev.scheduledAt,
       bookingId,
       serviceId: prev.serviceId,
     });
@@ -108,6 +114,7 @@ export async function assignJob(
     autoAssignedRuleId: auto ? auto.ruleId : "",
     autoAssignedAt: auto ? new Date() : null,
   };
+  if (opts.scheduledAt) set.scheduledAt = opts.scheduledAt;
   // Handing a live job to someone else: the new tech must not inherit the
   // previous tech's drive time, arrival or running on-site clock (that time is
   // billable and belongs to the first visit, not to this one).
@@ -124,7 +131,12 @@ export async function assignJob(
   const [b] = await t.update(
     schema.bookings,
     set,
-    and(eq(schema.bookings.id, bookingId), eq(schema.bookings.status, prev.status)),
+    and(
+      eq(schema.bookings.id, bookingId),
+      eq(schema.bookings.status, prev.status),
+      // Moving it too: only from the time we checked.
+      ...(opts.scheduledAt ? [eq(schema.bookings.scheduledAt, prev.scheduledAt)] : []),
+    ),
   );
   if (!b)
     return {

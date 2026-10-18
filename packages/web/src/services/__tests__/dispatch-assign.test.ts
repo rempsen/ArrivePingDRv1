@@ -179,6 +179,35 @@ describe("dispatchAssign + undoAssign", () => {
     await flushNotices();
   });
 
+  it("assigns at a new time in one write, checked at that time, and Undo puts both back", async () => {
+    // t2 is busy at the job's current time, free at the new one.
+    const blocker = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    const id = await job(CO, { scheduledAt: (await row(blocker)).scheduledAt });
+    const before = (await row(id)).scheduledAt;
+    const to = new Date(before.getTime() + 4 * HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t2`, scheduledAt: to, by: "Dana" }, NOW.getTime());
+    expect(r.ok).toBe(true);
+    expect((await row(id)).scheduledAt.toISOString()).toBe(to);
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+    const u = await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime());
+    expect(u.ok).toBe(true);
+    expect((await row(id)).riderId).toBeNull();
+    expect((await row(id)).scheduledAt.toISOString()).toBe(before.toISOString());
+    await flushNotices();
+    expect(await events(id)).not.toContain("assigned");
+  });
+
+  it("won't put the time back on its own once the technician accepted", async () => {
+    const id = await job(CO);
+    const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, scheduledAt: to, by: "Dana" }, NOW.getTime());
+    await db.update(schema.bookings).set({ assignStatus: "accepted", acceptedAt: new Date() }).where(eq(schema.bookings.id, id));
+    expect(await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).scheduledAt.toISOString()).toBe(to);
+    expect((await row(id)).riderId).toBe(`${CO}-t1`);
+    await flushNotices();
+  });
+
   it("refuses unknown jobs, other companies' jobs and other companies' technicians", async () => {
     expect(await da.dispatchAssign(CO, { bookingId: "nope", riderId: `${CO}-t1`, by: "Dana" })).toMatchObject({ ok: false, status: 404 });
     const theirs = await job(OTHER);

@@ -47,6 +47,8 @@ export interface AssignInput {
   bookingId: string;
   riderId: string;
   force?: boolean;
+  /** ISO instant: also move it there, under the same Undo (the calendar). */
+  scheduledAt?: string;
 }
 export interface AssignResponse {
   job: JobPatch;
