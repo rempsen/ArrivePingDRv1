@@ -16,7 +16,6 @@ import * as SecureStore from "expo-secure-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { getActiveCompany } from "../lib/active-company";
-import { isPracticeJob } from "../lib/practice";
 import { C, R } from "../lib/theme";
 
 /**
@@ -106,18 +105,25 @@ function seenKey(userId: string): string {
   const clean = (v: string) => v.replace(/[^A-Za-z0-9._-]/g, "_");
   return `${SEEN_PREFIX}.${clean(userId)}.${clean(getActiveCompany() || "home")}`;
 }
-async function readSeen(key: string): Promise<boolean> {
+/**
+ * What this phone remembers: how the tour ended ("completed" / "skipped"), so
+ * an offline finish can be reported to the server as it really happened, or
+ * "not-needed" for an experienced technician (nothing to report).
+ */
+type SeenState = "completed" | "skipped" | "not-needed";
+async function readSeen(key: string): Promise<SeenState | null> {
   try {
-    if (Platform.OS === "web") return localStorage.getItem(key) === "1";
-    return (await SecureStore.getItemAsync(key)) === "1";
+    const v = Platform.OS === "web" ? localStorage.getItem(key) : await SecureStore.getItemAsync(key);
+    if (v === "completed" || v === "skipped" || v === "not-needed") return v;
+    return v === "1" ? "completed" : null; // the first build stored "1"
   } catch {
-    return false;
+    return null;
   }
 }
-async function writeSeen(key: string) {
+async function writeSeen(key: string, state: SeenState) {
   try {
-    if (Platform.OS === "web") localStorage.setItem(key, "1");
-    else await SecureStore.setItemAsync(key, "1");
+    if (Platform.OS === "web") localStorage.setItem(key, state);
+    else await SecureStore.setItemAsync(key, state);
   } catch {
     /* best effort: the server copy still stops a repeat */
   }
@@ -140,8 +146,9 @@ async function findDriveTarget(practiceJobId: string | null): Promise<DriveTarge
     const res = await api.bookings.$get();
     if (res.ok) {
       const list = ((await res.json()) as { bookings: { id: string; status: string; assignStatus?: string; isSample?: boolean }[] }).bookings;
-      const j = list.find((b) => b.assignStatus === "accepted" && b.status === DRIVABLE);
-      if (j) return { id: j.id, practice: isPracticeJob(j) };
+      // Real jobs only: a sample-day job never texts anyone, so it would teach the wrong thing.
+      const j = list.find((b) => !b.isSample && b.assignStatus === "accepted" && b.status === DRIVABLE);
+      if (j) return { id: j.id, practice: false };
     }
   } catch {
     /* no target: the tip is shown without a spotlight */
@@ -207,6 +214,13 @@ export function CoachProvider({ children }: { children: ReactNode }) {
   const [reduceMotion, setReduceMotion] = useState(false);
   /** user + company the first-run check has already run for. */
   const startedKeyRef = useRef<string | null>(null);
+  /**
+   * Bumped by cancel() and by every new start. A start still waiting on the
+   * network when the person signs out or switches company finds the number
+   * changed and doesn't open, so a stale tour can't appear over sign-in or
+   * under another company.
+   */
+  const genRef = useRef(0);
   const { width, height } = useWindowDimensions();
 
   useEffect(() => {
@@ -228,7 +242,7 @@ export function CoachProvider({ children }: { children: ReactNode }) {
       const key = runRef.current?.key;
       setRun(null);
       setRect(null);
-      if (key) void writeSeen(key);
+      if (key) void writeSeen(key, status);
       api.me.onboarding
         .$patch({ json: { tours: { [TOUR_ID]: { status, at: new Date().toISOString() } } } })
         .catch(() => {});
@@ -250,7 +264,8 @@ export function CoachProvider({ children }: { children: ReactNode }) {
   );
 
   const begin = useCallback(
-    async (key: string, replay: boolean) => {
+    async (key: string, replay: boolean, gen: number) => {
+      const stale = () => gen !== genRef.current;
       let practiceJobId: string | null = null;
       try {
         const res = await api.me["practice-job"].$post();
@@ -259,7 +274,7 @@ export function CoachProvider({ children }: { children: ReactNode }) {
         // A technician who has already done real work here doesn't need the
         // first-run tour; they can still replay it from Profile.
         if (!replay && !out.jobId && out.reason === "experienced") {
-          await writeSeen(key);
+          if (!stale()) await writeSeen(key, "not-needed");
           return;
         }
       } catch {
@@ -269,6 +284,7 @@ export function CoachProvider({ children }: { children: ReactNode }) {
       // A removed or finished practice job can't show Start Driving: use one of
       // their own jobs that can, or show that tip without a spotlight.
       const drive = await findDriveTarget(practiceJobId);
+      if (stale()) return;
       setRun({ steps: buildSteps(drive), i: 0, key });
     },
     [qc],
@@ -279,6 +295,8 @@ export function CoachProvider({ children }: { children: ReactNode }) {
       const key = seenKey(userId);
       if (startedKeyRef.current === key) return;
       startedKeyRef.current = key;
+      const gen = ++genRef.current;
+      const stale = () => gen !== genRef.current;
       (async () => {
         // The server decides when it can be reached (this membership's record);
         // the device flag covers being offline.
@@ -286,26 +304,30 @@ export function CoachProvider({ children }: { children: ReactNode }) {
           const res = await api.me.onboarding.$get();
           if (res.ok) {
             const body = (await res.json()) as { state?: { tours?: Record<string, unknown> } };
-            if (body.state?.tours?.[TOUR_ID]) {
-              await writeSeen(key);
+            if (stale()) return;
+            const done = body.state?.tours?.[TOUR_ID] as { status?: "completed" | "skipped" } | undefined;
+            if (done) {
+              await writeSeen(key, done.status === "skipped" ? "skipped" : "completed");
               return;
             }
-            // Seen on this phone but the server never heard (offline at the
-            // end): tell it now instead of showing the tour again.
-            if (await readSeen(key)) {
-              api.me.onboarding
-                .$patch({ json: { tours: { [TOUR_ID]: { status: "completed", at: new Date().toISOString() } } } })
-                .catch(() => {});
+            // Finished on this phone but the server never heard (offline at the
+            // end): report it now, as it happened, instead of showing it again.
+            const local = await readSeen(key);
+            if (local) {
+              if (local !== "not-needed")
+                api.me.onboarding
+                  .$patch({ json: { tours: { [TOUR_ID]: { status: local, at: new Date().toISOString() } } } })
+                  .catch(() => {});
               return;
             }
-            await begin(key, false);
+            await begin(key, false, gen);
             return;
           }
         } catch {
           /* offline: fall back to the device flag */
         }
-        if (await readSeen(key)) return;
-        await begin(key, false);
+        if (stale() || (await readSeen(key))) return;
+        await begin(key, false, gen);
       })();
     },
     [begin],
@@ -313,12 +335,13 @@ export function CoachProvider({ children }: { children: ReactNode }) {
 
   const replay = useCallback(
     (userId: string) => {
-      void begin(seenKey(userId), true);
+      void begin(seenKey(userId), true, ++genRef.current);
     },
     [begin],
   );
 
   const cancel = useCallback(() => {
+    genRef.current++;
     setRun(null);
     setRect(null);
     // Coming back (another company, another person) checks again.
