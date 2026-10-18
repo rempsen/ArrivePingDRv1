@@ -34,7 +34,7 @@ export const ASK_PAGES: AskPage[] = [
     adminOnly: true,
   },
   { route: "/admin/reports", label: "Money → Reports (reports and exports)", adminOnly: true },
-  { route: "/admin/settings", label: "Setup → Settings (company, running late, calendar feed, API & MCP)", adminOnly: true },
+  { route: "/admin/settings", label: "Setup → Settings (Company tab: details, running late, Calendar Sync feed; API & MCP tab: keys)", adminOnly: true },
   { route: "/admin/getting-started", label: "Getting started (the launch checklist)", adminOnly: true },
 ];
 

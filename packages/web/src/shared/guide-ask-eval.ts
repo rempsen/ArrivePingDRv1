@@ -20,7 +20,7 @@ export const ASK_EVAL: AskEvalCase[] = [
   { q: "how do i add a technician", tours: ["people"], articles: ["invite-your-technicians"] },
   { q: "Where do I create a new job?", tours: ["create-job"], articles: ["your-first-job"] },
   { q: "Can I see the whole week on a calendar?", tours: ["scheduler"], articles: ["scheduler-views"], pages: ["/admin/scheduler"] },
-  { q: "How do I export my jobs to Excel?", tours: ["export"], articles: ["exports-and-integrations"] },
+  { q: "How do I export my jobs to Excel?", tours: ["export"], articles: ["exports-and-integrations", "run-a-report"], pages: ["/admin/reports"] },
   { q: "Can I change the text customers get when the tech is on the way?", tours: ["milestones"], articles: ["customize-messages"] },
   { q: "Where are the revenue reports?", tours: ["reports"], articles: ["run-a-report"], pages: ["/admin/reports"] },
   { q: "How do my customers track the technician?", tours: ["notifications"], articles: ["what-customers-receive", "on-the-way-and-arrival"] },
