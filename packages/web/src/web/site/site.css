@@ -2885,6 +2885,18 @@
     align-items: center;
     min-height: 44px;
   }
+  .site .help-article__crumbs a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -12px;
+  }
+  .site .help-article__related a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding-block: 8px;
+  }
 }
 @media (max-width: 560px) {
   .site .lede {
