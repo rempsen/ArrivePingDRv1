@@ -70,3 +70,18 @@ describe("inviteStaffMember reports whether the email went", () => {
     expect(r.message).toBe("Account created.");
   });
 });
+
+describe("a mobile number is a second way in (Codex on #75)", () => {
+  it("when the email fails and the text can't go either, both are reported as not reaching them", async () => {
+    // No TWILIO_AUTH_TOKEN here, so the text is skipped too.
+    const r = await inviteStaffMember({ companyId: CO, invitedBy: null, name: "Pat Phone", email: "pat@si.test", phone: "+12045550199", kind: "tech" });
+    expect(r.emailed).toBe(false);
+    expect(r.texted).toBe(false);
+    expect(r.message).toContain("Email a sign-in link");
+  });
+
+  it("no mobile: there's no text to report on", async () => {
+    const r = await inviteStaffMember({ companyId: CO, invitedBy: null, name: "Nolan Nophone", email: "nolan@si.test", kind: "tech" });
+    expect(r.texted).toBeUndefined();
+  });
+});

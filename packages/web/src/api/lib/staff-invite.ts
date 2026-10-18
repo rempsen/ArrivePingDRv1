@@ -76,6 +76,12 @@ export interface StaffInviteResult {
    * (`silent`) or they were already on the roster.
    */
   emailed?: boolean;
+  /**
+   * Only checked when the email didn't go out: whether the same set-password
+   * link reached them by text instead (a mobile was given). True means they
+   * can still get in and nothing needs resending.
+   */
+  texted?: boolean;
 }
 
 /** Map the plain-English kind onto our role/staffType model. */
@@ -234,6 +240,7 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
   const link = `${SITE}/join/${inv.token}`;
 
   let emailed: boolean | undefined;
+  let texted: boolean | undefined;
   if (!a.silent) {
     emailed = await sendWelcomeSetPassword({ companyId: a.companyId, to: email, name, kind: a.kind, link }).catch((e) => {
       console.error("[staff-invite] welcome email failed", e);
@@ -241,7 +248,12 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
     });
     if (phone) {
       const co = await t.selectOne(schema.companySettings);
-      sendSms(phone, `${co?.name || "ArrivePing"}: you've been added as a ${KIND_LABEL[a.kind]}. Set your password here: ${link}`).catch(() => {});
+      const sms = sendSms(phone, `${co?.name || "ArrivePing"}: you've been added as a ${KIND_LABEL[a.kind]}. Set your password here: ${link}`)
+        .then((r) => Boolean(r?.ok))
+        .catch(() => false);
+      // Only wait for the text when it's their one way in left, so the admin
+      // is told the truth; otherwise it stays fire-and-forget.
+      if (!emailed) texted = await sms;
     }
   }
 
@@ -254,13 +266,16 @@ export async function inviteStaffMember(a: StaffInviteInput): Promise<StaffInvit
     inviteId: inv.id,
     link,
     emailed,
-    message:
-      emailed === false
-        ? "Account created, but the set-password email didn't go out. Use “Email a sign-in link” on their profile."
-        : emailed
-          ? "Account created — set-password email sent."
-          : "Account created.",
+    texted,
+    message: newLoginMessage(emailed, texted),
   };
+}
+
+function newLoginMessage(emailed: boolean | undefined, texted: boolean | undefined): string {
+  if (emailed === undefined) return "Account created.";
+  if (emailed) return "Account created — set-password email sent.";
+  if (texted) return "Account created. The set-password email didn't go out, but the link reached them by text.";
+  return "Account created, but the set-password email didn't go out. Use “Email a sign-in link” on their profile.";
 }
 
 /** Resolves true only when the email was handed to the provider (sendEmail reports a skip or failure as { ok: false }). */

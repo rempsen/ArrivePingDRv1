@@ -670,9 +670,10 @@ without it unless the user explicitly says to skip/finish everything.
         if a mobile was given) to set their own password — nobody types
         passwords for anyone else. Then say one line like "Invites are on
         their way — they'll each set their own password." If the result
-        lists anyone under notEmailed, say instead that their invite
-        didn't go out and how to resend it (from howToResend). Then
-        continue with question 3.
+        lists anyone under notEmailed, say their invite EMAIL didn't go
+        out: when textedInstead is true, add that the link reached them
+        by text so nothing else is needed; otherwise say how to resend it
+        (from howToResend). Then continue with question 3.
     Anyone they're not sure about yet can be added later under Settings →
     Team; say so once if they seem stuck, then move on. Don't make them
     finish everything now.
@@ -1026,7 +1027,7 @@ correction like that — it reads like you weren't listening.`;
         }),
         add_team_members: tool({
           description:
-            "Create login invites for the tenant's staff in one go. Field staff (tech/driver) get a technician profile with vehicle details; office staff (dispatcher/manager/owner) get a dispatcher/manager login. Every person is sent a branded email (and SMS when a mobile is given) with a link to set their OWN password — never ask the admin for passwords. The result lists anyone whose email did NOT go out under notEmailed, with how to resend it; tell the admin about those instead of saying their invite is on its way. Only include people with a name, kind and email; skip the rest and tell the user they can add them later under Settings → Team.",
+            "Create login invites for the tenant's staff in one go. Field staff (tech/driver) get a technician profile with vehicle details; office staff (dispatcher/manager/owner) get a dispatcher/manager login. Every person is sent a branded email (and SMS when a mobile is given) with a link to set their OWN password — never ask the admin for passwords. The result lists anyone whose email did NOT go out under notEmailed: if textedInstead is true the link reached them by text, so say so and nothing needs resending; otherwise tell the admin their invite email didn't go out and how to resend it (howToResend). Only include people with a name, kind and email; skip the rest and tell the user they can add them later under Settings → Team.",
           inputSchema: z.object({
             members: z
               .array(
@@ -1102,6 +1103,8 @@ correction like that — it reads like you weren't listening.`;
               invited: invited.map((r) => ({ name: r.name, email: r.email, kind: r.kind, emailed: r.emailed !== false })),
               notEmailed: notEmailed.map((r) => ({
                 name: r.name,
+                // The same set-password link went by text and arrived.
+                textedInstead: r.texted === true,
                 howToResend:
                   r.status === "joined"
                     ? "People → Technicians & Managers → “Resend invite” next to their name"
