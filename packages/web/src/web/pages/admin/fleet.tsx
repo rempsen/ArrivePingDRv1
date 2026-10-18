@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
 import { TechAvatar } from "../../components/tech-avatar";
 import { FleetMap } from "../../components/fleet-map";
+import { setMapV2 } from "../../features/dispatch/map-switch";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { Modal, inputCls, BtnGhost, BtnPrimary } from "../../components/modal";
 import { EmptyState } from "../../components/empty-state";
@@ -187,6 +188,13 @@ export default function FleetPage() {
 
   return (
     <div className="relative h-[calc(100vh-0px)] md:h-screen">
+      <button
+        type="button"
+        onClick={() => setMapV2(true)}
+        className="absolute right-3 top-3 z-[500] rounded-full border border-white/20 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-white shadow backdrop-blur hover:bg-slate-800"
+      >
+        Try the new map
+      </button>
       <FleetMap
         techs={mapTechs as any}
         jobs={jobs}

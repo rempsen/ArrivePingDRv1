@@ -8,7 +8,7 @@ import { lazyRoute } from "../../lib/lazy-route";
 // into its own chunk and loads only when its route is visited.
 const AdminDashboard = lazyRoute(() => import("./dashboard"));
 const GettingStartedPage = lazyRoute(() => import("./getting-started"));
-const FleetPage = lazyRoute(() => import("./fleet"));
+const FleetPage = lazyRoute(() => import("../../features/dispatch/dispatch-route"));
 const SchedulerPage = lazyRoute(() => import("./scheduler"));
 const WorkOrdersPage = lazyRoute(() => import("./bookings"));
 const BuilderPage = lazyRoute(() => import("./builder"));
