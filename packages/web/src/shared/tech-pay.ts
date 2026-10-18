@@ -74,8 +74,10 @@ function safe(v: unknown): number {
 export function computeTechPay(input: TechPayInput): TechPayResult {
   const payRatePerHour = safe(input.payRatePerHour);
   const minutes = safe(input.onSiteMinutes);
+  // Paid to the exact minute (minutes / 60 x rate, rounded once to the cent),
+  // the same rule customers are billed by. `hours` is for display only.
   const hours = round2(minutes / 60);
-  const hourlyPay = round2(hours * payRatePerHour);
+  const hourlyPay = round2((minutes / 60) * payRatePerHour);
   // sumUnitLinePay can go negative if someone entered a negative unit cost;
   // clamp so a bad line can't reduce pay earned on other jobs in the period.
   const unitPay = Math.max(0, sumUnitLinePay(input.lineItems ?? []));

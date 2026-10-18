@@ -158,7 +158,7 @@ export const screens: Record<string, Screen[]> = {
   price: [
     { src: S("price-rate"), w: 1120, h: 794, span: 6, alt: "ArrivePing customer pricing set to a flat fee: $150 that includes 60 minutes, then $90 an hour, with an optional mileage charge per km.", caption: "Customer pricing: a $150 service fee that includes the first hour, then $90 an hour." },
     { src: S("price-techpay"), w: 1120, h: 598, span: 6, alt: "ArrivePing technician pay for the same workflow: the technician's own hourly rate plus $0.50 per km of mileage, round trip.", caption: "Technician pay, set separately: their own hourly rate plus mileage." },
-    { src: S("price-job"), w: 744, h: 968, span: 5, alt: "A finished ArrivePing job: $150 flat rate including 60 minutes, $37.80 additional time, parts, total $639.41 paid, and technician pay of $59.33 split into time on site and mileage.", caption: "The finished job: billed by the rule, paid, and the technician's pay line by line." },
+    { src: S("price-job"), w: 744, h: 968, span: 5, alt: "A finished ArrivePing job: $150 flat rate including 60 minutes, 25 minutes of additional time at $90 an hour ($37.50), parts, total $639.07 paid, and technician pay of $59.20 split into time on site and mileage.", caption: "The finished job: billed by the rule, paid, and the technician's pay line by line." },
     { src: S("price-payouts"), w: 1800, h: 802, span: 7, alt: "ArrivePing technician payouts for the week with hourly, mileage, flat and per-unit pay for each technician, and one job's breakdown expanded.", caption: "Payouts: hourly, mileage, flat and per-unit pay, job by job." },
   ],
   start: [

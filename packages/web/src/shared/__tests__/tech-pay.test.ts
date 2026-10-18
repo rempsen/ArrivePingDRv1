@@ -32,11 +32,11 @@ describe("computeTechPay — hourly on-site time + per-unit pay", () => {
     expect(r.techPay).toBe(50);
   });
 
-  it("rounds money to cents, never to a fraction of a cent", () => {
-    // 50 min @ $37/h = 0.83h * 37 = 30.71 (0.8333.. rounded to 2dp first)
+  it("pays to the exact minute, rounded once to the cent", () => {
+    // 50 min @ $37/h = 30.8333.. -> $30.83 (0.83 h first would have paid $30.71)
     const r = computeTechPay({ ...base, onSiteMinutes: 50, payRatePerHour: 37 });
     expect(r.hours).toBe(0.83);
-    expect(r.hourlyPay).toBe(30.71);
+    expect(r.hourlyPay).toBe(30.83);
   });
 
   it("flags a job as unrated when there is no hourly rate and no per-unit pay", () => {
@@ -125,7 +125,7 @@ describe("client pricing — $150 service fee that includes the first 60 minutes
     expect(computeSubtotal(rule, 60, 0).subtotal).toBe(150);
   });
   it("charges the hourly rate only for time past the included hour", () => {
-    // 85 min: $150 + 25 min (0.42 h) x $90
-    expect(computeSubtotal(rule, 85, 0).subtotal).toBe(187.8);
+    // 85 min: $150 + 25 min x $90/h, billed to the minute
+    expect(computeSubtotal(rule, 85, 0).subtotal).toBe(187.5);
   });
 });

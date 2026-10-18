@@ -63,6 +63,9 @@ export interface PriceLineItem {
   unit: string;
   rate: number;
   amount: number;
+  /** The unit `rate` is quoted in when it differs from `unit` — time is
+   *  counted in minutes but priced per hour ("25 min × $90.00/hr"). */
+  per?: string;
 }
 
 export interface PriceResult {
@@ -71,6 +74,18 @@ export interface PriceResult {
 }
 
 /** Compute the client subtotal (pre-tax) given a rate model + actuals. */
+/**
+ * A line for time billed at an hourly rate. Time is billed to the exact
+ * minute: the amount is minutes / 60 x rate, rounded once to the cent, and the
+ * line shows the minutes and the hourly rate ("25 min × $90.00/hr = $37.50").
+ * Rounding the hours first (0.42 h x $90 = $37.80) overcharged by up to a few
+ * cents per hour of rate on every job.
+ */
+function timeLine(label: string, minutes: number, hourlyRate: number): PriceLineItem {
+  const cents = (n: number) => Math.round(n * 100) / 100;
+  return { label, qty: cents(minutes), unit: "min", rate: hourlyRate, per: "hr", amount: cents((minutes / 60) * hourlyRate) };
+}
+
 export function computeSubtotal(
   rm: RateModel,
   actualMinutes: number,
@@ -104,25 +119,21 @@ export function computeSubtotal(
     if (billableMin > 0) {
       const firstMin = Math.min(billableMin, 60);
       const addlMin = Math.max(0, billableMin - 60);
-      const firstHrs = round(firstMin / 60);
-      const addlHrs = round(addlMin / 60);
       if (firstHrRate > 0 && firstMin > 0) {
-        items.push({ label: "First hour", qty: firstHrs, unit: "hr", rate: firstHrRate, amount: round(firstHrs * firstHrRate) });
+        items.push(timeLine("First hour", firstMin, firstHrRate));
       }
       if (addlHrRate > 0 && addlMin > 0) {
-        items.push({ label: "Additional time", qty: addlHrs, unit: "hr", rate: addlHrRate, amount: round(addlHrs * addlHrRate) });
+        items.push(timeLine("Additional time", addlMin, addlHrRate));
       } else if (addlMin > 0 && firstHrRate > 0) {
         // fallback: use firstHrRate for additional if additionalHourRate not set
-        items.push({ label: "Additional time", qty: addlHrs, unit: "hr", rate: firstHrRate, amount: round(addlHrs * firstHrRate) });
+        items.push(timeLine("Additional time", addlMin, firstHrRate));
       }
     }
   } else if (rm.timeRate > 0) {
     // simple flat hourly / per-minute
     const billableMin = Math.max(0, actualMinutes - rm.includedMinutes);
     if (rm.timeUnit === "hour") {
-      const hrs = round(billableMin / 60);
-      if (hrs > 0)
-        items.push({ label: "Additional time", qty: hrs, unit: "hr", rate: rm.timeRate, amount: round(hrs * rm.timeRate) });
+      if (billableMin > 0) items.push(timeLine("Additional time", billableMin, rm.timeRate));
     } else {
       if (billableMin > 0)
         items.push({ label: "Additional time", qty: round(billableMin), unit: "min", rate: rm.timeRate, amount: round(billableMin * rm.timeRate) });

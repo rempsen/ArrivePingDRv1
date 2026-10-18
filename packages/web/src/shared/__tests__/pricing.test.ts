@@ -30,8 +30,7 @@ describe("computeSubtotal — time overage", () => {
     const r = computeSubtotal(rm({ flatRate: 50, includedMinutes: 60, timeRate: 120, timeUnit: "hour" }), 90, 0);
     expect(r.subtotal).toBe(110);
     const time = r.items.find((i) => i.label === "Additional time")!;
-    expect(time.qty).toBe(0.5);
-    expect(time.amount).toBe(60);
+    expect(time).toMatchObject({ qty: 30, unit: "min", rate: 120, per: "hr", amount: 60 });
   });
 
   it("bills per-minute overage when timeUnit is minute", () => {
@@ -68,6 +67,24 @@ describe("computeSubtotal — minimum charge floor", () => {
     const r = computeSubtotal(rm({ flatRate: 200, minCharge: 75 }), 0, 0);
     expect(r.subtotal).toBe(200);
     expect(r.items.find((i) => i.label === "Minimum charge adjustment")).toBeUndefined();
+  });
+});
+
+describe("computeSubtotal — billed to the exact minute", () => {
+  it("bills 25 minutes at $90/hr as $37.50, not 0.42 h ($37.80)", () => {
+    const r = computeSubtotal(rm({ flatRate: 150, includedMinutes: 60, timeRate: 90, timeUnit: "hour" }), 85, 0);
+    expect(r.items.find((i) => i.label === "Additional time")).toMatchObject({ qty: 25, unit: "min", amount: 37.5 });
+    expect(r.subtotal).toBe(187.5);
+  });
+  it("bills tiered first hour and additional time by the minute", () => {
+    const r = computeSubtotal(rm({ firstHourRate: 150, additionalHourRate: 95 }), 85, 0);
+    expect(r.items.find((i) => i.label === "First hour")!.amount).toBe(150);
+    // 25 min x $95/h = 39.5833 -> $39.58 (0.42 h would have been $39.90)
+    expect(r.items.find((i) => i.label === "Additional time")!.amount).toBe(39.58);
+  });
+  it("prorates a short first hour by the minute", () => {
+    const r = computeSubtotal(rm({ firstHourRate: 100 }), 20, 0);
+    expect(r.subtotal).toBe(33.33);
   });
 });
 

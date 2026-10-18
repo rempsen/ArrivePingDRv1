@@ -401,7 +401,7 @@ export default function JobReportPage() {
                     <span className="text-slate-300">
                       {it.label}
                       {it.unit && it.unit !== "job" && it.unit !== "each" && (
-                        <span className="text-slate-500"> · {it.qty} {it.unit} × {money(it.rate ?? 0)}</span>
+                        <span className="text-slate-500"> · {it.qty} {it.unit} × {money(it.rate ?? 0)}{it.per ? `/${it.per}` : ""}</span>
                       )}
                       {(it.unit === "each" || it.unit === "job") && Number(it.qty) > 1 && <span className="text-slate-500"> · {it.qty} ×</span>}
                     </span>
@@ -433,7 +433,7 @@ export default function JobReportPage() {
             {pay && (
               <div className="mt-2 space-y-1 border-t border-white/5 pt-2 text-xs">
                 {Number(pay.hourlyPay) > 0 && (
-                  <div className="flex justify-between text-slate-400"><span>Time on site · {pay.hours} h × {money(pay.payRatePerHour)}</span><span className="text-slate-200">{money(pay.hourlyPay)}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>Time on site · {fmtMins(Math.round(Number(pay.onSiteMinutes) || 0))} × {money(pay.payRatePerHour)}/h</span><span className="text-slate-200">{money(pay.hourlyPay)}</span></div>
                 )}
                 {Number(pay.mileagePay) > 0 && (
                   <div className="flex justify-between text-slate-400">

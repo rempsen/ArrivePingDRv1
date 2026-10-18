@@ -377,10 +377,10 @@ describe("POST /payouts/generate — real tech pay", () => {
     expect(res.status).toBe(201);
     const rows = await payoutRows();
     expect(rows.length).toBe(1);
-    expect(rows[0].hourly_pay).toBe(13.2); // 0.33h × $40
+    expect(rows[0].hourly_pay).toBe(13.33); // 20 min × $40/h, to the minute
     expect(rows[0].unit_pay).toBe(0);
-    expect(rows[0].net).toBe(13.2);
-    expect(rows[0].gross).toBe(13.2);
+    expect(rows[0].net).toBe(13.33);
+    expect(rows[0].gross).toBe(13.33);
     // No platform fee in the real-pay model.
     expect(rows[0].fee).toBe(0);
     expect(rows[0].fee_pct).toBe(0);
