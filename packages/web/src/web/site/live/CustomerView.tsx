@@ -33,29 +33,32 @@ export function CustomerView() {
           </div>
         </div>
 
-        <ol className="ap-cv__steps">
-          {customerView.steps.map((s, i) => (
-            <li key={s.kicker} className="ap-cv__step" data-reveal="" data-reveal-delay={String(i + 1)}>
-              <div className="ap-cv__device">
-                <div className="ap-phone ap-phone--crop">
-                  {s.screen.kind === "sms" ? (
-                    <SmsScreen from={sms.from} body={sms.body} />
-                  ) : (
-                    <img src={s.screen.src} width={s.screen.width} height={s.screen.height} alt={s.screen.alt} loading="lazy" decoding="async" />
-                  )}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- on phones this row scrolls sideways; a focusable region lets keyboard users scroll it */}
+        <section className="ap-cv__scroller" aria-label="What your customer sees, step by step" tabIndex={0}>
+          <ol className="ap-cv__steps">
+            {customerView.steps.map((s, i) => (
+              <li key={s.kicker} className="ap-cv__step" data-reveal="" data-reveal-delay={String(i + 1)}>
+                <div className="ap-cv__device">
+                  <div className="ap-phone ap-phone--crop">
+                    {s.screen.kind === "sms" ? (
+                      <SmsScreen from={sms.from} body={sms.body} />
+                    ) : (
+                      <img src={s.screen.src} width={s.screen.width} height={s.screen.height} alt={s.screen.alt} loading="lazy" decoding="async" />
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="ap-cv__text">
-                <span className="ap-cv__kicker">
-                  <span className="ap-cv__n tnum">{i + 1}</span>
-                  {s.kicker}
-                </span>
-                <h3>{s.title}</h3>
-                <p>{s.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+                <div className="ap-cv__text">
+                  <span className="ap-cv__kicker">
+                    <span className="ap-cv__n tnum">{i + 1}</span>
+                    {s.kicker}
+                  </span>
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
         <p className="ap-cv__cap">{customerView.caption}</p>
 
         <div className="ap-cv__why" data-reveal="">

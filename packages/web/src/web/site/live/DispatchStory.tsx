@@ -267,8 +267,8 @@ function Story() {
             <text x={198} y={285} textAnchor="end" fill="#7dd3fc" fontSize={11.5}>0.9 km away</text>
             <circle cx={40} cy={322} r={16} fill="#1e3a5f" />
             <text x={40} y={326.5} textAnchor="middle" fill="#bae6fd" fontSize={11} fontWeight={700}>JP</text>
-            <text x={64} y={318} fill="#f1f5f9" fontSize={12.5} fontWeight={700}>Jordan Park · Gas fitter</text>
-            <text x={64} y={335} fill="#94a3b8" fontSize={11}>2024 Ford Transit · Van 3</text>
+            <text x={64} y={318} fill="#f1f5f9" fontSize={12.5} fontWeight={700}>Jordan Park</text>
+            <text x={64} y={335} fill="#94a3b8" fontSize={11}>HVAC Technician · Van 3</text>
             <rect x={24} y={360} width={84} height={44} rx={11} fill="#0ea5e9" />
             <text x={66} y={387} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={700}>Text</text>
             <rect x={116} y={360} width={84} height={44} rx={11} fill="#10b981" />

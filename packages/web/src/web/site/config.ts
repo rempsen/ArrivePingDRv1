@@ -102,8 +102,8 @@ export const hero = {
   /** The four objections a buyer has before clicking, answered before the button. */
   assurances: [
     { icon: "phone", label: "No GPS hardware", sub: "Runs on the phones your team carries" },
-    { icon: "clock", label: "Live in under an hour", sub: "An AI agent does the setup" },
-    { icon: "tap", label: "Three taps for technicians", sub: "Accept, Start Driving, I've Arrived" },
+    { icon: "clock", label: "Live in under an hour", sub: "Typical, with an AI agent doing the setup" },
+    { icon: "tap", label: "Minimal training", sub: "Accept, Start Driving, I've Arrived, Complete Job" },
     { icon: "tag", label: "From US$49 a month", sub: "1 dispatcher + 2 drivers" },
   ],
   risk: "Free for 30 days with as many users as you like. Nothing is charged until day 30, and you can cancel any time.",
@@ -153,7 +153,7 @@ export const customerView = {
     {
       kicker: "The text",
       title: "Sent the moment they set off",
-      body: "Your company name, the technician's name, the ETA and a live link. Nothing to install.",
+      body: "Your company name, the technician's name and a live link, plus the ETA once it's known. Nothing to install.",
       screen: { kind: "sms" as const },
     },
     {
@@ -170,8 +170,8 @@ export const customerView = {
     },
     {
       kicker: "The technician",
-      title: "Call or text, without the office",
-      body: "Messages stay on the job, so the office can see what was said.",
+      title: "Reach the technician directly",
+      body: "One tap to call or text. Messages sent on the page stay with the job, so the office sees them too.",
       screen: {
         kind: "img" as const,
         src: "/img/site/app/cust-contact.webp",
@@ -208,31 +208,39 @@ export const customerView = {
 /** The technician side: minimal training, shown with the app's real buttons. */
 export const techApp = {
   eyebrow: "For your technicians",
-  title: "Three taps.",
+  title: "Accept. Drive. Arrive. Done.",
   titleMuted: "That's the training.",
   body:
     "The job lands on the phone your technician already carries, with the address, notes, time and price. There's nothing to install in the van.",
   taps: [
     {
-      button: { src: "/img/site/app/btn-accept.webp", width: 363, height: 96, alt: "Accept" },
+      button: { src: "/img/site/app/btn-accept.webp", width: 363, height: 96 },
       screen: 0,
       spot: { x: 28.4, y: 53.7, w: 39.7, h: 4.7 },
       title: "Accept the job",
       body: "New work orders arrive as offers. One tap to take it, one to pass.",
     },
     {
-      button: { src: "/img/site/app/btn-start-driving.webp", width: 345, height: 96, alt: "Start Driving" },
+      button: { src: "/img/site/app/btn-start-driving.webp", width: 345, height: 96 },
       screen: 1,
       spot: { x: 18.2, y: 17, w: 28.5, h: 3 },
       title: "Start Driving",
       body: "Your customer gets their text and live link, and the office sees the technician en route.",
     },
     {
-      button: { src: "/img/site/app/btn-arrived.webp", width: 668, height: 96, alt: "I've Arrived" },
+      button: { src: "/img/site/app/btn-arrived.webp", width: 668, height: 96 },
       screen: 1,
       spot: { x: 49.9, y: 83, w: 91.6, h: 5.8 },
       title: "I've Arrived",
-      body: "Usually automatic: a geofence checks the technician in at the address and starts the on-site clock. The button is the backup.",
+      body: "With the job open, the app checks the technician in automatically within 150 m of the address (the default). The button is the backup.",
+    },
+    {
+      /** No screenshot of this state: drawn from the app's own "success" button (C.green, #03130d label). */
+      button: { src: "/img/site/app/btn-complete.webp", width: 668, height: 96 },
+      screen: 1,
+      spot: null,
+      title: "Complete Job",
+      body: "One confirm and the job is done, and the office sees it finished. If you've made checklist items required, the app asks for those first.",
     },
   ],
   facts: [

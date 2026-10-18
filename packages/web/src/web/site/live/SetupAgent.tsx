@@ -19,7 +19,10 @@ const delay = (s: number) => ({ "--lv-sa-d": `${s}s` }) as CSSProperties;
 
 export function SetupAgent() {
   const { ref, play } = useLivePlay<HTMLDivElement>(0.25);
-  const { reduced } = usePlayback();
+  const { reduced, paused } = usePlayback();
+  // Before hydration (and with no JavaScript) show the finished workspace, not an empty idle frame.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [site, setSite] = useState(setupAgent.defaultSite);
   const [runSite, setRunSite] = useState(setupAgent.defaultSite);
   const [epoch, setEpoch] = useState(0);
@@ -38,7 +41,8 @@ export function SetupAgent() {
     setEpoch((n) => n + 1);
   };
 
-  const state = reduced ? "is-done" : started ? "is-run" : "is-idle";
+  // Paused or reduced motion: the finished result, since paused animations would hold it blank.
+  const state = reduced || paused || !mounted ? "is-done" : started ? "is-run" : "is-idle";
   const last = setupAgent.steps.length * STEP_GAP + 0.3;
 
   // Lives inside "Getting started" (FirstHour), which owns the heading and the CTA.
@@ -131,7 +135,7 @@ export function SetupAgent() {
             </div>
             <div className="lv-sa-card lv-sa-card--wide lv-sa-tile" style={delay(0.3 + 6 * STEP_GAP + 1)}>
               <span className="lv-sa-k">Customer texts, in your voice</span>
-              <span className="lv-sa-bubble">Hi Dana, Jordan from Prairie Comfort is on the way for your furnace call. Track him live: arriveping.com/t/7k2q9x</span>
+              <span className="lv-sa-bubble">Hi Dana, Jordan from Prairie Comfort is on the way for your furnace call. Track live: arriveping.com/t/7k2q9x</span>
             </div>
           </div>
         </div>

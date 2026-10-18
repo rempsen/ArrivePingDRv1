@@ -77,7 +77,7 @@ export function HeroFilm() {
             <img src={hero.film.poster} alt="" width={1600} height={1066} fetchPriority="high" decoding="async" />
           </picture>
           {src && !reduced ? (
-            <video ref={video} aria-hidden="true" src={src} poster={hero.film.poster} muted loop playsInline autoPlay preload="auto" disablePictureInPicture tabIndex={-1} />
+            <video ref={video} aria-hidden="true" src={src} poster={hero.film.posterWebp} muted loop playsInline autoPlay preload="auto" disablePictureInPicture tabIndex={-1} />
           ) : null}
         </div>
       </div>
@@ -141,7 +141,7 @@ export function HeroFilm() {
               {d.techLabel}
             </span>
             <div className="ap-phone ap-phone--hero">
-              <img src={d.tech.src} width={d.tech.width} height={d.tech.height} alt={d.tech.alt} decoding="async" fetchPriority="high" />
+              <img src={d.tech.src} width={d.tech.width} height={d.tech.height} alt={d.tech.alt} decoding="async" />
             </div>
           </div>
 

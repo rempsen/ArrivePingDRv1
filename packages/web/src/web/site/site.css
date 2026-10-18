@@ -721,51 +721,6 @@
   background: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
-/* ---------- Benefits strip ---------- */
-.site .benefits {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gutter);
-  border-top: 1px solid var(--line);
-  padding-top: 40px;
-}
-.site .benefit__icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: var(--accent-soft);
-  color: var(--accent);
-  margin-bottom: 16px;
-}
-.site .benefit h3 {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-.site .benefit p {
-  margin-top: 8px;
-  font-size: 15px;
-  color: var(--ink-secondary);
-  max-width: 34ch;
-}
-.site .benefit__stat {
-  display: block;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-}
-@media (max-width: 767px) {
-  .site .benefits {
-    grid-template-columns: 1fr;
-    gap: 28px;
-  }
-}
-
 /* ---------- Showcase (sticky rail + chapters) ---------- */
 .site .showcase__head {
   display: flex;

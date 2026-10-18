@@ -421,19 +421,32 @@
   .site .lv-hero__ctas .btn {
     flex: 1 1 100%;
   }
-  /* explicit width: the phone wrapper is a size container, so it can't size from content */
+  /* Small phones: Jordan's phone, then Dana's text tucked under its lower edge. */
+  .site .lv-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .site .lv-stage__tech {
-    width: min(58vw, 250px);
+    grid-column: 1;
+    justify-self: end;
+    /* explicit width: the phone wrapper is a size container, so it can't size from content */
+    width: min(62vw, 260px);
   }
   .site .lv-stage__cust {
-    width: 74%;
-    margin-bottom: 22%;
+    grid-column: 1;
+    grid-row: 2;
+    width: min(100%, 340px);
+    margin: -96px 0 0;
   }
   .site .lv-stage__cap {
     justify-self: start;
   }
   .site .lv-hero__pause {
     bottom: 14px;
+  }
+}
+@media (max-width: 360px) {
+  .site .lv-assure strong + span {
+    display: none;
   }
 }
 
