@@ -124,6 +124,8 @@ beforeAll(async () => {
   //   Bolt:   trial Sep 10, still on it
   //   Closed: trial Jun 1, paying Jul 1, cancelled and closed Sep 20 (churn)
   //   Gone:   trial Sep 3, deleted Sep 25 while still on trial (a trial lost); no companies row left
+  //   Flash:  trial Sep 2, paying Sep 8, cancelled Sep 9 (paid and stopped inside one week: not churn of
+  //           the companies paying when the week began); deleted since, so no companies row either
   //   Demo:   a test company, never billed
   const hist = (company_id: string, when: string, row: Record<string, unknown>) =>
     insert("company_history", { id: id("ch"), company_id, at: when, name: company_id, status: "active", billing_status: "none", billing_seats: 0, industry: IND, is_internal: false, removed: false, source: "live", ...row });
@@ -135,6 +137,9 @@ beforeAll(async () => {
   await hist("closed-fx", at("2026-09-20"), { status: "closed", billing_status: "canceled" });
   await hist("gone-fx", at("2026-09-03"), { billing_status: "trialing", billing_seats: 1 });
   await hist("gone-fx", at("2026-09-25"), { billing_status: "trialing", billing_seats: 1, removed: true });
+  await hist("flash-fx", at("2026-09-02"), { billing_status: "trialing", billing_seats: 1 });
+  await hist("flash-fx", at("2026-09-08"), { billing_status: "active", billing_seats: 1 });
+  await hist("flash-fx", at("2026-09-09"), { billing_status: "canceled", billing_seats: 1 });
   await hist("demo-fx", at("2026-07-01"), { is_internal: true });
   // Technicians: Acme's two from Aug 15; one on Bolt from Sep 11 who leaves Sep 16; a test company's.
   const tech = (rider_id: string, company_id: string, when: string, active: boolean) =>
@@ -222,21 +227,21 @@ describe("headline", () => {
 describe("trials, conversion, churn and technicians", () => {
   it("counts trial starts, conversions, lost trials and churn in the period and the one before", async () => {
     const h = await A.headline(SEPT);
-    expect([h.trial_starts, h.trial_starts_prev]).toEqual([2, 1]); // Bolt and Gone; Acme in August
-    expect([h.conversions, h.conversions_prev]).toEqual([1, 0]); // Acme
-    expect(h.trials_lost).toBe(1); // Gone, deleted on trial
-    expect([h.churned, h.paying_start]).toEqual([1, 1]); // Closed was paying on Sep 1
+    expect([h.trial_starts, h.trial_starts_prev]).toEqual([3, 1]); // Bolt, Gone and Flash; Acme in August
+    expect([h.conversions, h.conversions_prev]).toEqual([2, 0]); // Acme and Flash
+    expect(h.trials_lost).toBe(1); // Gone, deleted on trial (Flash paid first)
+    expect([h.churned, h.paying_start]).toEqual([1, 1]); // Closed was paying on Sep 1; Flash wasn't, so it isn't churn here
     expect(h.techs_per_account).toBeCloseTo(1, 5); // 2 technicians, 2 open companies
     expect(h.techs_per_paying).toBeCloseTo(2, 5);
     const k = A.kpisFrom(h);
-    expect(k.find((x) => x.metric === "trial_starts")).toMatchObject({ value: 2, previous: 1, change: 1 });
+    expect(k.find((x) => x.metric === "trial_starts")).toMatchObject({ value: 3, previous: 1, change: 2 });
     expect(k.find((x) => x.metric === "churned")).toMatchObject({ value: 1, previous: 0, change: null });
   });
 
   it("keeps test companies out of the lifecycle unless asked", async () => {
     const w = await A.weekly({ ...SEPT, include_test: true });
     const sep14 = w.find((x) => x.week === "2026-09-14")!;
-    expect(sep14.tenants).toBe(4); // + Demo
+    expect(sep14.tenants).toBe(5); // + Demo
     expect(sep14.techs).toBe(3);
   });
 
@@ -250,20 +255,21 @@ describe("trials, conversion, churn and technicians", () => {
   it("counts each week's trials, conversions and churn against the state the week began and ended in", async () => {
     const w = Object.fromEntries((await A.weekly({ start_day: "2026-08-10", end_day: "2026-09-27", industry: IND })).map((x) => [x.week, x]));
     expect(w["2026-08-10"]).toMatchObject({ trial_starts: 1, cohort_converted: 1, cohort_rate: 1 }); // Acme, paying since
-    expect(w["2026-08-31"]).toMatchObject({ trial_starts: 1, cohort_converted: 0, tenants: 3 }); // Gone joins Acme and Closed
-    expect(w["2026-09-07"]).toMatchObject({ trial_starts: 1, new_tenants: 1, trialing: 3, tenants: 4 }); // Bolt signs up
+    expect(w["2026-08-31"]).toMatchObject({ trial_starts: 2, cohort_converted: 1, cohort_rate: 0.5, tenants: 4 }); // Gone and Flash join Acme and Closed
+    expect(w["2026-09-07"]).toMatchObject({ trial_starts: 1, new_tenants: 1, trialing: 3, tenants: 5, conversions: 1, paying_start: 1, churned: 0, churn_rate: 0 }); // Bolt signs up; Flash pays and cancels
     expect(w["2026-09-14"]).toMatchObject({
       conversions: 1, trials_lost: 0, conversion_rate: 1,
-      paying_start: 1, churned: 1, churn_rate: 1, paying: 1, accounts_closed: 1, tenants: 3,
+      paying_start: 1, churned: 1, churn_rate: 1, paying: 1, accounts_closed: 1, tenants: 4,
       mrr: monthlyPrice(3).total,
     });
-    expect(w["2026-09-21"]).toMatchObject({ trials_lost: 1, conversion_rate: 0, accounts_closed: 1, tenants: 2, churned: 0, churn_rate: 0 });
+    expect(w["2026-09-21"]).toMatchObject({ trials_lost: 1, conversion_rate: 0, accounts_closed: 1, tenants: 3, churned: 0, churn_rate: 0 });
+    for (const x of Object.values(w)) if (x.churn_rate != null) expect(x.churn_rate).toBeLessThanOrEqual(1);
   });
 
   it("reads technicians per company as they were at each week's end", async () => {
     const w = Object.fromEntries((await A.weekly(SEPT)).map((x) => [x.week, x]));
-    expect(w["2026-09-07"]).toMatchObject({ techs: 3, accounts_with_techs: 2, median_techs: 0.5 }); // Acme 2, Bolt 1, Gone and Closed 0
-    expect(w["2026-09-07"]!.techs_per_account).toBeCloseTo(3 / 4, 5);
+    expect(w["2026-09-07"]).toMatchObject({ techs: 3, accounts_with_techs: 2, median_techs: 0 }); // Acme 2, Bolt 1, Gone, Flash and Closed 0
+    expect(w["2026-09-07"]!.techs_per_account).toBeCloseTo(3 / 5, 5);
     expect(w["2026-09-14"]).toMatchObject({ techs: 2, accounts_with_techs: 1, techs_per_paying: 2 }); // Bolt's technician left on Sep 16
   });
 
@@ -272,6 +278,15 @@ describe("trials, conversion, churn and technicians", () => {
     expect(t["acme-fx"]).toMatchObject({ trial_started: "2026-08-15", paid_since: "2026-09-14", churned_on: null });
     expect(t["bolt-fx"]).toMatchObject({ trial_started: "2026-09-10", paid_since: null, churned_on: null });
     expect(t["closed-fx"]).toMatchObject({ trial_started: "2026-06-01", paid_since: "2026-07-01", churned_on: "2026-09-20" });
+  });
+
+  it("keeps deleted companies in the Explorer's lifecycle metrics, as in the weekly figures", async () => {
+    const churn = await A.explore("paying_churn", "tenant", SEPT);
+    expect(churn.rows.map((r) => [r.key, r.value]).sort()).toEqual([["closed-fx", 1], ["flash-fx", 1]]);
+    const starts = await A.explore("trial_starts", "time", { ...SEPT, grain: "month" });
+    expect(starts.rows.reduce((n, r) => n + r.value, 0)).toBe(3);
+    const conv = await A.explore("trial_conversions", "industry", SEPT);
+    expect(conv.rows.map((r) => r.value)).toEqual([2]);
   });
 
   it("filters by billing status and company like every other figure", async () => {

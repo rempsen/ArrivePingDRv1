@@ -263,9 +263,9 @@ churn_ev AS (
   SELECT hs.company_id, hs.at FROM hs WHERE hs.paying_before AND NOT hs.paying_now
 )`;
 
-/** Companies in scope that were paying just before `t` (a timestamptz expression). */
-const payingAt = (t: string) =>
-  `(SELECT COUNT(*)::int FROM (SELECT DISTINCT ON (hs.company_id) hs.paying_now FROM hs WHERE hs.at < ${t} ORDER BY hs.company_id, hs.at DESC, hs.seq DESC) z WHERE z.paying_now)`;
+/** The companies in scope that were paying just before `t` (a timestamptz expression), as a subquery of ids. */
+const payingIds = (t: string) =>
+  `(SELECT z.company_id FROM (SELECT DISTINCT ON (hs.company_id) hs.company_id, hs.paying_now FROM hs WHERE hs.at < ${t} ORDER BY hs.company_id, hs.at DESC, hs.seq DESC) z WHERE z.paying_now)`;
 
 /** `col` falls in [from, to), plus an optional extra condition. */
 const inRange = (from: string, to: string, col: string, extra = "") =>
@@ -313,8 +313,8 @@ ${HIST}`;
 const lifecycle = (from: string, to: string, suffix: string) => `(SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.trial_at")}) AS trial_starts${suffix},
   (SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.paid_at", "lc.trial_at < lc.paid_at")}) AS conversions${suffix},
   (SELECT COUNT(*)::int FROM lost WHERE ${inRange(from, to, "lost.lost_at")}) AS trials_lost${suffix},
-  (SELECT COUNT(DISTINCT churn_ev.company_id)::int FROM churn_ev WHERE ${inRange(from, to, "churn_ev.at")}) AS churned${suffix},
-  ${payingAt(from)} AS paying_start${suffix}`;
+  (SELECT COUNT(DISTINCT churn_ev.company_id)::int FROM churn_ev WHERE ${inRange(from, to, "churn_ev.at", `churn_ev.company_id IN ${payingIds(from)}`)}) AS churned${suffix},
+  (SELECT COUNT(*)::int FROM ${payingIds(from)} pz) AS paying_start${suffix}`;
 
 const HEADLINE_COLUMNS = `rng.d0::text AS start_day,
   rng.d1::text AS end_day,
@@ -654,9 +654,11 @@ ORDER BY k.pos`;
  *   trials_lost        trials that ended in the week without paying
  *   conversion_rate    conversions / (conversions + trials_lost)
  *   cohort_rate        of the week's trial starts, the share paying since
- *   churned            paying companies that stopped paying (cancelled,
- *                      closed or deleted) in the week; churn_rate divides it by
- *                      the companies paying when the week began
+ *   churned            of the companies paying when the week began, those
+ *                      that stopped paying (cancelled, closed or deleted) in
+ *                      it; churn_rate divides it by them, so it never passes
+ *                      100%. A company that starts and stops within one week
+ *                      isn't counted.
  *   techs              technicians on open companies at week end, with the
  *                      average per company, per paying company, and the median
  *   mrr                monthly plan value of the paying companies at week end
@@ -717,7 +719,8 @@ ev AS (
     (SELECT COUNT(*) FROM lc WHERE ${inRange("wk.ws", "wk.we", "lc.paid_at", "lc.trial_at < lc.paid_at")})::int AS conversions,
     (SELECT COUNT(*) FROM lost WHERE ${inRange("wk.ws", "wk.we", "lost.lost_at")})::int AS trials_lost,
     (SELECT COUNT(*) FROM lc WHERE ${inRange("wk.ws", "wk.we", "lc.trial_at", "lc.paid_at > lc.trial_at")})::int AS cohort_converted,
-    (SELECT COUNT(DISTINCT churn_ev.company_id) FROM churn_ev WHERE ${inRange("wk.ws", "wk.we", "churn_ev.at")})::int AS churned
+    (SELECT COUNT(DISTINCT churn_ev.company_id) FROM churn_ev JOIN st ON st.company_id = churn_ev.company_id AND st.week = wk.week AND st.k = 'start' AND st.paying_now
+      WHERE ${inRange("wk.ws", "wk.we", "churn_ev.at")})::int AS churned
   FROM wk
 )
 SELECT to_char(wk.week, 'YYYY-MM-DD') AS week,
@@ -796,6 +799,20 @@ export interface MetricDef {
 }
 
 const JOBS_FROM = `bookings x JOIN co ON co.id = x.company_id`;
+
+/**
+ * The companies in scope as they last were in company_history, in the shape
+ * of `co` (id, name, industry, billing_status), deleted ones included: the
+ * lifecycle metrics join this so a company deleted after it churned still
+ * counts, as it does in WEEKLY.
+ */
+const HCO = `(SELECT l.company_id AS id, l.name, l.industry, l.billing_status
+  FROM (SELECT h.*, ROW_NUMBER() OVER (PARTITION BY h.company_id ORDER BY h.at DESC, h.seq DESC) AS rn FROM company_history h) l, rng
+  WHERE l.rn = 1
+    AND (rng.inc OR NOT l.is_internal OR l.company_id = rng.tid)
+    AND (rng.tid IS NULL OR l.company_id = rng.tid)
+    AND (rng.ind IS NULL OR l.industry = rng.ind)
+    AND (rng.bil IS NULL OR l.billing_status = rng.bil)) co`;
 /** A job that counts: not deleted, not sample-day pretend work. */
 const REAL_JOB = "x.deleted_at IS NULL AND NOT x.is_sample";
 
@@ -881,23 +898,20 @@ export const METRICS: MetricDef[] = [
   {
     id: "trial_starts", label: "Trial starts", group: "Companies",
     description: "Companies that began a free trial, by when it began.",
-    from: `(SELECT h.company_id, MIN(h.at) AS at FROM company_history h WHERE h.billing_status = 'trialing' AND NOT h.removed GROUP BY h.company_id) x JOIN co ON co.id = x.company_id`,
+    from: `(SELECT h.company_id, MIN(h.at) AS at FROM company_history h WHERE h.billing_status = 'trialing' AND NOT h.removed AND h.status <> 'closed' GROUP BY h.company_id) x JOIN ${HCO} ON co.id = x.company_id`,
     at: "x.at", value: "COUNT(*)", format: "count",
-    only: ["time", "industry", "billing"],
   },
   {
     id: "trial_conversions", label: "Trials converted to paid", group: "Companies",
     description: "Companies that went from a trial to a paid plan, by when they first paid.",
-    from: `(SELECT h.company_id, MIN(h.at) FILTER (WHERE h.billing_status = 'active') AS at, MIN(h.at) FILTER (WHERE h.billing_status = 'trialing') AS trial_at FROM company_history h WHERE NOT h.removed GROUP BY h.company_id) x JOIN co ON co.id = x.company_id`,
+    from: `(SELECT h.company_id, MIN(h.at) FILTER (WHERE h.billing_status = 'active') AS at, MIN(h.at) FILTER (WHERE h.billing_status = 'trialing') AS trial_at FROM company_history h WHERE NOT h.removed AND h.status <> 'closed' GROUP BY h.company_id) x JOIN ${HCO} ON co.id = x.company_id`,
     at: "x.at", where: "x.trial_at < x.at", value: "COUNT(*)", format: "count",
-    only: ["time", "industry", "billing"],
   },
   {
     id: "paying_churn", label: "Paying companies lost", group: "Companies",
-    description: "Times a paying company stopped paying (cancelled or closed), by when it happened.",
-    from: `(SELECT z.company_id, z.at FROM (SELECT h.company_id, h.at, (h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) AS p, LAG(h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) OVER (PARTITION BY h.company_id ORDER BY h.at, h.seq) AS pb FROM company_history h) z WHERE z.pb AND NOT z.p) x JOIN co ON co.id = x.company_id`,
+    description: "Each time a paying company stopped paying (cancelled, closed or deleted), by when it happened.",
+    from: `(SELECT z.company_id, z.at FROM (SELECT h.company_id, h.at, (h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) AS p, LAG(h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) OVER (PARTITION BY h.company_id ORDER BY h.at, h.seq) AS pb FROM company_history h) z WHERE z.pb AND NOT z.p) x JOIN ${HCO} ON co.id = x.company_id`,
     at: "x.at", value: "COUNT(*)", format: "count",
-    only: ["time", "tenant", "industry", "billing"],
   },
   {
     id: "techs_added", label: "Technicians added", group: "Team",
