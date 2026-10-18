@@ -7,7 +7,7 @@ import { useLivePlay } from "./shared";
  *
  * A 60-minute dial fills as the setup milestones light up (16 s loop, six
  * equal windows). Below it the setup agent demo is the proof, then the trial
- * and price, then "keep your tools" and the export formats.
+ * and price. (Tools and data formats moved to the Integrations section.)
  * Milestone k uses a negative delay so its active window lines up with the
  * dial: delay = -(16 - k × 16/6) s.
  */
@@ -82,21 +82,6 @@ export function FirstHour() {
           <a href={firstHour.cta.href} className="btn btn--primary beam">
             {firstHour.cta.label}
           </a>
-        </div>
-
-        <div className="lv-fh-io">
-          <div className="lv-fh-col">
-            <h3>{firstHour.tools.title}</h3>
-            <p>{firstHour.tools.body}</p>
-          </div>
-          <div className="lv-fh-col">
-            <h3>{firstHour.formats.title}</h3>
-            <ul className="lv-fh-tags">
-              {firstHour.formats.items.map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-          </div>
         </div>
       </div>
     </section>

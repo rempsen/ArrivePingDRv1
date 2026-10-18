@@ -11,6 +11,8 @@
  *    "verified" date and a source link, and are re-checked before each update.
  */
 
+import { construction, delivery, electrical, hvac, plumbing, property } from "./trades";
+
 export const COMPETITORS_VERIFIED = "October 7, 2026";
 
 /**
@@ -21,7 +23,7 @@ export const COMPETITORS_VERIFIED = "October 7, 2026";
  * Central time, which Google treats as an unreliable lastmod).
  * Bump it when page copy changes, not when the site is merely rebuilt.
  */
-export const CONTENT_UPDATED = "2026-10-08";
+export const CONTENT_UPDATED = "2026-10-17";
 
 export type Cell = string | { text: string; href?: string };
 
@@ -44,6 +46,23 @@ export type Section =
   | { kind: "story" }
   | { kind: "trades"; title: string; body?: string };
 
+/** Rich content for a trade page (HVAC, plumbing…), rendered in the homepage's design language. */
+export type TradeContent = {
+  /** Film loop and poster for the hero (generated footage of the trade, no real customers). */
+  media: { poster: string; posterWebp: string; film?: { large: string; small: string }; position?: string };
+  /** Three short proof points under the headline. */
+  proof: readonly string[];
+  /** The customer's on-the-way text, in ArrivePing's default wording with the trade's own word for the field person (a sample company and person). */
+  sms: { company: string; who: string; tech: string; eta: number };
+  /** Sourced figures for this trade, set large under this heading. */
+  statsTitle: string;
+  stats: readonly { value: string; label: string; source: string; href: string }[];
+  /** A time-stamped scenario through ArrivePing. */
+  day: { eyebrow: string; title: string; cta: string; steps: readonly { time: string; title: string; body: string }[] };
+  /** Trade-specific feature points. */
+  features: { eyebrow: string; title: string; items: readonly { title: string; body: string }[] };
+};
+
 export type LandingPage = {
   path: string;
   /** Short label used in breadcrumbs, the footer and llms.txt. */
@@ -62,6 +81,8 @@ export type LandingPage = {
   sources?: { label: string; href: string }[];
   /** Shown under the comparison table, e.g. when competitor facts were checked. */
   verified?: string;
+  /** Trade pages: rendered with the homepage's design language instead of the generic layout. */
+  trade?: TradeContent;
 };
 
 /* ------------------------------------------------------------------ */
@@ -271,51 +292,6 @@ const dispatch: LandingPage = {
   related: ["/fleet-tracking", "/construction-trades", "/field-service-software", "/compare/servicetitan"],
 };
 
-const construction: LandingPage = {
-  path: "/construction-trades",
-  label: "Construction & trade crews",
-  meta: {
-    title: "Crew Scheduling & Dispatch for Construction Trades | ArrivePing",
-    description:
-      "Schedule and dispatch construction and trade crews across job sites: custom work orders, skill-based assignment, geofenced time clock and live status. From $49/mo.",
-  },
-  eyebrow: "Construction and trade efficiency",
-  h1: "Run crews across every job site from one live board.",
-  lede:
-    "Installers, renovators, electricians and specialty subcontractors lose hours to check-in calls and crews at the wrong site. ArrivePing puts every crew, work order and job site on one board, so the day can be adjusted before it slips.",
-  answer: {
-    q: "How do I schedule crews across multiple job sites?",
-    a: "Put every job and crew on one live board. In ArrivePing each work order carries its site, time window and required skills; crews see their jobs in the technician app; a geofence confirms arrival and runs the on-site clock; and the office sees status change in real time instead of calling around.",
-  },
-  sections: [
-    {
-      kind: "features",
-      eyebrow: "On site and in the office",
-      title: "Less phone tag, more billable hours.",
-      items: [
-        { title: "Custom work orders", body: "Site address, access notes, photos, checklists and the skills the job needs." },
-        { title: "Skill-based assignment", body: "Match each job to a crew member with the right trade and certification, close to the site." },
-        { title: "Geofenced time clock", body: "Arrival is confirmed at the site and on-site time is tracked across pauses, so hours match where people actually were." },
-        { title: "Live status", body: "En route, on site, paused and complete, visible to the office without a single check-in call." },
-        { title: "Job photos and notes", body: "Crews attach photos and notes to the work order, so the record lives with the job." },
-        { title: "Customer and GC updates", body: "Send the homeowner or site contact an on-my-way text and a live arrival page." },
-      ],
-    },
-    {
-      kind: "prose",
-      title: "Built by people who ran crews.",
-      paragraphs: [
-        "ArrivePing began as software our founding team built for National Interiors, a Winnipeg specialty subcontracting operation that ran more than 800 field technicians. Dispatchers tied to the phone, crews at the wrong site and hours that didn't add up were daily problems. ArrivePing is the tool we wanted, rebuilt by NVC360 for every trade.",
-      ],
-    },
-    { kind: "trades", title: "Trades we work with." },
-  ],
-  faqs: [{
-    q: "Can ArrivePing track crew hours on site?",
-    a: "Yes. A geofence marks the crew member as arrived at the job address and starts the on-site clock. Time pauses when they leave the site and resumes when they return.",
-  }, HARDWARE_FAQ, SETUP_FAQ, TOOLS_FAQ, PRICE_FAQ],
-  related: ["/dispatch-software", "/fleet-tracking", "/field-service-software", "/about"],
-};
 
 const notifications: LandingPage = {
   path: "/customer-notifications",
@@ -708,80 +684,6 @@ const onMyWay: LandingPage = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Last-mile delivery and driver dispatch                               */
-/* ------------------------------------------------------------------ */
-
-const delivery: LandingPage = {
-  path: "/delivery-dispatch-software",
-  label: "Delivery dispatch software",
-  meta: {
-    title: "Last-Mile Delivery Dispatch Software for Small Fleets | ArrivePing",
-    description:
-      "Dispatch drivers for appointment-based deliveries and installs: live driver map, auto-assign the closest driver, customer tracking link with ETA, geofenced arrival. No GPS hardware. From $49/mo.",
-  },
-  eyebrow: "Last-mile delivery dispatch",
-  h1: "Last-mile delivery dispatch for teams that promise an arrival time.",
-  lede:
-    "Furniture and appliance delivery, installers, equipment drop-offs, courier runs with a booked window: when the customer has to be home, the arrival experience is the product. ArrivePing puts your drivers on a live map, assigns the closest one, and gives every customer an Uber-style tracking link.",
-  answer: {
-    q: "What is last-mile delivery dispatch software?",
-    a: "Last-mile delivery dispatch software assigns deliveries to drivers, tracks them on the road and keeps the customer informed until the item is at the door. ArrivePing is built for appointment-based last-mile work: it shows every driver on a live map, auto-assigns each delivery to the closest available driver with the right vehicle or skills, sends the stop to the driver's phone, and texts the customer a live tracking link with an ETA. Arrival is confirmed by geofence. If you need to optimize hundreds of parcel stops per driver per day, a dedicated route optimizer is the better tool.",
-  },
-  sections: [
-    {
-      kind: "features",
-      eyebrow: "What you get",
-      title: "The last mile, from assignment to the doorstep.",
-      items: [
-        { title: "Live driver map", body: "Every driver and vehicle on one map with status: available, en route, arrived, delivering." },
-        { title: "Closest-driver assignment", body: "ArrivePing ranks drivers by distance, availability, workload and any required skills or vehicle type, then assigns the delivery. Dispatchers can override." },
-        { title: "Driver app", body: "Stop details, access notes and contact info on the driver's phone. One tap to accept, one tap to head out, one tap to text or call the customer." },
-        { title: "Customer tracking link", body: "An on-my-way text with a live map, ETA and the driver's first name. No customer app." },
-        { title: "Geofenced arrival", body: "Arrival at the address is recorded automatically and starts the on-site clock for unloads and installs." },
-        { title: "Phone-based GPS", body: "Location comes from the driver app. No telematics boxes, no per-vehicle hardware fees." },
-      ],
-    },
-    {
-      kind: "prose",
-      eyebrow: "Fit",
-      title: "Appointment deliveries, not parcel routing.",
-      paragraphs: [
-        "ArrivePing is at its best when each delivery or install is an appointment the customer is waiting for: a sofa, a water heater, a piece of equipment, a courier run with a promised window. It optimizes who goes and keeps the customer informed about when they will arrive.",
-        "If your drivers run 100-plus parcel stops a day and the main problem is stop sequencing, use a route optimizer such as Onfleet, Routific or OptimoRoute. Those tools are built for that; ArrivePing is built for the arrival experience.",
-      ],
-    },
-    {
-      kind: "steps",
-      eyebrow: "How it works",
-      title: "A delivery in five steps.",
-      items: [
-        { title: "Book the delivery", body: "From your office, an intake form or an integration, with the time window, items and access notes." },
-        { title: "Auto-assign the driver", body: "The closest available driver with the right vehicle or skills gets the stop." },
-        { title: "Send it to their phone", body: "Address, items, gate codes and contact details in the driver app." },
-        { title: "Text the customer", body: "On-my-way message with a live tracking link and ETA when the driver heads out." },
-        { title: "Confirm arrival", body: "Geofence marks the arrival; the on-site clock covers the unload or install." },
-      ],
-    },
-    { kind: "trades", title: "Delivery and install teams we're built for." },
-  ],
-  faqs: [
-    {
-      q: "Does ArrivePing optimize multi-stop routes?",
-      a: "ArrivePing assigns each delivery to the best driver by distance, availability, workload and skills, and shows the drive to each stop. It is not a parcel route optimizer that sequences hundreds of stops per driver; for that, pair it with or choose a dedicated routing tool.",
-    },
-    HARDWARE_FAQ,
-    TRACKING_FAQ,
-    {
-      q: "Can the customer contact the driver?",
-      a: "Yes. The tracking page has text and call buttons that reach the driver without exposing a personal phone number.",
-    },
-    PRICE_FAQ,
-    SETUP_FAQ,
-  ],
-  related: ["/fleet-tracking", "/on-my-way-text-software", "/compare/onfleet", "/compare/routific"],
-};
-
-/* ------------------------------------------------------------------ */
 /* Additional comparisons                                                */
 /* ------------------------------------------------------------------ */
 
@@ -970,185 +872,6 @@ const routific: LandingPage = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Trade pages                                                          */
-/* ------------------------------------------------------------------ */
-
-const hvac: LandingPage = {
-  path: "/hvac-dispatch-software",
-  label: "HVAC dispatch software",
-  meta: {
-    title: "HVAC Dispatch Software with Live Tech Tracking | ArrivePing",
-    description:
-      "HVAC dispatch software for no-heat and no-cool calls: auto-assign the closest tech with the right certification, send customers a live ETA text, and run maintenance season from one map. From $49/mo.",
-  },
-  eyebrow: "HVAC & mechanical",
-  h1: "HVAC dispatch software for the days when every call is urgent.",
-  lede:
-    "A furnace out at -30 or an AC down in a heat wave is not a ticket, it's a household waiting by the window. ArrivePing gets the closest qualified technician moving, tells the homeowner exactly when they'll arrive, and keeps the maintenance-season board from collapsing when emergencies land on top of it.",
-  answer: {
-    q: "What should HVAC dispatch software do?",
-    a: "HVAC dispatch software should assign each call to the closest technician who holds the right certification (gas, refrigeration, electrical), re-sequence the day when a no-heat emergency lands, and keep the homeowner informed with an on-my-way text and live ETA. ArrivePing does this from the technician's phone with no vehicle hardware, confirms arrival by geofence, and starts the on-site clock automatically, from $49 a month.",
-  },
-  sections: [
-    {
-      kind: "features",
-      eyebrow: "Built for HVAC",
-      title: "Emergency calls, maintenance season and everything between.",
-      items: [
-        { title: "Certification-aware assignment", body: "Tag technicians with gas, refrigeration, electrical or sheet-metal skills. Auto-assignment only considers techs who hold what the job needs." },
-        { title: "Emergency reshuffle", body: "When a no-heat call arrives, dispatch sees who is closest and who can be freed, assigns in one tap, and every affected customer gets an updated ETA." },
-        { title: "Maintenance tune-up routes", body: "Book seasonal tune-ups by neighbourhood so technicians drive less between visits; the live map shows the day unfolding." },
-        { title: "On-my-way texts with live ETA", body: "The homeowner sees the van moving and the arrival time updating as the drive progresses. Fewer \"where is he?\" calls to the office." },
-        { title: "Geofenced arrival and on-site time", body: "Arrival is recorded automatically when the tech reaches the address; the on-site clock covers diagnosis, repair and commissioning." },
-        { title: "Parts and access notes on the phone", body: "Model numbers, filter sizes, furnace-room access and gate codes travel with the work order." },
-      ],
-    },
-    {
-      kind: "prose",
-      eyebrow: "A winter morning",
-      title: "What a no-heat call looks like in ArrivePing.",
-      paragraphs: [
-        "08:12. A homeowner calls: furnace won't fire, house at 14 °C. Your office creates the work order with the symptom, equipment make and access notes. ArrivePing ranks your gas-ticketed technicians by distance, availability and current load and proposes Marcus, 11 minutes away and finishing a tune-up.",
-        "08:14. Marcus accepts on his phone, taps \"on the way\", and the homeowner receives a text with his name, a live map and a 08:27 ETA. The office sees him moving. Nobody phones anyone.",
-        "08:26. Marcus crosses the geofence; arrival is logged and the on-site clock starts. The tune-up he left is still scheduled for his afternoon, and that customer already received a running-late notice with the new time.",
-      ],
-    },
-    { kind: "trades", title: "Trades that dispatch with ArrivePing." },
-  ],
-  faqs: [
-    {
-      q: "Can ArrivePing only assign gas work to gas-ticketed technicians?",
-      a: "Yes. Skills are part of every technician profile and every work order; auto-assignment only considers technicians who hold the skills the job requires. Dispatchers can override.",
-    },
-    {
-      q: "How does ArrivePing handle emergency no-heat calls on a full day?",
-      a: "Create the work order as high priority and ArrivePing shows the closest qualified technicians and their current jobs. Reassign in one tap; customers whose appointments move get a running-late text with the new time.",
-    },
-    HARDWARE_FAQ,
-    TRACKING_FAQ,
-    PRICE_FAQ,
-    SETUP_FAQ,
-  ],
-  related: ["/dispatch-software", "/on-my-way-text-software", "/fleet-tracking", "/compare/housecall-pro"],
-};
-
-const plumbing: LandingPage = {
-  path: "/plumbing-dispatch-software",
-  label: "Plumbing dispatch software",
-  meta: {
-    title: "Plumbing Dispatch Software: Closest Tech, Live ETA | ArrivePing",
-    description:
-      "Plumbing dispatch software for burst pipes, backups and water heaters: auto-assign the closest available plumber, text the customer a live ETA, confirm arrival by geofence. No GPS hardware. From $49/mo.",
-  },
-  eyebrow: "Plumbing",
-  h1: "Plumbing dispatch software for calls that can't wait for a four-hour window.",
-  lede:
-    "A burst pipe doesn't care about your schedule. ArrivePing finds the closest available plumber, gets the job onto their phone with the shut-off and access notes, and tells the customer exactly when help arrives, while the rest of the day's installs and inspections stay on track.",
-  answer: {
-    q: "What is the best way to dispatch plumbers?",
-    a: "Dispatch plumbers by proximity and availability, not by who is next on a list: for a burst pipe or a sewer backup, the closest free plumber saves the most damage. ArrivePing ranks your plumbers by distance, skills and current workload, assigns in one tap, texts the customer an on-my-way message with a live tracking link, and records arrival by geofence. Location comes from the plumber's phone, so there is no vehicle hardware to install.",
-  },
-  sections: [
-    {
-      kind: "features",
-      eyebrow: "Built for plumbing",
-      title: "From the emergency call to the arrival at the door.",
-      items: [
-        { title: "Closest-plumber emergencies", body: "Burst pipe, backup, no hot water: ArrivePing shows who is closest and free, and assigns with one tap." },
-        { title: "Skills on every job", body: "Tag plumbers for gas fitting, backflow testing, drain cameras or hydro-jetting; auto-assignment matches the work to the ticket." },
-        { title: "Job notes that matter", body: "Shut-off valve location, access instructions, previous visit notes and photos travel with the work order to the plumber's phone." },
-        { title: "Live ETA for the customer", body: "The customer sees the plumber approaching on a map with a live ETA and can text or call them directly, without getting a personal number." },
-        { title: "Arrival and on-site time", body: "A geofence records the arrival time and runs the on-site clock, so emergency and after-hours billing rests on real timestamps." },
-        { title: "Installs and inspections stay scheduled", body: "When an emergency pulls a plumber away, the affected customer gets a running-late notice automatically." },
-      ],
-    },
-    {
-      kind: "prose",
-      eyebrow: "Why proximity matters",
-      title: "Minutes are litres.",
-      paragraphs: [
-        "A burst supply line can release several litres a minute. The difference between the plumber who is 9 minutes away and the one who is next in the rotation but 35 minutes away is the difference between a mop and a restoration claim. ArrivePing makes distance a first-class signal in every assignment, alongside skills and workload, and shows dispatch the trade-off before they confirm.",
-        "The same location feed powers the customer's live tracking page, so the household that is holding a bucket under the ceiling can see help getting closer instead of calling your office for an estimate.",
-      ],
-    },
-    { kind: "trades", title: "Trades that dispatch with ArrivePing." },
-  ],
-  faqs: [
-    {
-      q: "Does ArrivePing help with after-hours and emergency plumbing calls?",
-      a: "Yes. Create the work order with high priority, see which plumbers are closest and available, and assign in one tap. The customer gets an on-my-way text with a live ETA, and arrival is recorded by geofence for accurate after-hours billing.",
-    },
-    {
-      q: "Can I keep gas-fitting work to licensed plumbers?",
-      a: "Yes. Skills live on each plumber's profile and each work order type; auto-assignment only proposes plumbers who hold the required skill.",
-    },
-    HARDWARE_FAQ,
-    PRIVACY_FAQ,
-    PRICE_FAQ,
-    SETUP_FAQ,
-  ],
-  related: ["/dispatch-software", "/on-my-way-text-software", "/hvac-dispatch-software", "/compare/jobber"],
-};
-
-const electrical: LandingPage = {
-  path: "/electrical-dispatch-software",
-  label: "Electrical dispatch software",
-  meta: {
-    title: "Electrical Contractor Dispatch Software | ArrivePing",
-    description:
-      "Dispatch software for electrical contractors: service calls, panel upgrades, EV charger installs and multi-day projects on one live map, with skill-based assignment and live customer ETAs. From $49/mo.",
-  },
-  eyebrow: "Electrical",
-  h1: "Electrical dispatch software for service calls and multi-day installs on one board.",
-  lede:
-    "Electrical shops juggle two different days at once: short service calls that need the closest licensed electrician, and installs that run for days with crews, permits and inspections. ArrivePing runs both from the same live map and keeps every customer informed about when someone will actually show up.",
-  answer: {
-    q: "How do electrical contractors dispatch service calls and installs together?",
-    a: "Treat them as two kinds of work order on one map. Service calls (tripped breakers, dead circuits, no power to a suite) go to the closest available licensed electrician by distance, skills and workload. Installs (panel upgrades, EV chargers, lighting retrofits) are scheduled with the crew and time window, and the geofence records each day's arrival and on-site hours. In ArrivePing both kinds send the customer an on-my-way text with a live ETA, and all of it runs from the electrician's phone with no vehicle hardware.",
-  },
-  sections: [
-    {
-      kind: "features",
-      eyebrow: "Built for electrical contractors",
-      title: "Service calls, installs and inspections without three spreadsheets.",
-      items: [
-        { title: "Licensed-only assignment", body: "Tag journeypersons, masters and apprentices; auto-assignment only proposes people licensed for the work on the order." },
-        { title: "EV charger and panel-upgrade installs", body: "Schedule the crew and window; the geofence logs each arrival and on-site hours for the job cost." },
-        { title: "Inspection-day coordination", body: "Put the inspection window on the work order so the right electrician is on site and the customer knows who is coming." },
-        { title: "Service-call speed", body: "A commercial tenant without power gets the closest available electrician, not the next name on a list." },
-        { title: "Live ETA texts", body: "Homeowners and property managers watch the electrician approach on a map and can text or call without a personal number being exposed." },
-        { title: "Photos and notes on the phone", body: "Panel photos, circuit notes and access instructions travel with the job and come back with the completion record." },
-      ],
-    },
-    {
-      kind: "prose",
-      eyebrow: "Property managers",
-      title: "Why property managers prefer contractors who send a tracking link.",
-      paragraphs: [
-        "A property manager coordinating access for a tenant does not want to stand in a hallway for a four-hour window. A text with a live ETA lets them show up five minutes before you do, which gets your electrician into the suite faster and gets you called back for the next job.",
-        "ArrivePing sends that text automatically when the electrician taps \"on the way\", updates the ETA as the drive progresses, and stops sharing location the moment they arrive.",
-      ],
-    },
-    { kind: "trades", title: "Trades that dispatch with ArrivePing." },
-  ],
-  faqs: [
-    {
-      q: "Can ArrivePing schedule multi-day electrical installs?",
-      a: "Yes. Create the work order with the crew and time window for each day; arrival and on-site hours are recorded by geofence each day, and the customer gets an on-my-way text each morning.",
-    },
-    {
-      q: "Does ArrivePing restrict work to licensed electricians?",
-      a: "Yes. Licences and skills live on each profile and each work order type; auto-assignment only proposes people who hold what the job requires.",
-    },
-    HARDWARE_FAQ,
-    TOOLS_FAQ,
-    PRICE_FAQ,
-    SETUP_FAQ,
-  ],
-  related: ["/dispatch-software", "/construction-trades", "/on-my-way-text-software", "/compare/servicetitan"],
-};
-
-/* ------------------------------------------------------------------ */
 /* Canada                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -1274,6 +997,7 @@ export const landingPages: LandingPage[] = [
   hvac,
   plumbing,
   electrical,
+  property,
   canada,
   pricingPage,
   compareHub,
@@ -1289,5 +1013,5 @@ export const landingPages: LandingPage[] = [
 export const landingByPath: Record<string, LandingPage> = Object.fromEntries(landingPages.map((p) => [p.path, p]));
 
 /** Footer navigation for the new pages. */
-export const solutionLinks = [fieldService, fleet, dispatch, construction, notifications, onMyWay, delivery, hvac, plumbing, electrical, canada].map((p) => ({ label: p.label, href: p.path }));
+export const solutionLinks = [fieldService, fleet, dispatch, construction, notifications, onMyWay, delivery, hvac, plumbing, electrical, property, canada].map((p) => ({ label: p.label, href: p.path }));
 export const compareLinks = [jobber, housecallPro, serviceTitan, workiz, onfleet, routific].map((p) => ({ label: p.label.replace("ArrivePing vs ", "vs "), href: p.path }));

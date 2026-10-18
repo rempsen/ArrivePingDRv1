@@ -82,7 +82,7 @@ export function CustomerView() {
 }
 
 /** iOS Messages, showing ArrivePing's default on-the-way text. */
-function SmsScreen({ from, body }: { from: string; body: string }) {
+export function SmsScreen({ from, body }: { from: string; body: string }) {
   const url = body.match(/https?:\/\/\S+$/)?.[0] ?? "";
   const text = url ? body.slice(0, -url.length) : body;
   return (

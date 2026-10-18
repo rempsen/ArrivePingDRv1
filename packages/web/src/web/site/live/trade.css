@@ -1,0 +1,307 @@
+/* ==========================================================================
+   Trade pages (HVAC, plumbing, electrical, installers, property, delivery).
+   Same rules as opening.css: visible at rest, motion is decoration, reduced
+   motion and Pause motion are respected.
+   ========================================================================== */
+
+/* ---------- Hero: the trade at work, the customer's text in front ---------- */
+.site .lv-hero--trade {
+  min-height: clamp(620px, calc(92svh - var(--header-offset)), 860px);
+}
+.site .lv-hero--trade .lv-hero__film img,
+.site .lv-hero--trade .lv-hero__film video {
+  object-position: 64% 50%;
+}
+/* Strong on the left for the copy, clear over the person at work on the right. */
+.site .lv-hero--trade .lv-hero__shade {
+  background:
+    linear-gradient(90deg, rgb(5 8 15 / 94%) 0%, rgb(5 8 15 / 84%) 30%, rgb(5 8 15 / 40%) 52%, rgb(5 8 15 / 6%) 72%, rgb(5 8 15 / 18%) 100%),
+    linear-gradient(0deg, rgb(5 8 15 / 80%) 0%, rgb(5 8 15 / 0%) 34%);
+}
+.site .lv-hero--trade .lv-hero__inner {
+  grid-template-columns: minmax(0, 600px) minmax(0, 1fr);
+  align-items: end;
+}
+.site .lv-hero--trade .lv-hero__copy {
+  align-self: center;
+}
+.site .lv-hero--trade .lp-crumbs ol {
+  margin-bottom: 0;
+  font-size: 13.5px;
+}
+.site .lv-hero--trade .lp-crumbs a,
+.site .lv-hero--trade .lp-crumbs span {
+  color: #b9c8d8;
+}
+.site .lv-hero--trade .lv-hero__title {
+  font-size: clamp(40px, 4.6vw, 66px);
+}
+
+/* Three proof points under the promise */
+.site .lv-proof {
+  list-style: none;
+  margin: 0;
+  padding: 16px 0;
+  display: grid;
+  gap: 10px;
+  border-block: 1px solid rgb(255 255 255 / 11%);
+}
+.site .lv-proof li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15.5px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: #e6eef6;
+}
+.site .lv-proof svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--p-cyan-300);
+}
+
+/* The on-the-way text, floating near the person at work */
+.site .lv-trade-note {
+  margin: 0;
+  justify-self: end;
+  width: min(100%, 372px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: ap-drop 640ms var(--ease-out) 700ms both;
+}
+.site .lv-trade-note__cap {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b9c8d8;
+  text-shadow: 0 1px 8px rgb(5 8 15 / 80%);
+}
+@media (max-width: 1120px) {
+  .site .lv-hero--trade .lv-hero__inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .lv-hero--trade .lv-hero__film img,
+  .site .lv-hero--trade .lv-hero__film video {
+    object-position: 70% 50%;
+  }
+  .site .lv-trade-note {
+    justify-self: start;
+  }
+}
+@media (max-width: 560px) {
+  .site .lv-hero--trade .lv-hero__badge {
+    font-size: 12.5px;
+  }
+  .site .lv-proof li {
+    font-size: 15px;
+  }
+  .site .lv-hero--trade .lv-hero__ctas .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------- The quotable answer, tucked under the hero ---------- */
+.site .tr-answer {
+  padding-block: clamp(36px, 5vw, 56px);
+}
+
+/* ---------- Sourced figures on the light band ---------- */
+.site .ap-cv--band {
+  padding-block: clamp(48px, 6vw, 80px);
+}
+.site .ap-cv--band .ap-cv__stats {
+  margin-top: 28px;
+}
+.site .ap-cv--band .ap-cv__val {
+  font-size: clamp(54px, 6.4vw, 92px);
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .site .ap-cv--band .ap-cv__val {
+    font-size: clamp(44px, 12vw, 64px);
+  }
+}
+
+/* ---------- A day in the trade ---------- */
+.site .tr-day__intro {
+  max-width: 820px;
+}
+.site .tr-day__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(32px, 5vw, 80px);
+  align-items: start;
+  margin-top: clamp(32px, 4vw, 52px);
+}
+.site .tr-day__media {
+  margin: 0;
+  position: sticky;
+  top: calc(var(--header-offset, 72px) + 24px);
+}
+.site .tr-day__phones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(14px, 2vw, 24px);
+  align-items: start;
+}
+.site .tr-day__phone {
+  container-type: inline-size;
+}
+.site .tr-day__phone--2 {
+  margin-top: clamp(36px, 5vw, 64px);
+}
+.site .tr-day__cap {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.site .tr-day__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.site .tr-day__steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 18px;
+  padding: 0 0 30px;
+}
+/* the line that runs through the morning */
+.site .tr-day__steps li::before {
+  content: "";
+  position: absolute;
+  left: 104px;
+  top: 10px;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, rgb(56 189 248 / 45%), rgb(56 189 248 / 8%));
+}
+.site .tr-day__steps li:last-child {
+  padding-bottom: 0;
+}
+.site .tr-day__steps li:last-child::before {
+  display: none;
+}
+.site .tr-day__steps li::after {
+  content: "";
+  position: absolute;
+  left: 100px;
+  top: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--p-cyan-400);
+  box-shadow: 0 0 0 4px rgb(56 189 248 / 16%);
+}
+.site .tr-day__time {
+  padding-top: 1px;
+  font: 600 14px/1.3 var(--font-heading);
+  color: var(--p-cyan-300);
+  white-space: nowrap;
+}
+.site .tr-day__steps li > div {
+  padding-left: 22px;
+}
+.site .tr-day__steps h3 {
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 650;
+}
+.site .tr-day__steps p {
+  margin-top: 6px;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+@media (max-width: 980px) {
+  .site .tr-day__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .tr-day__media {
+    position: static;
+    max-width: 520px;
+  }
+}
+@media (max-width: 560px) {
+  .site .tr-day__steps li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding-left: 22px;
+  }
+  .site .tr-day__steps li::before {
+    left: 4px;
+  }
+  .site .tr-day__steps li::after {
+    left: 0;
+  }
+  .site .tr-day__steps li > div {
+    padding-left: 0;
+  }
+}
+
+/* ---------- Trade features ---------- */
+.site .tr-feat__grid {
+  list-style: none;
+  margin: clamp(32px, 4vw, 48px) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+.site .tr-feat__grid li {
+  padding: 24px 24px 28px;
+  background: var(--canvas);
+}
+.site .tr-feat__n {
+  font: 600 13px/1 var(--font-heading);
+  color: var(--p-cyan-300);
+  letter-spacing: 0.04em;
+}
+.site .tr-feat__grid h3 {
+  margin-top: 14px;
+  font-size: 18.5px;
+  line-height: 1.3;
+  font-weight: 650;
+}
+.site .tr-feat__grid p {
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+@media (max-width: 980px) {
+  .site .tr-feat__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .site .tr-feat__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phones: the film sits clear at the top, the copy starts below it. */
+@media (max-width: 760px) {
+  .site .lv-hero--trade .lv-hero__film {
+    bottom: auto;
+    height: calc(58vw + 140px);
+  }
+  .site .lv-hero--trade .lv-hero__film img,
+  .site .lv-hero--trade .lv-hero__film video {
+    object-position: 74% 45%;
+  }
+  .site .lv-hero--trade .lv-hero__shade {
+    background: linear-gradient(180deg, rgb(5 8 15 / 0%) 0%, rgb(5 8 15 / 8%) calc(58vw - 60px), rgb(5 8 15 / 88%) calc(58vw + 70px), #05080f calc(58vw + 140px));
+  }
+  .site .lv-hero--trade .lv-hero__inner {
+    padding-top: calc(58vw - 8px);
+  }
+}
