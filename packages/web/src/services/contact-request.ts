@@ -19,15 +19,11 @@ import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { log } from "../api/lib/logger";
 import { sendEmail } from "./email";
-import {
-  ensureProperties,
-  HubSpotError,
-  hubspotEnabled,
-  hubspotNonEmpty,
-  hubspotOwnerId,
-  hubspotRequest,
-  type HubspotObject,
-} from "./hubspot-sync";
+import { hubspotEnabled } from "./hubspot-sync";
+import { addContactNote, displayPhone, findOrCreateLeadContact, htmlEsc, normalizePhone, phoneVariants, splitName } from "./hubspot-leads";
+
+// Re-exported: these helpers used to live here and tests/import sites still use them from this module.
+export { displayPhone, normalizePhone, phoneVariants, splitName };
 
 export interface ContactRequestInput {
   name: string;
@@ -56,51 +52,6 @@ export function parseContact(raw: string): { email: string } | { phone: string }
   return phone ? { phone } : null;
 }
 
-/**
- * One stable form for every phone number, so the same person typed two ways is
- * one HubSpot contact: E.164. Ten digits are a North American number (+1);
- * eleven starting with 1 likewise; anything else keeps its digits behind a +.
- */
-export function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length < 10 || digits.length > 15) return null;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return `+${digits}`;
-}
-
-/**
- * HubSpot stores phone numbers as people typed them and its search is exact,
- * so look an E.164 number up under the common ways it gets written.
- */
-export function phoneVariants(e164: string): string[] {
-  const d = e164.replace(/\D/g, "");
-  const out = new Set([e164, d]);
-  if (d.length === 11 && d.startsWith("1")) {
-    const n = d.slice(1);
-    const [a, b, c] = [n.slice(0, 3), n.slice(3, 6), n.slice(6)];
-    for (const v of [n, `(${a}) ${b}-${c}`, `${a}-${b}-${c}`, `${a}.${b}.${c}`, `${a} ${b} ${c}`, `(${a})${b}-${c}`, `+1 ${a} ${b} ${c}`, `+1 (${a}) ${b}-${c}`, `+1-${a}-${b}-${c}`, `1-${a}-${b}-${c}`, `1 ${a} ${b} ${c}`])
-      out.add(v);
-  }
-  return [...out];
-}
-
-/** "+12045550199" → "(204) 555-0199" for people to read; other numbers stay E.164. */
-export function displayPhone(e164: string): string {
-  const d = e164.replace(/\D/g, "");
-  return d.length === 11 && d.startsWith("1") ? `(${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7)}` : e164;
-}
-
-export function splitName(name: string): { firstname: string; lastname: string } {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return { firstname: parts[0] ?? "", lastname: "" };
-  return { firstname: parts.slice(0, -1).join(" "), lastname: parts[parts.length - 1]! };
-}
-
-function htmlEsc(s: string): string {
-  return s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] as string);
-}
-
 function whenText(d: Date): string {
   return d.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Winnipeg" }) + " Central";
 }
@@ -108,15 +59,6 @@ function whenText(d: Date): string {
 export const LEAD_SOURCE = "Website contact request";
 
 /* --------------------------------------------------------------- HubSpot */
-
-async function findContact(property: "email" | "phone", values: string[]): Promise<HubspotObject | null> {
-  const r = await hubspotRequest<{ results: HubspotObject[] }>("POST", "/crm/v3/objects/contacts/search", {
-    filterGroups: [{ filters: [values.length === 1 ? { propertyName: property, operator: "EQ", value: values[0] } : { propertyName: property, operator: "IN", values }] }],
-    properties: [],
-    limit: 1,
-  });
-  return r.results?.[0] ?? null;
-}
 
 /**
  * Create the HubSpot contact, or find the existing one, and add a note to its
@@ -127,38 +69,8 @@ async function findContact(property: "email" | "phone", values: string[]): Promi
 export async function pushContactRequestToHubspot(req: ContactRequestInput, at = new Date()): Promise<HubspotOutcome> {
   if (!hubspotEnabled()) return { status: "skipped" };
   try {
-    await ensureProperties();
-    let existing: HubspotObject | null = null;
-    if (req.email) existing = await findContact("email", [req.email]);
-    else if (req.phone) existing = await findContact("phone", phoneVariants(req.phone));
-
-    let contactId = existing?.id ?? null;
-    let wasExisting = !!existing;
-    if (!contactId) {
-      const props: Record<string, string> = {
-        ...splitName(req.name),
-        email: req.email ?? "",
-        phone: req.phone ?? "",
-        company: req.company ?? "",
-        lifecyclestage: "lead",
-        hs_lead_status: "NEW",
-        arriveping_lead_source: LEAD_SOURCE,
-      };
-      const owner = hubspotOwnerId();
-      if (owner) props.hubspot_owner_id = owner;
-      try {
-        contactId = (await hubspotRequest<HubspotObject>("POST", "/crm/v3/objects/contacts", { properties: hubspotNonEmpty(props) })).id;
-      } catch (e) {
-        // 409 = that email already exists (created between our search and now).
-        const m = e instanceof HubSpotError && e.status === 409 ? /Existing ID:\s*(\d+)/.exec(e.body) : null;
-        if (!m) throw e;
-        contactId = m[1]!;
-        wasExisting = true;
-      }
-    }
-
-    // Timeline note so whoever opens the record sees the request. Best effort:
-    // a missing notes scope must not turn a created lead into a "failed" one.
+    const { contactId, existing } = await findOrCreateLeadContact({ ...req, source: LEAD_SOURCE });
+    // Timeline note so whoever opens the record sees the request.
     const lines = [
       `<strong>Asked to be contacted by an NVC360 associate</strong> (arriveping.com ${htmlEsc(req.source ?? "homepage")}, ${htmlEsc(whenText(at))})`,
       `Name: ${htmlEsc(req.name)}`,
@@ -166,12 +78,8 @@ export async function pushContactRequestToHubspot(req: ContactRequestInput, at =
       req.phone ? `Phone: ${htmlEsc(displayPhone(req.phone))}` : "",
       req.company ? `Company: ${htmlEsc(req.company)}` : "",
     ].filter(Boolean);
-    await hubspotRequest("POST", "/crm/v3/objects/notes", {
-      properties: { hs_timestamp: at.toISOString(), hs_note_body: lines.join("<br>") },
-      associations: [{ to: { id: contactId }, types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 202 }] }],
-    }).catch((e) => log.warn("contact-request: HubSpot note failed", { err: (e as Error).message.slice(0, 200) }));
-
-    return { status: "synced", contactId, existing: wasExisting };
+    await addContactNote(contactId, lines.join("<br>"), at, "contact-request");
+    return { status: "synced", contactId, existing };
   } catch (e) {
     const error = (e as Error).message.slice(0, 500);
     log.error("contact-request: HubSpot push failed", { err: error });

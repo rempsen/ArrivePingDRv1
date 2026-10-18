@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { brand, footer } from "../config";
 import { useAnchorNav } from "./SiteHeader";
+import { CookieConsent } from "./CookieConsent";
 
 /**
  * One footer column. On desktop it is a plain heading + list. On phones
@@ -47,6 +48,7 @@ function FooterColumn({ heading, links }: { heading: string; links: { label: str
 export function SiteFooter() {
   return (
     <footer className="footer">
+      <CookieConsent />
       <div className="container">
         <div className="footer__grid">
           <div className="footer__brand">

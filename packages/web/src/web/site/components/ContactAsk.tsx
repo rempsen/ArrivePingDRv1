@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { brand, closing } from "../config";
+import { hubspotIdentify } from "../lib/hubspot-tracking";
 
 /**
  * "Would you like to be contacted by an NVC360 associate?" — a Yes/No choice
@@ -69,6 +70,8 @@ export function ContactAsk() {
         body: JSON.stringify({ name: name.trim(), contact: contact.trim(), company: company.trim() || undefined, website }),
       });
       if (r.ok) {
+        // Link this visit to the new lead in HubSpot (only with analytics consent).
+        if (contact.includes("@")) hubspotIdentify(contact);
         setStatus({ kind: "sent", first: name.trim().split(/\s+/)[0] ?? "" });
         return;
       }
