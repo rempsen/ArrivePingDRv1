@@ -25,7 +25,7 @@ imageAlt: "Rows of orange high-visibility vests and blue hard hats hanging on a 
   public pricing pages, checked October 18, 2026. Every figure is in the table below it.
 -->
 
-Field service software for small trades teams lists at $29 to $245 a month for an entry-level plan, according to Capterra's 2026 guide to eight vendor-confirmed platforms ([Capterra, 2026](https://www.capterra.com/resources/field-service-management-software-pricing-models/)). That entry price is rarely what you pay. The real bill depends on three things the headline price hides: who the vendor counts as a user, whether the tracking you want is an add-on, and whether you commit for a year. At list prices on October 18, 2026, a 12-person team with 2 office staff and 10 technicians pays between $245 and $669 a month on the published plans we checked.
+Entry-level field service software plans list at $29 to $245 a month, according to Capterra's 2026 guide to eight vendor-confirmed platforms ([Capterra, 2026](https://www.capterra.com/resources/field-service-management-software-pricing-models/)). That entry price is rarely what you pay. The real bill depends on three things the headline price hides: who the vendor counts as a user, whether the tracking you want is an add-on, and whether you commit for a year. At list prices on October 18, 2026, a 12-person team with 2 office staff and 10 technicians pays between $245 and $669 a month on the published plans we checked.
 
 This guide prices three real team sizes on the vendors' own pricing pages, shows which pricing model is cheapest at each size, and lists the costs that only appear after you sign. It is written for owners and office managers of HVAC, plumbing, electrical, delivery and trade crews with roughly 3 to 30 people.
 
@@ -41,13 +41,13 @@ Capterra groups the market into three pricing models: a flat subscription, a pri
 
 ## Do office staff count as users?
 
-At most of the vendors we checked, yes. This is the line on the quote that surprises owners most, because a dispatcher, an office manager and the owner who checks the board at night are all people who log in.
+At most of the vendors we checked, yes. It is an easy line to miss on a quote, because a dispatcher, an office manager and the owner who checks the board at night are all people who log in.
 
 ![An office worker in a blue work shirt typing at a computer on a desk inside a warehouse, behind a chain-link partition, the kind of office user many field service plans bill as a full user](/blog/img/field-service-software-cost-office.webp)
 
 How each vendor's public pages define who you pay for:
 
-- **Jobber:** a user is "anyone who accesses your account at the office or in the field," and extra users cost $29 a month each ([Jobber](https://www.getjobber.com/pricing/)).
+- **Jobber:** a user is "anyone who accesses your account at the office or in the field to view or manage the team's schedule," and extra users cost $29 a month each ([Jobber](https://www.getjobber.com/pricing/)).
 - **Housecall Pro:** the pricing page asks "How many on your team will use Housecall Pro?" Essentials includes 5 users; Max includes 8, with "$35/mo per additional user" ([Housecall Pro](https://www.housecallpro.com/pricing/)).
 - **ServiceTitan:** priced per technician, on request ([ServiceTitan](https://www.servicetitan.com/pricing)).
 - **Service Fusion:** "Unlimited Users" on every plan ([Service Fusion](https://www.servicefusion.com/pricing)).
@@ -62,7 +62,7 @@ These are the monthly list prices on each vendor's public pricing page for three
 | Monthly list price | 4 people (1 office, 3 field) | 12 people (2 office, 10 field) | 28 people (3 office, 25 field) |
 |---|---|---|---|
 | ArrivePing | $79 | $319 | $799 |
-| Jobber Connect | $199 (5-user tier) | $357 (10-user tier $299 + 2 users at $29) | Contact sales (teams of 16+) |
+| Jobber Connect | $199 (5-user tier) | $357 (10-user tier $299 + 2 users at $29) | $776 (15-user tier $399 + 13 users at $29), or a custom quote |
 | Housecall Pro | $189 (Essentials, 5 users) | $469 (Max, 8 users + 4 at $35) | $1,029 (Max, 8 users + 20 at $35) |
 | Housecall Pro + Vehicle GPS ($20 a van) | $249 | $669 | $1,529 |
 | Service Fusion Starter (unlimited users) | $245 | $245 | $245 |
@@ -79,11 +79,11 @@ Read the table as a starting point, not a verdict. Each vendor's tiers unlock di
 | Pricing model | Who you pay for | Usually cheapest for | Watch for | Example on a public page |
 |---|---|---|---|---|
 | Per user, sold in tiers | Everyone who logs in, office and field | Teams that land exactly on a tier size | Jumps to the next tier; office staff count | Jobber, Housecall Pro |
-| Per technician | Field technicians | Office-heavy teams | No public price; quote and contract terms | ServiceTitan |
-| Flat, unlimited users | One price for the account | Large crews | Higher entry price; add-ons priced separately | Service Fusion |
+| Per technician | Technicians (how office users are priced isn't published) | Office-heavy teams, if office users aren't charged | No public price; ask how office users are priced | ServiceTitan |
+| Flat, unlimited users | One price for the account | Crews of about 10 or more | Higher entry price; add-ons priced separately | Service Fusion |
 | Graduated per driver | Field staff, plus office users after the first | Small and growing crews | Cost still rises with each driver; no annual discount | ArrivePing |
 
-In the price table, per-person pricing is cheapest for the 4-person team and the flat plan is cheapest for the 28-person team. Where the crossover falls depends on the plans you compare, so do the arithmetic at your own size, today and in 12 months.
+In the price table, per-person pricing is cheapest for the 4-person team, and the flat plan is cheapest for the 12- and 28-person teams. Against ArrivePing, the crossover comes early: at list, Service Fusion's $245 Starter costs less from 9 licenses ($259 on ArrivePing). Where the crossover falls depends on the plans you compare, so do the arithmetic at your own size, today and in 12 months.
 
 ## What costs don't show on the plan price?
 
@@ -91,7 +91,7 @@ The subscription is the number on the pricing page. These are the costs that arr
 
 ![Aerial view of dozens of identical white vans parked in tight rows on a lot, each one a vehicle a per-vehicle GPS add-on would bill every month](/blog/img/field-service-software-cost-vans.webp)
 
-1. **Tracking hardware, per vehicle.** Housecall Pro's Vehicle GPS Tracking is "a paid add-on at $20 per vehicle per month," and its feature page says that when a tech starts driving, the customer gets an on-my-way text with a live map link ([Housecall Pro](https://www.housecallpro.com/features/vehicle-gps-tracking/)). Its Essentials plan also includes employee GPS that locates techs "using their mobile phone's GPS, no hardware required" ([Housecall Pro](https://www.housecallpro.com/pricing/)), shown to your team on the map in the web portal ([Housecall Pro Help Center](https://help.housecallpro.com/en/articles/2810583-employee-gps-tracking-hcp-map)). Jobber's live map needs FleetSharp devices, and "pricing for these devices varies based on your contract with FleetSharp" ([Jobber Help Center](https://help.getjobber.com/en/articles/fleetsharp-tracker-devices/)). For when a tracker in the van is worth it, see [Phone vs. vehicle GPS tracking](/blog/phone-vs-vehicle-gps-tracking).
+1. **Tracking hardware, per vehicle.** Housecall Pro's Vehicle GPS Tracking is "a paid add-on at $20 per vehicle per month," and its feature page says that when a tech starts driving, the customer gets an on-my-way text with a live map link ([Housecall Pro](https://www.housecallpro.com/features/vehicle-gps-tracking/)). Its Essentials plan also includes employee GPS that locates techs "using their mobile phone's GPS, no hardware required" ([Housecall Pro](https://www.housecallpro.com/pricing/)), shown to your team on the map in the web portal ([Housecall Pro Help Center](https://help.housecallpro.com/en/articles/2810583-employee-gps-tracking-hcp-map)). Jobber records GPS waypoints at set points in a team member's day, such as clocking in and out, and gives you a live map "when you install FleetSharp tracking devices in your vehicles" ([Jobber](https://www.getjobber.com/features/gps-tracking-app/)); "pricing for these devices varies based on your contract with FleetSharp" ([Jobber Help Center](https://help.getjobber.com/en/articles/fleetsharp-tracker-devices/)). For when a tracker in the van is worth it, see [Phone vs. vehicle GPS tracking](/blog/phone-vs-vehicle-gps-tracking).
 2. **Add-ons.** Jobber lists its Marketing Suite at $99 a month, an AI Receptionist at $29 a month and Pipeline at $49 a month ([Jobber](https://www.getjobber.com/pricing/)). Housecall Pro's dashcam package is $49 per device per month ([Housecall Pro](https://www.housecallpro.com/features/vehicle-gps-tracking/)).
 3. **Payment processing.** If customers pay in the app, card fees come on top. Jobber lists 2.9% + 30¢ for cards and 1% for bank (ACH) payments ([Jobber](https://www.getjobber.com/pricing/)).
 4. **The commitment.** Jobber says you can "save up to 25% with annual billing"; its Connect plan for 10 users is $299 a month with no commitment and $229 a month billed annually ([Jobber](https://www.getjobber.com/pricing/)). Service Fusion's annual price is "charged as one annual payment at sign-up" ([Service Fusion](https://www.servicefusion.com/pricing)). A lower monthly figure can mean a year's money up front.
@@ -112,21 +112,21 @@ Getting this wrong is common. In Capterra's survey of 700 U.S. software buyers (
 
 ## How ArrivePing does this
 
-ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It began as a tool built for a specialty subcontractor running more than 800 field technicians, where every dispatcher and every truck showed up on the monthly bill.
+ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It began as a tool built for a specialty subcontractor running more than 800 field technicians.
 
 Every company gets the same $49 Starter package: one dispatcher license and two driver licenses. Drivers 3 to 29 cost $30 each and drivers from 30 on cost $25 each, and each rate applies only to the drivers in its band. A second dispatcher or a manager is a license priced like a driver, so 10 drivers with one dispatcher cost $289 a month, and adding a manager makes it $319 ([pricing](/pricing)). There's no setup fee, no contract and no GPS hardware. Tracking comes from the technician app on the phone your team already carries, and every plan includes the customer's live tracking page with the ETA ([customer notifications](/customer-notifications)). The 30-day free trial includes as many users as you like; a card goes on file, but nothing is charged until day 30. If customers pay invoices by card, you connect your own Stripe account and ArrivePing takes no cut. For side-by-side details, see [ArrivePing vs. Jobber, Housecall Pro and ServiceTitan](/compare).
 
-ArrivePing is not the cheapest choice for every team. A flat unlimited-user plan can cost less once a crew passes a couple of dozen people, and vendors with annual plans come in lower if you can pay a year up front; ArrivePing is billed monthly only. If you want marketing campaigns or a sales pipeline in the same subscription, an all-in-one platform covers more of that than ArrivePing does.
+ArrivePing is not the cheapest choice for every team. At list, a flat unlimited-user plan such as Service Fusion's $245 Starter costs less from about 9 licenses, Jobber's tier-plus-extra-users price comes in below ours at 28 people, and some vendors' annual plans are lower again if you can pay a year up front; ArrivePing is billed monthly only. If you want marketing campaigns or a sales pipeline in the same platform, an all-in-one product covers more of that than ArrivePing does.
 
 ## FAQ
 
 ### How much does field service software cost per month?
 
-Entry-level plans for small teams list from about $29 to $245 a month, according to Capterra's 2026 pricing guide. A full team costs more: at list prices in October 2026, a 12-person team with 2 office staff paid between $245 and $669 a month on the published plans we checked, before tax and payment fees.
+Entry-level plans list from about $29 to $245 a month in Capterra's 2026 pricing guide. A full team costs more: at list prices in October 2026, a 12-person team with 2 office staff paid between $245 and $669 a month on the published plans we checked, before tax and payment fees.
 
 ### Do office staff count as users in field service software?
 
-Often, yes. Jobber defines a user as anyone who accesses the account at the office or in the field, and Housecall Pro prices by how many people will use it. Service Fusion's plans include unlimited users, and ArrivePing includes one dispatcher license in every plan and prices each additional office user like a driver.
+Often, yes. Jobber defines a user as anyone who accesses the account at the office or in the field to view or manage the team's schedule, and Housecall Pro prices by how many people will use it. Service Fusion's plans include unlimited users, and ArrivePing includes one dispatcher license in every plan and prices each additional office user like a driver.
 
 ### Is GPS tracking included in field service software?
 
@@ -142,15 +142,16 @@ $289 a month for 10 technicians and one dispatcher: the $49 Starter covers the d
 
 ## Sources
 
-1. Capterra (Rakshat Chhokar). "Field Service Management Software Pricing 2026." September 29, 2026. https://www.capterra.com/resources/field-service-management-software-pricing-models/
+1. Capterra (Rakshat Chhokar). "Field Service Management Software Pricing in 2026: What Are Buyers Actually Paying?" September 29, 2026. https://www.capterra.com/resources/field-service-management-software-pricing-models/
 2. Jobber. "Pricing." Checked October 18, 2026. https://www.getjobber.com/pricing/
 3. Housecall Pro. "Pricing." Checked October 18, 2026. https://www.housecallpro.com/pricing/
 4. Housecall Pro. "Vehicle GPS Tracking." Checked October 18, 2026. https://www.housecallpro.com/features/vehicle-gps-tracking/
 5. Service Fusion. "Pricing." Checked October 18, 2026. https://www.servicefusion.com/pricing
 6. ServiceTitan. "ServiceTitan Packages." Checked October 18, 2026. https://www.servicetitan.com/pricing
 7. Workiz. "Pricing." Checked October 18, 2026. https://www.workiz.com/pricing/
-8. Housecall Pro Help Center. "Employee GPS Tracking (HCP Map)." Updated August 11, 2026. https://help.housecallpro.com/en/articles/2810583-employee-gps-tracking-hcp-map
+8. Housecall Pro Help Center. "Employee GPS Tracking & HCP Map." August 11, 2026. https://help.housecallpro.com/en/articles/2810583-employee-gps-tracking-hcp-map
 9. Jobber Help Center. "FleetSharp tracker devices." Updated June 19, 2026. https://help.getjobber.com/en/articles/fleetsharp-tracker-devices/
-10. Capterra. "Capterra's 2025 Tech Trends Report: How Goals, Fears, and Challenges Impact SMB and Enterprise Software Purchases." January 24, 2025. https://www.capterra.com/resources/tech-trends-smb-enterprise-software-purchase-tips/
-11. Capterra. "2024 U.S. Tech Trends Report: 58% of Businesses Regret a Recent Software Purchase." November 7, 2023. https://www.capterra.com/resources/us-tech-trends/
-12. ArrivePing. "Pricing." https://arriveping.com/pricing
+10. Jobber. "GPS Tracking App." Checked October 18, 2026. https://www.getjobber.com/features/gps-tracking-app/
+11. Capterra. "Capterra's 2025 Tech Trends Report: How Goals, Fears, and Challenges Impact SMB and Enterprise Software Purchases." January 24, 2025. https://www.capterra.com/resources/tech-trends-smb-enterprise-software-purchase-tips/
+12. Capterra. "2024 U.S. Tech Trends Report: 58% of Businesses Regret a Recent Software Purchase." November 7, 2023. https://www.capterra.com/resources/us-tech-trends/
+13. ArrivePing. "Pricing." https://arriveping.com/pricing
