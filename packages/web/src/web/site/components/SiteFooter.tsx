@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { brand, footer } from "../config";
 import { useAnchorNav } from "./SiteHeader";
+import { CookieConsent } from "./CookieConsent";
+import { openConsent } from "../lib/hubspot-tracking";
 
 /**
  * One footer column. On desktop it is a plain heading + list. On phones
@@ -47,6 +49,7 @@ function FooterColumn({ heading, links }: { heading: string; links: { label: str
 export function SiteFooter() {
   return (
     <footer className="footer">
+      <CookieConsent />
       <div className="container">
         <div className="footer__grid">
           <div className="footer__brand">
@@ -64,9 +67,14 @@ export function SiteFooter() {
             <img src={brand.icon} alt="" width={16} height={16} className="footer__mini-mark" aria-hidden="true" />
             {footer.legal}
           </span>
-          <a href={footer.maker.href} target="_blank" rel="noopener">
-            {footer.maker.label}
-          </a>
+          <span className="footer__bottom-links">
+            <button type="button" className="footer__link-btn" onClick={openConsent}>
+              Cookie preferences
+            </button>
+            <a href={footer.maker.href} target="_blank" rel="noopener">
+              {footer.maker.label}
+            </a>
+          </span>
         </div>
       </div>
     </footer>

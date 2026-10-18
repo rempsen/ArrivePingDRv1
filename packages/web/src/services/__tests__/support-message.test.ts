@@ -38,6 +38,7 @@ beforeEach(() => {
   emailResult = { ok: true };
   process.env.SLACK_SUPPORT_WEBHOOK_URL = "https://hooks.slack.com/services/T/B/x";
   delete process.env.SUPPORT_MESSAGE_TO;
+  delete process.env.HUBSPOT_ACCESS_TOKEN; // HubSpot tickets are covered in hubspot-leads.test.ts
 });
 afterEach(() => {
   if (savedHook === undefined) delete process.env.SLACK_SUPPORT_WEBHOOK_URL;

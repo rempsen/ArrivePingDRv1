@@ -7,11 +7,17 @@
  *
  * Customers are not members of our Slack workspace, so replies go by email:
  * the Slack post links the sender's address and the email copy sets Reply-To.
- * Both channels are attempted; the visitor only sees an error when neither
- * one took the message.
+ *
+ * It also becomes a HubSpot ticket (Support Pipeline / New) on the sender's
+ * contact — created as a lead when they're new, never edited when they exist —
+ * so every conversation sits on the customer's CRM record.
+ *
+ * All channels are attempted; the visitor only sees an error when none of
+ * them took the message.
  */
 import { sendEmail } from "./email";
 import { log } from "../api/lib/logger";
+import { createSupportTicket, findOrCreateLeadContact, hubspotEnabled } from "./hubspot-leads";
 
 export interface SupportMessage {
   name: string;
@@ -140,10 +146,46 @@ export async function emailSupport(m: SupportMessage): Promise<EmailOutcome> {
  * environment with nothing configured (local dev) logs and reports success,
  * the same way the demo-request form behaves.
  */
+export const SUPPORT_LEAD_SOURCE = "Help Center message";
+
+/** Ticket subject: the topic plus the start of the message, on one line. */
+export function ticketSubject(m: SupportMessage): string {
+  const first = m.message.replace(/\s+/g, " ").trim();
+  const head = first.length > 80 ? `${first.slice(0, 79)}…` : first;
+  return `${m.topic || "Help Center"}: ${head}`;
+}
+
+export function ticketContent(m: SupportMessage): string {
+  return [
+    m.message,
+    "",
+    "—",
+    `From: ${m.name} <${m.email}>`,
+    m.company ? `Company: ${m.company}` : "",
+    m.topic ? `About: ${m.topic}` : "",
+    `Sent from: arriveping.com${m.page || "/support"}`,
+  ]
+    .filter((l, i) => l !== "" || i === 1)
+    .join("\n");
+}
+
+/** "synced" | "skipped" (HubSpot not configured) | "failed" */
+export async function postSupportToHubspot(m: SupportMessage): Promise<"synced" | "skipped" | "failed"> {
+  if (!hubspotEnabled()) return "skipped";
+  try {
+    const { contactId } = await findOrCreateLeadContact({ name: m.name, email: m.email, company: m.company, source: SUPPORT_LEAD_SOURCE });
+    await createSupportTicket({ subject: ticketSubject(m), content: ticketContent(m), contactId });
+    return "synced";
+  } catch (e) {
+    log.error("support-message: HubSpot ticket failed", { err: (e as Error).message.slice(0, 300) });
+    return "failed";
+  }
+}
+
 export async function deliverSupportMessage(m: SupportMessage, fetchImpl: typeof fetch = fetch) {
-  const [slack, email] = await Promise.all([postSupportToSlack(m, fetchImpl), emailSupport(m)]);
+  const [slack, email, hubspot] = await Promise.all([postSupportToSlack(m, fetchImpl), emailSupport(m), postSupportToHubspot(m)]);
   const slackConfigured = !!process.env.SLACK_SUPPORT_WEBHOOK_URL?.trim();
-  const delivered = slack || email === "sent" || (!slackConfigured && email === "skipped");
-  log.info("support-message: done", { slack, email, delivered });
-  return { slack, email, delivered };
+  const delivered = slack || email === "sent" || hubspot === "synced" || (!slackConfigured && email === "skipped" && hubspot === "skipped");
+  log.info("support-message: done", { slack, email, hubspot, delivered });
+  return { slack, email, hubspot, delivered };
 }
