@@ -48,15 +48,17 @@ function QueueCard(p: { job: BoardJob; tz: string; today: string; on: boolean; o
   const pr = PRIORITY_META[j.priority as keyof typeof PRIORITY_META];
   const due = dayOf(j, p.tz);
   return (
+    // The whole card drags (a click still opens the job: a drag only starts
+    // once the pointer moves); the grip is the visible cue.
     <div
-      className={`group rounded-xl border p-2.5 transition ${p.on ? "border-emerald-live bg-emerald-live/[0.07]" : "border-white/10 bg-ink-3/60 hover:border-brand/40"}`}
+      ref={setNodeRef}
+      {...listeners}
+      className={`group cursor-grab rounded-xl border p-2.5 transition active:cursor-grabbing ${p.on ? "border-emerald-live bg-emerald-live/[0.07]" : "border-white/10 bg-ink-3/60 hover:border-brand/40"}`}
       style={{ opacity: isDragging ? 0.4 : 1 }}
     >
       <div className="flex items-start gap-2">
         <span
-          ref={setNodeRef}
           {...attributes}
-          {...listeners}
           aria-label={`Drag ${j.title || j.service} onto a technician`}
           className="mt-0.5 hidden cursor-grab touch-none text-slate-600 group-hover:text-slate-400 lg:block"
         >
