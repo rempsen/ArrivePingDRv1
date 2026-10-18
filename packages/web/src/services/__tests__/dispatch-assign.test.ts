@@ -355,6 +355,17 @@ describe("dispatchAssign + undoAssign", () => {
     expect((await row(id)).riderId).toBe(`${CO}-t2`);
   });
 
+  it("an earlier offer's notice stays quiet when the same technician is offered the job again", async () => {
+    const id = await job(CO);
+    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    // declined, then offered to the same technician again before the first notice ran
+    await db.update(schema.bookings).set({ riderId: null, status: "confirmed", assignStatus: "declined" }).where(eq(schema.bookings.id, id));
+    await new Promise((r) => setTimeout(r, 5)); // the second offer is a later moment
+    await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    await flushNotices();
+    expect((await events(id)).filter((k) => k === "assigned")).toHaveLength(1);
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

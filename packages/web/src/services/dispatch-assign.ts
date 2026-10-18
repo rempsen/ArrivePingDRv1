@@ -161,8 +161,9 @@ const patchOf = (b: typeof schema.bookings.$inferSelect): JobPatch => ({
   riderId: b.riderId,
 });
 
-async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string): Promise<boolean> {
-  return holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId }, fallback: "assigned" });
+/** `offer`: the assignedAt this offer wrote (ISO), so the notice speaks only for this offer. */
+async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string, offer: string | null): Promise<boolean> {
+  return holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId, ...(offer ? { offer } : {}) }, fallback: "assigned" });
 }
 
 registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {
@@ -172,6 +173,10 @@ registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {
   // Undone, given to someone else or archived in the meantime: nothing to announce.
   if (!b || b.deletedAt || b.riderId !== riderId) return;
   if (b.assignStatus !== "offered" && b.assignStatus !== "accepted") return;
+  // A later offer to the same technician (declined or taken back, then offered
+  // again) has its own notice; this one was for an earlier offer.
+  const offer = typeof task.payload.offer === "string" ? task.payload.offer : null;
+  if (offer && (!b.assignedAt || new Date(b.assignedAt).getTime() !== new Date(offer).getTime())) return;
   await fireEvent("assigned", task.bookingId);
 });
 
@@ -253,7 +258,8 @@ export async function dispatchAssign(
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     // Already announced (a notice couldn't be held): no Undo to offer.
-    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId)) || !moveHeld || !restorable) undo = null;
+    const offer = r.booking.assignedAt ? new Date(r.booking.assignedAt).toISOString() : null;
+    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId, offer)) || !moveHeld || !restorable) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.
     void publishDispatch(companyId, { kind: "job", jobId: input.bookingId });
   }
