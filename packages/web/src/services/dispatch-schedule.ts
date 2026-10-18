@@ -138,7 +138,16 @@ export async function dispatchSchedule(
   }
   void publishDispatch(companyId, { kind: "job", jobId: prev.id });
 
-  const undo = signUndo({ v: 1, k: "time", c: companyId, b: prev.id, f: from.toISOString(), t: to.toISOString(), exp: now + UNDO_TOKEN_TTL_MS });
+  const undo = signUndo({
+    v: 1,
+    k: "time",
+    c: companyId,
+    b: prev.id,
+    f: from.toISOString(),
+    t: to.toISOString(),
+    r: prev.riderId ?? "",
+    exp: now + UNDO_TOKEN_TTL_MS,
+  });
   return { ok: true, job: patchOf(b), undo };
 }
 
@@ -150,11 +159,19 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
 
   const t = tdb(companyId);
   const B = schema.bookings;
-  // Only if the job is still where this move put it and still open.
+  // Only if the job is still where this move put it, with the same technician
+  // (their availability was what the move checked), and still open.
   const [b] = await t.update(
     B,
     { scheduledAt: new Date(c.f) },
-    and(eq(B.id, c.b), eq(B.scheduledAt, new Date(c.t)), isNull(B.deletedAt), ne(B.status, "completed"), ne(B.status, "cancelled")),
+    and(
+      eq(B.id, c.b),
+      eq(B.scheduledAt, new Date(c.t)),
+      ...(c.r === undefined ? [] : [c.r ? eq(B.riderId, c.r) : isNull(B.riderId)]),
+      isNull(B.deletedAt),
+      ne(B.status, "completed"),
+      ne(B.status, "cancelled"),
+    ),
   );
   if (!b) {
     const cur = await t.selectOne(B, eq(B.id, c.b));

@@ -195,6 +195,17 @@ describe("dispatchSchedule + undo", () => {
     expect(kinds).not.toContain("rescheduled");
   });
 
+  it("won't undo a time move once the job has gone to another technician", async () => {
+    const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "offered" });
+    const base = (await row(id)).scheduledAt;
+    const r = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 30), by: "Dana" }, NOW.getTime());
+    await db.update(schema.bookings).set({ riderId: `${CO}-t2` }).where(eq(schema.bookings.id, id));
+    const u = await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime());
+    expect(u).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).scheduledAt.toISOString()).toBe(minutesLater(base, 30));
+    await flushNotices();
+  });
+
   it("won't undo a job that has moved again since", async () => {
     const id = await job(CO);
     const base = (await row(id)).scheduledAt;

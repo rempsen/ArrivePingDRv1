@@ -83,6 +83,8 @@ export interface TimeUndoClaims {
   f: string;
   /** scheduledAt after the move, ISO */
   t: string;
+  /** The technician it was moved for ("" when unassigned); Undo only for them. */
+  r?: string;
   exp: number;
 }
 
@@ -128,6 +130,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
+  if (c.k === "time" && c.r !== undefined && typeof c.r !== "string") return "invalid";
   if (now > c.exp) return "expired";
   return c;
 }
