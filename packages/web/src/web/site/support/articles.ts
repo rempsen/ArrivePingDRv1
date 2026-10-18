@@ -71,6 +71,7 @@ export const support = {
 };
 
 const U = "October 16, 2026";
+const U2 = "October 17, 2026";
 
 export const articles: Article[] = [
   /* ---------------------------------------------------------------- */
@@ -276,6 +277,25 @@ export const articles: Article[] = [
   /* Customer notifications                                             */
   /* ---------------------------------------------------------------- */
   {
+    slug: "scheduler-views",
+    title: "Plan the day in the Scheduler",
+    summary: "Board shows a lane per technician; Calendar shows the day, week or month. The Work Queue holds jobs nobody has yet.",
+    category: "dispatch",
+    updated: U2,
+    keywords: ["calendar", "week view", "month view", "board", "work queue", "unassigned", "drag"],
+    blocks: [
+      { type: "p", text: "Open **Operations → Scheduler**. Two switches at the top change how you see the same jobs:" },
+      {
+        type: "ul",
+        items: [
+          "**Board or Calendar.** Board gives each technician a lane for the day. Calendar lays jobs out on a grid.",
+          "**Day, Week, Work Week or Month.** Work Week is Monday to Friday.",
+        ],
+      },
+      { type: "p", text: "The **Work Queue** lists every job still waiting for a technician. Open one to give it a time and a technician. **New Job** opens the booking form with the date already filled in." },
+    ],
+  },
+  {
     slug: "what-customers-receive",
     title: "What your customers receive and see",
     summary: "A text or email per milestone, and a live tracking page that needs no app or account.",
@@ -299,6 +319,45 @@ export const articles: Article[] = [
       { type: "p", text: "During onboarding, ArrivePing drafts your booking, on-the-way, running-late and arrived messages in your voice, including your business name and how the technician is introduced." },
       { type: "p", text: "To change them, open **Setup → Notifications**. Each milestone has its own SMS and email text, and you can turn individual messages off. Changes apply to the next message sent; messages already delivered are not altered." },
       { type: "p", text: "Keep the tracking link in the on-the-way message; without it the customer has no way to see the ETA or contact the technician." },
+    ],
+  },
+  {
+    slug: "check-what-was-sent",
+    title: "Check whether a message was sent",
+    summary: "The Delivery Log under Setup → Notifications lists every text, email, app alert and webhook, with its status.",
+    category: "customer-notifications",
+    updated: U2,
+    keywords: ["delivery log", "sent", "delivered", "history", "message log", "failed", "proof"],
+    blocks: [
+      { type: "p", text: "Open **Setup → Notifications** and choose the **Delivery Log** tab. Each row shows when it went, the milestone, who it was for, the channel (in-app, email, SMS or webhook), the address or number, and the status:" },
+      {
+        type: "ul",
+        items: [
+          "**sent:** handed to the email or text provider.",
+          "**failed:** the provider refused it, often a wrong number or a bad email address.",
+          "**skipped:** text messaging isn't set up for your account yet.",
+        ],
+      },
+      { type: "p", text: "Messages held back by **quiet hours** or a master switch don't appear here, because nothing was sent. If a message shows as sent but the customer says it never arrived, see [A customer didn't get their text or email](/support/customer-did-not-get-the-text)." },
+    ],
+  },
+  {
+    slug: "quiet-hours",
+    title: "Stop texts and emails going out overnight",
+    summary: "Quiet hours skip the channels you choose between two times. Messages due then are not sent later.",
+    category: "customer-notifications",
+    updated: U2,
+    keywords: ["night", "overnight", "do not disturb", "weekend", "after hours", "master switch", "turn off texts"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **Setup → Notifications** and choose the **Channels** tab.",
+          "Turn on **Quiet hours** and set the start and end times. They follow your company's time zone.",
+          "Choose the channels that go quiet, for example SMS and Email, then **Save settings**.",
+        ],
+      },
+      { type: "p", text: "During quiet hours those channels are skipped. Nothing is queued for the morning, so a booking confirmation due at 11 pm is simply not sent. To stop a channel completely, use its master switch on the same tab." },
     ],
   },
   {
@@ -565,6 +624,26 @@ export const articles: Article[] = [
   /* ---------------------------------------------------------------- */
   /* Exports & integrations                                             */
   /* ---------------------------------------------------------------- */
+  {
+    slug: "run-a-report",
+    title: "Run and export a report",
+    summary: "Money → Reports: pick a report, choose the period, then export it as CSV, Excel or PDF.",
+    category: "integrations",
+    updated: U2,
+    keywords: ["revenue", "sales", "payroll", "performance", "accountant", "analytics", "numbers"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **Money → Reports**.",
+          "Pick a report: Revenue & Sales, Tech Performance, Job Status, Payroll & Payouts, Catalog Margin, Client Activity, Invoices / AR or Zone Breakdown.",
+          "Choose the period: 7 days, 30 days, 90 days, year to date or 12 months, or set exact dates. You can also filter by technician or status.",
+          "Use **Export** to download the report on screen as CSV, Excel (.xlsx) or PDF.",
+        ],
+      },
+      { type: "p", text: "Need everything, not a summary? The same page downloads every job, technician, client or invoice as a spreadsheet. See [Exports and integrations](/support/exports-and-integrations)." },
+    ],
+  },
   {
     slug: "exports-and-integrations",
     title: "Exports and integrations",
