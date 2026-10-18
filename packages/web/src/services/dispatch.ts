@@ -536,12 +536,17 @@ async function notifyForEvent(ctx: DispatchContext, event: NvcEvent) {
 
 /**
  * Fire a milestone the company made itself (services/custom-milestones.ts) on
- * a job: a line on the job's timeline, then its notification rules (event key
- * `custom:<id>`) through the same delivery path as a built-in event, so
- * channels, quiet hours, branded email and the delivery log all apply.
+ * a job: its notification rules (event key `custom:<id>`) through the same
+ * delivery path as a built-in event, so channels, quiet hours, branded email
+ * and the delivery log all apply, then a line on the job's timeline.
  *
  * A custom milestone has no built-in copy: a recipient nobody wrote a message
  * for gets nothing in-app or by text. Sample jobs get the timeline line only.
+ *
+ * Returns "failed" when it broke before anything was sent (the caller lets
+ * the milestone go again), "skipped" when the job isn't this company's or no
+ * longer exists, and "done" otherwise. Once a message has gone out it is
+ * "done" even if a later one failed, so nobody is ever messaged twice.
  */
 export async function fireCustomEvent(input: {
   companyId: string;
@@ -551,13 +556,24 @@ export async function fireCustomEvent(input: {
   customerVisible: boolean;
   /** false for an admin's Test send: deliver, but leave the job's record alone. */
   timeline?: boolean;
-}): Promise<void> {
+}): Promise<"done" | "skipped" | "failed"> {
   const event = `custom:${input.milestoneId}`;
   try {
     const ctx = await context(input.bookingId);
     // The booking is looked up across tenants; a milestone only ever fires on
     // its own company's jobs.
-    if (!ctx || ctx.companyId !== input.companyId) return;
+    if (!ctx || ctx.companyId !== input.companyId) return "skipped";
+    // Messages before the timeline line, so a failure before anything was
+    // sent leaves no trace and the milestone can simply go again.
+    if (!ctx.b.isSample) {
+      const progress = { sending: false };
+      try {
+        await deliver(ctx, event, input.meta, () => "", progress);
+      } catch (e) {
+        if (!progress.sending) throw e;
+        console.error("[dispatch] fireCustomEvent partly delivered", event, e);
+      }
+    }
     if (input.timeline !== false) {
       await logJobEvent({
         companyId: ctx.companyId,
@@ -570,10 +586,10 @@ export async function fireCustomEvent(input: {
       });
       void publishDispatch(ctx.companyId, { kind: "job", jobId: ctx.b.id });
     }
-    if (ctx.b.isSample) return;
-    await deliver(ctx, event, input.meta, () => "");
+    return "done";
   } catch (e) {
     console.error("[dispatch] fireCustomEvent failed", event, e);
+    return "failed";
   }
 }
 
@@ -588,6 +604,8 @@ async function deliver(
   event: string,
   meta: EventMeta,
   fallback: (recipient: Recipient) => string,
+  /** Set once the first message is about to go out (see fireCustomEvent). */
+  progress?: { sending: boolean },
 ) {
   const { b, companyId, cust, rider, riderUser, vars } = ctx;
   const rules = await tdb(companyId).select(
@@ -643,6 +661,7 @@ async function deliver(
     }
 
     for (const t of targets) {
+      if (progress) progress.sending = true;
       // in-app
       if (rule.inApp && allowInApp && t.userId && msg) {
         await tdb(companyId).insert(schema.notifications, {
@@ -694,6 +713,7 @@ async function deliver(
     if (rule.webhook && allowWebhook) {
       const eps = await activeWebhooks(companyId, event);
       for (const ep of eps) {
+        if (progress) progress.sending = true;
         const payload = {
           event,
           recipient,
