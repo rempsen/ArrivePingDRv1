@@ -10,7 +10,7 @@ process.env.DATABASE_AUTH_TOKEN = "";
 process.env.HUBSPOT_ACCESS_TOKEN = "pat-test";
 process.env.HUBSPOT_OWNER_ID = "83114636";
 
-const { syncCompanyToHubspot, buildSyncPlan, planFingerprint, _setHubspotFetch, _resetHubspotForTests, isSyncedCompany, CUSTOM_PROPERTIES } =
+const { syncCompanyToHubspot, sweepHubspotSync, buildSyncPlan, planFingerprint, _setHubspotFetch, _resetHubspotForTests, isSyncedCompany, CUSTOM_PROPERTIES } =
   await import("../hubspot-sync");
 const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
@@ -295,6 +295,23 @@ describe("enrichment", () => {
 });
 
 describe("which tenants sync", () => {
+  it("never auto-syncs an internal tenant, even one already linked", async () => {
+    await db.insert(schema.companies).values([{ id: "linked-demo", name: "Linked Demo", isInternal: true, hubspotCompanyId: "999", billingCustomerId: "cus_x" } as any]);
+    expect(await isSyncedCompany("linked-demo")).toBe(false);
+    calls = [];
+    await sweepHubspotSync();
+    expect(JSON.stringify(calls)).not.toContain("linked-demo");
+    process.env.HUBSPOT_SYNC_ALL = "1";
+    try {
+      expect(await isSyncedCompany("linked-demo")).toBe(false);
+      calls = [];
+      await sweepHubspotSync();
+      expect(JSON.stringify(calls)).not.toContain("linked-demo");
+    } finally {
+      delete process.env.HUBSPOT_SYNC_ALL;
+    }
+  });
+
   it("HUBSPOT_SYNC_ALL adds hand-made tenants but never internal (demo/test) ones", async () => {
     await db.insert(schema.companies).values([
       { id: "hand-made", name: "Hand Made Co" } as any,

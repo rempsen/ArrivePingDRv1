@@ -43,7 +43,18 @@ export function getConsent(): Consent | null {
   }
 }
 
+const HUBSPOT_COOKIES = ["hubspotutk", "__hstc", "__hssc", "__hssrc", "messagesUtk"];
+
+/** Delete HubSpot's cookies on this host and its parent domain. */
+function clearHubspotCookies(): void {
+  const host = location.hostname;
+  const domains = ["", host, `.${host.split(".").slice(-2).join(".")}`];
+  for (const name of HUBSPOT_COOKIES)
+    for (const d of domains) document.cookie = `${name}=; Max-Age=0; path=/${d ? `; domain=${d}` : ""}`;
+}
+
 export function setConsent(c: Consent): void {
+  const was = getConsent();
   try {
     storage()?.setItem(KEY, c);
   } catch {
@@ -51,6 +62,18 @@ export function setConsent(c: Consent): void {
   }
   if (c === "granted") loadHubspotTracking();
   window.dispatchEvent(new CustomEvent("ap-consent", { detail: c }));
+  if (c === "denied" && (was === "granted" || loaded)) {
+    // Withdrawn: tell HubSpot, drop its cookies, and reload so the tracker is gone from this page too.
+    const w = window as unknown as { _hsp?: unknown[][] };
+    (w._hsp = w._hsp || []).push(["revokeCookieConsent"]);
+    clearHubspotCookies();
+    if (loaded) location.reload();
+  }
+}
+
+/** Reopen the cookie choice (footer "Cookie preferences"). */
+export function openConsent(): void {
+  window.dispatchEvent(new Event("ap-open-consent"));
 }
 
 let loaded = false;

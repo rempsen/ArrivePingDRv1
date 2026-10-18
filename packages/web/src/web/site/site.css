@@ -1719,6 +1719,29 @@
   align-items: center;
   gap: 8px;
 }
+.site .footer__bottom-links {
+  display: inline-flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.site .footer__link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.site .footer__link-btn:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site .footer__link-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .site .footer__mini-mark {
   border-radius: 4px;
   flex-shrink: 0;

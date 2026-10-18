@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getConsent, loadHubspotTracking, setConsent } from "../lib/hubspot-tracking";
+import { getConsent, loadHubspotTracking, setConsent, type Consent } from "../lib/hubspot-tracking";
 
 /**
  * Analytics-cookie choice for the marketing site (the banner the privacy policy
@@ -8,22 +8,33 @@ import { getConsent, loadHubspotTracking, setConsent } from "../lib/hubspot-trac
  */
 export function CookieConsent() {
   const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState<Consent | null>(null);
 
   useEffect(() => {
     const c = getConsent();
     if (c === "granted") loadHubspotTracking();
+    setCurrent(c);
     setOpen(c === null);
+    // The footer's "Cookie preferences" link reopens this to change the choice.
+    const reopen = () => {
+      setCurrent(getConsent());
+      setOpen(true);
+    };
+    window.addEventListener("ap-open-consent", reopen);
+    return () => window.removeEventListener("ap-open-consent", reopen);
   }, []);
 
   if (!open) return null;
-  const choose = (c: "granted" | "denied") => {
+  const choose = (c: Consent) => {
     setConsent(c);
+    setCurrent(c);
     setOpen(false);
   };
   return (
     <section className="consent" aria-label="Cookie preferences">
       <p className="consent__text">
-        We use analytics cookies to understand how people find and use ArrivePing. Essential cookies are always on.{" "}
+        We use analytics cookies to understand how people find and use ArrivePing. Essential cookies are always on.
+        {current && ` You currently ${current === "granted" ? "allow" : "block"} analytics cookies.`}{" "}
         <a href="/privacy#cookies-and-tracking-technologies" className="consent__link">
           Privacy policy
         </a>

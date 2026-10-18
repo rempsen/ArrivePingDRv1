@@ -2,6 +2,7 @@ import { useState } from "react";
 import { brand, footer } from "../config";
 import { useAnchorNav } from "./SiteHeader";
 import { CookieConsent } from "./CookieConsent";
+import { openConsent } from "../lib/hubspot-tracking";
 
 /**
  * One footer column. On desktop it is a plain heading + list. On phones
@@ -66,9 +67,14 @@ export function SiteFooter() {
             <img src={brand.icon} alt="" width={16} height={16} className="footer__mini-mark" aria-hidden="true" />
             {footer.legal}
           </span>
-          <a href={footer.maker.href} target="_blank" rel="noopener">
-            {footer.maker.label}
-          </a>
+          <span className="footer__bottom-links">
+            <button type="button" className="footer__link-btn" onClick={openConsent}>
+              Cookie preferences
+            </button>
+            <a href={footer.maker.href} target="_blank" rel="noopener">
+              {footer.maker.label}
+            </a>
+          </span>
         </div>
       </div>
     </footer>

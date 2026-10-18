@@ -28,7 +28,8 @@
  * Config: HUBSPOT_ACCESS_TOKEN (a Private App token with crm.objects.
  * companies/contacts/deals read+write and crm.schemas.* write), optional
  * HUBSPOT_OWNER_ID (owner stamped on new records), HUBSPOT_SYNC_ALL=1 to
- * include every tenant except those flagged internal (demo/test). Missing token = feature off, silently.
+ * include hand-provisioned tenants too. Tenants flagged internal (demo/test)
+ * never sync automatically. Missing token = feature off, silently.
  */
 import { and, avg, count, eq, gte, inArray, isNotNull, isNull, max, min, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
@@ -671,10 +672,12 @@ export async function isSyncedCompany(companyId: string): Promise<boolean> {
     .select({ a: schema.companies.hubspotCompanyId, b: schema.companies.billingCustomerId, internal: schema.companies.isInternal })
     .from(schema.companies)
     .where(eq(schema.companies.id, companyId));
-  if (!co) return false;
-  // HUBSPOT_SYNC_ALL=1 adds hand-provisioned customers, but never tenants a
-  // superadmin flagged internal (demo, test, our own sandboxes).
-  if (process.env.HUBSPOT_SYNC_ALL === "1" && !co.internal) return true;
+  // A tenant a superadmin flagged internal (demo, test, our own sandboxes) is
+  // never synced automatically, even if it was linked before; a superadmin
+  // "Sync to HubSpot" (force) still can.
+  if (!co || co.internal) return false;
+  // HUBSPOT_SYNC_ALL=1 adds hand-provisioned customers.
+  if (process.env.HUBSPOT_SYNC_ALL === "1") return true;
   return Boolean(co.a || co.b);
 }
 
@@ -707,8 +710,8 @@ export async function sweepHubspotSync(): Promise<{ checked: number; pushed: num
     .from(schema.companies)
     .where(
       process.env.HUBSPOT_SYNC_ALL === "1"
-        ? or(eq(schema.companies.isInternal, false), isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId))
-        : or(isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId)),
+        ? eq(schema.companies.isInternal, false)
+        : and(eq(schema.companies.isInternal, false), or(isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId))),
     );
   for (const r of rows) {
     if (r.id === "default") continue;
