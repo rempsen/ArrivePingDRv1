@@ -274,5 +274,13 @@ describe("freeAtFor", () => {
   it("counts down a job in progress, never below five minutes", () => {
     expect(freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 20 * MIN, durationMins: 60, etaMins: null }], now)).toBe(now + 40 * MIN);
     expect(freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 3 * HOUR, durationMins: 60, etaMins: null }], now)).toBe(now + 5 * MIN);
+    // 10 minutes worked, then paused for two hours: 50 minutes still to do.
+    expect(
+      freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 130 * MIN, durationMins: 60, etaMins: null, clockState: "paused", accumulatedMs: 10 * MIN, lastResumeAt: now - 130 * MIN }], now),
+    ).toBe(now + 50 * MIN);
+    // running again for 5 more minutes after 10 banked
+    expect(
+      freeAtFor([{ status: "in_progress", scheduledAt: now, startedAt: now - 60 * MIN, durationMins: 60, etaMins: null, clockState: "running", accumulatedMs: 10 * MIN, lastResumeAt: now - 5 * MIN }], now),
+    ).toBe(now + 45 * MIN);
   });
 });

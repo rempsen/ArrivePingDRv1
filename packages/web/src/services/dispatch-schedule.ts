@@ -76,9 +76,9 @@ const fromOf = (task: { payload: string }) => {
 };
 
 /** Hold one "rescheduled" notice for the job, replacing any that is waiting. */
-async function holdRescheduled(companyId: string, bookingId: string, from: string) {
+async function holdRescheduled(companyId: string, bookingId: string, from: string): Promise<boolean> {
   await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
-  await holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId, payload: { from }, fallback: "rescheduled" });
+  return holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId, payload: { from }, fallback: "rescheduled" });
 }
 
 export async function dispatchSchedule(
@@ -131,13 +131,16 @@ export async function dispatchSchedule(
   if (!b) return { ok: false, status: 409, message: "This job just changed — pull it up again to see where it is now.", forceable: false };
 
   const waiting = await pendingNotices(companyId, prev.id);
+  let held = true;
   if (!waiting.assigned) {
     // Carry forward the time people were last told, if an earlier move is still waiting.
     const told = waiting.rescheduled.map(fromOf).find((f) => f) ?? from.toISOString();
-    await holdRescheduled(companyId, prev.id, told);
+    held = await holdRescheduled(companyId, prev.id, told);
   }
   void publishDispatch(companyId, { kind: "job", jobId: prev.id });
 
+  // Already announced (the notice couldn't be held): no Undo to offer.
+  if (!held) return { ok: true, job: patchOf(b), undo: null };
   const undo = signUndo({
     v: 1,
     k: "time",

@@ -200,7 +200,9 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
           // the new time, in one conditional write. It notifies at once and has
           // no Undo, like a reassignment on the map.
           const r = await withAssignConfirm(
-            (force) => postAssign({ bookingId: job.id, riderId: techId, force, ...(moved ? { scheduledAt: at } : {}) }),
+            // The live-visit question and the double-booking one are asked separately,
+            // so taking a job off a visit doesn't skip the check at the new time.
+            (f) => postAssign({ bookingId: job.id, riderId: techId, force: f.inflight, forceBusy: f.busy, ...(moved ? { scheduledAt: at } : {}) }),
             confirm,
             techName,
           );
@@ -209,8 +211,9 @@ export function usePlace(api: { overlay(o: Overlay): () => void; refresh(): Prom
         const when = new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: tz });
         const who = firstName(techName);
         if (reassign) toast(`${job.title || job.service} moved to ${who}, ${when}. ${who} has been notified.`);
-        else if (fromQueue) toast(`${job.title || job.service} → ${who}, ${when}. The customer and ${who} hear about it in a few seconds.`, tokens);
-        else toast(`${job.title || job.service} moved to ${when}. The customer gets the new time in a few seconds.`, tokens);
+        else if (fromQueue)
+          toast(`${job.title || job.service} → ${who}, ${when}. ${tokens.length ? `The customer and ${who} hear about it in a few seconds.` : `The customer and ${who} have been told.`}`, tokens);
+        else toast(`${job.title || job.service} moved to ${when}. ${tokens.length ? "The customer gets the new time in a few seconds." : "The customer has been told."}`, tokens);
       } catch (e) {
         toast((e as Error).message || "That didn't save. Try again.", [], "warn");
       } finally {

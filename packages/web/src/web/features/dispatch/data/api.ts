@@ -47,6 +47,8 @@ export interface AssignInput {
   bookingId: string;
   riderId: string;
   force?: boolean;
+  /** Override a double booking / day off separately from `force` (the calendar). */
+  forceBusy?: boolean;
   /** ISO instant: also move it there, under the same Undo (the calendar). */
   scheduledAt?: string;
 }

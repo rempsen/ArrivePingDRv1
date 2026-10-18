@@ -157,12 +157,13 @@ export function _setGraceTimerForTests(fn: GraceTimer | null) {
 /**
  * Hold a notification for the Undo window: a scheduled task run by an
  * in-process timer (or the scheduler's tick if this process dies first). If the
- * task can't be queued, the event fires now rather than never.
+ * task can't be queued, the event fires now rather than never, and this
+ * returns false: there is nothing left for an Undo to keep quiet.
  */
 export async function holdNotice(
   companyId: string,
   opts: { kind: string; bookingId: string; payload: Record<string, unknown>; fallback: Parameters<typeof fireEvent>[0] },
-) {
+): Promise<boolean> {
   const id = await scheduleTask({
     companyId,
     kind: opts.kind,
@@ -172,13 +173,14 @@ export async function holdNotice(
   });
   if (!id) {
     await fireEvent(opts.fallback, opts.bookingId);
-    return;
+    return false;
   }
   graceTimer(() => void runTaskNow(id), NOTIFY_GRACE_MS);
+  return true;
 }
 
-async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string) {
-  await holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId }, fallback: "assigned" });
+async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string): Promise<boolean> {
+  return holdNotice(companyId, { kind: ASSIGNED_NOTICE_TASK, bookingId, payload: { riderId }, fallback: "assigned" });
 }
 
 registerTaskHandler(ASSIGNED_NOTICE_TASK, async (task) => {
@@ -206,7 +208,7 @@ async function techName(companyId: string, riderId: string): Promise<string> {
 
 export async function dispatchAssign(
   companyId: string,
-  input: { bookingId: string; riderId: string; force?: boolean; scheduledAt?: string; by: string },
+  input: { bookingId: string; riderId: string; force?: boolean; forceBusy?: boolean; scheduledAt?: string; by: string },
   now = Date.now(),
 ): Promise<AssignOutcome> {
   const t = tdb(companyId);
@@ -219,6 +221,7 @@ export async function dispatchAssign(
   const to = input.scheduledAt ? new Date(input.scheduledAt) : null;
   const r = await assignJob(companyId, input.bookingId, input.riderId, {
     force: input.force,
+    ...(input.forceBusy !== undefined ? { forceBusy: input.forceBusy } : {}),
     by: { kind: "dispatcher", name: input.by },
     deferEvent: undoable,
     ...(to ? { scheduledAt: to } : {}),
@@ -250,7 +253,8 @@ export async function dispatchAssign(
       ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
-    await deferAssignedNotice(companyId, input.bookingId, input.riderId);
+    // Already announced (the notice couldn't be held): no Undo to offer.
+    if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId))) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.
     void publishDispatch(companyId, { kind: "job", jobId: input.bookingId });
   }

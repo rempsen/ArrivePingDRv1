@@ -212,6 +212,20 @@ describe("dispatchAssign + undoAssign", () => {
     expect(await events(id)).toContain("assigned");
   });
 
+  it("still checks the new time when taking a job off a live visit", async () => {
+    const theirs = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const live = await job(CO, { riderId: `${CO}-t2`, status: "enroute", assignStatus: "accepted" });
+    const target = (await row(theirs)).scheduledAt.toISOString();
+    const first = await da.dispatchAssign(CO, { bookingId: live, riderId: `${CO}-t1`, scheduledAt: target, forceBusy: false, by: "Dana" }, NOW.getTime());
+    expect(first).toMatchObject({ ok: false, status: 409, forceable: true });
+    expect((first as { reason?: string }).reason).toBeUndefined();
+    const second = await da.dispatchAssign(CO, { bookingId: live, riderId: `${CO}-t1`, scheduledAt: target, force: true, forceBusy: false, by: "Dana" }, NOW.getTime());
+    expect(second).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
+    const third = await da.dispatchAssign(CO, { bookingId: live, riderId: `${CO}-t1`, scheduledAt: target, force: true, forceBusy: true, by: "Dana" }, NOW.getTime());
+    expect(third.ok).toBe(true);
+    expect((await row(live)).riderId).toBe(`${CO}-t1`);
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

@@ -115,6 +115,10 @@ export interface FreeAtJob {
   startedAt: Date | string | number | null;
   durationMins: number | null;
   etaMins: number | null;
+  /** The on-site clock, when the job uses it: paused time isn't work done. */
+  clockState?: string | null;
+  accumulatedMs?: number | null;
+  lastResumeAt?: Date | string | number | null;
 }
 
 const ms = (v: Date | string | number | null | undefined): number | null => {
@@ -137,8 +141,15 @@ export function freeAtFor(jobs: readonly FreeAtJob[], now: number): number | nul
     const dur = jobMinutes(j.durationMins);
     let remaining: number;
     const started = ms(j.startedAt);
-    if ((j.status === "in_progress" || j.status === "onsite" || j.status === "paused") && started != null) {
-      remaining = Math.max(5, dur - (now - started) / 60_000);
+    const clock = j.clockState === "running" || j.clockState === "paused";
+    if ((j.status === "in_progress" || j.status === "onsite" || j.status === "paused") && (clock || started != null)) {
+      // Work done: the on-site clock when it's in use (a paused stretch isn't
+      // work), else the wall time since they started.
+      const resumed = ms(j.lastResumeAt);
+      const workedMs = clock
+        ? (j.accumulatedMs ?? 0) + (j.clockState === "running" && resumed != null ? Math.max(0, now - resumed) : 0)
+        : now - started!;
+      remaining = Math.max(5, dur - workedMs / 60_000);
     } else if (j.status === "enroute") {
       remaining = (j.etaMins ?? 10) + dur;
     } else {
@@ -220,6 +231,9 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
           address: B.address,
           scheduledAt: B.scheduledAt,
           startedAt: B.startedAt,
+          clockState: B.clockState,
+          accumulatedMs: B.accumulatedMs,
+          lastResumeAt: B.lastResumeAt,
           riderId: B.riderId,
           requiredSkillClass: B.requiredSkillClass,
           requiredSkills: B.requiredSkills,
@@ -323,7 +337,16 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         .filter((j) => !IN_FIELD.includes(j.status))
         .sort((a, b) => Number(new Date(a.scheduledAt)) - Number(new Date(b.scheduledAt)));
       const freeAt = freeAtFor(
-        inField.map((j) => ({ status: j.status, scheduledAt: j.scheduledAt, startedAt: j.startedAt, durationMins: j.durationMins, etaMins: j.etaMins })),
+        inField.map((j) => ({
+          status: j.status,
+          scheduledAt: j.scheduledAt,
+          startedAt: j.startedAt,
+          durationMins: j.durationMins,
+          etaMins: j.etaMins,
+          clockState: j.clockState,
+          accumulatedMs: j.accumulatedMs,
+          lastResumeAt: j.lastResumeAt,
+        })),
         nowMs,
       );
       const locMs = ms(r.locationUpdatedAt);

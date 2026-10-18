@@ -27,6 +27,12 @@ export type Booking = typeof schema.bookings.$inferSelect;
 export interface AssignOptions {
   /** Dispatcher override: pull a tech off a live job / ignore availability clashes. */
   force?: boolean;
+  /**
+   * When set, the availability check is its own override: `force` then only
+   * covers taking the job off a live visit, and a clash at the new time is
+   * still asked about unless this is true. (The dispatch calendar asks both.)
+   */
+  forceBusy?: boolean;
   /** Who's doing this. Automation stamps the job so the UI can badge it. */
   by?: { kind: "dispatcher"; name?: string } | { kind: "automation"; ruleId: string; ruleName: string };
   /**
@@ -94,7 +100,7 @@ export async function assignJob(
   // Is this tech actually free then? Double-booking + time off. Forceable,
   // because a real dispatcher overrides both for good reasons — automation
   // never passes force, so a rule can't double-book anyone.
-  if (!force) {
+  if (opts.forceBusy === undefined ? !force : !opts.forceBusy) {
     const busy = await findAvailabilityBlock(companyId, {
       riderId,
       scheduledAt: opts.scheduledAt ?? prev.scheduledAt,
