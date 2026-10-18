@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, doublePrecision, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, doublePrecision, boolean, timestamp, index, uniqueIndex, bigserial } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
 
@@ -1344,6 +1344,58 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });
+
+/**
+ * Every state a company has been in, for platform analytics: one row from the
+ * moment it took effect. A database trigger on `companies` writes a row when a
+ * company is created, when its status, billing status, seats, trial end,
+ * industry or test flag changes, and when it is deleted (`removed`), so trial
+ * starts, conversions to paid and churn can be counted week by week
+ * (services/platform-analytics/sql.ts). Nothing in the app writes it.
+ *
+ * No foreign key: the history outlives a deleted company. RLS is on with no
+ * policy, so only the trigger (SECURITY DEFINER) and the system connection
+ * reach it. Rows from before the trigger existed are `source = 'backfill'`.
+ */
+export const companyHistory = pgTable("company_history", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  /** Write order, to break ties between rows written in the same instant. */
+  seq: bigserial("seq", { mode: "number" }).notNull(),
+  companyId: text("company_id").notNull(),
+  at: timestamp("at", { mode: "date", withTimezone: true }).notNull().default(sql`now()`),
+  name: text("name").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  billingStatus: text("billing_status").notNull().default("none"),
+  billingSeats: integer("billing_seats").notNull().default(0),
+  billingTrialEndsAt: timestamp("billing_trial_ends_at", { mode: "date", withTimezone: true }),
+  industry: text("industry"),
+  isInternal: boolean("is_internal").notNull().default(false),
+  removed: boolean("removed").notNull().default(false),
+  source: text("source").notNull().default("live"), // live | backfill
+}, (t) => ({
+  companyAtIdx: index("company_history_company_at_idx").on(t.companyId, t.at),
+  atIdx: index("company_history_at_idx").on(t.at),
+}));
+
+/**
+ * Every change to whether a technician counts toward their company's field
+ * team (approved and not a sample-day technician), written by a trigger on
+ * `riders` like company_history, so technicians per account can be read for
+ * any past week. `active = false` rows mark a technician leaving the team,
+ * including being deleted.
+ */
+export const technicianHistory = pgTable("technician_history", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  seq: bigserial("seq", { mode: "number" }).notNull(),
+  riderId: text("rider_id").notNull(),
+  companyId: text("company_id").notNull(),
+  at: timestamp("at", { mode: "date", withTimezone: true }).notNull().default(sql`now()`),
+  active: boolean("active").notNull(),
+  source: text("source").notNull().default("live"),
+}, (t) => ({
+  riderAtIdx: index("technician_history_rider_at_idx").on(t.riderId, t.at),
+  companyAtIdx: index("technician_history_company_at_idx").on(t.companyId, t.at),
+}));
 
 /**
  * A person's membership OF a company. This is what makes one human able to work

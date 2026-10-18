@@ -4,13 +4,14 @@
  * SQL as the Claude "ArrivePing Analytics" dashboard
  * (services/platform-analytics/sql.ts), so the two always agree.
  *
- * Three views share one set of filters (range, industry, billing, test
- * companies): Overview, Companies (with a drill-down sheet) and Explorer
- * (any metric, broken down any supported way, exportable as CSV).
+ * Four views share one set of filters (range, company, industry, billing,
+ * test companies): Overview, Growth (trials, conversion, churn and
+ * technicians week by week), Companies (with a drill-down sheet) and
+ * Explorer (any metric, broken down any supported way, exportable as CSV).
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import {
   Building2,
   CalendarRange,
@@ -97,6 +98,18 @@ interface Headline {
   top_tenant_name: string | null;
   top_tenant_jobs: number | null;
   top_tenant_share: number | null;
+  trial_starts: number;
+  trial_starts_prev: number;
+  conversions: number;
+  conversions_prev: number;
+  trials_lost: number;
+  trials_lost_prev: number;
+  churned: number;
+  churned_prev: number;
+  paying_start: number;
+  paying_start_prev: number;
+  techs_per_account: number | null;
+  techs_per_paying: number | null;
 }
 interface Kpi {
   metric: string;
@@ -147,6 +160,9 @@ interface TenantRow {
   internal: boolean;
   created: string;
   trial_ends: string | null;
+  trial_started: string | null;
+  paid_since: string | null;
+  churned_on: string | null;
   onboarded: boolean;
   plan_seats: number;
   plan_value: number;
@@ -160,6 +176,31 @@ interface TenantRow {
   customer_updates: number;
   last_active: string | null;
   health: string;
+}
+interface WeeklyRow {
+  week: string;
+  week_end: string;
+  in_progress: boolean;
+  tenants: number;
+  new_tenants: number;
+  accounts_closed: number;
+  trialing: number;
+  trial_starts: number;
+  conversions: number;
+  trials_lost: number;
+  conversion_rate: number | null;
+  cohort_converted: number;
+  cohort_rate: number | null;
+  paying_start: number;
+  paying: number;
+  churned: number;
+  churn_rate: number | null;
+  mrr: number;
+  techs: number;
+  accounts_with_techs: number;
+  techs_per_account: number | null;
+  techs_per_paying: number | null;
+  median_techs: number | null;
 }
 interface Catalog {
   firstDay: string | null;
@@ -276,7 +317,7 @@ function useAnalytics<T>(path: string, enabled = true) {
 
 /* --------------------------------------------------------------- page -- */
 
-type View = "overview" | "companies" | "explore";
+type View = "overview" | "growth" | "companies" | "explore";
 
 export default function AnalyticsPage() {
   const { role } = useAuth();
@@ -341,6 +382,7 @@ function Analytics() {
             onChange={setView}
             options={[
               { value: "overview", label: "Overview" },
+              { value: "growth", label: "Growth" },
               { value: "companies", label: "Companies" },
               { value: "explore", label: "Explorer" },
             ]}
@@ -359,6 +401,7 @@ function Analytics() {
       {view === "overview" && (
         <OverviewView qs={qs} grain={grain} setGrain={setGrainOverride} filters={filters} set={set} onOpenCompany={setOpenCompany} rangeLabel={rangeLabel(filters.preset, start, end)} />
       )}
+      {view === "growth" && <GrowthView qs={qs} rangeLabel={rangeLabel(filters.preset, start, end)} />}
       {view === "companies" && <CompaniesView qs={qs} onOpenCompany={setOpenCompany} rangeLabel={rangeLabel(filters.preset, start, end)} />}
       {view === "explore" && <ExploreView qs={qs} grain={grain} setGrain={setGrainOverride} catalog={catalog.data} rangeLabel={rangeLabel(filters.preset, start, end)} />}
 
@@ -713,6 +756,8 @@ function OverviewView({
                   ["Paying", fmt.int(h.paying)],
                   ["On trial", `${fmt.int(h.trialing)} · ${fmt.money(h.trial_mrr)}/mo`],
                   ["Trials ending in 7 days", fmt.int(h.trials_ending_soon)],
+                  ["Trials converted in this period", `${fmt.int(h.conversions)} of ${fmt.int(h.conversions + h.trials_lost)}`],
+                  ["Paying companies lost in this period", fmt.int(h.churned)],
                   ["Past due", fmt.int(h.past_due)],
                   ["Invoiced outside ArrivePing", fmt.int(h.invoiced_manually)],
                   ["Closed in this period", fmt.int(h.tenants_closed)],
@@ -873,7 +918,8 @@ function CompaniesView({ qs, onOpenCompany, rangeLabel }: { qs: string; onOpenCo
                   company: t.name, id: t.id, industry: t.industry_label, health: healthMeta(t.health).label, test: t.internal ? "yes" : "no",
                   plan: billingLabel(t.billing_status), seats: t.plan_seats, plan_value_usd: t.plan_value, team: t.team, technicians: t.techs,
                   customers: t.customers, active_users: t.active_users, jobs_created: t.jobs, jobs_completed: t.completed, jobs_all_time: t.jobs_all,
-                  customer_updates: t.customer_updates, last_active: t.last_active ?? "", signed_up: t.created, trial_ends: t.trial_ends ?? "",
+                  customer_updates: t.customer_updates, last_active: t.last_active ?? "", signed_up: t.created, trial_started: t.trial_started ?? "",
+                  trial_ends: t.trial_ends ?? "", paid_since: t.paid_since ?? "", stopped_paying: t.churned_on ?? "",
                 })),
               )
             }
@@ -929,6 +975,7 @@ function CompaniesView({ qs, onOpenCompany, rangeLabel }: { qs: string; onOpenCo
                   <td className="px-3 py-2.5 text-right">
                     <BillingText status={t.billing_status} />
                     {t.plan_value > 0 && <p className="text-[11px] text-slate-500 tabular-nums">{fmt.money(t.plan_value)}/mo · {t.plan_seats} seats</p>}
+                    <p className="text-[11px] text-slate-500">{lifecycleLine(t)}</p>
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(t.team)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(t.techs)}</td>
@@ -961,6 +1008,301 @@ function CompaniesView({ qs, onOpenCompany, rangeLabel }: { qs: string; onOpenCo
       </p>
     </div>
   );
+}
+
+/* -------------------------------------------------------------- growth -- */
+
+type GrowthChart = "companies" | "trials" | "conversion" | "churn" | "techs" | "revenue";
+
+const GROWTH_CHARTS: { value: GrowthChart; label: string; caption: string }[] = [
+  { value: "companies", label: "Companies", caption: "Open companies (line) and paying companies (bars) at each week's end" },
+  { value: "trials", label: "Trials", caption: "Trials started, converted to paid and lost, each week" },
+  { value: "conversion", label: "Conversion", caption: "Trials that ended converted to paid (bars), and of each week's new trials, the share paying since (line)" },
+  { value: "churn", label: "Churn", caption: "Paying companies lost each week (bars) and as a share of those paying when the week began (line)" },
+  { value: "techs", label: "Technicians", caption: "Technicians per company (line) and per paying company (dashed) at each week's end" },
+  { value: "revenue", label: "Revenue", caption: "Monthly plan value of paying companies at each week's end" },
+];
+
+const PCT = (n: number) => fmt.pct(n);
+
+/** A week's tooltip: the figures of the chart shown, formatted as they are counted. */
+function WeekTip({ active, payload, label, rows }: { active?: boolean; payload?: { name: string; value: number; color: string; dataKey: string; payload: { _fmt?: Record<string, (n: number) => string> } }[]; label?: string; rows: WeeklyRow[] }) {
+  if (!active || !payload?.length || !label) return null;
+  const w = rows.find((r) => r.week === label);
+  return (
+    <div className="rounded-xl border border-white/[0.1] bg-[#111a2b]/95 px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur">
+      <p className="mb-1 text-[11px] font-medium text-slate-400">
+        Week of {fmt.day(label)}
+        {w?.in_progress ? " · so far" : ""}
+      </p>
+      {payload.map((p) => {
+        const f = p.payload._fmt?.[p.dataKey] ?? ((n: number) => fmt.int(n));
+        return (
+          <p key={p.dataKey} className="flex items-center gap-2 text-[12px] text-slate-200">
+            <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+            <span className="text-slate-400">{p.name}</span>
+            <span className="ml-auto pl-3 font-semibold tabular-nums">{p.value == null ? "—" : f(p.value)}</span>
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function GrowthChartView({ rows, chart }: { rows: WeeklyRow[]; chart: GrowthChart }) {
+  const ticks = useMemo(() => pickTicks(rows.map((r) => r.week)), [rows]);
+  const bars: { key: keyof WeeklyRow; name: string; color: string }[] = [];
+  const lines: { key: keyof WeeklyRow; name: string; color: string; dashed?: boolean }[] = [];
+  let tickF: (n: number) => string = (n) => fmt.int(n);
+  let pct = false;
+  switch (chart) {
+    case "companies":
+      bars.push({ key: "paying", name: "Paying", color: "#10b981" });
+      lines.push({ key: "tenants", name: "Companies", color: "#22d3ee" });
+      break;
+    case "trials":
+      bars.push({ key: "trial_starts", name: "Trials started", color: "#22d3ee" }, { key: "conversions", name: "Converted to paid", color: "#10b981" }, { key: "trials_lost", name: "Lost", color: "#f43f5e" });
+      break;
+    case "conversion":
+      bars.push({ key: "conversion_rate", name: "Converted, of trials that ended", color: "#10b981" });
+      lines.push({ key: "cohort_rate", name: "New trials paying since", color: "#22d3ee" });
+      pct = true;
+      break;
+    case "churn":
+      bars.push({ key: "churned", name: "Paying companies lost", color: "#f43f5e" });
+      lines.push({ key: "churn_rate", name: "Churn rate", color: "#fbbf24" });
+      break;
+    case "techs":
+      lines.push({ key: "techs_per_account", name: "Per company", color: "#22d3ee" }, { key: "techs_per_paying", name: "Per paying company", color: "#10b981", dashed: true });
+      tickF = (n) => fmt.num(n, 1);
+      break;
+    case "revenue":
+      bars.push({ key: "mrr", name: "Monthly plan value", color: "#a78bfa" });
+      tickF = (n) => fmt.money(n);
+      break;
+  }
+  const rateFmt: Record<string, (n: number) => string> = { conversion_rate: PCT, cohort_rate: PCT, churn_rate: PCT, techs_per_account: (n) => fmt.num(n, 1), techs_per_paying: (n) => fmt.num(n, 1), mrr: (n) => fmt.money(n) };
+  const data = rows.map((r) => ({ ...r, _fmt: rateFmt }));
+  const churnRight = chart === "churn";
+  return (
+    <div className="h-[280px] min-w-0">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, right: churnRight ? 4 : 18, bottom: 0, left: -12 }} barCategoryGap="22%">
+          <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+          <XAxis dataKey="week" ticks={ticks} tickFormatter={(d: string) => fmt.day(d)} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} interval={0} minTickGap={8} />
+          <YAxis
+            yAxisId="l"
+            allowDecimals={chart === "techs"}
+            tick={{ fontSize: 11, fill: "#64748b" }}
+            axisLine={false}
+            tickLine={false}
+            width={pct || chart === "revenue" ? 52 : 40}
+            tickFormatter={pct ? PCT : tickF}
+            domain={pct ? [0, 1] : [0, "auto"]}
+          />
+          {churnRight && <YAxis yAxisId="r" orientation="right" domain={[0, 1]} tickFormatter={PCT} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} width={44} />}
+          <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} content={<WeekTip rows={rows} />} />
+          {bars.map((b) => (
+            <Bar key={b.key} yAxisId="l" dataKey={b.key} name={b.name} fill={b.color} radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+          ))}
+          {lines.map((l) => (
+            <Line
+              key={l.key}
+              yAxisId={churnRight ? "r" : "l"}
+              dataKey={l.key}
+              name={l.name}
+              type="linear"
+              stroke={l.color}
+              strokeWidth={2}
+              strokeDasharray={l.dashed ? "5 4" : undefined}
+              strokeLinecap="round"
+              dot={rows.length <= 16 ? { r: 2.5, strokeWidth: 0, fill: l.color } : false}
+              activeDot={{ r: 3.5, strokeWidth: 0 }}
+              connectNulls
+              isAnimationActive={false}
+            />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+        {[...bars, ...lines].map((x) => (
+          <span key={x.key} className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: x.color }} />
+            {x.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GrowthView({ qs, rangeLabel }: { qs: string; rangeLabel: string }) {
+  const ov = useAnalytics<Overview>(`overview?${qs}`);
+  const wk = useAnalytics<{ weeks: WeeklyRow[]; generatedAt: string }>(`weekly?${qs}`);
+  const [chart, setChart] = useState<GrowthChart>("trials");
+
+  if (wk.error && !wk.data) return <ErrorCard error={wk.error} onRetry={() => wk.refetch()} />;
+  const h = ov.data?.headline;
+  const k = (m: string) => ov.data?.kpis.find((x) => x.metric === m);
+  const delta = (m: string, upIsGood = true) => {
+    const x = k(m);
+    return x ? <DeltaPill change={x.change} value={x.value} previous={x.previous} upIsGood={upIsGood} /> : null;
+  };
+  const weeks = wk.data?.weeks ?? [];
+  const loading = !h;
+  const ended = h ? h.conversions + h.trials_lost : 0;
+  const churnRate = h && h.paying_start > 0 ? h.churned / h.paying_start : null;
+  const caption = GROWTH_CHARTS.find((c) => c.value === chart)?.caption;
+
+  return (
+    <div className={`space-y-5 transition-opacity ${wk.isPlaceholderData ? "opacity-60" : ""}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px] text-slate-400">
+          {rangeLabel}
+          {h ? <span className="text-slate-600"> · compared with the {h.days} days before · weeks run Monday to Sunday</span> : null}
+        </p>
+        <LiveStamp at={wk.data?.generatedAt} fetching={wk.isFetching || ov.isFetching} onRefresh={() => { wk.refetch(); ov.refetch(); }} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Tile
+          label="Trial starts"
+          loading={loading}
+          value={fmt.int(h?.trial_starts)}
+          delta={delta("trial_starts")}
+          sub={h && `${fmt.int(h.trialing)} on trial now · ${fmt.int(h.trials_ending_soon)} end within 7 days`}
+          spark={weeks.length > 1 ? weeks.map((w) => w.trial_starts) : undefined}
+          hint="Companies whose first free trial began in the period."
+        />
+        <Tile
+          label="Trial-to-paid conversion"
+          loading={loading}
+          value={ended ? fmt.pct(h!.conversions / ended) : "—"}
+          delta={delta("conversions")}
+          sub={h && `${fmt.int(h.conversions)} converted · ${fmt.int(h.trials_lost)} lost`}
+          sparkColor="#10b981"
+          spark={weeks.length > 1 ? weeks.map((w) => w.conversions) : undefined}
+          hint="Of the trials that ended in the period, the share that turned into a paid plan. Lost: cancelled, closed or deleted before paying. The badge compares conversions with the period before."
+        />
+        <Tile
+          label="Churn"
+          loading={loading}
+          value={churnRate == null ? fmt.int(h?.churned) : fmt.pct(churnRate)}
+          delta={delta("churned", false)}
+          sub={h && `${fmt.int(h.churned)} of ${fmt.int(h.paying_start)} paying companies lost`}
+          sparkColor="#f43f5e"
+          spark={weeks.length > 1 ? weeks.map((w) => w.churned) : undefined}
+          hint="Paying companies that stopped paying in the period (cancelled, closed or deleted), out of those paying when it began."
+        />
+        <Tile
+          label="Technicians per company"
+          loading={loading}
+          value={fmt.num(h?.techs_per_account, 1)}
+          sub={h && `${fmt.int(h.techs)} technicians · ${fmt.num(h.techs_per_paying, 1)} per paying company`}
+          spark={weeks.length > 1 ? weeks.map((w) => w.techs_per_account ?? 0) : undefined}
+          hint="Approved technicians (sample-day ones left out) per open company, today."
+        />
+      </div>
+
+      <Card
+        title="Week by week"
+        caption={caption}
+        action={<Segmented ariaLabel="Chart" size="sm" value={chart} onChange={setChart} options={GROWTH_CHARTS.map(({ value, label }) => ({ value, label }))} />}
+      >
+        {wk.data ? weeks.length ? <GrowthChartView rows={weeks} chart={chart} /> : <p className="py-10 text-center text-[13px] text-slate-500">No weeks in this range.</p> : <Skeleton className="h-[280px]" />}
+      </Card>
+
+      <Card
+        pad={false}
+        className="overflow-hidden"
+        title="Weekly figures"
+        caption="Every collected figure, one row per week. Figures at week end are as of the following Monday; this week's are so far."
+        action={
+          <button
+            type="button"
+            disabled={!weeks.length}
+            onClick={() =>
+              downloadCsv(
+                `arriveping-weekly-${new Date().toISOString().slice(0, 10)}.csv`,
+                weeks.map((w) => ({
+                  week_starting: w.week, week_ending: w.week_end, so_far: w.in_progress ? "yes" : "no",
+                  companies: w.tenants, new_companies: w.new_tenants, companies_closed: w.accounts_closed,
+                  on_trial: w.trialing, trial_starts: w.trial_starts, converted_to_paid: w.conversions, trials_lost: w.trials_lost,
+                  conversion_rate: w.conversion_rate ?? "", new_trials_paying_since: w.cohort_converted, new_trial_conversion: w.cohort_rate ?? "",
+                  paying_at_start: w.paying_start, paying_at_end: w.paying, paying_lost: w.churned, churn_rate: w.churn_rate ?? "",
+                  monthly_plan_value_usd: w.mrr, technicians: w.techs, companies_with_technicians: w.accounts_with_techs,
+                  technicians_per_company: w.techs_per_account ?? "", technicians_per_paying_company: w.techs_per_paying ?? "", median_technicians: w.median_techs ?? "",
+                })),
+              )
+            }
+            className="inline-flex h-[30px] items-center gap-1.5 rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-3 text-[12px] font-medium text-slate-200 transition hover:border-white/[0.14] disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" /> CSV
+          </button>
+        }
+      >
+        <div className="max-h-[60vh] overflow-auto">
+          <table className="w-full min-w-[1080px] text-[13px]">
+            <caption className="sr-only">Weekly growth figures, {rangeLabel}</caption>
+            <thead className="text-[12px] text-slate-500">
+              <tr className="border-b border-white/[0.06]">
+                {["Week of", "Companies", "New", "Trials started", "Converted", "Lost", "Conversion", "Paying", "Lost paying", "Churn", "Technicians", "Per company", "Per paying", "Plan value"].map((c, i) => (
+                  <th key={c} scope="col" className={`sticky top-0 z-10 bg-[#0d1422] px-3 py-2.5 font-medium ${i ? "text-right" : "text-left"}`}>
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {!wk.data &&
+                [0, 1, 2, 3].map((i) => (
+                  <tr key={i}>
+                    <td colSpan={14} className="px-3 py-3">
+                      <Skeleton className="h-5" />
+                    </td>
+                  </tr>
+                ))}
+              {[...weeks].reverse().map((w) => (
+                <tr key={w.week} data-key={w.week}>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-slate-200">
+                    {fmt.day(w.week)} – {fmt.day(w.week_end)}
+                    {w.in_progress && <span className="ml-2 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold text-slate-300">So far</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-slate-100">{fmt.int(w.tenants)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(w.new_tenants)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(w.trial_starts)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-emerald-300">{fmt.int(w.conversions)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(w.trials_lost)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.pct(w.conversion_rate)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(w.paying)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(w.churned)}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums ${w.churned ? "text-rose-300" : "text-slate-300"}`}>{fmt.pct(w.churn_rate)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.int(w.techs)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.num(w.techs_per_account, 1)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.num(w.techs_per_paying, 1)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-slate-300">{fmt.money(w.mrr)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <p className="text-[12px] text-slate-500">
+        Conversion: of the trials that ended in the week, the share that turned into a paid plan. Churn: paying companies that stopped paying (cancelled,
+        closed or deleted), out of those paying when the week began. Technicians: approved, sample-day ones left out. Every change is recorded as it happens from the October 2026 release on;
+        weeks before it are rebuilt from signup dates and each company's billing at the time of the release.
+      </p>
+    </div>
+  );
+}
+
+/** "Trial since Oct 8", "Paying since Nov 7", "Stopped paying Dec 2" — empty when it never billed. */
+function lifecycleLine(t: Pick<TenantRow, "trial_started" | "paid_since" | "churned_on" | "billing_status">): string {
+  if (t.churned_on) return `Stopped paying ${fmt.day(t.churned_on)}`;
+  if (t.paid_since && (t.billing_status === "active" || t.billing_status === "past_due")) return `Paying since ${fmt.day(t.paid_since)}`;
+  if (t.trial_started && t.billing_status === "trialing") return `Trial since ${fmt.day(t.trial_started)}`;
+  if (t.trial_started) return `Trial began ${fmt.day(t.trial_started)}`;
+  return "";
 }
 
 /* ------------------------------------------------------- company sheet -- */

@@ -64,7 +64,7 @@ beforeAll(async () => {
   for (const t of [
     schema.companies, schema.bookings, schema.memberships, schema.riders, schema.notificationDeliveries,
     schema.reviews, schema.invoices, schema.messages, schema.jobEvents, schema.trackingPings,
-    auth.user, auth.session,
+    auth.user, auth.session, schema.companyHistory, schema.technicianHistory,
   ]) await client.execute(ddlFor(t));
 
   // Companies: two real ones, one closed, one internal demo.
@@ -118,6 +118,33 @@ beforeAll(async () => {
 
   await insert("reviews", { id: id("rv"), company_id: "acme-fx", rating: 5, created_at: at("2026-09-08") });
   await insert("reviews", { id: id("rv"), company_id: "acme-fx", rating: 4, created_at: at("2026-09-09") });
+
+  // Company history, as the trigger on companies writes it (drizzle/0023_tenant_history.sql):
+  //   Acme:   trial Aug 15, paying Sep 14
+  //   Bolt:   trial Sep 10, still on it
+  //   Closed: trial Jun 1, paying Jul 1, cancelled and closed Sep 20 (churn)
+  //   Gone:   trial Sep 3, deleted Sep 25 while still on trial (a trial lost); no companies row left
+  //   Demo:   a test company, never billed
+  const hist = (company_id: string, when: string, row: Record<string, unknown>) =>
+    insert("company_history", { id: id("ch"), company_id, at: when, name: company_id, status: "active", billing_status: "none", billing_seats: 0, industry: IND, is_internal: false, removed: false, source: "live", ...row });
+  await hist("acme-fx", at("2026-08-15", "09:00"), { billing_status: "trialing", billing_seats: 3 });
+  await hist("acme-fx", at("2026-09-14"), { billing_status: "active", billing_seats: 3 });
+  await hist("bolt-fx", at("2026-09-10", "09:00"), { billing_status: "trialing", billing_seats: 1 });
+  await hist("closed-fx", at("2026-06-01"), { billing_status: "trialing", billing_seats: 1 });
+  await hist("closed-fx", at("2026-07-01"), { billing_status: "active", billing_seats: 1 });
+  await hist("closed-fx", at("2026-09-20"), { status: "closed", billing_status: "canceled" });
+  await hist("gone-fx", at("2026-09-03"), { billing_status: "trialing", billing_seats: 1 });
+  await hist("gone-fx", at("2026-09-25"), { billing_status: "trialing", billing_seats: 1, removed: true });
+  await hist("demo-fx", at("2026-07-01"), { is_internal: true });
+  // Technicians: Acme's two from Aug 15; one on Bolt from Sep 11 who leaves Sep 16; a test company's.
+  const tech = (rider_id: string, company_id: string, when: string, active: boolean) =>
+    insert("technician_history", { id: id("th"), rider_id, company_id, at: when, active, source: "live" });
+  await tech("r1-fx", "acme-fx", at("2026-08-15"), true);
+  await tech("r2-fx", "acme-fx", at("2026-08-15"), true);
+  await tech("r3-fx", "acme-fx", at("2026-08-15"), false);
+  await tech("rb-fx", "bolt-fx", at("2026-09-11"), true);
+  await tech("rb-fx", "bolt-fx", at("2026-09-16"), false);
+  await tech("rd-fx", "demo-fx", at("2026-07-01"), true);
 
   await insert("invoices", { id: id("inv"), company_id: "acme-fx", number: "1", amount: 100, total: 100, amount_refunded: 10, currency: "usd", status: "paid", paid_at: at("2026-09-07"), created_at: at("2026-09-07") });
   await insert("invoices", { id: id("inv"), company_id: "acme-fx", number: "2", amount: 50, total: 50, currency: "cad", status: "paid", paid_at: at("2026-09-08"), created_at: at("2026-09-08") });
@@ -189,6 +216,119 @@ describe("headline", () => {
     const k = A.kpisFrom(await A.headline(SEPT));
     expect(k.find((x) => x.metric === "jobs_created")).toEqual({ metric: "jobs_created", label: "Jobs created", value: 5, previous: 1, change: 4, ratio: 5 });
     expect(k.find((x) => x.metric === "customers_new")!.change).toBeNull(); // nothing before: no percentage
+  });
+});
+
+describe("trials, conversion, churn and technicians", () => {
+  it("counts trial starts, conversions, lost trials and churn in the period and the one before", async () => {
+    const h = await A.headline(SEPT);
+    expect([h.trial_starts, h.trial_starts_prev]).toEqual([2, 1]); // Bolt and Gone; Acme in August
+    expect([h.conversions, h.conversions_prev]).toEqual([1, 0]); // Acme
+    expect(h.trials_lost).toBe(1); // Gone, deleted on trial
+    expect([h.churned, h.paying_start]).toEqual([1, 1]); // Closed was paying on Sep 1
+    expect(h.techs_per_account).toBeCloseTo(1, 5); // 2 technicians, 2 open companies
+    expect(h.techs_per_paying).toBeCloseTo(2, 5);
+    const k = A.kpisFrom(h);
+    expect(k.find((x) => x.metric === "trial_starts")).toMatchObject({ value: 2, previous: 1, change: 1 });
+    expect(k.find((x) => x.metric === "churned")).toMatchObject({ value: 1, previous: 0, change: null });
+  });
+
+  it("keeps test companies out of the lifecycle unless asked", async () => {
+    const w = await A.weekly({ ...SEPT, include_test: true });
+    const sep14 = w.find((x) => x.week === "2026-09-14")!;
+    expect(sep14.tenants).toBe(4); // + Demo
+    expect(sep14.techs).toBe(3);
+  });
+
+  it("gives every week the range touches, Monday to Sunday", async () => {
+    const w = await A.weekly(SEPT);
+    expect(w.map((x) => x.week)).toEqual(["2026-08-31", "2026-09-07", "2026-09-14", "2026-09-21", "2026-09-28"]);
+    expect(w[0]!.week_end).toBe("2026-09-06");
+    expect(w.every((x) => !x.in_progress)).toBe(true);
+  });
+
+  it("counts each week's trials, conversions and churn against the state the week began and ended in", async () => {
+    const w = Object.fromEntries((await A.weekly({ start_day: "2026-08-10", end_day: "2026-09-27", industry: IND })).map((x) => [x.week, x]));
+    expect(w["2026-08-10"]).toMatchObject({ trial_starts: 1, cohort_converted: 1, cohort_rate: 1 }); // Acme, paying since
+    expect(w["2026-08-31"]).toMatchObject({ trial_starts: 1, cohort_converted: 0, tenants: 3 }); // Gone joins Acme and Closed
+    expect(w["2026-09-07"]).toMatchObject({ trial_starts: 1, new_tenants: 1, trialing: 3, tenants: 4 }); // Bolt signs up
+    expect(w["2026-09-14"]).toMatchObject({
+      conversions: 1, trials_lost: 0, conversion_rate: 1,
+      paying_start: 1, churned: 1, churn_rate: 1, paying: 1, accounts_closed: 1, tenants: 3,
+      mrr: monthlyPrice(3).total,
+    });
+    expect(w["2026-09-21"]).toMatchObject({ trials_lost: 1, conversion_rate: 0, accounts_closed: 1, tenants: 2, churned: 0, churn_rate: 0 });
+  });
+
+  it("reads technicians per company as they were at each week's end", async () => {
+    const w = Object.fromEntries((await A.weekly(SEPT)).map((x) => [x.week, x]));
+    expect(w["2026-09-07"]).toMatchObject({ techs: 3, accounts_with_techs: 2, median_techs: 0.5 }); // Acme 2, Bolt 1, Gone and Closed 0
+    expect(w["2026-09-07"]!.techs_per_account).toBeCloseTo(3 / 4, 5);
+    expect(w["2026-09-14"]).toMatchObject({ techs: 2, accounts_with_techs: 1, techs_per_paying: 2 }); // Bolt's technician left on Sep 16
+  });
+
+  it("lists when each company started its trial, first paid and stopped paying", async () => {
+    const t = Object.fromEntries((await A.tenants(SEPT)).map((x) => [x.id, x]));
+    expect(t["acme-fx"]).toMatchObject({ trial_started: "2026-08-15", paid_since: "2026-09-14", churned_on: null });
+    expect(t["bolt-fx"]).toMatchObject({ trial_started: "2026-09-10", paid_since: null, churned_on: null });
+    expect(t["closed-fx"]).toMatchObject({ trial_started: "2026-06-01", paid_since: "2026-07-01", churned_on: "2026-09-20" });
+  });
+
+  it("filters by billing status and company like every other figure", async () => {
+    const paying = await A.weekly({ ...SEPT, billing: "active" });
+    expect(paying.find((x) => x.week === "2026-09-07")!.tenants).toBe(1); // Acme only
+    const acme = await A.headline({ ...SEPT, tenant: "acme-fx" });
+    expect([acme.trial_starts, acme.conversions, acme.churned]).toEqual([0, 1, 0]);
+  });
+});
+
+describe("history triggers", () => {
+  it("record every state change, deletions and technicians leaving, and nothing else", async () => {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const pg = new PGlite();
+    await pg.exec(`
+      CREATE TABLE companies (id text PRIMARY KEY, name text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'active',
+        billing_status text NOT NULL DEFAULT 'none', billing_seats integer NOT NULL DEFAULT 0, billing_trial_ends_at timestamptz,
+        industry text NOT NULL DEFAULT '', is_internal boolean NOT NULL DEFAULT false, updated_at timestamptz);
+      CREATE TABLE riders (id text PRIMARY KEY, company_id text NOT NULL, approval text NOT NULL DEFAULT 'invited', is_sample boolean NOT NULL DEFAULT false);
+    `);
+    const migration = readFileSync(join(import.meta.dir, "../../../drizzle/0023_tenant_history.sql"), "utf8");
+    for (const stmt of migration.split("--> statement-breakpoint")) {
+      const body = stmt.replace(/^\s*--[^\n]*\n/gm, "").trim();
+      if (/^(CREATE TABLE|CREATE INDEX|CREATE OR REPLACE FUNCTION|CREATE TRIGGER)/.test(body)) await pg.exec(body);
+    }
+    await pg.exec(`
+      INSERT INTO companies (id, name, billing_status) VALUES ('c1', 'One', 'trialing');
+      UPDATE companies SET name = 'One Ltd', updated_at = now() WHERE id = 'c1';
+      UPDATE companies SET billing_status = 'active' WHERE id = 'c1';
+      UPDATE companies SET billing_seats = 4 WHERE id = 'c1';
+      DELETE FROM companies WHERE id = 'c1';
+      INSERT INTO riders (id, company_id, approval) VALUES ('r1', 'c1', 'invited');
+      UPDATE riders SET approval = 'active' WHERE id = 'r1';
+      UPDATE riders SET company_id = 'c2' WHERE id = 'r1';
+      UPDATE riders SET is_sample = false WHERE id = 'r1';
+      DELETE FROM riders WHERE id = 'r1';
+    `);
+    const c = await pg.query<{ billing_status: string; billing_seats: number; removed: boolean; name: string }>(
+      "SELECT name, billing_status, billing_seats, removed FROM company_history ORDER BY seq",
+    );
+    expect(c.rows).toEqual([
+      { name: "One", billing_status: "trialing", billing_seats: 0, removed: false },
+      { name: "One Ltd", billing_status: "active", billing_seats: 0, removed: false }, // the rename alone wrote nothing
+      { name: "One Ltd", billing_status: "active", billing_seats: 4, removed: false },
+      { name: "One Ltd", billing_status: "active", billing_seats: 4, removed: true },
+    ]);
+    const t = await pg.query<{ company_id: string; active: boolean }>("SELECT company_id, active FROM technician_history ORDER BY seq");
+    expect(t.rows).toEqual([
+      { company_id: "c1", active: false },
+      { company_id: "c1", active: true },
+      { company_id: "c1", active: false },
+      { company_id: "c2", active: true },
+      { company_id: "c2", active: false },
+    ]);
+    await pg.close();
   });
 });
 

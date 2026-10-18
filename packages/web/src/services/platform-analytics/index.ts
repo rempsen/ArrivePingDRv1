@@ -26,6 +26,7 @@ import {
   RECORDS,
   SERIES,
   TENANTS,
+  WEEKLY,
   exploreQuery,
   forApp,
   metricDimensions,
@@ -81,6 +82,52 @@ export interface Headline {
   top_tenant_name: string | null;
   top_tenant_jobs: number | null;
   top_tenant_share: number | null;
+  /** Companies whose first trial began in the period (and the period before). */
+  trial_starts: number;
+  trial_starts_prev: number;
+  /** Trials that turned into a paid plan in the period. */
+  conversions: number;
+  conversions_prev: number;
+  /** Trials that ended in the period without paying. */
+  trials_lost: number;
+  trials_lost_prev: number;
+  /** Paying companies that stopped paying in the period (cancelled, closed or deleted). */
+  churned: number;
+  churned_prev: number;
+  /** Companies paying when the period began (the churn rate's base). */
+  paying_start: number;
+  paying_start_prev: number;
+  /** Approved technicians per open company, and per paying company, today. */
+  techs_per_account: number | null;
+  techs_per_paying: number | null;
+}
+
+/** One week (Monday to Sunday, America/Winnipeg) of the SaaS figures; see WEEKLY in ./sql.ts. */
+export interface WeeklyRow {
+  week: string;
+  week_end: string;
+  /** This week: figures so far. */
+  in_progress: boolean;
+  tenants: number;
+  new_tenants: number;
+  accounts_closed: number;
+  trialing: number;
+  trial_starts: number;
+  conversions: number;
+  trials_lost: number;
+  conversion_rate: number | null;
+  cohort_converted: number;
+  cohort_rate: number | null;
+  paying_start: number;
+  paying: number;
+  churned: number;
+  churn_rate: number | null;
+  mrr: number;
+  techs: number;
+  accounts_with_techs: number;
+  techs_per_account: number | null;
+  techs_per_paying: number | null;
+  median_techs: number | null;
 }
 
 export interface Kpi {
@@ -115,6 +162,10 @@ export interface TenantRow {
   internal: boolean;
   created: string;
   trial_ends: string | null;
+  /** First day on a trial, first day paying, and (when not paying now) the last day it stopped. */
+  trial_started: string | null;
+  paid_since: string | null;
+  churned_on: string | null;
   onboarded: boolean;
   plan_seats: number;
   plan_value: number;
@@ -226,6 +277,12 @@ export async function funnel(p: AnalyticsParams): Promise<Funnel> {
 export async function tenants(p: AnalyticsParams): Promise<TenantRow[]> {
   // industry_label comes from the SQL (industryLabelSql), the same name the dashboard shows.
   return cached(keyOf("tenants", p), () => run<TenantRow>(TENANTS, p));
+}
+
+/** The SaaS figures week by week across the range (every week it touches). */
+export async function weekly(p: AnalyticsParams): Promise<WeeklyRow[]> {
+  const q = { ...p, grain: null }; // always weekly
+  return cached(keyOf("weekly", q), () => run<WeeklyRow>(WEEKLY, q));
 }
 
 /** Everything the Overview shows, in one round trip. */

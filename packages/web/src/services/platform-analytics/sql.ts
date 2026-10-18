@@ -210,6 +210,67 @@ const TECHS = `rd AS (
 /** A text or email to a customer that went out. */
 const CUSTOMER_UPDATE = `n.recipient = 'client' AND n.channel IN ('sms', 'email') AND n.status = 'sent'`;
 
+/**
+ * Company lifecycle, from company_history (one row per state a company has
+ * been in, written by a trigger; see the schema). Deleted companies stay in
+ * it, so churn by deletion still counts. The filters apply to each company's
+ * latest state, as they do to `co`.
+ *
+ *   ch / hs   every state, with whether it is open (not closed or deleted) and
+ *             paying (open and billing active or past due), and the same for
+ *             the state before it
+ *   sc        the companies in scope
+ *   lc        per company: signed up, first trial, first time paid
+ *   lost      trials that ended (cancelled, closed, deleted) before paying
+ *   churn_ev  every move from paying to not paying
+ */
+const HIST = `ch AS (
+  SELECT h.*,
+    ROW_NUMBER() OVER (PARTITION BY h.company_id ORDER BY h.at DESC, h.seq DESC) AS rn_desc,
+    (NOT h.removed AND h.status <> 'closed') AS open_now,
+    (NOT h.removed AND h.status <> 'closed' AND h.billing_status IN ('active', 'past_due')) AS paying_now
+  FROM company_history h
+),
+sc AS (
+  SELECT ch.company_id FROM ch, rng
+  WHERE ch.rn_desc = 1
+    AND (rng.inc OR NOT ch.is_internal OR ch.company_id = rng.tid)
+    AND (rng.tid IS NULL OR ch.company_id = rng.tid)
+    AND (rng.ind IS NULL OR ch.industry = rng.ind)
+    AND (rng.bil IS NULL OR ch.billing_status = rng.bil)
+),
+hs AS (
+  SELECT ch.*,
+    LAG(ch.open_now) OVER (PARTITION BY ch.company_id ORDER BY ch.at, ch.seq) AS open_before,
+    LAG(ch.paying_now) OVER (PARTITION BY ch.company_id ORDER BY ch.at, ch.seq) AS paying_before
+  FROM ch JOIN sc ON sc.company_id = ch.company_id
+),
+lc AS (
+  SELECT hs.company_id,
+    MIN(hs.at) AS signed_up_at,
+    MIN(hs.at) FILTER (WHERE hs.open_now AND hs.billing_status = 'trialing') AS trial_at,
+    MIN(hs.at) FILTER (WHERE hs.open_now AND hs.billing_status = 'active') AS paid_at
+  FROM hs GROUP BY hs.company_id
+),
+lost AS (
+  SELECT lc.company_id, MIN(hs.at) AS lost_at
+  FROM lc JOIN hs ON hs.company_id = lc.company_id
+  WHERE lc.trial_at IS NOT NULL AND hs.at > lc.trial_at AND (lc.paid_at IS NULL OR hs.at < lc.paid_at)
+    AND (NOT hs.open_now OR hs.billing_status IN ('canceled', 'unpaid', 'none'))
+  GROUP BY lc.company_id
+),
+churn_ev AS (
+  SELECT hs.company_id, hs.at FROM hs WHERE hs.paying_before AND NOT hs.paying_now
+)`;
+
+/** Companies in scope that were paying just before `t` (a timestamptz expression). */
+const payingAt = (t: string) =>
+  `(SELECT COUNT(*)::int FROM (SELECT DISTINCT ON (hs.company_id) hs.paying_now FROM hs WHERE hs.at < ${t} ORDER BY hs.company_id, hs.at DESC, hs.seq DESC) z WHERE z.paying_now)`;
+
+/** `col` falls in [from, to), plus an optional extra condition. */
+const inRange = (from: string, to: string, col: string, extra = "") =>
+  `${col} >= ${from} AND ${col} < ${to}${extra ? ` AND ${extra}` : ""}`;
+
 /* ----------------------------------------------------------- headline -- */
 
 // No SQL comments inside query text: some callers collapse whitespace, which
@@ -246,7 +307,14 @@ nd AS (
 rv AS (
   SELECT r.rating FROM reviews r JOIN co ON co.id = r.company_id, rng
   WHERE r.created_at >= rng.t0 AND r.created_at < rng.t1
-)`;
+),
+${HIST}`;
+
+const lifecycle = (from: string, to: string, suffix: string) => `(SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.trial_at")}) AS trial_starts${suffix},
+  (SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.paid_at", "lc.trial_at < lc.paid_at")}) AS conversions${suffix},
+  (SELECT COUNT(*)::int FROM lost WHERE ${inRange(from, to, "lost.lost_at")}) AS trials_lost${suffix},
+  (SELECT COUNT(DISTINCT churn_ev.company_id)::int FROM churn_ev WHERE ${inRange(from, to, "churn_ev.at")}) AS churned${suffix},
+  ${payingAt(from)} AS paying_start${suffix}`;
 
 const HEADLINE_COLUMNS = `rng.d0::text AS start_day,
   rng.d1::text AS end_day,
@@ -292,7 +360,13 @@ const HEADLINE_COLUMNS = `rng.d0::text AS start_day,
   (SELECT top.id FROM top) AS top_tenant_id,
   (SELECT top.name FROM top) AS top_tenant_name,
   (SELECT top.n FROM top) AS top_tenant_jobs,
-  (SELECT top.n::float8 / NULLIF((SELECT COUNT(*) FROM bk WHERE bk.created_at >= rng.t0 AND bk.created_at < rng.t1), 0) FROM top) AS top_tenant_share`;
+  (SELECT top.n::float8 / NULLIF((SELECT COUNT(*) FROM bk WHERE bk.created_at >= rng.t0 AND bk.created_at < rng.t1), 0) FROM top) AS top_tenant_share,
+  ${lifecycle("rng.t0", "rng.t1", "")},
+  ${lifecycle("rng.p0", "rng.t0", "_prev")},
+  (SELECT COALESCE(SUM(rd.techs), 0)::float8 FROM rd JOIN co ON co.id = rd.company_id WHERE co.status <> 'closed')
+    / NULLIF((SELECT COUNT(*) FROM co WHERE co.status <> 'closed'), 0) AS techs_per_account,
+  (SELECT COALESCE(SUM(rd.techs), 0)::float8 FROM rd JOIN pl ON pl.id = rd.company_id WHERE pl.billing_status IN ('active', 'past_due'))
+    / NULLIF((SELECT COUNT(*) FROM pl WHERE pl.billing_status IN ('active', 'past_due')), 0) AS techs_per_paying`;
 
 /** One row: every headline figure for the period, its previous period, and totals. */
 export const HEADLINE = `WITH ${HEADLINE_CTES}
@@ -309,6 +383,9 @@ export const KPI_METRICS = [
   ["customer_updates", "Customer updates sent"],
   ["tenants_new", "New companies"],
   ["customers_new", "New customers"],
+  ["trial_starts", "Trial starts"],
+  ["conversions", "Trials converted to paid"],
+  ["churned", "Paying companies lost"],
 ] as const;
 
 export const KPIS = `WITH ${HEADLINE_CTES},
@@ -403,8 +480,23 @@ up AS (
   WHERE n.created_at >= rng.t0 AND n.created_at < rng.t1 AND ${CUSTOMER_UPDATE}
   GROUP BY n.company_id
 ),
+lcy AS (
+  SELECT z.company_id,
+    MIN(z.at) FILTER (WHERE z.billing_status = 'trialing') AS trial_at,
+    MIN(z.at) FILTER (WHERE z.billing_status = 'active') AS paid_at,
+    MAX(z.at) FILTER (WHERE z.pb AND NOT z.p) AS churned_at
+  FROM (
+    SELECT h.company_id, h.at, h.billing_status,
+      (h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) AS p,
+      LAG(h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due'))
+        OVER (PARTITION BY h.company_id ORDER BY h.at, h.seq) AS pb
+    FROM company_history h JOIN co ON co.id = h.company_id
+  ) z
+  GROUP BY z.company_id
+),
 t AS (
   SELECT co.*, COALESCE(rd.techs, 0) AS techs_n,
+    lcy.trial_at, lcy.paid_at, lcy.churned_at,
     GREATEST(co.billing_seats, COALESCE(rd.techs, 0), 1) AS q,
     GREATEST(jb.last_job, tm.last_seen) AS last_active_at,
     jb.jobs, jb.completed, jb.jobs_all, tm.team, tm.customers, tm.active_users, up.updates
@@ -413,11 +505,15 @@ t AS (
   LEFT JOIN jb ON jb.company_id = co.id
   LEFT JOIN tm ON tm.company_id = co.id
   LEFT JOIN up ON up.company_id = co.id
+  LEFT JOIN lcy ON lcy.company_id = co.id
 )
 SELECT t.id, t.name, t.industry, ${industryLabelSql("t.industry")} AS industry_label,
   t.status, t.billing_status, t.is_internal AS internal,
   to_char(${local("t.created_at")}, 'YYYY-MM-DD') AS created,
   to_char(${local("t.billing_trial_ends_at")}, 'YYYY-MM-DD') AS trial_ends,
+  to_char(${local("t.trial_at")}, 'YYYY-MM-DD') AS trial_started,
+  to_char(${local("t.paid_at")}, 'YYYY-MM-DD') AS paid_since,
+  CASE WHEN t.status = 'closed' OR t.billing_status NOT IN ('active', 'past_due') THEN to_char(${local("t.churned_at")}, 'YYYY-MM-DD') END AS churned_on,
   (t.onboarding_completed_at IS NOT NULL) AS onboarded,
   t.q::int AS plan_seats,
   CASE WHEN t.billing_status IN ('active', 'past_due', 'trialing') THEN ${planPriceSql("t.q")} ELSE 0 END::float8 AS plan_value,
@@ -543,6 +639,115 @@ FROM fs, LATERAL (VALUES
   (6, 'paying', 'Paying', fs.paying)
 ) AS k(pos, step, label, companies)
 ORDER BY k.pos`;
+
+/* ------------------------------------------------------------- weekly -- */
+
+/**
+ * The SaaS figures week by week (Monday to Sunday, America/Winnipeg), for
+ * every week the range touches, whatever the chart grain. Figures "at week
+ * end" are the state just before the next Monday (now, for this week).
+ *
+ *   tenants            open companies at week end; new_tenants signed up in the
+ *                      week; accounts_closed closed or deleted in it
+ *   trial_starts       companies whose first trial began in the week
+ *   conversions        trials that turned into a paid plan in the week
+ *   trials_lost        trials that ended in the week without paying
+ *   conversion_rate    conversions / (conversions + trials_lost)
+ *   cohort_rate        of the week's trial starts, the share paying since
+ *   churned            paying companies that stopped paying (cancelled,
+ *                      closed or deleted) in the week; churn_rate divides it by
+ *                      the companies paying when the week began
+ *   techs              technicians on open companies at week end, with the
+ *                      average per company, per paying company, and the median
+ *   mrr                monthly plan value of the paying companies at week end
+ */
+export const WEEKLY = `WITH ${PRELUDE},
+${HIST},
+wk AS (
+  SELECT w::date AS week,
+    (w AT TIME ZONE '${TZ}') AS ws,
+    ((w + interval '7 days') AT TIME ZONE '${TZ}') AS we
+  FROM rng, generate_series(date_trunc('week', rng.d0::timestamp), date_trunc('week', rng.d1::timestamp), interval '1 week') AS w
+),
+edge AS (
+  SELECT wk.week, e.k, e.t FROM wk, LATERAL (VALUES ('start', wk.ws), ('end', wk.we)) AS e(k, t)
+),
+st AS (
+  SELECT DISTINCT ON (edge.week, edge.k, hs.company_id)
+    edge.week, edge.k, hs.company_id, hs.open_now, hs.paying_now, hs.billing_status, hs.billing_seats
+  FROM edge JOIN hs ON hs.at < edge.t
+  ORDER BY edge.week, edge.k, hs.company_id, hs.at DESC, hs.seq DESC
+),
+ts AS (
+  SELECT DISTINCT ON (wk.week, th.rider_id, th.company_id) wk.week, th.company_id, th.active
+  FROM wk JOIN technician_history th ON th.at < wk.we JOIN sc ON sc.company_id = th.company_id
+  ORDER BY wk.week, th.rider_id, th.company_id, th.at DESC, th.seq DESC
+),
+tc AS (
+  SELECT ts.week, ts.company_id, COUNT(*) FILTER (WHERE ts.active)::int AS techs
+  FROM ts GROUP BY ts.week, ts.company_id
+),
+pe AS (
+  SELECT st.week, st.open_now, st.paying_now, st.billing_status,
+    COALESCE(tc.techs, 0) AS techs, GREATEST(st.billing_seats, COALESCE(tc.techs, 0), 1) AS q
+  FROM st LEFT JOIN tc ON tc.week = st.week AND tc.company_id = st.company_id
+  WHERE st.k = 'end'
+),
+ea AS (
+  SELECT pe.week,
+    COUNT(*) FILTER (WHERE pe.open_now)::int AS tenants,
+    COUNT(*) FILTER (WHERE pe.open_now AND pe.billing_status = 'trialing')::int AS trialing,
+    COUNT(*) FILTER (WHERE pe.paying_now)::int AS paying,
+    COALESCE(SUM(${planPriceSql("pe.q")}) FILTER (WHERE pe.paying_now), 0)::float8 AS mrr,
+    COALESCE(SUM(pe.techs) FILTER (WHERE pe.open_now), 0)::int AS techs,
+    COUNT(*) FILTER (WHERE pe.open_now AND pe.techs > 0)::int AS accounts_with_techs,
+    COALESCE(SUM(pe.techs) FILTER (WHERE pe.paying_now), 0)::int AS paying_techs,
+    (percentile_cont(0.5) WITHIN GROUP (ORDER BY pe.techs) FILTER (WHERE pe.open_now))::float8 AS median_techs
+  FROM pe GROUP BY pe.week
+),
+sa AS (
+  SELECT st.week, COUNT(*) FILTER (WHERE st.paying_now)::int AS paying_start
+  FROM st WHERE st.k = 'start' GROUP BY st.week
+),
+ev AS (
+  SELECT wk.week,
+    (SELECT COUNT(*) FROM lc WHERE ${inRange("wk.ws", "wk.we", "lc.signed_up_at")})::int AS new_tenants,
+    (SELECT COUNT(DISTINCT hs.company_id) FROM hs WHERE ${inRange("wk.ws", "wk.we", "hs.at", "hs.open_before AND NOT hs.open_now")})::int AS accounts_closed,
+    (SELECT COUNT(*) FROM lc WHERE ${inRange("wk.ws", "wk.we", "lc.trial_at")})::int AS trial_starts,
+    (SELECT COUNT(*) FROM lc WHERE ${inRange("wk.ws", "wk.we", "lc.paid_at", "lc.trial_at < lc.paid_at")})::int AS conversions,
+    (SELECT COUNT(*) FROM lost WHERE ${inRange("wk.ws", "wk.we", "lost.lost_at")})::int AS trials_lost,
+    (SELECT COUNT(*) FROM lc WHERE ${inRange("wk.ws", "wk.we", "lc.trial_at", "lc.paid_at > lc.trial_at")})::int AS cohort_converted,
+    (SELECT COUNT(DISTINCT churn_ev.company_id) FROM churn_ev WHERE ${inRange("wk.ws", "wk.we", "churn_ev.at")})::int AS churned
+  FROM wk
+)
+SELECT to_char(wk.week, 'YYYY-MM-DD') AS week,
+  to_char(wk.week + 6, 'YYYY-MM-DD') AS week_end,
+  (now() < wk.we) AS in_progress,
+  COALESCE(ea.tenants, 0) AS tenants,
+  ev.new_tenants,
+  ev.accounts_closed,
+  COALESCE(ea.trialing, 0) AS trialing,
+  ev.trial_starts,
+  ev.conversions,
+  ev.trials_lost,
+  (ev.conversions::float8 / NULLIF(ev.conversions + ev.trials_lost, 0))::float8 AS conversion_rate,
+  ev.cohort_converted,
+  (ev.cohort_converted::float8 / NULLIF(ev.trial_starts, 0))::float8 AS cohort_rate,
+  COALESCE(sa.paying_start, 0) AS paying_start,
+  COALESCE(ea.paying, 0) AS paying,
+  ev.churned,
+  (ev.churned::float8 / NULLIF(sa.paying_start, 0))::float8 AS churn_rate,
+  COALESCE(ea.mrr, 0)::float8 AS mrr,
+  COALESCE(ea.techs, 0) AS techs,
+  COALESCE(ea.accounts_with_techs, 0) AS accounts_with_techs,
+  (ea.techs::float8 / NULLIF(ea.tenants, 0))::float8 AS techs_per_account,
+  (ea.paying_techs::float8 / NULLIF(ea.paying, 0))::float8 AS techs_per_paying,
+  ea.median_techs
+FROM wk
+JOIN ev ON ev.week = wk.week
+LEFT JOIN ea ON ea.week = wk.week
+LEFT JOIN sa ON sa.week = wk.week
+ORDER BY wk.week`;
 
 /** The industries companies have chosen, for the dashboard's industry filter. */
 export const INDUSTRIES = `SELECT COALESCE(c.industry, '') AS industry, ${industryLabelSql("c.industry")} AS label, COUNT(*)::int AS companies
@@ -674,6 +879,33 @@ export const METRICS: MetricDef[] = [
     only: ["time", "industry", "billing"],
   },
   {
+    id: "trial_starts", label: "Trial starts", group: "Companies",
+    description: "Companies that began a free trial, by when it began.",
+    from: `(SELECT h.company_id, MIN(h.at) AS at FROM company_history h WHERE h.billing_status = 'trialing' AND NOT h.removed GROUP BY h.company_id) x JOIN co ON co.id = x.company_id`,
+    at: "x.at", value: "COUNT(*)", format: "count",
+    only: ["time", "industry", "billing"],
+  },
+  {
+    id: "trial_conversions", label: "Trials converted to paid", group: "Companies",
+    description: "Companies that went from a trial to a paid plan, by when they first paid.",
+    from: `(SELECT h.company_id, MIN(h.at) FILTER (WHERE h.billing_status = 'active') AS at, MIN(h.at) FILTER (WHERE h.billing_status = 'trialing') AS trial_at FROM company_history h WHERE NOT h.removed GROUP BY h.company_id) x JOIN co ON co.id = x.company_id`,
+    at: "x.at", where: "x.trial_at < x.at", value: "COUNT(*)", format: "count",
+    only: ["time", "industry", "billing"],
+  },
+  {
+    id: "paying_churn", label: "Paying companies lost", group: "Companies",
+    description: "Times a paying company stopped paying (cancelled or closed), by when it happened.",
+    from: `(SELECT z.company_id, z.at FROM (SELECT h.company_id, h.at, (h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) AS p, LAG(h.status <> 'closed' AND NOT h.removed AND h.billing_status IN ('active', 'past_due')) OVER (PARTITION BY h.company_id ORDER BY h.at, h.seq) AS pb FROM company_history h) z WHERE z.pb AND NOT z.p) x JOIN co ON co.id = x.company_id`,
+    at: "x.at", value: "COUNT(*)", format: "count",
+    only: ["time", "tenant", "industry", "billing"],
+  },
+  {
+    id: "techs_added", label: "Technicians added", group: "Team",
+    description: "Technicians who joined a company's field team (approved, not sample-day).",
+    from: "technician_history x JOIN co ON co.id = x.company_id", at: "x.at",
+    where: "x.active", value: "COUNT(*)", format: "count",
+  },
+  {
     id: "job_activity", label: "Job activity", group: "Activity",
     description: "Everything logged on jobs: assigned, on the way, photos, signatures and more.",
     from: "job_events x JOIN co ON co.id = x.company_id", at: "x.created_at", value: "COUNT(*)", format: "count",
@@ -768,4 +1000,5 @@ export const DASHBOARD_QUERIES = {
   funnel_steps: FUNNEL_STEPS,
   industries: INDUSTRIES,
   first_day: FIRST_DAY,
+  weekly: WEEKLY,
 } as const;
