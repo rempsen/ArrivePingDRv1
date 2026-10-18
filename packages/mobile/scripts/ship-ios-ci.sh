@@ -42,7 +42,8 @@ echo "▶ Building the iOS app on Expo's servers (10–20 min)…"
 # --json: the finished build on stdout, so the submit below sends exactly this
 # build rather than whichever is newest (another run's, if two overlap).
 $EAS build --platform ios --profile production --non-interactive --json > build.json
-BUILD_ID="$(jq -r '.[0].id // empty' build.json)"
+# Parsed with node (eas-cli already needs it), so jq isn't another prerequisite.
+BUILD_ID="$(node -e 'const b=JSON.parse(require("fs").readFileSync("build.json","utf8"));process.stdout.write((Array.isArray(b)?b[0]:b)?.id||"")')"
 [ -n "$BUILD_ID" ] || { echo "✘ Couldn't read the build id from eas-cli."; cat build.json; exit 1; }
 echo "✔ Build finished"
 
