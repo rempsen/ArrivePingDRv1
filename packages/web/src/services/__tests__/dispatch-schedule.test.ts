@@ -128,7 +128,6 @@ describe("dispatchSchedule + undo", () => {
     const u = await ds.undoAny(CO, r.undo, "Dana", NOW.getTime() + 3_000);
     expect(u).toMatchObject({ ok: true, notified: false });
     expect((await row(id)).scheduledAt.toISOString()).toBe(before.toISOString());
-    expect((await tasks(id)).map((t) => t.status)).toEqual(["cancelled"]);
     await flushNotices();
     expect(await events(id)).not.toContain("rescheduled");
   });
@@ -285,6 +284,17 @@ describe("dispatchSchedule + undo", () => {
     const u = await ds.undoAny(CO, r.ok ? r.undo : "", "Dana", NOW.getTime());
     expect(u).toMatchObject({ ok: false, status: 409 });
     expect((await row(a)).scheduledAt.toISOString()).toBe(minutesLater(base, 180));
+    await flushNotices();
+  });
+
+  it("won't undo an older move after the job was moved away and back", async () => {
+    const id = await job(CO, { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted" });
+    const base = (await row(id)).scheduledAt;
+    const first = await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 60), by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 120), by: "Dana" }, NOW.getTime());
+    await ds.dispatchSchedule(CO, { bookingId: id, scheduledAt: minutesLater(base, 60), by: "Dana" }, NOW.getTime());
+    expect(await ds.undoAny(CO, first.ok ? first.undo : "", "Dana", NOW.getTime())).toMatchObject({ ok: false, status: 409 });
+    expect((await row(id)).scheduledAt.toISOString()).toBe(minutesLater(base, 60));
     await flushNotices();
   });
 

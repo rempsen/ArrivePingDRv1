@@ -112,14 +112,45 @@ const fromOf = (task: { payload: string }) => {
 };
 
 /** Hold one "rescheduled" notice for the job, replacing any that is waiting. */
-async function holdRescheduled(companyId: string, bookingId: string, from: string, at: string, ifToldSince?: string): Promise<boolean> {
+async function holdRescheduled(
+  companyId: string,
+  bookingId: string,
+  from: string,
+  at: string,
+  opts: { ifToldSince?: string; gen?: string | null; prevGen?: string | null } = {},
+): Promise<string | null> {
   await cancelTasks({ bookingId, kind: RESCHEDULED_NOTICE_TASK });
-  return holdNotice(companyId, {
+  // `gen` names the move the job is now at (a notice that waits and re-holds
+  // itself keeps it); `prevGen` the one before, which an Undo returns to.
+  const gen = opts.gen ?? crypto.randomUUID();
+  const held = await holdNotice(companyId, {
     kind: RESCHEDULED_NOTICE_TASK,
     bookingId,
-    payload: { from, at, movedAt: new Date().toISOString(), ...(ifToldSince ? { ifToldSince } : {}) },
+    payload: {
+      from,
+      at,
+      gen,
+      ...(opts.prevGen ? { prevGen: opts.prevGen } : {}),
+      movedAt: new Date().toISOString(),
+      ...(opts.ifToldSince ? { ifToldSince: opts.ifToldSince } : {}),
+    },
     fallback: "rescheduled",
   });
+  return held ? gen : null;
+}
+
+/** The latest move notice for this job (any status): its generation and the one before it. */
+async function latestMove(companyId: string, bookingId: string): Promise<{ gen: string | null; prevGen: string | null }> {
+  const T = schema.scheduledTasks;
+  const rows = await tdb(companyId).select(T, and(eq(T.bookingId, bookingId), eq(T.kind, RESCHEDULED_NOTICE_TASK)));
+  const latest = rows.sort((x, y) => new Date(y.createdAt ?? 0).getTime() - new Date(x.createdAt ?? 0).getTime())[0];
+  if (!latest) return { gen: null, prevGen: null };
+  try {
+    const p = JSON.parse(latest.payload || "{}") as { gen?: unknown; prevGen?: unknown };
+    return { gen: typeof p.gen === "string" ? p.gen : null, prevGen: typeof p.prevGen === "string" ? p.prevGen : null };
+  } catch {
+    return { gen: null, prevGen: null };
+  }
 }
 
 export async function dispatchSchedule(
@@ -175,11 +206,12 @@ export async function dispatchSchedule(
   // waiting. (If an "assigned" notice is also waiting, this one defers to it.)
   const waiting = await pendingNotices(companyId, prev.id);
   const told = waiting.rescheduled.map(fromOf).find((f) => f) ?? from.toISOString();
-  const held = await holdRescheduled(companyId, prev.id, told, to.toISOString());
+  const before = await latestMove(companyId, prev.id);
+  const gen = await holdRescheduled(companyId, prev.id, told, to.toISOString(), { prevGen: before.gen });
   void publishDispatch(companyId, { kind: "job", jobId: prev.id });
 
   // Already announced (the notice couldn't be held): no Undo to offer.
-  if (!held) return { ok: true, job: patchOf(b), undo: null };
+  if (!gen) return { ok: true, job: patchOf(b), undo: null };
   const undo = signUndo({
     v: 1,
     k: "time",
@@ -189,6 +221,7 @@ export async function dispatchSchedule(
     t: to.toISOString(),
     r: prev.riderId ?? "",
     m: new Date().toISOString(),
+    q: gen,
     exp: now + UNDO_TOKEN_TTL_MS,
   });
   return { ok: true, job: patchOf(b), undo };
@@ -202,6 +235,11 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
 
   const t = tdb(companyId);
   const B = schema.bookings;
+  // Only the latest move can be undone: moved away and back since, the job
+  // may sit at the same time, but this token's move isn't the last one.
+  const move = await latestMove(companyId, c.b);
+  if (c.q && move.gen !== c.q)
+    return { ok: false, status: 409, message: "This job changed since you moved it — open it to see where it is now." };
   // The old slot may have been filled since: don't put the job back into a
   // double booking or a day off without asking (open the job to force it).
   const cur = await t.selectOne(B, eq(B.id, c.b));
@@ -231,14 +269,14 @@ export async function undoSchedule(companyId: string, token: unknown, by: string
   const waiting = await pendingNotices(companyId, c.b);
   const told = waiting.rescheduled.map(fromOf).find((f) => f);
   if (told) {
-    // Back where people were last told: the waiting notice has nothing to say.
-    // Otherwise it now announces the time the job went back to.
-    if (new Date(told).getTime() === new Date(c.f).getTime()) await cancelTasks({ bookingId: c.b, kind: RESCHEDULED_NOTICE_TASK });
-    else await holdRescheduled(companyId, c.b, told, c.f);
+    // The waiting notice now speaks for the time the job went back to: nothing
+    // if that's where people were last told, else that time. It takes the
+    // previous move's generation, so that move's Undo still works.
+    await holdRescheduled(companyId, c.b, told, c.f, { gen: move.prevGen });
   } else {
     // No notice waiting: it went out, or is going out right now. A correction
     // waits its turn and speaks only if the move was in fact announced.
-    await holdRescheduled(companyId, c.b, c.t, c.f, c.m);
+    await holdRescheduled(companyId, c.b, c.t, c.f, { ifToldSince: c.m, gen: move.prevGen });
   }
   await logJobEvent({
     companyId,

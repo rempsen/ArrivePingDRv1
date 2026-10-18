@@ -325,6 +325,14 @@ describe("dispatchAssign + undoAssign", () => {
     expect(await events(id)).toContain("rescheduled");
   });
 
+  it("a queue drop that finds the job already assigned is refused, not turned into a reassignment", async () => {
+    const { assignJob } = await import("../assign");
+    const id = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "offered" });
+    const r = await assignJob(CO, id, `${CO}-t1`, { expectRiderId: null, by: { kind: "dispatcher", name: "Dana" } });
+    expect(r).toMatchObject({ ok: false, code: "raced" });
+    expect((await row(id)).riderId).toBe(`${CO}-t2`);
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

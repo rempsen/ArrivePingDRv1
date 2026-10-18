@@ -101,6 +101,8 @@ export interface TimeUndoClaims {
   r?: string;
   /** When the move was made (ISO): did its notice go out after this? */
   m?: string;
+  /** The move's notice generation: Undo only while this is still the latest move. */
+  q?: string;
   exp: number;
 }
 
@@ -147,7 +149,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
   if (c.k !== "time" && [c.d, c.o, c.n, c.w, c.g].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
-  if (c.k === "time" && [c.r, c.m].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
+  if (c.k === "time" && [c.r, c.m, c.q].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (now > c.exp) return "expired";
   return c;
 }
@@ -253,6 +255,8 @@ export async function dispatchAssign(
   const to = input.scheduledAt ? new Date(input.scheduledAt) : null;
   const r = await assignJob(companyId, input.bookingId, input.riderId, {
     force: input.force,
+    // A queue drop stays a queue drop: if someone assigned it meanwhile, refuse.
+    ...(undoable ? { expectRiderId: null } : {}),
     ...(input.forceBusy !== undefined ? { forceBusy: input.forceBusy } : {}),
     by: { kind: "dispatcher", name: input.by },
     deferEvent: undoable,
@@ -266,11 +270,6 @@ export async function dispatchAssign(
   // The token restores exactly what this write replaced (assignJob's own read),
   // not this function's earlier look at the job.
   const was = r.previous;
-  if (undoable && was.riderId) {
-    // Someone else assigned it in between: this was a reassignment after all.
-    await fireEvent("assigned", input.bookingId);
-    return { ok: true, job: patchOf(r.booking), undo: null };
-  }
   let undo: string | null = null;
   // A reason too long to carry back can't be restored exactly: no Undo then
   // (the notice still waits out the window, so nothing is sent early).

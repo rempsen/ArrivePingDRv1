@@ -47,6 +47,12 @@ export interface AssignOptions {
    * time, not the old one.
    */
   scheduledAt?: Date;
+  /**
+   * The assignee the caller saw (null = in the queue). If it changed before
+   * this read, the request is refused as a race rather than quietly turning a
+   * queue drop into a reassignment.
+   */
+  expectRiderId?: string | null;
 }
 
 export type AssignResult =
@@ -78,6 +84,9 @@ export async function assignJob(
   if (!assignee) return { ok: false, code: "tech_not_found", message: "Technician not found", forceable: false };
   const prev = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
   if (!prev) return { ok: false, code: "job_not_found", message: "Work order not found", forceable: false };
+
+  if (opts.expectRiderId !== undefined && (prev.riderId ?? null) !== opts.expectRiderId)
+    return { ok: false, code: "raced", message: "This job just changed — pull it up again to see where it is now.", forceable: false };
 
   // Terminal and in-flight jobs are protected (see assignBlockedReason).
   // `forceable` tells the dispatch UI whether this refusal is a "are you sure"
