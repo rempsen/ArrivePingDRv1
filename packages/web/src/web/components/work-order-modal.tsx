@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { DistanceInput } from "./distance-inputs";
+import { distanceLabel, fmtDistance } from "../../shared/units";
+import { useDistanceUnit } from "../lib/use-brand";
+import { CollectPaymentToggle, TechPayEditor } from "./tech-pay-editor";
+import { MileageCharge } from "./rate-model-editor";
+import { parseTechPayModel, type TechPayModel } from "../../shared/tech-pay";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -496,10 +502,15 @@ export function WorkOrderModal({
   const [region, setRegion] = useState("");
   const [rateModel, setRateModel] = useState<RateModel>({ ...EMPTY_RATE_MODEL });
   const [rateTouched, setRateTouched] = useState(false);
+  // Technician pay rules + on-site payment for this job (default: the template's).
+  const [techPayModel, setTechPayModel] = useState<TechPayModel | null>(null);
+  const [collectPayment, setCollectPayment] = useState<"" | "on_site">("");
+  const [payTouched, setPayTouched] = useState(false);
   // unified charges (flat fee / hourly / per-unit — all committed via ChargesEditor)
   const [charges, setCharges] = useState<Charge[]>([]);
   const [estMinutes, setEstMinutes] = useState("60");
   const [estKm, setEstKm] = useState("0");
+  const distUnit = useDistanceUnit();
 
   // custom fields
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
@@ -579,6 +590,14 @@ export function WorkOrderModal({
     if (next) setRateModel(next);
     else if (svc) setRateModel({ ...EMPTY_RATE_MODEL, flatRate: svc.basePrice || 0 });
   }, [templateId, serviceId, templates.data, services.data, rateTouched]);
+
+  // default tech pay + field payment from the template
+  useEffect(() => {
+    if (payTouched) return;
+    const tpl = (templates.data?.templates ?? []).find((t: any) => t.id === templateId);
+    setTechPayModel(parseTechPayModel(tpl?.techPayModel));
+    setCollectPayment(tpl?.collectPayment === "on_site" ? "on_site" : "");
+  }, [templateId, templates.data, payTouched]);
 
   // infer region from address
   useEffect(() => {
@@ -684,6 +703,9 @@ export function WorkOrderModal({
       setRegion(b.region ?? "");
       const rm = parseRateModel(b.rateModel);
       if (rm) { setRateModel(rm); setRateTouched(true); }
+      setTechPayModel(parseTechPayModel((b as any).techPayModel));
+      setCollectPayment((b as any).collectPayment === "on_site" ? "on_site" : "");
+      setPayTouched(true);
       try {
         const li = typeof b.lineItems === "string" ? JSON.parse(b.lineItems || "[]") : b.lineItems;
         const liArr: LineItem[] = Array.isArray(li) ? li : [];
@@ -795,6 +817,10 @@ export function WorkOrderModal({
     const effectiveRateModel: RateModel = hourlyCharge
       ? {
           ...EMPTY_RATE_MODEL,
+          // the mileage charge is independent of how time is priced
+          kmRate: rateModel.kmRate,
+          includedKm: rateModel.includedKm,
+          kmBasis: rateModel.kmBasis,
           freeMinutes: hourlyCharge.freeMinutes,
           firstHourRate: hourlyCharge.firstHourRate,
           additionalHourRate: hourlyCharge.additionalHourRate,
@@ -824,6 +850,8 @@ export function WorkOrderModal({
       riderId: riderId || undefined,
       region: region || undefined,
       rateModel: effectiveRateModel,
+      techPayModel: techPayModel ?? "",
+      collectPayment,
       lineItems: allLineItems,
       fieldData: { _customFields: customFields },
       requiredSkillClass: requiredSkillClass || "",
@@ -964,6 +992,7 @@ export function WorkOrderModal({
     setRiderId(""); setRequiredSkillClass(""); setRequiredSkills([]); setTechFilter("");
     setNotes(""); setStaffNotes(""); setRegion("");
     setRateModel({ ...EMPTY_RATE_MODEL }); setRateTouched(false); setCharges([]);
+    setTechPayModel(null); setCollectPayment(""); setPayTouched(false);
     setEstMinutes("60"); setEstKm("0"); setCustomFields([]); setLineItems([]);
     setFieldsFromTemplate(false); setPendingTemplateSwap(null);
   }
@@ -1404,11 +1433,8 @@ export function WorkOrderModal({
             className={inputCls} />
         </Field>
 
-        <Field label="Est. mileage (km)" hint="Round-trip travel">
-          <input aria-label="Est. mileage (km)" type="number" inputMode="decimal" min={0} value={estKm}
-            onChange={(e) => setEstKm(e.target.value)}
-            onBlur={(e) => setEstKm(String(Math.max(0, Number(e.target.value) || 0)))}
-            className={inputCls} />
+        <Field label={`Est. mileage (${distanceLabel(distUnit)})`} hint="Round-trip travel">
+          <DistanceInput ariaLabel="Est. mileage" className={inputCls} km={Number(estKm) || 0} onChange={(km) => setEstKm(String(km))} />
         </Field>
 
         <div className="sm:col-span-full xl:col-span-2">
@@ -1488,6 +1514,18 @@ export function WorkOrderModal({
         {/* ── Charges (flat fee / hourly / per-unit) ── */}
         <div className="sm:col-span-full">
           <ChargesEditor charges={charges} onChange={setCharges} />
+        </div>
+
+        {/* ── Customer mileage charge, technician pay, on-site payment ── */}
+        <div className="sm:col-span-full space-y-3">
+          <div className="rounded-xl border border-white/10 bg-ink-3/40 p-4">
+            <MileageCharge
+              rm={rateModel}
+              set={(p) => { setRateModel((cur) => ({ ...cur, ...p })); setRateTouched(true); }}
+            />
+          </div>
+          <TechPayEditor value={techPayModel} onChange={(m) => { setTechPayModel(m); setPayTouched(true); }} />
+          <CollectPaymentToggle value={collectPayment} onChange={(v) => { setCollectPayment(v); setPayTouched(true); }} />
         </div>
 
         {/* ── Price preview ── */}
@@ -1792,6 +1830,7 @@ function TimeMileagePanel({ booking }: { booking: any }) {
   });
   const transitMins = Number(booking.transitMinutes || 0);
   const km = Number(booking.mileageKm || 0);
+  const distUnit = useDistanceUnit();
 
   const fmtMins = (m: number) => {
     if (!m) return "0 min";
@@ -1825,7 +1864,12 @@ function TimeMileagePanel({ booking }: { booking: any }) {
           <MapPin className="h-4 w-4 shrink-0 text-brand" />
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Total mileage</p>
-            <p className="text-sm font-semibold text-white">{km.toFixed(1)} km</p>
+            <p className="text-sm font-semibold text-white">{fmtDistance(km, distUnit)}</p>
+            {km > 0 && (
+              <p className="text-[11px] text-slate-500">
+                {fmtDistance(Number((booking as any).mileageToJobKm) || 0, distUnit)} there · {fmtDistance(Number((booking as any).mileageReturnKm) || 0, distUnit)} back
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -119,7 +119,7 @@ beforeAll(async () => {
   await insert("reviews", { id: id("rv"), company_id: "acme-fx", rating: 5, created_at: at("2026-09-08") });
   await insert("reviews", { id: id("rv"), company_id: "acme-fx", rating: 4, created_at: at("2026-09-09") });
 
-  // Company history, as the trigger on companies writes it (drizzle/0023_tenant_history.sql):
+  // Company history, as the trigger on companies writes it (drizzle/0024_tenant_history.sql):
   //   Acme:   trial Aug 15, paying Sep 14
   //   Bolt:   trial Sep 10, still on it
   //   Closed: trial Jun 1, paying Jul 1, cancelled and closed Sep 20 (churn)
@@ -294,7 +294,7 @@ describe("history triggers", () => {
         industry text NOT NULL DEFAULT '', is_internal boolean NOT NULL DEFAULT false, updated_at timestamptz);
       CREATE TABLE riders (id text PRIMARY KEY, company_id text NOT NULL, approval text NOT NULL DEFAULT 'invited', is_sample boolean NOT NULL DEFAULT false);
     `);
-    const migration = readFileSync(join(import.meta.dir, "../../../drizzle/0023_tenant_history.sql"), "utf8");
+    const migration = readFileSync(join(import.meta.dir, "../../../drizzle/0024_tenant_history.sql"), "utf8");
     for (const stmt of migration.split("--> statement-breakpoint")) {
       const body = stmt.replace(/^\s*--[^\n]*\n/gm, "").trim();
       if (/^(CREATE TABLE|CREATE INDEX|CREATE OR REPLACE FUNCTION|CREATE TRIGGER)/.test(body)) await pg.exec(body);

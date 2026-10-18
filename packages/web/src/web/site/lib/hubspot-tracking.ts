@@ -126,7 +126,7 @@ export function loadHubspotTracking(): void {
 }
 
 /** Marketing pages: the homepage, landing pages, blog, pricing, support and legal pages, and signup. */
-const UNTRACKED = /^\/(admin|app|rider|t|s|p|f|join|join-company|sign-in|sign-up|forgot-password|reset-password)(\/|$)/;
+const UNTRACKED = /^\/(admin|app|rider|t|pay|s|p|f|join|join-company|sign-in|sign-up|forgot-password|reset-password)(\/|$)/;
 export function isTrackedPath(path: string): boolean {
   return !UNTRACKED.test(path);
 }

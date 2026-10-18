@@ -29,6 +29,7 @@ import { OFFICE_ROLES } from "./lib/home";
 const ForgotPasswordPage = lazyRoute(() => import("./pages/forgot-password"));
 const ResetPasswordPage = lazyRoute(() => import("./pages/reset-password"));
 const TrackPublic = lazyRoute(() => import("./pages/track-public"));
+const PayPublic = lazyRoute(() => import("./pages/pay-public"));
 const SelectionsPublic = lazyRoute(() => import("./pages/selections-public"));
 const PropertyPublic = lazyRoute(() => import("./pages/property-public"));
 const IntakeForm = lazyRoute(() => import("./pages/intake-form"));
@@ -152,6 +153,7 @@ function App() {
           <Route path="/forgot-password" component={ForgotPasswordPage} />
           <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/t/:token" component={TrackPublic} />
+          <Route path="/pay/:token" component={PayPublic} />
           <Route path="/s/:token" component={SelectionsPublic} />
           {/* Persistent, no-login property service history hub */}
           <Route path="/p/:token" component={PropertyPublic} />

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import { parseDistanceUnit, type DistanceUnit } from "./units";
 
 /**
  * Tenant brand + vocabulary for the driver app — mirrors
@@ -18,6 +19,8 @@ export interface TenantBrand {
   jobNoun: string; // singular noun for a unit of work, e.g. "Job", "Visit", "Ride"
   jobNounPlural: string;
   name: string;
+  /** metric | imperial — Settings → Distance units. */
+  distanceUnit: DistanceUnit;
 }
 
 const DEFAULTS: TenantBrand = {
@@ -28,6 +31,7 @@ const DEFAULTS: TenantBrand = {
   jobNoun: "Job",
   jobNounPlural: "Jobs",
   name: "ArrivePing",
+  distanceUnit: "metric",
 };
 
 export function useBrand(): TenantBrand {
@@ -52,7 +56,13 @@ export function useBrand(): TenantBrand {
     jobNoun: str(s.jobNoun, DEFAULTS.jobNoun),
     jobNounPlural: str(s.jobNounPlural, DEFAULTS.jobNounPlural),
     name: str(s.name, DEFAULTS.name),
+    distanceUnit: parseDistanceUnit(s.distanceUnit),
   };
+}
+
+/** The company's distance unit. */
+export function useDistanceUnit(): DistanceUnit {
+  return useBrand().distanceUnit;
 }
 
 /** Convenience: just the worker noun pair. */

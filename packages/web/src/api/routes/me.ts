@@ -23,8 +23,8 @@ import { deleteOwnAccount, deletionBlockers } from "../../services/account-delet
 import { AccessError } from "../../services/user-access";
 import { capture } from "../lib/analytics";
 import type { AppEnv } from "../env";
-import { computeTechPay } from "../../shared/tech-pay";
-import { parseLineItems, round2 } from "../../shared/catalog";
+import { jobTechPay } from "../../shared/tech-pay";
+import { round2 } from "../../shared/catalog";
 import { jsonBody } from "../lib/validate";
 import { mergeOnboarding, ONBOARDING_MAX_BYTES, parseOnboarding } from "../../shared/onboarding";
 import { OnboardingPatchSchema } from "../../shared/onboarding-schema";
@@ -402,7 +402,7 @@ export const meRoutes = new Hono<AppEnv>()
         payouts: [],
         totals: {
           gross: 0, weekGross: 0, weekJobs: 0, jobsCount: 0, paidNet: 0,
-          pay: 0, weekPay: 0, hourlyPay: 0, unitPay: 0, onSiteMinutes: 0,
+          pay: 0, weekPay: 0, hourlyPay: 0, unitPay: 0, mileagePay: 0, flatPay: 0, onSiteMinutes: 0,
         },
         truncated: false,
       });
@@ -439,7 +439,10 @@ export const meRoutes = new Hono<AppEnv>()
       payRatePerHour: number;
       hourlyPay: number;
       unitPay: number;
-      /** $0 because no hourly rate is set and there was no per-unit pay. */
+      mileagePay: number;
+      flatPay: number;
+      paidKm: number;
+      /** $0 because no rate of any kind is set and there was no per-unit pay. */
       unrated: boolean;
     };
     type PayoutRow = {
@@ -516,11 +519,7 @@ export const meRoutes = new Hono<AppEnv>()
             // rate + per-unit line pay. Computed with the same shared function as
             // job completion and payout generation, so the Earnings screen can
             // never disagree with the cheque.
-            const pay = computeTechPay({
-              onSiteMinutes: b.onSiteMinutes || 0,
-              payRatePerHour: rider.payRatePerHour || 0,
-              lineItems: parseLineItems(b.lineItems),
-            });
+            const pay = jobTechPay(b, rider);
             return {
             id: b.id,
             companyId: m.companyId,
@@ -535,6 +534,9 @@ export const meRoutes = new Hono<AppEnv>()
             payRatePerHour: pay.payRatePerHour,
             hourlyPay: pay.hourlyPay,
             unitPay: pay.unitPay,
+            mileagePay: pay.mileagePay,
+            flatPay: pay.flatPay,
+            paidKm: pay.paidKm,
             unrated: pay.unrated,
             // Pre-tax job value. `price`/`total` includes the GST/HST the company
             // collected for the government, so the Earnings screen was showing a
@@ -627,6 +629,8 @@ export const meRoutes = new Hono<AppEnv>()
         weekPay: +inWeek.reduce((s, j) => s + j.pay, 0).toFixed(2),
         hourlyPay: +allJobs.reduce((s, j) => s + j.hourlyPay, 0).toFixed(2),
         unitPay: +allJobs.reduce((s, j) => s + j.unitPay, 0).toFixed(2),
+        mileagePay: +allJobs.reduce((s, j) => s + j.mileagePay, 0).toFixed(2),
+        flatPay: +allJobs.reduce((s, j) => s + j.flatPay, 0).toFixed(2),
         onSiteMinutes: Math.round(allJobs.reduce((s, j) => s + j.onSiteMinutes, 0) * 10) / 10,
         weekJobs: inWeek.length,
         jobsCount: allJobs.length,

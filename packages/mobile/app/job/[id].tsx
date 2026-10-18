@@ -53,7 +53,9 @@ import {
   ClipboardText,
 } from "phosphor-react-native";
 import { api } from "../../lib/api";
-import { useCustomerNoun, useJobNoun } from "../../lib/use-brand";
+import { useCustomerNoun, useDistanceUnit, useJobNoun } from "../../lib/use-brand";
+import { fmtDistanceM, fmtKm, fmtM } from "../../lib/units";
+import { TakePayment } from "../../components/take-payment";
 import { useLiveMessageSignal } from "../../lib/live-messages";
 import { NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { getToken, authHeaders } from "../../lib/auth";
@@ -114,6 +116,7 @@ export default function JobDetail() {
   const qc = useQueryClient();
   const { noun: customerNoun } = useCustomerNoun();
   const { noun: jobNoun } = useJobNoun();
+  const unit = useDistanceUnit();
   
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [msg, setMsg] = useState("");
@@ -757,7 +760,7 @@ export default function JobDetail() {
           hour: "numeric",
           minute: "2-digit",
         });
-  const distLabel = j.etaDistanceKm != null ? `${j.etaDistanceKm} km` : null;
+  const distLabel = j.etaDistanceKm != null ? fmtKm(Number(j.etaDistanceKm), unit) : null;
   const etaSmsBody =
     etaLabel != null
       ? `Hi ${j.customer?.name?.split(" ")[0] || "there"}, this is your ${j.service?.name || "service"} technician — I'm on the way, about ${etaLabel} out${arrivalLabel ? ` (arriving ~${arrivalLabel})` : ""}.`
@@ -955,7 +958,7 @@ export default function JobDetail() {
                   {geo
                     ? geo.inside
                       ? "You're at the address — checking you in…"
-                      : `${geo.distanceM >= 1000 ? `${(geo.distanceM / 1000).toFixed(1)} km` : `${geo.distanceM} m`} from the address · auto check-in inside ${geo.radiusM} m`
+                      : `${fmtDistanceM(geo.distanceM, unit)} from the address · auto check-in inside ${fmtM(geo.radiusM, unit)}`
                     : "You'll be checked in automatically when you reach the address."}
                 </Text>
               </>
@@ -1032,7 +1035,7 @@ export default function JobDetail() {
                 <View style={s.statCard}>
                   <Ruler color={C.cyan} size={18} weight="fill" />
                   <Text style={s.statVal}>
-                    {typeof j.mileageKm === "number" ? `${j.mileageKm.toFixed(1)} km` : "—"}
+                    {typeof j.mileageKm === "number" ? fmtKm(j.mileageKm, unit) : "—"}
                   </Text>
                   <Text style={s.statLbl}>Mileage</Text>
                 </View>
@@ -1754,6 +1757,12 @@ export default function JobDetail() {
             )}
           </View>
 
+          {(j as any).collectPayment === "on_site" && ["arrived", "in_progress", "completed"].includes(j.status) && (
+            <View style={{ marginTop: 16 }}>
+              <TakePayment api={API} bookingId={j.id} total={Number((j as any).total) || undefined} paid={(j as any).paymentStatus === "paid"} />
+            </View>
+          )}
+
           <View style={{ height: 90 }} />
         </ScrollView>
 
@@ -1800,7 +1809,7 @@ export default function JobDetail() {
                     ? `${Math.floor(onSiteMin / 60)}h ${onSiteMin % 60}m`
                     : onSiteMin > 0 ? `${onSiteMin} min` : null;
                   const transitStr = fmtMinutes(j.transitMinutes);
-                  const mileageStr = typeof j.mileageKm === "number" ? `${j.mileageKm.toFixed(1)} km` : null;
+                  const mileageStr = typeof j.mileageKm === "number" ? fmtKm(j.mileageKm, unit) : null;
 
                   const lines: string[] = [];
                   if (transitStr !== "—") lines.push(`🚗 Time in transit: ${transitStr}`);

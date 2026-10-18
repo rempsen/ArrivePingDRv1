@@ -95,7 +95,7 @@ const PUBLIC_PAGES = ["/", "/privacy", "/terms", "/support", ...landingPages.map
 // exact public pages: served, never noindexed, even if a prerender is missing.
 const PUBLIC_PREFIX = ["/support/"];
 const APP_EXACT = new Set([...PUBLIC_PAGES, "/sign-in", "/sign-up", "/get-started", "/forgot-password", "/reset-password"]);
-const APP_PREFIX = ["/app", "/rider", "/admin", "/t/", "/s/", "/p/", "/f/", "/join/", "/join-company/", ...PUBLIC_PREFIX];
+const APP_PREFIX = ["/app", "/rider", "/admin", "/t/", "/pay/", "/s/", "/p/", "/f/", "/join/", "/join-company/", ...PUBLIC_PREFIX];
 const PUBLIC_EXACT = new Set(PUBLIC_PAGES);
 function isPublicRoute(pathname: string): boolean {
   return PUBLIC_EXACT.has(pathname) || pathname === "/blog" || PUBLIC_PREFIX.some((p) => pathname.startsWith(p));

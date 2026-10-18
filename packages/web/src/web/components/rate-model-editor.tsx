@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { money } from "../lib/utils";
-import { EMPTY_RATE_MODEL, type RateModel } from "../../shared/pricing";
-import { Clock, DollarSign, Hash, Plus, Trash2 } from "lucide-react";
+import { EMPTY_RATE_MODEL, type MileageBasis, type RateModel } from "../../shared/pricing";
+import { Car, Clock, DollarSign, Hash, Plus, Trash2 } from "lucide-react";
+import { DistanceInput, MileageRateInput } from "./distance-inputs";
+import { useDistanceUnit } from "../lib/use-brand";
+import { fmtDistance, perKmToUnit, distanceLabel } from "../../shared/units";
 
 export type PricingMode = "per_hour" | "per_unit" | "flat_fee";
 
@@ -155,12 +158,14 @@ export function RateModelEditor({
 
   function switchMode(next: PricingMode) {
     setMode(next);
+    // The mileage charge is its own component and survives a mode switch.
+    const mileage = { kmRate: rm.kmRate, includedKm: rm.includedKm, kmBasis: rm.kmBasis };
     if (next === "per_hour") {
-      onChange({ ...EMPTY_RATE_MODEL, freeMinutes: rm.freeMinutes, firstHourRate: rm.firstHourRate, additionalHourRate: rm.additionalHourRate });
+      onChange({ ...EMPTY_RATE_MODEL, ...mileage, freeMinutes: rm.freeMinutes, firstHourRate: rm.firstHourRate, additionalHourRate: rm.additionalHourRate });
     } else if (next === "per_unit") {
-      onChange({ ...EMPTY_RATE_MODEL });
+      onChange({ ...EMPTY_RATE_MODEL, ...mileage });
     } else {
-      onChange({ ...EMPTY_RATE_MODEL, flatRate: rm.flatRate, includedMinutes: rm.includedMinutes, includedKm: rm.includedKm });
+      onChange({ ...EMPTY_RATE_MODEL, ...mileage, flatRate: rm.flatRate, includedMinutes: rm.includedMinutes, timeRate: rm.flatRate ? rm.timeRate : 0, timeUnit: "hour" });
     }
     onUnitLinesChange?.([]);
     onUnitLineChange?.(null);
@@ -361,7 +366,7 @@ export function RateModelEditor({
       {/* ── FLAT FEE ── */}
       {mode === "flat_fee" && (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <MoneyInput
               label="Flat $"
               val={rm.flatRate}
@@ -374,20 +379,91 @@ export function RateModelEditor({
               onSet={(n) => set({ includedMinutes: n })}
               suffix="min"
             />
-            <NumberInput
-              label="Incl. km"
-              val={rm.includedKm}
-              onSet={(n) => set({ includedKm: n })}
-              suffix="km"
-            />
           </div>
+          <MoneyInput
+            label="Then per hour (optional)"
+            val={rm.timeRate}
+            onSet={(n) => set({ timeRate: n, timeUnit: "hour" })}
+            placeholder="0.00"
+          />
           {rm.flatRate > 0 && (
             <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-cyan-glow">
               Fixed charge of <span className="font-semibold text-white">{money(rm.flatRate)}</span>
               {rm.includedMinutes > 0 && ` · includes ${rm.includedMinutes} min`}
-              {rm.includedKm > 0 && ` · ${rm.includedKm} km`}
+              {rm.timeRate > 0 && rm.timeUnit === "hour" && ` · then ${money(rm.timeRate)}/hr`}
             </div>
           )}
+        </div>
+      )}
+
+      <MileageCharge rm={rm} set={set} />
+    </div>
+  );
+}
+
+/** Round trip vs drive-to-the-job, shared by the customer and technician editors. */
+export function MileageBasisPicker({ value, onChange, label }: { value: MileageBasis | undefined; onChange: (b: MileageBasis) => void; label: string }) {
+  return (
+    <fieldset aria-label={label} className="m-0 inline-flex min-w-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
+      {([["round_trip", "Round trip"], ["to_job", "Drive to the job only"]] as const).map(([v, text]) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={(value ?? "round_trip") === v}
+          onClick={() => onChange(v)}
+          className={[
+            "rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
+            (value ?? "round_trip") === v ? "bg-brand/25 text-brand" : "text-slate-400 hover:text-white",
+          ].join(" ")}
+        >
+          {text}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
+/** Charging the customer for distance driven — works with every pricing mode. */
+export function MileageCharge({ rm, set }: { rm: RateModel; set: (p: Partial<RateModel>) => void }) {
+  const unit = useDistanceUnit();
+  return (
+    <div className="space-y-2 border-t border-white/10 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Car className="h-3.5 w-3.5 text-cyan-glow" />
+        <span className="text-xs font-bold text-slate-300">Mileage charge</span>
+        <span className="text-[11px] text-slate-500">Mileage is always tracked and recorded; charge for it only if you want to.</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="block">
+          <Label>{`Charge per ${distanceLabel(unit)}`}</Label>
+          <MileageRateInput
+            ariaLabel="Customer mileage charge rate"
+            className="w-full rounded-lg border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand/40 focus:outline-none"
+            perKm={rm.kmRate || 0}
+            onChange={(v) => set({ kmRate: v ?? 0 })}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="block">
+          <Label>Free distance per job</Label>
+          <DistanceInput
+            ariaLabel="Free distance before the mileage charge"
+            className="w-full rounded-lg border border-white/10 bg-ink px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand/40 focus:outline-none"
+            km={rm.includedKm || 0}
+            onChange={(km) => set({ includedKm: km })}
+            placeholder="0"
+          />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Label>Distance that counts</Label>
+        <MileageBasisPicker label="Customer mileage basis" value={rm.kmBasis} onChange={(b) => set({ kmBasis: b })} />
+      </div>
+      {rm.kmRate > 0 && (
+        <div className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-cyan-glow">
+          {money(perKmToUnit(rm.kmRate, unit))} per {distanceLabel(unit)}
+          {rm.kmBasis === "to_job" ? " for the drive to the job" : " for the round trip"}
+          {rm.includedKm > 0 && `, after the first ${fmtDistance(rm.includedKm, unit)}`}
         </div>
       )}
     </div>

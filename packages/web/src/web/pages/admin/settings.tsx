@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { mToUnit, parseDistanceUnit, shortDistanceLabel, unitToM } from "../../../shared/units";
 import { useConfirm } from "../../components/confirm-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../../lib/api";
@@ -423,6 +424,78 @@ function RescanWebsiteHint({ website, onFilled }: { website: string; onFilled: (
   );
 }
 
+/**
+ * Auto-arrive radius plus the company's distance unit. The radius is stored in
+ * whole metres; with Imperial it is shown and typed in feet (shared/units.ts).
+ */
+function GeofenceCard({ form, set, noun }: { form: any; set: (k: string, v: unknown) => void; noun: string }) {
+  const unit = parseDistanceUnit(form.distanceUnit);
+  const short = shortDistanceLabel(unit);
+  const storedM = resolveGeofenceRadiusM(form.geofenceRadiusM ?? DEFAULT_GEOFENCE_RADIUS_M);
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(mToUnit(storedM, unit));
+  const lo = unit === "imperial" ? 30 : 10;
+  const hi = unit === "imperial" ? 6560 : 2000;
+  return (
+    <div className="nvc-card space-y-4 p-5">
+      <h3 className="flex items-center gap-2 font-bold text-white">
+        <MapPin className="h-4 w-4 text-brand" /> Geofencing &amp; distance units
+      </h3>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-white/50">Units</span>
+        <fieldset aria-label="Distance units" className="m-0 inline-flex min-w-0 rounded-full border border-white/10 bg-white/5 p-0.5">
+          {([["metric", "Meters & km"], ["imperial", "Feet & miles"]] as const).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={unit === v}
+              onClick={() => { setDraft(null); set("distanceUnit", v); }}
+              className={cn(
+                "rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
+                unit === v ? "bg-brand text-white shadow" : "text-white/60 hover:text-white",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </fieldset>
+        <span className="text-[11px] text-white/40">Applies to every distance: the geofence, mileage and mileage rates.</span>
+      </div>
+      <p className="text-xs text-white/50">
+        Auto-arrive a {noun.toLowerCase()} and start their on-site clock when they get within this distance of the job address. The clock only auto-pauses once they're past DOUBLE this radius (
+        {AUTO_PAUSE_RADIUS_MULTIPLIER}x, hardwired the same way for every account) — so stepping back to the truck for a part doesn't pause their time — and it auto-resumes as soon as they're back inside this radius. A {noun.toLowerCase()} can also always tap "Resume Clock" themselves if it pauses for the wrong reason.
+      </p>
+      <Field
+        label={`Auto-arrive radius (${unit === "imperial" ? "feet" : "meters"})`}
+        hint={unit === "imperial"
+          ? `Default ${mToUnit(DEFAULT_GEOFENCE_RADIUS_M, unit)} ft. Tighter (70-160 ft) suits homes and driveways — nobody is checked in early, though phone GPS drift means techs will sometimes tap "I've Arrived" themselves. Wider (500 ft+) suits large commercial sites and plazas where the map pin sits far from the actual door. Auto-pause always kicks in at ${AUTO_PAUSE_RADIUS_MULTIPLIER}x whatever you set here.`
+          : `Default ${DEFAULT_GEOFENCE_RADIUS_M} m. Tighter (20-50 m) suits homes and driveways — nobody is checked in early, though phone GPS drift means techs will sometimes tap "I've Arrived" themselves. Wider (150 m+) suits large commercial sites and plazas where the map pin sits far from the actual door. Auto-pause always kicks in at ${AUTO_PAUSE_RADIUS_MULTIPLIER}x whatever you set here.`}
+      >
+        <div className="relative">
+          <input aria-label="Geofence radius"
+            type="number"
+            min={lo}
+            max={hi}
+            step={unit === "imperial" ? 10 : 10}
+            className={cn(inputCls, "pr-12")}
+            value={shown}
+            // Clamped on blur, not per keystroke: clamping while typing
+            // turns "40" into 10 the moment the "4" lands.
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={(e) => {
+              const typed = Number(e.target.value);
+              const clamped = Math.min(hi, Math.max(lo, Number.isFinite(typed) && typed > 0 ? typed : mToUnit(DEFAULT_GEOFENCE_RADIUS_M, unit)));
+              set("geofenceRadiusM", resolveGeofenceRadiusM(unitToM(clamped, unit)));
+              setDraft(null);
+            }}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40">{short}</span>
+        </div>
+      </Field>
+    </div>
+  );
+}
+
 function CompanySettingsTab() {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
@@ -521,33 +594,8 @@ function CompanySettingsTab() {
           {/* Categories — shared by Form Builder templates and the Product Catalog */}
           <CategoriesCard />
 
-          {/* Geofencing */}
-          <div className="nvc-card space-y-4 p-5">
-            <h3 className="flex items-center gap-2 font-bold text-white">
-              <MapPin className="h-4 w-4 text-brand" /> Geofencing
-            </h3>
-            <p className="text-xs text-white/50">
-              Auto-arrive a {noun.toLowerCase()} and start their on-site clock when they get within this distance of the job address. The clock only auto-pauses once they're past DOUBLE this radius (
-              {AUTO_PAUSE_RADIUS_MULTIPLIER}x, hardwired the same way for every account) — so stepping back to the truck for a part doesn't pause their time — and it auto-resumes as soon as they're back inside this radius. A {noun.toLowerCase()} can also always tap "Resume Clock" themselves if it pauses for the wrong reason.
-            </p>
-            <Field
-              label="Auto-arrive radius (meters)"
-              hint={`Default ${DEFAULT_GEOFENCE_RADIUS_M} m. Tighter (20-50 m) suits homes and driveways — nobody is checked in early, though phone GPS drift means techs will sometimes tap "I've Arrived" themselves. Wider (150 m+) suits large commercial sites and plazas where the map pin sits far from the actual door. Auto-pause always kicks in at ${AUTO_PAUSE_RADIUS_MULTIPLIER}x whatever you set here.`}
-            >
-              <input aria-label="Geofence Radius M"
-                type="number"
-                min={10}
-                max={2000}
-                step={10}
-                className={inputCls}
-                value={form.geofenceRadiusM ?? DEFAULT_GEOFENCE_RADIUS_M}
-                // Clamped on blur, not per keystroke: clamping while typing
-                // turns "40" into 10 the moment the "4" lands.
-                onChange={(e) => set("geofenceRadiusM", parseInt(e.target.value) || 0)}
-                onBlur={(e) => set("geofenceRadiusM", resolveGeofenceRadiusM(e.target.value))}
-              />
-            </Field>
-          </div>
+          {/* Geofencing + distance units */}
+          <GeofenceCard form={form} set={set} noun={noun} />
 
           {/* Review requests + reputation routing */}
           <div className="nvc-card space-y-4 p-5">

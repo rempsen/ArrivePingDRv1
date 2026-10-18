@@ -7,8 +7,8 @@ import { Err } from "../lib/errors";
 import { jsonBody, isoDate } from "../lib/validate";
 import { z } from "zod";
 import type { AppEnv } from "../env";
-import { computeTechPay } from "../../shared/tech-pay";
-import { parseLineItems, round2 } from "../../shared/catalog";
+import { jobTechPay } from "../../shared/tech-pay";
+import { round2 } from "../../shared/catalog";
 
 const PayoutGenerate = z.object({
   periodStart: isoDate("Period start"),
@@ -81,6 +81,10 @@ export const payoutsRoutes = new Hono<AppEnv>()
       payRatePerHour: number;
       hourlyPay: number;
       unitPay: number;
+      paidKm: number;
+      payRatePerKm: number;
+      mileagePay: number;
+      flatPay: number;
       techPay: number;
       unrated: boolean;
     };
@@ -88,6 +92,8 @@ export const payoutsRoutes = new Hono<AppEnv>()
       count: number;
       hourlyPay: number;
       unitPay: number;
+      mileagePay: number;
+      flatPay: number;
       onSiteMinutes: number;
       total: number;
       unratedJobs: number;
@@ -96,7 +102,7 @@ export const payoutsRoutes = new Hono<AppEnv>()
     };
     const byRider = new Map<string, Agg>();
     // One rate lookup per tech per run, not per job.
-    const rateCache = new Map<string, number>();
+    const rateCache = new Map<string, { payRatePerHour: number; payRatePerKm: number } | null>();
 
     for (const b of payable) {
       if (!b.riderId) continue;
@@ -105,29 +111,26 @@ export const payoutsRoutes = new Hono<AppEnv>()
       // window — is what makes a second run a no-op instead of double pay.
       if (b.payoutId) continue;
 
-      let rate = rateCache.get(b.riderId);
-      if (rate === undefined) {
+      let rates = rateCache.get(b.riderId);
+      if (rates === undefined) {
         const r = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
         // No rider row in this tenant = the job is not ours to pay.
-        if (!r) { rateCache.set(b.riderId, -1); continue; }
-        rate = r.payRatePerHour || 0;
-        rateCache.set(b.riderId, rate);
+        rates = r ? { payRatePerHour: r.payRatePerHour || 0, payRatePerKm: r.payRatePerKm || 0 } : null;
+        rateCache.set(b.riderId, rates);
       }
-      if (rate < 0) continue;
+      if (!rates) continue;
 
-      const pay = computeTechPay({
-        onSiteMinutes: b.onSiteMinutes || 0,
-        payRatePerHour: rate,
-        lineItems: parseLineItems(b.lineItems),
-      });
+      const pay = jobTechPay(b, rates);
 
       const agg = byRider.get(b.riderId) || {
-        count: 0, hourlyPay: 0, unitPay: 0, onSiteMinutes: 0,
+        count: 0, hourlyPay: 0, unitPay: 0, mileagePay: 0, flatPay: 0, onSiteMinutes: 0,
         total: 0, unratedJobs: 0, bookingIds: [], jobs: [],
       };
       agg.count += 1;
       agg.hourlyPay += pay.hourlyPay;
       agg.unitPay += pay.unitPay;
+      agg.mileagePay += pay.mileagePay;
+      agg.flatPay += pay.flatPay;
       agg.onSiteMinutes += b.onSiteMinutes || 0;
       agg.total += pay.techPay;
       if (pay.unrated) agg.unratedJobs += 1;
@@ -140,6 +143,10 @@ export const payoutsRoutes = new Hono<AppEnv>()
         payRatePerHour: pay.payRatePerHour,
         hourlyPay: pay.hourlyPay,
         unitPay: pay.unitPay,
+        paidKm: pay.paidKm,
+        payRatePerKm: pay.payRatePerKm,
+        mileagePay: pay.mileagePay,
+        flatPay: pay.flatPay,
         techPay: pay.techPay,
         unrated: pay.unrated,
       });
@@ -158,6 +165,8 @@ export const payoutsRoutes = new Hono<AppEnv>()
         net: total,
         hourlyPay: round2(agg.hourlyPay),
         unitPay: round2(agg.unitPay),
+        mileagePay: round2(agg.mileagePay),
+        flatPay: round2(agg.flatPay),
         onSiteMinutes: Math.round(agg.onSiteMinutes * 10) / 10,
         unratedJobs: agg.unratedJobs,
         breakdown: JSON.stringify(agg.jobs),

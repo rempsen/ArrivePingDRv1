@@ -400,6 +400,27 @@ describe("POST /payouts/generate — real tech pay", () => {
     expect(p.net).toBe(210);
   });
 
+  it("pays mileage at the tech's per-km rate, and a workflow's own rates override the tech's", async () => {
+    await resetPayouts();
+    await setRate(RIDER, 40);
+    await sqlClient().execute({ sql: "UPDATE riders SET pay_rate_per_km = ? WHERE id = ?", args: [0.5, RIDER] });
+    await seedJob({ id: "dap-pay-km", status: "completed", scheduledAt: mid, onSiteMinutes: 60 });
+    await sqlClient().execute({ sql: "UPDATE bookings SET mileage_km = ?, mileage_to_job_km = ? WHERE id = ?", args: [20, 12, "dap-pay-km"] });
+    await seedJob({ id: "dap-pay-wf", status: "completed", scheduledAt: mid, onSiteMinutes: 60 });
+    await sqlClient().execute({
+      sql: "UPDATE bookings SET mileage_km = ?, mileage_to_job_km = ?, tech_pay_model = ? WHERE id = ?",
+      args: [20, 12, JSON.stringify({ hourlyRate: 30, perKmRate: 1, flatPay: 15, mileageBasis: "to_job", includedKm: 2 }), "dap-pay-wf"],
+    });
+    expect((await generate()).status).toBe(201);
+    const p = (await payoutRows()).at(-1)!;
+    // job 1: $40 + 20 km × $0.50 = $50 · job 2: $30 + 10 km × $1 + $15 flat = $55
+    expect(p.hourly_pay).toBe(70);
+    expect(p.mileage_pay).toBe(20);
+    expect(p.flat_pay).toBe(15);
+    expect(p.net).toBe(105);
+    await sqlClient().execute({ sql: "UPDATE riders SET pay_rate_per_km = 0 WHERE id = ?", args: [RIDER] });
+  });
+
   it("pays for completed work even when the customer has not paid the invoice yet", async () => {
     await resetPayouts();
     await setRate(RIDER, 50);

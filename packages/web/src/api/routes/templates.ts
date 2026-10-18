@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseTechPayModel } from "../../shared/tech-pay";
 import { ensureFormCategories } from "../../services/form-categories";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
@@ -22,8 +23,17 @@ const TemplateBody = z.object({
   checklist: z.array(z.unknown()).optional(),
   estimatedMins: z.number().int().min(0).max(43_200).optional(),
   rateModel: z.unknown().optional(),
+  techPayModel: z.unknown().optional(),
+  collectPayment: z.enum(["", "on_site"]).optional(),
   active: z.boolean().optional(),
 });
+
+/** Validate + normalise a tech pay model; "" / null clears it (tech's own rates). */
+export function techPayModelJson(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "";
+  const m = parseTechPayModel(typeof v === "string" ? v : JSON.stringify(v));
+  return m ? JSON.stringify(m) : "";
+}
 
 const TemplatePatch = TemplateBody.partial();
 
@@ -58,6 +68,8 @@ export const templatesRoutes = new Hono<AppEnv>()
             ? body.rateModel
             : JSON.stringify(body.rateModel)
           : "",
+      techPayModel: techPayModelJson(body.techPayModel),
+      collectPayment: body.collectPayment ?? "",
     });
     return c.json({ template: t }, 201);
   })
@@ -71,6 +83,8 @@ export const templatesRoutes = new Hono<AppEnv>()
     if (body.rateModel !== undefined)
       set.rateModel =
         typeof body.rateModel === "string" ? body.rateModel : JSON.stringify(body.rateModel);
+    if (body.techPayModel !== undefined) set.techPayModel = techPayModelJson(body.techPayModel);
+    if (body.collectPayment !== undefined) set.collectPayment = body.collectPayment;
     const [t] = await tx(c).update(
       schema.taskTemplates,
       set,

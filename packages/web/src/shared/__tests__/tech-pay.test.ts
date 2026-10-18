@@ -75,3 +75,57 @@ describe("computeTechPay — hourly on-site time + per-unit pay", () => {
     expect(r.techPay).toBe(0);
   });
 });
+
+import { jobTechPay, parseTechPayModel } from "../tech-pay";
+import { computeSubtotal, EMPTY_RATE_MODEL, mileageFor } from "../pricing";
+
+describe("jobTechPay — mileage, flat and workflow overrides", () => {
+  const job = { onSiteMinutes: 90, mileageKm: 20, mileageToJobKm: 12, lineItems: "[]" };
+  it("uses the technician's own hourly and per-km rates by default (round trip)", () => {
+    const r = jobTechPay(job, { payRatePerHour: 40, payRatePerKm: 0.5 });
+    expect(r.hourlyPay).toBe(60);
+    expect(r.paidKm).toBe(20);
+    expect(r.mileagePay).toBe(10);
+    expect(r.techPay).toBe(70);
+  });
+  it("lets the workflow pay a different rate than the tech's default", () => {
+    const model = JSON.stringify({ hourlyRate: 30, perKmRate: 0.6, flatPay: 25, mileageBasis: "to_job", includedKm: 2 });
+    const r = jobTechPay({ ...job, techPayModel: model }, { payRatePerHour: 40, payRatePerKm: 0.5 });
+    expect(r.hourlyPay).toBe(45);
+    expect(r.paidKm).toBe(10);
+    expect(r.mileagePay).toBe(6);
+    expect(r.flatPay).toBe(25);
+    expect(r.techPay).toBe(76);
+  });
+  it("treats a blank override as 'use the tech's rate', never as $0", () => {
+    const m = parseTechPayModel(JSON.stringify({ hourlyRate: "", perKmRate: null }))!;
+    expect(m.hourlyRate).toBeNull();
+    expect(jobTechPay({ ...job, techPayModel: JSON.stringify(m) }, { payRatePerHour: 40 }).hourlyPay).toBe(60);
+  });
+  it("pays mileage-only and flat-only setups, and flags truly unrated jobs", () => {
+    expect(jobTechPay(job, { payRatePerKm: 1 }).unrated).toBe(false);
+    expect(jobTechPay({ ...job, techPayModel: JSON.stringify({ flatPay: 50 }) }, {}).techPay).toBe(50);
+    expect(jobTechPay(job, {}).unrated).toBe(true);
+  });
+  it("charges the client on its own rate and basis, independent of tech pay", () => {
+    const rm = { ...EMPTY_RATE_MODEL, kmRate: 1.2, includedKm: 5, kmBasis: "to_job" as const };
+    const km = mileageFor(rm.kmBasis, job.mileageKm, job.mileageToJobKm);
+    const metric = computeSubtotal(rm, 0, km);
+    expect(metric.subtotal).toBe(8.4);
+    const imperial = computeSubtotal(rm, 0, km, "imperial");
+    expect(imperial.subtotal).toBe(8.4);
+    expect(imperial.items[0]!.unit).toBe("mi");
+  });
+});
+
+describe("client pricing — $150 service fee that includes the first 60 minutes", () => {
+  const rule = { ...EMPTY_RATE_MODEL, flatRate: 150, includedMinutes: 60, timeRate: 90, timeUnit: "hour" as const };
+  it("charges the full $150 even when the job takes less than an hour", () => {
+    expect(computeSubtotal(rule, 40, 0).subtotal).toBe(150);
+    expect(computeSubtotal(rule, 60, 0).subtotal).toBe(150);
+  });
+  it("charges the hourly rate only for time past the included hour", () => {
+    // 85 min: $150 + 25 min (0.42 h) x $90
+    expect(computeSubtotal(rule, 85, 0).subtotal).toBe(187.8);
+  });
+});

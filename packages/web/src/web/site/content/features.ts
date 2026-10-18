@@ -51,9 +51,9 @@ export const chapters: Chapter[] = [
     promise: "No clocking in or out. Location does it for you, and every number is recorded against the job.",
     tiles: [
       { icon: "route", title: "The driving path", text: "The route to and from each job is recorded and saved on the job." },
-      { icon: "gauge", title: "Mileage", text: "Mileage to and from the job location, calculated for you." },
+      { icon: "gauge", title: "Mileage", text: "The drive there, the drive back and the total, recorded on every job, in kilometres or miles." },
       { icon: "clock", title: "Travel time", text: "How long it took to get there, on every job." },
-      { icon: "fence", title: "Time on site", text: "Starts when the technician arrives and stops when they leave, using a GPS geofence around the job address." },
+      { icon: "fence", title: "Time on site", text: "Starts when the technician arrives and stops when they leave, using a GPS geofence around the job address. You set the range in feet or meters." },
     ],
   },
   {
@@ -66,7 +66,7 @@ export const chapters: Chapter[] = [
       { icon: "camera", title: "Before, during and after photos", text: "Captured on site, following the steps of your workflow." },
       { icon: "mic", title: "Voice notes", text: "Typing is slow with gloves on. Record a note and it is added to the job record." },
       { icon: "sign", title: "Customer signature on the phone", text: "The customer signs on the technician's screen. No paper." },
-      { icon: "card", title: "Take payment through Stripe", text: "Charge the customer's card on the spot, right from the job." },
+      { icon: "card", title: "Take payment through Stripe", text: "When the work order says so, the technician taps Take payment. The customer pays by card, Apple Pay or Google Pay, on the technician's phone or their own." },
     ],
   },
   {
@@ -90,8 +90,8 @@ export const chapters: Chapter[] = [
     promise: "Charge the way you do business, and record how every driver and technician is paid.",
     tiles: [
       { icon: "catalog", title: "A catalog ready on day one", text: "Parts, time, services and assemblies (combinations of them) are pre-filled. Edit, delete or add your own." },
-      { icon: "calc", title: "Pricing logic that fits your rules", text: "A service fee that includes the first hour, with charges after that. You set the rules." },
-      { icon: "wallet", title: "Pay by hour, by mileage, or both", text: "Set how each driver or technician is paid. ArrivePing records each method." },
+      { icon: "calc", title: "Pricing logic that fits your rules", text: "A service fee that includes the first hour, then an hourly rate, plus mileage if you charge for it. You set the rules." },
+      { icon: "wallet", title: "Pay by hour, by mileage, or both", text: "Pay technicians by the hour, by the kilometre or mile, a flat amount per job, or any mix, at a different rate than you charge the client." },
     ],
   },
   {
@@ -145,19 +145,21 @@ export const screens: Record<string, Screen[]> = {
   ],
   track: [
     { src: S("track-report"), w: 1520, h: 1216, span: 7, alt: "An ArrivePing job report showing the timeline, a 14 minute drive, 1 hour 25 minutes on site, 10.7 km of mileage and the road-matched route driven there and back on a map.", caption: "Job report: drive time, time on site, mileage and the route driven there and back." },
-    { src: S("track-geofence"), w: 1130, h: 644, span: 5, alt: "ArrivePing Geofencing settings with the auto-arrive radius set to 150 meters.", caption: "Settings: each company sets its own auto-arrive radius." },
+    { src: S("track-geofence"), w: 1130, h: 802, span: 5, alt: "ArrivePing Geofencing and distance units settings: a Meters & km or Feet & miles toggle and the auto-arrive radius set to 150 meters.", caption: "Settings: your auto-arrive radius, in meters or feet." },
   ],
   capture: [
-    { src: S("capture-signoff"), w: 1800, h: 505, span: 12, alt: "The job record showing the customer's drawn signature and a 12 second voice note from the technician with its transcript.", caption: "Job record: the customer's signature and the technician's voice note, transcribed." },
+    { src: S("capture-take-payment"), w: 1170, h: 1746, span: 4, phone: true, alt: "Take payment in the ArrivePing technician app: the $168.00 total, a QR code for the customer to scan, Pay on this phone and Text the link.", caption: "Take payment: the customer scans, pays on the tech's phone, or gets a text link." },
+    { src: S("capture-signoff"), w: 1800, h: 505, span: 8, alt: "The job record showing the customer's drawn signature and a 12 second voice note from the technician with its transcript.", caption: "Job record: the customer's signature and the technician's voice note, transcribed." },
   ],
   inform: [
     { src: S("inform-phone"), w: 1170, h: 1920, span: 4, phone: true, alt: "The ArrivePing customer tracking page on a phone: a live map, the technician's arrival countdown, and Call and Text buttons.", caption: "What your customer sees: live ETA, map, and Call or Text." },
     { src: S("inform-rules"), w: 1800, h: 927, span: 8, alt: "ArrivePing notification rules: for each job event, toggles for in-app, email, text and webhook to the customer, technician and office.", caption: "Notification rules: choose which milestones text, email or notify whom." },
   ],
   price: [
-    { src: S("price-rate"), w: 1172, h: 670, span: 7, alt: "ArrivePing pricing and rate model set to per hour: first hour $150, each hour after $90.", caption: "Pricing rule: $150 covers the first hour, then $90 an hour." },
-    { src: S("price-job"), w: 744, h: 780, span: 5, alt: "The pricing on a finished ArrivePing job: parts, subtotal $570.90, GST and PST, total $639.41 paid, and technician pay of $53.96.", caption: "The finished job: billed from actual time and parts, paid, with tech pay." },
-    { src: S("price-payouts"), w: 1800, h: 802, span: 12, alt: "ArrivePing technician payouts for the week: each technician's jobs, time on site, hourly pay and total, with one job's breakdown expanded.", caption: "Payouts: every technician's time and pay, job by job." },
+    { src: S("price-rate"), w: 1120, h: 794, span: 6, alt: "ArrivePing customer pricing set to a flat fee: $150 that includes 60 minutes, then $90 an hour, with an optional mileage charge per km.", caption: "Customer pricing: a $150 service fee that includes the first hour, then $90 an hour." },
+    { src: S("price-techpay"), w: 1120, h: 598, span: 6, alt: "ArrivePing technician pay for the same workflow: the technician's own hourly rate plus $0.50 per km of mileage, round trip.", caption: "Technician pay, set separately: their own hourly rate plus mileage." },
+    { src: S("price-job"), w: 744, h: 968, span: 5, alt: "A finished ArrivePing job: $150 flat rate including 60 minutes, $37.80 additional time, parts, total $639.41 paid, and technician pay of $59.33 split into time on site and mileage.", caption: "The finished job: billed by the rule, paid, and the technician's pay line by line." },
+    { src: S("price-payouts"), w: 1800, h: 802, span: 7, alt: "ArrivePing technician payouts for the week with hourly, mileage, flat and per-unit pay for each technician, and one job's breakdown expanded.", caption: "Payouts: hourly, mileage, flat and per-unit pay, job by job." },
   ],
   start: [
     { src: S("start-templates"), w: 560, h: 1056, span: 4, alt: "Saved work-order templates in ArrivePing: Residential Visit, Commercial Job, Service / Maintenance and Emergency / Rush Call.", caption: "Your first four workflows, created when you sign up." },

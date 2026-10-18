@@ -92,6 +92,7 @@ const TeamCreate = z.object({
   address: optText(300),
   notes: longText(2_000).optional(),
   payRatePerHour: money("Pay rate").optional(),
+  payRatePerKm: money("Mileage rate").optional(),
 });
 
 const TeamPatch = z
@@ -242,6 +243,7 @@ export const teamRoutes = new Hono<AppEnv>()
             address: b.address ?? "",
             notes: b.notes ?? "",
             payRatePerHour: b.payRatePerHour ?? 0,
+            payRatePerKm: b.payRatePerKm ?? 0,
           });
         }
       }
@@ -309,6 +311,7 @@ export const teamRoutes = new Hono<AppEnv>()
         address: b.address ?? "",
         notes: b.notes ?? "",
         payRatePerHour: b.payRatePerHour ?? 0,
+            payRatePerKm: b.payRatePerKm ?? 0,
       });
     }
     // Their set-password link, and the app or the dashboard, right away.

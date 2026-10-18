@@ -1,4 +1,5 @@
 import { useParams, Link, useLocation } from "wouter";
+import { TakePayment } from "../../components/take-payment";
 import { UserFacingError } from "../../lib/api-error";
 import { DialogPanel } from "../../components/dialog-panel";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -276,6 +277,15 @@ export default function RiderActive() {
           ) : (
             <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 py-4 font-bold text-green-600">
               <CheckCircle2 className="h-5 w-5" /> Job completed
+            </div>
+          )}
+
+          {b.collectPayment === "on_site" && ["arrived", "in_progress", "completed"].includes(b.status) && b.paymentStatus !== "paid" && (
+            <TakePayment bookingId={b.id} total={Number(b.total) || undefined} />
+          )}
+          {b.collectPayment === "on_site" && b.paymentStatus === "paid" && (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 py-3 text-sm font-semibold text-emerald-300">
+              <CheckCircle2 className="h-4 w-4" /> Paid
             </div>
           )}
 

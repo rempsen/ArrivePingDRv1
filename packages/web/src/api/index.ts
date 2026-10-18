@@ -21,6 +21,7 @@ import { paymentsWebhookRoutes } from "./routes/payments-webhook";
 import { notificationsRoutes } from "./routes/notifications";
 import { adminRoutes } from "./routes/admin";
 import { trackRoutes } from "./routes/track";
+import { payPublicRoutes } from "./routes/pay-public";
 import { propertyPublicRoutes } from "./routes/property-public";
 import { maintenanceRoutes } from "./routes/maintenance";
 import { optionCatalogRoutes } from "./routes/option-catalog";
@@ -85,7 +86,7 @@ const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // High-frequency or irrelevant writes that never change CRM-visible data.
 // `guide`: Ask ArrivePing is a POST that changes nothing (Codex on #44);
 // `me/guide-events`: Guide analytics, likewise.
-const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections|guide|me\/guide-events)(\/|$)/;
+const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|pay|punchlist|selections|guide|me\/guide-events)(\/|$)/;
 
 const app = new Hono<{ Variables: Variables }>()
   // request id + per-request logger (correlation across the request lifecycle)
@@ -377,6 +378,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/notifications", notificationsRoutes)
   .route("/admin", adminRoutes)
   .route("/track", trackRoutes)
+  // Public on-site payment page API (no auth) — /pay/:token.
+  .route("/pay", payPublicRoutes)
   // Public, persistent property hub (no auth) — /p/:token service history.
   .route("/property", propertyPublicRoutes)
   // Unsubscribe link in the launch tip emails (no auth; signed token).

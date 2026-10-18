@@ -9,7 +9,8 @@ import { Err } from "../lib/errors";
 import { publicFieldData, mergeInternalFieldData } from "../lib/field-data";
 import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } from "../lib/memberships";
 import { fireEvent } from "../../services/dispatch";
-import { recomputeBooking } from "../../services/billing";
+import { accrueTechPay, recomputeBooking } from "../../services/billing";
+import { techPayModelJson } from "./templates";
 import { reconcileRiderStatus } from "../../services/presence";
 import { assignJob } from "../../services/assign";
 import { applyBookingStatus, resumeClock, StatusTransitionError } from "../../services/booking-status";
@@ -289,6 +290,10 @@ const BookingAdminCreate = z
     customerEmail: email("Customer email").optional(),
     riderId: idField("Technician").nullish(),
     status: bookingStatus.optional(),
+    /** How this job pays the technician (TechPayModel); omitted = the template's. */
+    techPayModel: z.unknown().optional(),
+    /** "on_site" = the technician collects payment in the field; omitted = the template's. */
+    collectPayment: z.enum(["", "on_site"]).optional(),
     /** Book it anyway: the tech is already out on a job then, or has time off. */
     force: z.boolean().optional(),
   })
@@ -324,6 +329,8 @@ const BookingPatch = z
     requiredSkills: z.union([z.string().max(2_000), z.array(z.string().max(120)).max(50)]),
     fieldData: jsonObject(),
     riderId: idField("Technician").nullable().or(z.literal("")),
+    techPayModel: z.unknown(),
+    collectPayment: z.enum(["", "on_site"]),
     /** Save it anyway when the new tech/time double-books somebody. */
     force: z.boolean(),
   })
@@ -744,9 +751,14 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // something on a real work order instead of being write-only.
     let fieldData = body.fieldData ? JSON.stringify(body.fieldData) : "{}";
     let checklistState = "[]";
+    // Tech pay + field payment: what the office set on this work order, else the template's.
+    let techPayModel = body.techPayModel !== undefined ? techPayModelJson(body.techPayModel) : "";
+    let collectPayment: string = body.collectPayment ?? "";
     if (body.templateId) {
       const tpl = await t.selectOne(schema.taskTemplates, eq(schema.taskTemplates.id, body.templateId));
       if (tpl) {
+        if (body.techPayModel === undefined) techPayModel = tpl.techPayModel || "";
+        if (body.collectPayment === undefined) collectPayment = tpl.collectPayment || "";
         const hasOwnFields = Array.isArray(body.fieldData?._customFields) && body.fieldData._customFields.length > 0;
         if (!hasOwnFields) {
           const seeded = templateFieldsToCustomFields(tpl.fields);
@@ -786,6 +798,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
       staffNotes: (body as any).staffNotes ?? "",
       fieldData,
       checklistState,
+      techPayModel,
+      collectPayment,
       customerPhone: body.phone ?? cu!.phone ?? "",
       region: body.region ?? "",
       rateModel: body.rateModel ? JSON.stringify(body.rateModel) : "",
@@ -965,6 +979,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (body.scheduledAt) set.scheduledAt = body.scheduledAt;
     if (body.rateModel !== undefined)
       set.rateModel = body.rateModel ? JSON.stringify(body.rateModel) : "";
+    if (body.techPayModel !== undefined) set.techPayModel = techPayModelJson(body.techPayModel);
+    if (body.collectPayment !== undefined) set.collectPayment = body.collectPayment;
     if (body.lineItems !== undefined)
       set.lineItems = Array.isArray(body.lineItems) ? JSON.stringify(body.lineItems) : "";
     if ((body as any).requiredSkillClass !== undefined)
@@ -1036,6 +1052,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
       body.lineItems !== undefined
     ) {
       await recomputeBooking(co, id);
+    }
+    // A finished job's tech pay follows its pay rules until a payout locks it in.
+    if ((body.techPayModel !== undefined || body.lineItems !== undefined) && prev.status === "completed" && !prev.payoutId) {
+      await accrueTechPay(co, id);
     }
 
     return c.json({ booking: await enrichById(co, id) }, 200);

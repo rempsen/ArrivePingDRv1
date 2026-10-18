@@ -1,5 +1,5 @@
 {
-  "id": "27919241-db9e-4aaf-aac7-e0e0f92e8ab1",
+  "id": "7054bc69-7445-449e-9d8c-b101e84dabf4",
   "prevId": "9f8f34da-6470-4fe3-980a-62f9a10488ec",
   "version": "7",
   "dialect": "postgresql",
@@ -1131,6 +1131,20 @@
           "notNull": true,
           "default": 0
         },
+        "mileage_to_job_km": {
+          "name": "mileage_to_job_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "mileage_return_km": {
+          "name": "mileage_return_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "route_snapped": {
           "name": "route_snapped",
           "type": "text",
@@ -1146,6 +1160,20 @@
         },
         "tech_pay_breakdown": {
           "name": "tech_pay_breakdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "tech_pay_model": {
+          "name": "tech_pay_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "collect_payment": {
+          "name": "collect_payment",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -1936,143 +1964,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.company_history": {
-      "name": "company_history",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
-        },
-        "seq": {
-          "name": "seq",
-          "type": "bigserial",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "at": {
-          "name": "at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "billing_status": {
-          "name": "billing_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'none'"
-        },
-        "billing_seats": {
-          "name": "billing_seats",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "billing_trial_ends_at": {
-          "name": "billing_trial_ends_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "industry": {
-          "name": "industry",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_internal": {
-          "name": "is_internal",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "removed": {
-          "name": "removed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'live'"
-        }
-      },
-      "indexes": {
-        "company_history_company_at_idx": {
-          "name": "company_history_company_at_idx",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "company_history_at_idx": {
-          "name": "company_history_at_idx",
-          "columns": [
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.company_settings": {
       "name": "company_settings",
       "schema": "",
@@ -2300,6 +2191,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 150
+        },
+        "distance_unit": {
+          "name": "distance_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'metric'"
         },
         "review_request_enabled": {
           "name": "review_request_enabled",
@@ -6090,6 +5988,20 @@
           "notNull": true,
           "default": 0
         },
+        "mileage_pay": {
+          "name": "mileage_pay",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "flat_pay": {
+          "name": "flat_pay",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "on_site_minutes": {
           "name": "on_site_minutes",
           "type": "real",
@@ -6944,6 +6856,13 @@
           "notNull": true,
           "default": 0
         },
+        "pay_rate_per_km": {
+          "name": "pay_rate_per_km",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "rating": {
           "name": "rating",
           "type": "real",
@@ -7753,6 +7672,20 @@
           "notNull": true,
           "default": "''"
         },
+        "tech_pay_model": {
+          "name": "tech_pay_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "collect_payment": {
+          "name": "collect_payment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "active": {
           "name": "active",
           "type": "boolean",
@@ -8011,107 +7944,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.technician_history": {
-      "name": "technician_history",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()::text"
-        },
-        "seq": {
-          "name": "seq",
-          "type": "bigserial",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "rider_id": {
-          "name": "rider_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "company_id": {
-          "name": "company_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "at": {
-          "name": "at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "active": {
-          "name": "active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'live'"
-        }
-      },
-      "indexes": {
-        "technician_history_rider_at_idx": {
-          "name": "technician_history_rider_at_idx",
-          "columns": [
-            {
-              "expression": "rider_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "technician_history_company_at_idx": {
-          "name": "technician_history_company_at_idx",
-          "columns": [
-            {
-              "expression": "company_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseDistanceUnit } from "../../shared/units";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import {
@@ -577,6 +578,10 @@ export const jobSearchRoutes = new Hono<AppEnv>()
         transitMinutes: b.transitMinutes,
         onSiteMinutes: b.onSiteMinutes,
         mileageKm: b.mileageKm,
+        mileageToJobKm: b.mileageToJobKm,
+        mileageReturnKm: b.mileageReturnKm,
+        collectPayment: b.collectPayment,
+        distanceUnit: parseDistanceUnit((await t.selectOne(schema.companySettings))?.distanceUnit),
         route: pingRows.map((p: any) => ({ lat: p.lat, lng: p.lng, phase: p.phase, createdAt: p.createdAt })),
         routeSnapped: snapped
           ? { provider: snapped.provider, distanceKm: snapped.distanceKm, points: snapped.points }
@@ -584,6 +589,13 @@ export const jobSearchRoutes = new Hono<AppEnv>()
         photos: photoRows.map((p: any) => ({ id: p.id, url: p.url, caption: p.caption, createdAt: p.createdAt })),
         pricing: {
           lineItems,
+          // The full invoice breakdown (time, mileage, catalog lines) as billed.
+          items: (() => {
+            try {
+              const v = JSON.parse(b.priceBreakdown || "[]");
+              return Array.isArray(v) ? v : [];
+            } catch { return []; }
+          })(),
           subtotal: b.subtotal,
           taxAmount: b.taxAmount,
           taxLabel: b.taxLabel,
