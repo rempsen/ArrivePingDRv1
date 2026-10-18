@@ -25,7 +25,16 @@ async function jget<T>(url: string): Promise<T> {
 }
 async function jpost<T>(url: string): Promise<T> {
   const r = await fetch(url, { method: "POST", headers: authHeaders() });
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) {
+    const text = await r.text();
+    let message = text;
+    try {
+      message = (JSON.parse(text) as { message?: string }).message ?? text;
+    } catch {
+      /* not JSON: show it as is */
+    }
+    throw new Error(message);
+  }
   return r.json();
 }
 

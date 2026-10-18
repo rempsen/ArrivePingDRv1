@@ -12,6 +12,13 @@ on:
         required: false
         default: "manual"
 
+# One release at a time. Two clicks a minute apart used to start two builds
+# side by side; both then submitted "the latest" build, so the second upload
+# was a duplicate and Apple refused it. A second run now waits its turn.
+concurrency:
+  group: ship-ios
+  cancel-in-progress: false
+
 jobs:
   ship:
     runs-on: ubuntu-latest
@@ -60,11 +67,19 @@ jobs:
           }
 
       - name: Build iOS app on Expo's servers
-        run: bunx --yes eas-cli build --platform ios --profile production --non-interactive
+        id: build
+        # --json prints the finished build to stdout (progress goes to stderr),
+        # so the next step submits exactly this build, not whichever is newest.
+        run: |
+          bunx --yes eas-cli build --platform ios --profile production --non-interactive --json > build.json
+          id="$(jq -r '.[0].id // empty' build.json)"
+          [ -n "$id" ] || { echo "::error::Couldn't read the build id from eas-cli."; cat build.json; exit 1; }
+          echo "Built $(jq -r '(.[0].appVersion // "?") + " (" + (.[0].appBuildVersion // "?") + ")"' build.json): $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Submit to TestFlight
-        run: bunx --yes eas-cli submit --platform ios --latest --profile production --non-interactive
+        run: bunx --yes eas-cli submit --platform ios --id "${{ steps.build.outputs.id }}" --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
