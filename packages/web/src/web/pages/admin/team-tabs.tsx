@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
-import { useAuth } from "../../hooks/use-auth";
+import { useAccess } from "../../hooks/use-access";
 import { FullLoader } from "../../components/loader";
 import {
   Modal,
@@ -101,9 +101,8 @@ function useCatalog() {
 export function InternalTeamTab() {
   const qc = useQueryClient();
   const { noun } = useWorkerNoun();
-  const { role: myRole } = useAuth();
-  // Admins add office staff and change roles; a manager adds field staff.
-  const isAdminRole = myRole === "admin" || myRole === "superadmin";
+  // Admins (at this company) add office staff and change roles; a manager adds field staff.
+  const { isAdmin: isAdminRole } = useAccess();
   const defaultRole = isAdminRole ? "dispatcher" : "rider";
   const [showAdd, setShowAdd] = useState(false);
   const [editEmp, setEditEmp] = useState<any>(null);
@@ -521,7 +520,7 @@ export function InternalTeamTab() {
 }
 
 function RolePicker({ value, onChange }: { value: string; onChange: (r: string) => void }) {
-  const { role: myRole } = useAuth();
+  const { role: myRole } = useAccess();
   // Only a superadmin may assign admin-tier roles, and only an admin assigns
   // office roles (a manager adds field staff).
   const roles =
