@@ -226,6 +226,19 @@ describe("dispatchAssign + undoAssign", () => {
     expect((await row(live)).riderId).toBe(`${CO}-t1`);
   });
 
+  it("Undo restores why a declined job came back to the queue", async () => {
+    const offeredAt = new Date(NOW.getTime() - HOUR);
+    const id = await job(CO, { status: "confirmed", assignStatus: "declined", declineReason: "Truck in the shop", assignedAt: offeredAt });
+    const r = await da.dispatchAssign(CO, { bookingId: id, riderId: `${CO}-t1`, by: "Dana" }, NOW.getTime());
+    expect((await row(id)).declineReason).toBe("");
+    expect((await da.undoAssign(CO, r.ok ? r.undo : "", "Dana", NOW.getTime())).ok).toBe(true);
+    const back = await row(id);
+    expect(back.declineReason).toBe("Truck in the shop");
+    expect(back.assignedAt?.toISOString()).toBe(offeredAt.toISOString());
+    expect(back.assignStatus).toBe("declined");
+    await flushNotices();
+  });
+
   it("won't put the time back on its own once the technician accepted", async () => {
     const id = await job(CO);
     const to = new Date((await row(id)).scheduledAt.getTime() + HOUR).toISOString();

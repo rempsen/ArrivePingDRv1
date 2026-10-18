@@ -37,6 +37,8 @@ export const UNDO_TOKEN_TTL_MS = 2 * 60_000;
 /** How long the "assigned" notifications wait, so an Undo inside the window reaches nobody. */
 export const NOTIFY_GRACE_MS = 8_000;
 export { ASSIGNED_NOTICE_TASK } from "./dispatch-notice-kinds";
+/** The longest decline reason an Undo token carries back (tokens stay under 2,000 characters even for 4-byte text). */
+const MAX_KEPT_REASON = 200;
 
 /** What changed on the job, for the map to patch its copy. */
 export interface JobPatch {
@@ -69,6 +71,9 @@ interface UndoClaims {
   /** When the drop also moved the time: scheduledAt before and after, ISO. */
   f?: string;
   t?: string;
+  /** What the queue entry said before: why it came back (declineReason) and when it was last offered (assignedAt, ISO). */
+  d?: string;
+  o?: string;
   /** expiry, ms */
   exp: number;
 }
@@ -130,6 +135,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
+  if (c.k !== "time" && ((c.d !== undefined && typeof c.d !== "string") || (c.o !== undefined && typeof c.o !== "string"))) return "invalid";
   if (c.k === "time" && c.r !== undefined && typeof c.r !== "string") return "invalid";
   if (now > c.exp) return "expired";
   return c;
@@ -251,6 +257,9 @@ export async function dispatchAssign(
       s: was.status,
       a: was.assignStatus,
       ...(moved ? { f: from.toISOString(), t: new Date(r.booking.scheduledAt).toISOString() } : {}),
+      // Kept short so the token stays a small header-sized string.
+      ...(was.declineReason ? { d: was.declineReason.slice(0, MAX_KEPT_REASON) } : {}),
+      ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
     // Already announced (the notice couldn't be held): no Undo to offer.
@@ -277,7 +286,9 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
       riderId: null,
       status: c.s,
       assignStatus: c.a,
-      assignedAt: null,
+      // Back as it was in the queue, including why it came back.
+      assignedAt: c.o ? new Date(c.o) : null,
+      declineReason: c.d ?? "",
       acceptedAt: null,
       autoAssignedRuleId: "",
       autoAssignedAt: null,
