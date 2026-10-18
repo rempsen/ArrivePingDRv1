@@ -18,6 +18,7 @@ import "../site/site.css";
 import "../site/live/live.css";
 import "../site/live/opening.css";
 import "../site/live/lower.css";
+import "../site/live/setup-film.css";
 import { homeFor } from "../lib/home";
 
 /** Marketing landing page — Attio-inspired light design language, scoped under `.site`. */

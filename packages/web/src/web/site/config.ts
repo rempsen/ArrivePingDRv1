@@ -58,7 +58,7 @@ export const hero = {
   /** The four objections a buyer has before clicking, answered before the button. */
   assurances: [
     { icon: "phone", label: "No GPS hardware", sub: "Runs on the phones your team carries" },
-    { icon: "clock", label: "Live in under an hour", sub: "Typical, with an AI agent doing the setup" },
+    { icon: "clock", label: "Live in under an hour", sub: "Typical, with an AI agent doing the setup", href: "#getting-started" },
     { icon: "tap", label: "Minimal training", sub: "Accept, Start Driving, I've Arrived, Complete Job" },
     { icon: "tag", label: "From US$49 a month", sub: "1 dispatcher + 2 drivers" },
   ],
@@ -224,47 +224,82 @@ export const techApp = {
 };
 
 /** Getting started (option 1): the setup agent builds a workspace from a website. Sample result. */
-/** The setup agent demo, embedded in "Getting started" (firstHour). */
-export const setupAgent = {
-  defaultSite: "prairiecomforthvac.com",
-  run: "Run setup agent",
-  note: "Sample result for an HVAC company. Your workspace is built from your own website.",
-  steps: [
-    { text: (site: string) => `Reading ${site} · home, services and about pages`, t: "0:06" },
-    { text: () => "Logo and brand colors found", t: "0:14" },
-    { text: () => "Trade detected: HVAC & Plumbing", t: "0:19" },
-    { text: () => "8 services and 4 team members found", t: "0:31" },
-    { text: () => "Priced catalog loaded for your trade", t: "0:48" },
-    { text: () => "Job templates and intake forms written", t: "1:20" },
-    { text: () => "Customer texts and emails drafted in your voice", t: "1:44" },
+/**
+ * The setup film in "Getting started": the real onboarding (services/brand-scout.ts,
+ * company-provisioning.ts, terminology.ts) acted out on a made-up plumbing
+ * company. Every beat is something the agent does today: it reads the home,
+ * services, area, about, team and contact pages; lifts the logo and brand
+ * colours; reads the address and service area; picks the trade with a reason;
+ * learns their words for staff, customers and work; turns services into a
+ * priced catalog; lists the people on the team page (and asks before inviting
+ * anyone); writes templates, intake forms and customer texts in their words.
+ * The provisioning aside is the real line for this trade (provisioning-jokes.ts).
+ */
+export const setupFilm = {
+  site: "bluestemplumbing.ca",
+  company: "Bluestem Plumbing & Drain",
+  short: "Bluestem Plumbing",
+  colors: { primary: "#1f4e8c", accent: "#f29a2e" },
+  address: "88 Kettle Way, Winnipeg MB",
+  serviceArea: "Winnipeg, East St. Paul and Headingley",
+  hours: "Open 24/7",
+  phone: "(204) 555-0187",
+  pages: ["Home", "Services", "Service area", "About", "Our team", "Contact"],
+  services: ["Emergency plumbing", "Drain cleaning", "Water heaters", "Leak repair", "Sump pumps", "Backflow testing", "Fixture installs", "Camera inspections"],
+  team: [
+    { name: "Jordan", role: "Journeyman plumber" },
+    { name: "Kim", role: "Dispatch" },
+    { name: "Sam", role: "Apprentice" },
   ],
-  done: { text: "Workspace ready. Next: a short setup chat and team invites.", t: "1:52" },
+  catalogItems: 34,
+  templates: 4,
+  forms: 2,
+  text: "Bluestem Plumbing: Your plumber Jordan is on the way! ETA ~14 min. Track live, see ETA & message them: arriveping.com/t/7k2q9x",
+  /** What the agent says, in order. `q` is the question it asks itself, `a` its answer. */
+  lines: {
+    read: { a: "Reading bluestemplumbing.ca: home, services, area, about, team and contact pages." },
+    logo: { q: "Whose site is this?", a: "Bluestem Plumbing & Drain. That's their logo." },
+    colors: { q: "Brand colours?", a: "Deep blue and amber." },
+    address: { q: "Where are they?", a: "88 Kettle Way. They serve Winnipeg, East St. Paul and Headingley." },
+    trade: { q: "What are they?", a: "A plumber: licensed plumbers, drains and water heaters." },
+    words: { q: "What do they call things?", a: "Their people are plumbers. The work is jobs." },
+    services: { q: "What do they sell?", a: "8 services. Loading a priced starter catalog for their trade." },
+    team: { q: "Who works there?", a: "Jordan, Kim and Sam. I'll ask before inviting anyone." },
+    joke: { a: "Bleeding the lines so nothing's stuck in the pipes…" },
+    texts: { a: "Job templates, intake forms and customer texts, written in their words." },
+    done: { a: "Workspace ready. Next: a short setup chat, then invite the team." },
+  },
+  caption: "Bluestem Plumbing & Drain and its website are made up for this demo. Times are typical; your workspace is built from your own website.",
 };
 
-/** Getting started: one section. The first-hour dial leads; the setup agent run is the proof. Times are typical, not guaranteed. */
+/** "Your turn" under the setup film: website + work email → signup, with a HubSpot lead for marketing. */
+export const setupTry = {
+  eyebrow: "Your turn",
+  title: "Try it with your website.",
+  body: "We'll take you straight to signup with your website filled in, and the agent starts reading it.",
+  site: { label: "Your website", placeholder: "yourcompany.com" },
+  email: { label: "Work email", placeholder: "you@company.com" },
+  button: "Build my workspace",
+  price: "30 days free, then from US$49 a month. Cancel before day 30 and pay nothing.",
+  fine: "We'll email you about getting set up. Unsubscribe any time.",
+  noSite: { label: "No website? Sign up without one", href: brand.urls.signUp },
+};
+
+/** Getting started: the setup film leads, then the rest of the first hour and the price. Times are typical, not guaranteed. */
 export const firstHour = {
   eyebrow: "Getting started",
-  title: "Live in under an hour.",
-  titleMuted: "An AI agent does the setup.",
-  body: "No consultants, no hardware to install, no weeks of setup. Give the agent your website, answer a few questions about how you work, and dispatch your first job before the hour is up.",
+  title: "Paste your website.",
+  titleMuted: "Dispatch within the hour.",
+  body: "Nobody has to learn setup, and nobody has to chase it. The ArrivePing agent reads your website the way a new hire would, then builds your workspace in about two minutes. You check it, invite your team and send your first job.",
   milestones: [
-    { at: "0 min", title: "Paste your website", body: "That's the only form you fill in." },
-    { at: "2 min", title: "Workspace built for you", body: "Brand, services, priced catalog, job templates, intake forms and customer texts." },
-    { at: "15 min", title: "Short setup chat", body: "The agent asks 5–10 questions about your crews, jobs and pricing, then tunes everything." },
-    { at: "25 min", title: "Team invited", body: "Technicians get a text and email to join, then use the ArrivePing app on the phone they already carry. No devices to buy." },
-    { at: "40 min", title: "Bring your data", body: "Import customers and technicians straight from a spreadsheet." },
-    { at: "Under 60", title: "First job dispatched", body: "Your customer gets a text and a live ETA." },
+    { at: "0 min", title: "Paste your website", body: "The only form you fill in." },
+    { at: "2 min", title: "Workspace built", body: "Brand, services, priced catalog, job templates, intake forms and customer texts." },
+    { at: "15 min", title: "Short setup chat", body: "The agent asks 5–10 questions about your team, jobs and pricing, then tunes everything." },
+    { at: "25 min", title: "Team invited", body: "Your people get a text to join and use the phone they already carry." },
+    { at: "40 min", title: "Bring your data", body: "Import customers and technicians from a spreadsheet." },
+    { at: "< 60 min", title: "First job dispatched", body: "Your customer gets a text and a live ETA." },
   ],
-  demo: {
-    title: "Watch the agent build a workspace",
-    body: "Type any website and run it. This is a labelled sample; your workspace is built from your own site.",
-  },
-  cta: {
-    label: "Sign up free",
-    href: brand.urls.signUp,
-    price: "30 days free, then from US$49 a month",
-    detail: "1 dispatcher + 2 drivers · each added driver is US$30 a month, less from driver 30",
-  },
+  stepsTitle: "Then the rest of the first hour.",
   note: "Typical first hour. Times vary with team size and how much data you bring.",
 };
 
