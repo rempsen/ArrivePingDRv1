@@ -104,6 +104,8 @@ export interface Board {
   generatedAt: string;
   techs: BoardTech[];
   jobs: BoardJob[];
+  /** Days off in the range (company-time days), so the calendar doesn't suggest them. */
+  timeOff: Array<{ techId: string; day: string }>;
 }
 
 /** The minimum a job needs for the "free at" estimate. */
@@ -180,7 +182,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
   const waiting = and(isNull(B.riderId), notInArray(B.status, [...TERMINAL_STATUSES]));
   const live = inArray(B.status, [...IN_FLIGHT_STATUSES]);
 
-  const [techRows, jobRows, company] = await Promise.all([
+  const [techRows, jobRows, company, offRows] = await Promise.all([
     // 2. Technicians with their names. Deactivated ones can't be dispatched.
     t.transaction((tx) =>
       tx
@@ -243,7 +245,25 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
       .from(schema.companies)
       .where(eq(schema.companies.id, companyId))
       .then((r) => r[0] ?? null),
+    // 5. Time off in the range (a day either side covers every zone offset).
+    t.select(
+      schema.techShifts,
+      and(
+        eq(schema.techShifts.kind, "timeoff"),
+        gte(schema.techShifts.date, new Date(start.getTime() - 48 * 3_600_000)),
+        lt(schema.techShifts.date, new Date(dayEnd.getTime() + 48 * 3_600_000)),
+      ),
+    ),
   ]);
+  const rangeDays = new Set(Array.from({ length: days }, (_, i) => addDays(day, i)));
+  const timeOff = [
+    ...new Map(
+      offRows
+        .map((s) => ({ techId: s.riderId, day: zonedDayKey(new Date(s.date), tz) }))
+        .filter((o) => rangeDays.has(o.day))
+        .map((o) => [`${o.techId}|${o.day}`, o] as const),
+    ).values(),
+  ];
 
   const truncated = jobRows.length > BOARD_JOB_LIMIT;
   const rows = truncated ? jobRows.slice(0, BOARD_JOB_LIMIT) : jobRows;
@@ -342,5 +362,6 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
     generatedAt: now.toISOString(),
     techs,
     jobs,
+    timeOff,
   };
 }

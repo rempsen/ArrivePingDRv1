@@ -179,6 +179,18 @@ describe("loadBoard", () => {
     expect((await loadBoard(CO, { now: NOW, days: 30 })).days).toBe(7);
   });
 
+  it("lists the days off in range, in company time", async () => {
+    // Noon Winnipeg on the 18th; and one on the 25th, outside a 3-day board.
+    await db.insert(schema.techShifts).values([
+      { companyId: CO, riderId: `${CO}-t1`, kind: "timeoff", date: new Date("2026-10-18T17:00:00Z") },
+      { companyId: CO, riderId: `${CO}-t1`, kind: "shift", date: new Date("2026-10-17T17:00:00Z") },
+      { companyId: CO, riderId: `${CO}-t2`, kind: "timeoff", date: new Date("2026-10-25T17:00:00Z") },
+    ]);
+    const b = await loadBoard(CO, { now: NOW, days: 3 });
+    expect(b.timeOff).toEqual([{ techId: `${CO}-t1`, day: "2026-10-18" }]);
+    expect((await loadBoard(OTHER, { now: NOW, days: 3 })).timeOff).toEqual([]);
+  });
+
   it("never shows another company's technicians or jobs", async () => {
     const b = await loadBoard(CO, { now: NOW });
     expect(b.jobs.some((j) => j.id === "b-other")).toBe(false);
@@ -219,8 +231,8 @@ describe("loadBoard", () => {
       expect(big.techs).toHaveLength(50);
       expect(big.jobs).toHaveLength(200);
       expect(bigReads).toBe(smallReads);
-      // the spy really saw the reads: settings, technicians, jobs, company
-      expect(smallReads).toBe(4);
+      // the spy really saw the reads: settings, technicians, jobs, company, time off
+      expect(smallReads).toBe(5);
     } finally {
       client.query = origQuery;
       client.transaction = origTx;

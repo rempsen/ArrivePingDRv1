@@ -91,6 +91,7 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
   const range = useMemo(() => timelineRange([...jobsByTech.values()].flat().map((j) => spanOf(j, tz))), [jobsByTech, tz]);
   const nowMin = day === today ? zonedMinutesOfDay(now, tz) : null;
 
+  const offToday = useMemo(() => new Set((sb.board?.timeOff ?? []).filter((o) => o.day === day).map((o) => o.techId)), [sb.board, day]);
   const ghosts: Slot[] = useMemo(() => {
     if (!placing || view !== "day" || day < today) return [];
     return rankSlots({
@@ -98,13 +99,13 @@ export function DispatchCalendar(p: { confirm: ConfirmFn; onOpenJob(jobId: strin
       techs: techs.map((t) => ({
         id: t.id,
         qualified: qualifiedFor(t, placing),
-        available: !(day === today && t.status === "offline"),
+        available: !(day === today && t.status === "offline") && !offToday.has(t.id),
         dayJobs: (jobsByTech.get(t.id) ?? []).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
       })),
       earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,
       range,
     });
-  }, [placing, view, day, today, techs, jobsByTech, tz, now, range]);
+  }, [placing, view, day, today, techs, jobsByTech, tz, now, range, offToday]);
   const dimmed = useMemo(() => new Set(placing ? techs.filter((t) => !qualifiedFor(t, placing)).map((t) => t.id) : []), [placing, techs]);
 
   // ---- drag and drop ----

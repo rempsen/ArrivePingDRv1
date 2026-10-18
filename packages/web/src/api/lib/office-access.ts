@@ -80,6 +80,11 @@ const RULES: Rule[] = [
   { re: /^\/api\/audit(\/|$)/, need: mod("audit") },
   { re: /^\/api\/(catalog|option-catalog|services)(\/|$)/, need: mod("catalog") },
   { re: /^\/api\/(change-requests|delays)(\/|$)/, need: readOr("work_orders:view", "work_orders:edit") },
+  // The dispatch calendar: moving a job in time is scheduling, as on
+  // POST /bookings/:id/schedule. Undo checks per token (assign vs time move).
+  { re: /^\/api\/dispatch\/schedule$/, need: () => "scheduler:edit" },
+  { re: /^\/api\/dispatch\/load$/, need: readOr("scheduler:view", "scheduler:edit") },
+  { re: /^\/api\/dispatch\/undo$/, need: () => "self" },
   // The dispatch map (board, candidates, assign/undo, live stream).
   { re: /^\/api\/dispatch(\/|$)/, need: readOr("work_orders:view", "work_orders:edit") },
   // Talking to technicians is dispatching.

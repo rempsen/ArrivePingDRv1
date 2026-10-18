@@ -25,12 +25,12 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database";
 import * as schema from "../database/schema";
-import { requireAdmin, tenantId } from "../middleware/auth";
+import { officeCan, requireAdmin, tenantId } from "../middleware/auth";
 import { jsonBody, id as idField, ValidationError } from "../lib/validate";
 import type { AppEnv } from "../env";
 import { loadBoard, MAX_BOARD_DAYS } from "../../services/dispatch-board";
 import { loadCandidates, MAX_CANDIDATE_JOBS } from "../../services/dispatch-candidates";
-import { dispatchAssign } from "../../services/dispatch-assign";
+import { dispatchAssign, readAnyUndo } from "../../services/dispatch-assign";
 import { dispatchSchedule, loadDayLoad, MAX_LOAD_DAYS, undoAny } from "../../services/dispatch-schedule";
 import { subscribeDispatch, type DispatchSignal } from "../../services/realtime";
 
@@ -123,7 +123,16 @@ export const dispatchRoutes = new Hono<AppEnv>()
 
   .post("/undo", requireAdmin, jsonBody(UndoBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    const r = await undoAny(tenantId(c), c.req.valid("json").token, u.name);
+    const token = c.req.valid("json").token;
+    // Undoing a time move is scheduling; undoing an assignment is dispatching.
+    // A token that no longer reads (expired, garbled) gets its own message from
+    // undoAny for anyone who could have made either kind.
+    const claims = readAnyUndo(token);
+    const needs = typeof claims === "string" ? ["work_orders:edit", "scheduler:edit"] : [claims.k === "time" ? "scheduler:edit" : "work_orders:edit"];
+    let allowed = false;
+    for (const p of needs) if (!allowed) allowed = await officeCan(u, p);
+    if (!allowed) return c.json({ message: "Your role doesn't include this. Ask an admin on your account." }, 403);
+    const r = await undoAny(tenantId(c), token, u.name);
     if (!r.ok) return c.json({ message: r.message }, r.status);
     return c.json({ job: r.job }, 200);
   })

@@ -172,7 +172,9 @@ export function rankSlots(input: {
         });
         break;
       }
-      if (next) prev = next;
+      // Where they are free from is the end of the latest job so far, which with
+      // overlapping jobs isn't always the one just passed.
+      if (next && (!prev || next.endMin > prev.endMin)) prev = next;
     }
   }
   return found
