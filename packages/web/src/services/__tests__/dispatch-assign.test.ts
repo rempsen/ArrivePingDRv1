@@ -40,6 +40,9 @@ async function ensureTable(table: PgTable) {
   for (const c of cfg.columns) {
     if (c.primary) continue;
     await s.execute(`ALTER TABLE "${cfg.name}" ADD COLUMN IF NOT EXISTS ${colDdl(c, false)}`);
+    // Another test file may have made this table first without the now()
+    // default; the notice handlers compare event times, so make sure it's there.
+    if (colDdl(c, false).endsWith("DEFAULT now()")) await s.execute(`ALTER TABLE "${cfg.name}" ALTER COLUMN "${c.name}" SET DEFAULT now()`);
   }
 }
 
