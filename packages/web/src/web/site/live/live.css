@@ -186,15 +186,31 @@
 .site .lv-hero__badge {
   align-self: flex-start;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 4px 12px;
+  padding: 6px 14px;
   border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 999px;
   background: rgb(5 8 15 / 45%);
   color: #cfe6f7;
   font-size: 13px;
   font-weight: 500;
+}
+/* The three value propositions; a blinking dot sits before the second and third. */
+.site .lv-hero__pillar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.site .lv-hero__sep {
+  width: 6px;
+  height: 6px;
+}
+/* the two dots blink out of step, like a signal passing along the line */
+.site .lv-hero__sep--2 {
+  animation-delay: -0.8s;
 }
 .site .lv-hero__title {
   font-size: clamp(40px, 4.5vw, 64px);
@@ -391,9 +407,14 @@
   .site .lv-hero__copy {
     gap: 18px;
   }
+  /* sized so the three fit on one line on a 390 px phone (345 px wide) */
   .site .lv-hero__badge {
-    font-size: 12px;
-    padding: 5px 10px;
+    font-size: 11.5px;
+    padding: 5px 11px;
+    column-gap: 8px;
+  }
+  .site .lv-hero__pillar {
+    gap: 8px;
   }
   .site .lv-hero__title {
     font-size: clamp(36px, 10vw, 42px);
@@ -442,6 +463,17 @@
   }
   .site .lv-hero__pause {
     bottom: 14px;
+  }
+}
+@media (max-width: 380px) {
+  /* one line on a 360 px phone too (323 px wide); below that it wraps */
+  .site .lv-hero__badge {
+    font-size: 11px;
+    padding: 5px 10px;
+    column-gap: 6px;
+  }
+  .site .lv-hero__pillar {
+    gap: 6px;
   }
 }
 @media (max-width: 360px) {
