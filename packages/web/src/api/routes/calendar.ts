@@ -5,6 +5,7 @@ import * as schema from "../database/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { officeCan, requireAuth, loadMemberships } from "../middleware/auth";
 import { isOfficeRole } from "../lib/office-access";
+import { overrideAt } from "../lib/permissions";
 import { buildCalendar, type CalEvent } from "../../services/ics";
 import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
@@ -149,8 +150,15 @@ export const calendarRoutes = new Hono<AppEnv>()
     // every company, each read with the role they hold THERE. Reading only
     // u.companyId hid every job from their non-home companies.
     const memberships = await loadMemberships(u.id);
+    const userPerms = (u as { permissions?: string | null }).permissions;
     const scopes = memberships.length
-      ? memberships.map((m) => ({ companyId: m.companyId, role: m.role, permissions: m.permissions }))
+      ? memberships.map((m) => ({
+          companyId: m.companyId,
+          role: m.role,
+          // Same rule as authMiddleware, so the feed never shows more than the
+          // dashboard would (lib/permissions.ts overrideAt).
+          permissions: overrideAt({ membership: m.permissions, user: userPerms, companyId: m.companyId, homeCompany: u.companyId }),
+        }))
       : [{ companyId: (u as any).companyId || "default", role: u.role, permissions: (u as { permissions?: string | null }).permissions ?? null }];
 
     const perCompany = await Promise.all(

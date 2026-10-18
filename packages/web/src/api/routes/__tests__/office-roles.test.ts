@@ -134,6 +134,15 @@ describe("the calendar feed follows the person's own permissions (Codex on #62)"
       await db.update(schema.memberships).set({ permissions: null }).where(eq(schema.memberships.id, "m-or-disp2"));
     }
   });
+  it("…including an older override saved on the user row at their home company (Codex on #69)", async () => {
+    await db.update(schema.user).set({ permissions: JSON.stringify(["work_orders:view"]) }).where(eq(schema.user.id, "or-disp2"));
+    try {
+      const ics = await feed("or-cal-token-disp");
+      expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
+    } finally {
+      await db.update(schema.user).set({ permissions: null }).where(eq(schema.user.id, "or-disp2"));
+    }
+  });
 });
 
 describe("the team", () => {
