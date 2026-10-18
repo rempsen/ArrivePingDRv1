@@ -10,11 +10,35 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { AlertTriangle, Clock3, Plus } from "lucide-react";
 import { useEffect, useRef, type CSSProperties } from "react";
-import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
+import type {
+  BoardJob,
+  BoardTech,
+} from "../../../features/dispatch/data/types";
 import { TechAvatar } from "../../../components/tech-avatar";
 import { AutoBadge } from "../../../components/auto-badge";
-import { bookedMinutes, driveMinutes, durationOf, loadLevel, packLanes, pct, snapMinutes, type Range, type Slot } from "../../../../shared/schedule-layout";
-import { DRIVE_HATCH, LOAD_COLOR, PHASE_STYLE, TECH_STATUS, clock, hourLabel, hours, matches, phaseOf, spanOf } from "./calendar-utils";
+import {
+  bookedMinutes,
+  driveMinutes,
+  durationOf,
+  loadLevel,
+  packLanes,
+  pct,
+  snapMinutes,
+  type Range,
+  type Slot,
+} from "../../../../shared/schedule-layout";
+import {
+  DRIVE_HATCH,
+  LOAD_COLOR,
+  PHASE_STYLE,
+  TECH_STATUS,
+  clock,
+  hourLabel,
+  hours,
+  matches,
+  phaseOf,
+  spanOf,
+} from "./calendar-utils";
 
 export interface DropPreview {
   techId: string;
@@ -41,6 +65,8 @@ interface Props {
   onOpenJob(job: BoardJob): void;
   /** New job for this technician; at a time when one was picked on the row. */
   onNewJob(techId: string, startMin?: number): void;
+  /** May move jobs in time (scheduler:edit); without it the blocks only open. */
+  canMove: boolean;
 }
 
 export const TECH_COL_PX = 232;
@@ -50,7 +76,12 @@ const MIN_HOUR_PX = 112;
 export function DayTimeline(p: Props) {
   const rowH = p.compact ? 50 : 76;
   const hourMarks: number[] = [];
-  for (let m = Math.ceil(p.range.startMin / 60) * 60; m < p.range.endMin; m += 60) hourMarks.push(m);
+  for (
+    let m = Math.ceil(p.range.startMin / 60) * 60;
+    m < p.range.endMin;
+    m += 60
+  )
+    hourMarks.push(m);
   const span = p.range.endMin - p.range.startMin;
   const grid: CSSProperties = {
     backgroundImage: `repeating-linear-gradient(to right, rgba(148,163,184,.10) 0 1px, transparent 1px calc(100% / ${span / 60}))`,
@@ -79,32 +110,51 @@ export function DayTimeline(p: Props) {
       <div ref={scroller} className="overflow-x-auto">
         <div style={{ minWidth: TECH_COL_PX + minTrack }}>
           {/* hour axis */}
-          <div className="sticky top-0 z-10 grid h-10 border-b border-white/10 bg-ink-2" style={{ gridTemplateColumns: `${TECH_COL_PX}px minmax(0,1fr)` }}>
+          <div
+            className="sticky top-0 z-10 grid h-10 border-b border-white/10 bg-ink-2"
+            style={{ gridTemplateColumns: `${TECH_COL_PX}px minmax(0,1fr)` }}
+          >
             <div className="sticky left-0 z-[6] flex items-center bg-ink-2 px-4 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
-              {p.techs.length} {p.techs.length === 1 ? "technician" : "technicians"}
+              {p.techs.length}{" "}
+              {p.techs.length === 1 ? "technician" : "technicians"}
             </div>
             <div className="relative">
               {hourMarks.map((m) => (
-                <span key={m} className="absolute top-3 font-mono text-[11px] text-slate-500" style={{ left: `calc(${pct(m, p.range)}% + 6px)` }}>
+                <span
+                  key={m}
+                  className="absolute top-3 font-mono text-[11px] text-slate-500"
+                  style={{ left: `calc(${pct(m, p.range)}% + 6px)` }}
+                >
                   {hourLabel(m)}
                 </span>
               ))}
-              {p.nowMin !== null && p.nowMin >= p.range.startMin && p.nowMin <= p.range.endMin && (
-                <span
-                  className="absolute top-2 -translate-x-1/2 rounded bg-red-400 px-1.5 text-[10.5px] font-extrabold text-red-950"
-                  style={{ left: `${pct(p.nowMin, p.range)}%` }}
-                >
-                  {clock(p.nowMin, true)}
-                </span>
-              )}
+              {p.nowMin !== null &&
+                p.nowMin >= p.range.startMin &&
+                p.nowMin <= p.range.endMin && (
+                  <span
+                    className="absolute top-2 -translate-x-1/2 rounded bg-red-400 px-1.5 text-[10.5px] font-extrabold text-red-950"
+                    style={{ left: `${pct(p.nowMin, p.range)}%` }}
+                  >
+                    {clock(p.nowMin, true)}
+                  </span>
+                )}
             </div>
           </div>
 
           {p.techs.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm text-slate-500">No technicians match this filter.</p>
+            <p className="px-4 py-10 text-center text-sm text-slate-500">
+              No technicians match this filter.
+            </p>
           )}
           {p.techs.map((t) => (
-            <TechRow key={t.id} tech={t} jobs={p.jobsByTech.get(t.id) ?? []} rowH={rowH} grid={grid} {...p} />
+            <TechRow
+              key={t.id}
+              tech={t}
+              jobs={p.jobsByTech.get(t.id) ?? []}
+              rowH={rowH}
+              grid={grid}
+              {...p}
+            />
           ))}
         </div>
       </div>
@@ -112,22 +162,38 @@ export function DayTimeline(p: Props) {
   );
 }
 
-function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; grid: CSSProperties }) {
+function TechRow(
+  p: Props & {
+    tech: BoardTech;
+    jobs: BoardJob[];
+    rowH: number;
+    grid: CSSProperties;
+  },
+) {
   const { tech: t, jobs, rowH, range, tz } = p;
-  const { setNodeRef, isOver } = useDroppable({ id: `row:${t.id}`, data: { techId: t.id } });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `row:${t.id}`,
+    data: { techId: t.id },
+  });
   const spans = jobs.map((j) => spanOf(j, tz));
   const lanes = new Map(packLanes(spans).map((l) => [l.id, l]));
   const booked = bookedMinutes(jobs);
   const level = loadLevel(booked);
   const st = TECH_STATUS[t.status] ?? TECH_STATUS.offline!;
   const dim = p.dimmedTechs.has(t.id);
-  const ghosts = p.ghosts.map((g, i) => ({ g, i })).filter((x) => x.g.techId === t.id);
+  const ghosts = p.ghosts
+    .map((g, i) => ({ g, i }))
+    .filter((x) => x.g.techId === t.id);
   const preview = p.preview && p.preview.techId === t.id ? p.preview : null;
 
   return (
     <div
       className="grid border-b border-white/[0.06] transition-opacity"
-      style={{ gridTemplateColumns: `${TECH_COL_PX}px minmax(0,1fr)`, height: rowH, opacity: dim ? 0.5 : 1 }}
+      style={{
+        gridTemplateColumns: `${TECH_COL_PX}px minmax(0,1fr)`,
+        height: rowH,
+        opacity: dim ? 0.5 : 1,
+      }}
     >
       <div className="sticky left-0 z-[6] flex min-w-0 items-center gap-2.5 border-r border-white/10 bg-[#0d1524] px-3.5">
         <TechAvatar
@@ -139,8 +205,14 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
         />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[13.5px] font-semibold text-white">{t.name}</span>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: st.dot }} title={st.label} />
+            <span className="truncate text-[13.5px] font-semibold text-white">
+              {t.name}
+            </span>
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ background: st.dot }}
+              title={st.label}
+            />
             <button
               type="button"
               onClick={() => p.onNewJob(t.id)}
@@ -152,7 +224,9 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
             </button>
           </div>
           {dim && p.placing ? (
-            <span className="truncate text-xs font-semibold text-slate-500">Not qualified for this job</span>
+            <span className="truncate text-xs font-semibold text-slate-500">
+              Not qualified for this job
+            </span>
           ) : (
             !p.compact && (
               <span className="truncate text-xs text-slate-500">
@@ -160,11 +234,22 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
               </span>
             )
           )}
-          <div className="flex items-center gap-1.5" title={`${hours(booked)} of 8h booked`}>
+          <div
+            className="flex items-center gap-1.5"
+            title={`${hours(booked)} of 8h booked`}
+          >
             <span className="h-1 flex-1 overflow-hidden rounded bg-white/10">
-              <span className="block h-full" style={{ width: `${Math.min(100, (booked / 480) * 100)}%`, background: LOAD_COLOR[level] }} />
+              <span
+                className="block h-full"
+                style={{
+                  width: `${Math.min(100, (booked / 480) * 100)}%`,
+                  background: LOAD_COLOR[level],
+                }}
+              />
             </span>
-            <span className="font-mono text-[10.5px] text-slate-400">{hours(booked)}/8h</span>
+            <span className="font-mono text-[10.5px] text-slate-400">
+              {hours(booked)}/8h
+            </span>
           </div>
         </div>
       </div>
@@ -172,22 +257,39 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
       <div
         ref={setNodeRef}
         className="relative"
-        style={{ ...p.grid, background: isOver ? "rgba(14,165,233,.06)" : undefined }}
+        style={{
+          ...p.grid,
+          background: isOver ? "rgba(14,165,233,.06)" : undefined,
+        }}
         // Double-click an empty spot to book a job there.
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest("button")) return;
           const r = e.currentTarget.getBoundingClientRect();
           if (r.width <= 0) return;
-          const at = range.startMin + ((e.clientX - r.left) / r.width) * (range.endMin - range.startMin);
+          const at =
+            range.startMin +
+            ((e.clientX - r.left) / r.width) * (range.endMin - range.startMin);
           p.onNewJob(t.id, snapMinutes(at));
         }}
       >
         {p.nowMin !== null && p.nowMin > range.startMin && (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 bg-black/25" style={{ width: `${pct(Math.min(p.nowMin, range.endMin), range)}%` }} />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 bg-black/25"
+            style={{
+              width: `${pct(Math.min(p.nowMin, range.endMin), range)}%`,
+            }}
+          />
         )}
-        {p.nowMin !== null && p.nowMin >= range.startMin && p.nowMin <= range.endMin && (
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-[3] w-0.5 bg-red-400" style={{ left: `${pct(p.nowMin, range)}%` }} />
-        )}
+        {p.nowMin !== null &&
+          p.nowMin >= range.startMin &&
+          p.nowMin <= range.endMin && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 z-[3] w-0.5 bg-red-400"
+              style={{ left: `${pct(p.nowMin, range)}%` }}
+            />
+          )}
 
         {/* drive time into each stop */}
         {jobs.map((j, i) => {
@@ -196,14 +298,23 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
           const drive = driveMinutes(prev, j);
           if (drive === null) return null;
           const s = spans[i]!;
-          const from = Math.max(range.startMin, s.startMin - drive, spans[i - 1]!.endMin);
+          const from = Math.max(
+            range.startMin,
+            s.startMin - drive,
+            spans[i - 1]!.endMin,
+          );
           if (from >= s.startMin) return null;
           return (
             <span
               key={`d-${j.id}`}
               title={`About ${drive} min drive from the last stop`}
               className="absolute z-[1] h-1.5 rounded"
-              style={{ left: `${pct(from, range)}%`, width: `${pct(s.startMin, range) - pct(from, range)}%`, top: rowH / 2 - 3, backgroundImage: DRIVE_HATCH }}
+              style={{
+                left: `${pct(from, range)}%`,
+                width: `${pct(s.startMin, range) - pct(from, range)}%`,
+                top: rowH / 2 - 3,
+                backgroundImage: DRIVE_HATCH,
+              }}
             />
           );
         })}
@@ -217,8 +328,18 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
             rowH={rowH}
             range={range}
             compact={p.compact}
-            faded={!matches(p.query, j.title, j.service, j.customerName, j.address, t.name) || dim}
+            faded={
+              !matches(
+                p.query,
+                j.title,
+                j.service,
+                j.customerName,
+                j.address,
+                t.name,
+              ) || dim
+            }
             selected={p.selectedJobId === j.id}
+            canMove={p.canMove}
             onOpen={() => p.onOpenJob(j)}
           />
         ))}
@@ -230,15 +351,23 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
             onClick={() => p.onGhost(g)}
             aria-label={`Assign ${p.placing?.title ?? "job"} to ${t.name} at ${clock(g.startMin)}`}
             className="absolute z-[4] flex flex-col justify-center gap-0.5 overflow-hidden rounded-lg border-[1.5px] border-dashed border-emerald-live bg-[#0d2420]/95 px-2 text-left text-white shadow-[0_0_0_4px_rgba(16,185,129,.12)] hover:brightness-125"
-            style={{ left: `${pct(g.startMin, range)}%`, width: `max(150px, ${pct(g.startMin + durationOf(p.placing ?? {}), range) - pct(g.startMin, range)}%)`, top: 4, height: rowH - 8 }}
+            style={{
+              left: `${pct(g.startMin, range)}%`,
+              width: `max(150px, ${pct(g.startMin + durationOf(p.placing ?? {}), range) - pct(g.startMin, range)}%)`,
+              top: 4,
+              height: rowH - 8,
+            }}
           >
             <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-extrabold">
-              <span className="rounded bg-emerald-live px-1.5 text-[10.5px] text-emerald-950">#{i + 1}</span>
+              <span className="rounded bg-emerald-live px-1.5 text-[10.5px] text-emerald-950">
+                #{i + 1}
+              </span>
               {i === 0 ? "Best fit" : `Option ${i + 1}`}
             </span>
             {!p.compact && (
               <span className="truncate text-[11.5px] text-emerald-100">
-                {clock(g.startMin, true)}–{clock(g.startMin + durationOf(p.placing ?? {}), true)}
+                {clock(g.startMin, true)}–
+                {clock(g.startMin + durationOf(p.placing ?? {}), true)}
                 {g.driveMins !== null ? ` · ${g.driveMins} min drive` : ""}
               </span>
             )}
@@ -249,7 +378,12 @@ function TechRow(p: Props & { tech: BoardTech; jobs: BoardJob[]; rowH: number; g
           <span
             aria-hidden="true"
             className="pointer-events-none absolute z-[3] rounded-lg border-[1.5px] border-dashed border-brand bg-brand/10 px-2 py-1 text-[11.5px] font-extrabold text-sky-200"
-            style={{ left: `${pct(preview.startMin, range)}%`, width: `${pct(preview.startMin + preview.dur, range) - pct(preview.startMin, range)}%`, top: 4, height: rowH - 8 }}
+            style={{
+              left: `${pct(preview.startMin, range)}%`,
+              width: `${pct(preview.startMin + preview.dur, range) - pct(preview.startMin, range)}%`,
+              top: 4,
+              height: rowH - 8,
+            }}
           >
             {clock(preview.startMin)}
           </span>
@@ -268,12 +402,17 @@ function JobBlock(p: {
   compact: boolean;
   faded: boolean;
   selected: boolean;
+  canMove: boolean;
   onOpen(): void;
 }) {
   const { job: j, span, lane, rowH, range } = p;
   const phase = phaseOf(j.status);
   const look = PHASE_STYLE[phase];
-  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: `j:${j.id}`, data: { job: j }, disabled: phase === "done" });
+  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
+    id: `j:${j.id}`,
+    data: { job: j },
+    disabled: phase === "done" || !p.canMove,
+  });
   const split = lane.lanes === 2;
   const top = split ? (lane.lane === 0 ? 4 : rowH / 2 + 1) : 5;
   const h = split ? rowH / 2 - 5 : rowH - 10;
@@ -303,23 +442,40 @@ function JobBlock(p: {
         borderColor: lane.conflict ? "#f87171" : look.border,
         color: look.text,
         opacity: isDragging ? 0.35 : p.faded ? 0.25 : 1,
-        boxShadow: p.selected ? "0 0 0 2px #e6edf7" : lane.conflict ? "0 0 0 1px #f87171" : undefined,
+        boxShadow: p.selected
+          ? "0 0 0 2px #e6edf7"
+          : lane.conflict
+            ? "0 0 0 1px #f87171"
+            : undefined,
         cursor: phase === "done" ? "pointer" : "grab",
         touchAction: "manipulation",
       }}
     >
       <span className="flex min-w-0 items-start gap-1.5">
-        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: look.dot }} />
-        <span className={`text-[12.5px] font-bold leading-tight ${short && !split && !p.compact ? "line-clamp-2" : "truncate"}`}>{j.title || j.service}</span>
+        <span
+          className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: look.dot }}
+        />
+        <span
+          className={`text-[12.5px] font-bold leading-tight ${short && !split && !p.compact ? "line-clamp-2" : "truncate"}`}
+        >
+          {j.title || j.service}
+        </span>
         <AutoBadge booking={j} size="xs" className="mt-0.5" />
         {lane.conflict && (
-          <span title="Overlaps another job" className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-red-400 px-1 text-[10px] font-extrabold text-red-950">
+          <span
+            title="Overlaps another job"
+            className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-red-400 px-1 text-[10px] font-extrabold text-red-950"
+          >
             <AlertTriangle className="h-2.5 w-2.5" />
             {showMeta && "Overlap"}
           </span>
         )}
         {!lane.conflict && j.late && phase !== "done" && (
-          <span title="Projected to run late" className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-amber-warn px-1 text-[10px] font-extrabold text-amber-950">
+          <span
+            title="Projected to run late"
+            className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-amber-warn px-1 text-[10px] font-extrabold text-amber-950"
+          >
             <Clock3 className="h-2.5 w-2.5" />
             {showMeta && "Late"}
           </span>
@@ -330,7 +486,11 @@ function JobBlock(p: {
           {clock(span.startMin, true)}–{clock(span.endMin, true)}
         </span>
       )}
-      {showMeta && <span className="truncate text-[11.5px] text-slate-400">{j.customerName || j.address || "Customer"}</span>}
+      {showMeta && (
+        <span className="truncate text-[11.5px] text-slate-400">
+          {j.customerName || j.address || "Customer"}
+        </span>
+      )}
     </button>
   );
 }

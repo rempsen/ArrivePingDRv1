@@ -4,15 +4,45 @@
  * them. Built for a dispatcher placing work across 10–30 technicians, not for
  * one person's meetings: see blueprints/2026-10-18-arriveping-dispatch-calendar.
  */
-import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent, type DragMoveEvent, type DragStartEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { BoardJob, BoardTech } from "../../../features/dispatch/data/types";
+import type {
+  BoardJob,
+  BoardTech,
+} from "../../../features/dispatch/data/types";
 import { useBrand } from "../../../lib/use-brand";
+import { useAccess } from "../../../hooks/use-access";
 import { tourAttr } from "../../../guide/anchors";
 import type { ConfirmFn } from "../../../lib/force-confirm";
-import { addDays, bookedMinutes, clampStart, DEFAULT_RANGE, durationOf, instantFor, mondayOf, rankSlots, snapMinutes, timelineRange, type Slot } from "../../../../shared/schedule-layout";
-import { safeTimeZone, zonedDayKey, zonedMinutesOfDay } from "../../../../shared/tz";
+import {
+  addDays,
+  bookedMinutes,
+  clampStart,
+  DEFAULT_RANGE,
+  durationOf,
+  instantFor,
+  mondayOf,
+  rankSlots,
+  snapMinutes,
+  timelineRange,
+  type Slot,
+} from "../../../../shared/schedule-layout";
+import {
+  safeTimeZone,
+  zonedDayKey,
+  zonedMinutesOfDay,
+} from "../../../../shared/tz";
 import { isTerminalStatus } from "../../../../shared/job-status";
 import { STALE_LOCATION_MS } from "../../../../shared/board-patch";
 import { Agenda } from "./Agenda";
@@ -20,7 +50,16 @@ import { DayTimeline, type DropPreview } from "./DayTimeline";
 import { MonthLoad } from "./MonthLoad";
 import { Queue, SlotList } from "./Queue";
 import { WeekCapacity } from "./WeekCapacity";
-import { clock, dayOf, dayTitle, hours, isWaiting, qualifiedFor, spanOf, type View } from "./calendar-utils";
+import {
+  clock,
+  dayOf,
+  dayTitle,
+  hours,
+  isWaiting,
+  qualifiedFor,
+  spanOf,
+  type View,
+} from "./calendar-utils";
 import { useDayLoad, usePlace, useScheduleBoard } from "./use-schedule";
 
 const VIEWS: Array<{ key: View; label: string }> = [
@@ -52,6 +91,11 @@ export function DispatchCalendar(p: {
   onNewJob(at: Date, riderId?: string): void;
 }) {
   const brand = useBrand();
+  // What this person may change here (the API checks the same on every request):
+  // moving a job in time is scheduling; giving it to someone is also dispatching.
+  const access = useAccess();
+  const canMove = access.can("scheduler:edit");
+  const canAssign = canMove && access.can("work_orders:edit");
   const [view, setView] = useState<View>("day");
   const [compact, setCompact] = useState(readCompact);
   const [skill, setSkill] = useState("");
@@ -76,18 +120,36 @@ export function DispatchCalendar(p: {
       overlay: sb.overlay,
       refresh: sb.refresh,
       tz,
-      techName: (id) => (sb.board?.techs.find((t) => t.id === id)?.name ?? "").trim().split(/\s+/)[0] ?? "",
+      techName: (id) =>
+        (sb.board?.techs.find((t) => t.id === id)?.name ?? "")
+          .trim()
+          .split(/\s+/)[0] ?? "",
     },
     p.confirm,
   );
 
-  const allTechs: BoardTech[] = useMemo(() => sb.board?.techs ?? [], [sb.board]);
-  const skills = useMemo(() => [...new Set(allTechs.map((t) => t.skillClass).filter(Boolean))].sort(), [allTechs]);
-  const techs = useMemo(() => (skill ? allTechs.filter((t) => t.skillClass === skill) : allTechs), [allTechs, skill]);
+  const allTechs: BoardTech[] = useMemo(
+    () => sb.board?.techs ?? [],
+    [sb.board],
+  );
+  const skills = useMemo(
+    () =>
+      [...new Set(allTechs.map((t) => t.skillClass).filter(Boolean))].sort(),
+    [allTechs],
+  );
+  const techs = useMemo(
+    () => (skill ? allTechs.filter((t) => t.skillClass === skill) : allTechs),
+    [allTechs, skill],
+  );
   const jobs = useMemo(() => sb.board?.jobs ?? [], [sb.board]);
   const waiting = jobs
     .filter(isWaiting)
-    .sort((a, b) => (a.priority === "urgent" ? -1 : 0) - (b.priority === "urgent" ? -1 : 0) || new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    .sort(
+      (a, b) =>
+        (a.priority === "urgent" ? -1 : 0) -
+          (b.priority === "urgent" ? -1 : 0) ||
+        new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+    );
   const placing = waiting.find((j) => j.id === placingId) ?? null;
 
   const jobsByTech = useMemo(() => {
@@ -101,19 +163,39 @@ export function DispatchCalendar(p: {
       list.push(j);
       m.set(j.riderId, list);
     }
-    for (const list of m.values()) list.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    for (const list of m.values())
+      list.sort(
+        (a, b) =>
+          new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+      );
     return m;
   }, [jobs, techs, view, day, tz]);
 
-  const range = useMemo(() => timelineRange([...jobsByTech.values()].flat().map((j) => spanOf(j, tz))), [jobsByTech, tz]);
+  const range = useMemo(
+    () =>
+      timelineRange([...jobsByTech.values()].flat().map((j) => spanOf(j, tz))),
+    [jobsByTech, tz],
+  );
   const nowMin = day === today ? zonedMinutesOfDay(now, tz) : null;
 
-  const offToday = useMemo(() => new Set((sb.board?.timeOff ?? []).filter((o) => o.day === day).map((o) => o.techId)), [sb.board, day]);
+  const offToday = useMemo(
+    () =>
+      new Set(
+        (sb.board?.timeOff ?? [])
+          .filter((o) => o.day === day)
+          .map((o) => o.techId),
+      ),
+    [sb.board, day],
+  );
   const ghosts: Slot[] = useMemo(() => {
     // No suggestions from the previous day's board while this day loads.
     if (!placing || view !== "day" || day < today || sb.stale) return [];
     return rankSlots({
-      job: { durationMins: durationOf(placing), lat: placing.lat, lng: placing.lng },
+      job: {
+        durationMins: durationOf(placing),
+        lat: placing.lat,
+        lng: placing.lng,
+      },
       techs: techs.map((t) => {
         // Today, someone on a job that's running long is free when it really ends.
         const free = day === today && t.freeAt ? new Date(t.freeAt) : null;
@@ -122,36 +204,88 @@ export function DispatchCalendar(p: {
         // reported recently (from when they're free), else the office; another
         // day, the office at the start of the day.
         const office = sb.board?.office ?? null;
-        const fresh = !!t.locationAt && now.getTime() - new Date(t.locationAt).getTime() <= STALE_LOCATION_MS;
-        const live = day === today && fresh && t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : null;
+        const fresh =
+          !!t.locationAt &&
+          now.getTime() - new Date(t.locationAt).getTime() <= STALE_LOCATION_MS;
+        const live =
+          day === today && fresh && t.lat != null && t.lng != null
+            ? { lat: t.lat, lng: t.lng }
+            : null;
         const startPoint = live ?? office;
-        const atMin = day !== today ? DEFAULT_RANGE.startMin : free && !freeLater ? zonedMinutesOfDay(free, tz) : zonedMinutesOfDay(now, tz);
+        const atMin =
+          day !== today
+            ? DEFAULT_RANGE.startMin
+            : free && !freeLater
+              ? zonedMinutesOfDay(free, tz)
+              : zonedMinutesOfDay(now, tz);
         const origin = startPoint ? { ...startPoint, atMin } : undefined;
         return {
           id: t.id,
           qualified: qualifiedFor(t, placing),
           // Off, on a break or off for the day: not a same-day suggestion.
-          available: !(day === today && (t.status === "offline" || t.status === "break")) && !offToday.has(t.id) && !freeLater,
-          ...(free && !freeLater ? { earliestMin: Math.ceil((zonedMinutesOfDay(free, tz) + 15) / 15) * 15 } : {}),
+          available:
+            !(
+              day === today &&
+              (t.status === "offline" || t.status === "break")
+            ) &&
+            !offToday.has(t.id) &&
+            !freeLater,
+          ...(free && !freeLater
+            ? {
+                earliestMin:
+                  Math.ceil((zonedMinutesOfDay(free, tz) + 15) / 15) * 15,
+              }
+            : {}),
           ...(origin ? { origin } : {}),
           // Finished and cancelled jobs stay on the calendar but don't hold time;
           // finished work still counts toward how full their day is.
-          dayJobs: (jobsByTech.get(t.id) ?? []).filter((j) => !isTerminalStatus(j.status)).map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
-          doneMins: bookedMinutes((jobsByTech.get(t.id) ?? []).filter((j) => j.status === "completed")),
+          dayJobs: (jobsByTech.get(t.id) ?? [])
+            .filter((j) => !isTerminalStatus(j.status))
+            .map((j) => ({ ...spanOf(j, tz), lat: j.lat, lng: j.lng })),
+          doneMins: bookedMinutes(
+            (jobsByTech.get(t.id) ?? []).filter(
+              (j) => j.status === "completed",
+            ),
+          ),
         };
       }),
-      earliestMin: day === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15 : 0,
+      earliestMin:
+        day === today
+          ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 15) * 15
+          : 0,
       // The working day suggestions are made in. The timeline may be wider (it
       // grows to show an early or late job), but that's display, not hours.
       range: DEFAULT_RANGE,
     });
-  }, [placing, view, day, today, techs, jobsByTech, tz, now, offToday, sb.board, sb.stale]);
-  const dimmed = useMemo(() => new Set(placing ? techs.filter((t) => !qualifiedFor(t, placing)).map((t) => t.id) : []), [placing, techs]);
+  }, [
+    placing,
+    view,
+    day,
+    today,
+    techs,
+    jobsByTech,
+    tz,
+    now,
+    offToday,
+    sb.board,
+    sb.stale,
+  ]);
+  const dimmed = useMemo(
+    () =>
+      new Set(
+        placing
+          ? techs.filter((t) => !qualifiedFor(t, placing)).map((t) => t.id)
+          : [],
+      ),
+    [placing, techs],
+  );
 
   // ---- drag and drop ----
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
   );
   const [dragging, setDragging] = useState<BoardJob | null>(null);
   const [preview, setPreview] = useState<DropPreview | null>(null);
@@ -160,19 +294,30 @@ export function DispatchCalendar(p: {
     const job = e.active.data.current?.job as BoardJob | undefined;
     const techId = e.over?.data.current?.techId as string | undefined;
     if (!job || !techId || !e.over) return null;
+    // Without dispatching rights a job only moves along its own row.
+    if (!canAssign && techId !== job.riderId) return null;
     const rect = e.over.rect;
     const fromBlock = String(e.active.id).startsWith("j:");
-    const x = fromBlock ? e.active.rect.current.translated?.left ?? null : pointerX(e);
+    const x = fromBlock
+      ? (e.active.rect.current.translated?.left ?? null)
+      : pointerX(e);
     if (x === null || rect.width <= 0) return null;
     const dur = durationOf(job);
-    const raw = range.startMin + ((x - rect.left) / rect.width) * (range.endMin - range.startMin);
+    const raw =
+      range.startMin +
+      ((x - rect.left) / rect.width) * (range.endMin - range.startMin);
     return { techId, startMin: clampStart(snapMinutes(raw), dur, range), dur };
   };
 
-  const onDragStart = (e: DragStartEvent) => setDragging((e.active.data.current?.job as BoardJob) ?? null);
+  const onDragStart = (e: DragStartEvent) =>
+    setDragging((e.active.data.current?.job as BoardJob) ?? null);
   const onDragMove = (e: DragMoveEvent) => {
     const next = dropAt(e);
-    setPreview((cur) => (cur?.techId === next?.techId && cur?.startMin === next?.startMin ? cur : next));
+    setPreview((cur) =>
+      cur?.techId === next?.techId && cur?.startMin === next?.startMin
+        ? cur
+        : next,
+    );
   };
   const onDragEnd = (e: DragEndEvent) => {
     const at = dropAt(e);
@@ -182,17 +327,30 @@ export function DispatchCalendar(p: {
     if (!at || !job) return;
     const tech = allTechs.find((t) => t.id === at.techId);
     setPlacingId(null);
-    void placer.place({ job, techId: at.techId, techName: tech?.name ?? "the technician", dayKey: day, startMin: at.startMin });
+    void placer.place({
+      job,
+      techId: at.techId,
+      techName: tech?.name ?? "the technician",
+      dayKey: day,
+      startMin: at.startMin,
+    });
   };
 
   const placeSlot = (s: Slot) => {
     if (!placing) return;
     const tech = allTechs.find((t) => t.id === s.techId);
     setPlacingId(null);
-    void placer.place({ job: placing, techId: s.techId, techName: tech?.name ?? "the technician", dayKey: day, startMin: s.startMin });
+    void placer.place({
+      job: placing,
+      techId: s.techId,
+      techName: tech?.name ?? "the technician",
+      dayKey: day,
+      startMin: s.startMin,
+    });
   };
 
   const pick = (j: BoardJob) => {
+    if (!canAssign) return;
     if (placingId === j.id) return setPlacingId(null);
     setPlacingId(j.id);
     setView("day");
@@ -232,7 +390,11 @@ export function DispatchCalendar(p: {
   const openJob = (j: BoardJob) => p.onOpenJob(j.id);
   /** A new job on `d`: at the time picked, else the next half hour today, else 9:00. */
   const newJob = (d: string, riderId?: string, startMin?: number) => {
-    const min = startMin ?? (d === today ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 30) * 30 : 9 * 60);
+    const min =
+      startMin ??
+      (d === today
+        ? Math.ceil((zonedMinutesOfDay(now, tz) + 30) / 30) * 30
+        : 9 * 60);
     p.onNewJob(instantFor(d, Math.min(min, 23 * 60 + 30), tz), riderId);
   };
 
@@ -241,19 +403,41 @@ export function DispatchCalendar(p: {
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => shift(-1)} aria-label="Previous" className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-ink-2 text-slate-300 hover:text-white">
+          <button
+            type="button"
+            onClick={() => shift(-1)}
+            aria-label="Previous"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-ink-2 text-slate-300 hover:text-white"
+          >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <button type="button" onClick={() => setDay(today)} className="h-9 rounded-lg border border-white/10 bg-ink-2 px-3 text-xs font-semibold text-slate-300 hover:text-white">
+          <button
+            type="button"
+            onClick={() => setDay(today)}
+            className="h-9 rounded-lg border border-white/10 bg-ink-2 px-3 text-xs font-semibold text-slate-300 hover:text-white"
+          >
             Today
           </button>
-          <button type="button" onClick={() => shift(1)} aria-label="Next" className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-ink-2 text-slate-300 hover:text-white">
+          <button
+            type="button"
+            onClick={() => shift(1)}
+            aria-label="Next"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-ink-2 text-slate-300 hover:text-white"
+          >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <h3 className="min-w-[10rem] font-display text-base font-bold text-white">{label}</h3>
-        {sb.isLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-500" />}
-        <fieldset {...tourAttr("sched.views")} aria-label="Calendar view" className="m-0 flex min-w-0 rounded-lg border border-white/10 bg-ink-2 p-0.5 sm:ml-auto">
+        <h3 className="min-w-[10rem] font-display text-base font-bold text-white">
+          {label}
+        </h3>
+        {sb.isLoading && (
+          <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+        )}
+        <fieldset
+          {...tourAttr("sched.views")}
+          aria-label="Calendar view"
+          className="m-0 flex min-w-0 rounded-lg border border-white/10 bg-ink-2 p-0.5 sm:ml-auto"
+        >
           {VIEWS.map((v) => (
             <button
               key={v.key}
@@ -270,7 +454,9 @@ export function DispatchCalendar(p: {
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Month adds up the whole team; trade and search filters don't apply there. */}
-        {view === "month" && <span className="text-xs text-slate-500">Whole team, all trades</span>}
+        {view === "month" && (
+          <span className="text-xs text-slate-500">Whole team, all trades</span>
+        )}
         {view !== "month" && skills.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             {["", ...skills].map((s) => (
@@ -286,7 +472,9 @@ export function DispatchCalendar(p: {
             ))}
           </div>
         )}
-        <label className={`h-9 min-w-[14rem] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-ink-2 px-3 text-slate-500 sm:max-w-xs ${view === "month" ? "hidden" : "flex"}`}>
+        <label
+          className={`h-9 min-w-[14rem] flex-1 items-center gap-2 rounded-lg border border-white/10 bg-ink-2 px-3 text-slate-500 sm:max-w-xs ${view === "month" ? "hidden" : "flex"}`}
+        >
           <Search className="h-4 w-4 shrink-0" />
           <span className="sr-only">Find a job, customer or technician</span>
           <input
@@ -297,7 +485,12 @@ export function DispatchCalendar(p: {
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none"
           />
           {query && (
-            <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="text-slate-500 hover:text-white">
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="text-slate-500 hover:text-white"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           )}
@@ -320,15 +513,31 @@ export function DispatchCalendar(p: {
         </button>
         {view === "day" && (
           <span className="text-xs text-slate-500 lg:ml-auto">
-            {dayJobs.length} jobs · {hours(dayJobs.reduce((s, j) => s + durationOf(j), 0))} booked
-            {conflicts > 0 && <span className="font-semibold text-red-300"> · {conflicts} overlap{conflicts === 1 ? "" : "s"}</span>}
+            {dayJobs.length} jobs ·{" "}
+            {hours(dayJobs.reduce((s, j) => s + durationOf(j), 0))} booked
+            {conflicts > 0 && (
+              <span className="font-semibold text-red-300">
+                {" "}
+                · {conflicts} overlap{conflicts === 1 ? "" : "s"}
+              </span>
+            )}
           </span>
         )}
       </div>
 
-      {sb.error && !sb.board && <p className="nvc-card px-4 py-6 text-sm text-red-300">Couldn't load the schedule: {sb.error.message}</p>}
+      {sb.error && !sb.board && (
+        <p className="nvc-card px-4 py-6 text-sm text-red-300">
+          Couldn't load the schedule: {sb.error.message}
+        </p>
+      )}
 
-      <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={() => (setDragging(null), setPreview(null))}>
+      <DndContext
+        sensors={canMove ? sensors : []}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => (setDragging(null), setPreview(null))}
+      >
         {view !== "day" && waiting.length > 0 && (
           <button
             type="button"
@@ -338,17 +547,28 @@ export function DispatchCalendar(p: {
             }}
             className="flex items-center gap-2 self-start rounded-lg border border-amber-warn/30 bg-amber-warn/[0.07] px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-warn/[0.12]"
           >
-            <span className="rounded-full bg-amber-warn/20 px-1.5 font-bold text-amber-warn">{waiting.length}</span>
-            {waiting.length === 1 ? "job" : "jobs"} to schedule · open today to place {waiting.length === 1 ? "it" : "them"}
+            <span className="rounded-full bg-amber-warn/20 px-1.5 font-bold text-amber-warn">
+              {waiting.length}
+            </span>
+            {waiting.length === 1 ? "job" : "jobs"} to schedule · open today to
+            place {waiting.length === 1 ? "it" : "them"}
           </button>
         )}
-        <div className={`grid gap-4 ${view === "day" ? "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]" : ""}`}>
-          <div className="relative min-w-0" aria-busy={sb.stale && view !== "month"}>
+        <div
+          className={`grid gap-4 ${view === "day" ? "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]" : ""}`}
+        >
+          <div
+            className="relative min-w-0"
+            aria-busy={sb.stale && view !== "month"}
+          >
             {/* Changing dates: the last range is still on screen until the new one
                 arrives. Cover it so it isn't read (or clicked) as the new day. */}
             {sb.stale && view !== "month" && (
               <div className="absolute inset-0 z-20 grid place-items-center rounded-2xl bg-ink/60 backdrop-blur-[1px]">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-300" aria-label="Loading" />
+                <Loader2
+                  className="h-5 w-5 animate-spin text-slate-300"
+                  aria-label="Loading"
+                />
               </div>
             )}
             {view === "day" && (
@@ -369,11 +589,21 @@ export function DispatchCalendar(p: {
                     dimmedTechs={dimmed}
                     onGhost={placeSlot}
                     onOpenJob={openJob}
-                    onNewJob={(techId, startMin) => newJob(day, techId, startMin)}
+                    onNewJob={(techId, startMin) =>
+                      newJob(day, techId, startMin)
+                    }
+                    canMove={canMove}
                   />
                 </div>
                 <div className="lg:hidden">
-                  <Agenda techs={techs} jobsByTech={jobsByTech} tz={tz} query={query} onOpenJob={openJob} onNewJob={() => newJob(day)} />
+                  <Agenda
+                    techs={techs}
+                    jobsByTech={jobsByTech}
+                    tz={tz}
+                    query={query}
+                    onOpenJob={openJob}
+                    onNewJob={() => newJob(day)}
+                  />
                 </div>
               </>
             )}
@@ -409,26 +639,49 @@ export function DispatchCalendar(p: {
               />
             )}
           </div>
-          <div className={`min-w-0 flex-col gap-3 ${view === "day" ? "flex" : "hidden"}`}>
+          <div
+            className={`min-w-0 flex-col gap-3 ${view === "day" ? "flex" : "hidden"}`}
+          >
             {placing && view === "day" && (
               <SlotList
                 job={placing}
                 slots={ghosts}
                 techs={allTechs}
-                dayLabel={day === today ? "Today" : dayTitle(day, { weekday: "long", month: "short", day: "numeric" })}
+                dayLabel={
+                  day === today
+                    ? "Today"
+                    : dayTitle(day, {
+                        weekday: "long",
+                        month: "short",
+                        day: "numeric",
+                      })
+                }
                 onPlace={placeSlot}
                 onCancel={() => setPlacingId(null)}
               />
             )}
-            <Queue jobs={waiting} tz={tz} today={today} query={query} placingId={placingId} onPick={pick} onOpen={openJob} />
+            <Queue
+              jobs={waiting}
+              tz={tz}
+              today={today}
+              query={query}
+              placingId={placingId}
+              canPlace={canAssign}
+              onPick={pick}
+              onOpen={openJob}
+            />
           </div>
         </div>
         <DragOverlay dropAnimation={null}>
           {dragging && (
             <div className="pointer-events-none w-48 rounded-lg border border-brand bg-ink-3 px-2.5 py-1.5 text-left shadow-2xl">
-              <span className="block truncate text-xs font-bold text-white">{dragging.title || dragging.service}</span>
+              <span className="block truncate text-xs font-bold text-white">
+                {dragging.title || dragging.service}
+              </span>
               <span className="block font-mono text-[11px] text-sky-200">
-                {preview ? `${clock(preview.startMin)} · ${allTechs.find((t) => t.id === preview.techId)?.name ?? ""}` : hours(durationOf(dragging))}
+                {preview
+                  ? `${clock(preview.startMin)} · ${allTechs.find((t) => t.id === preview.techId)?.name ?? ""}`
+                  : hours(durationOf(dragging))}
               </span>
             </div>
           )}
@@ -436,7 +689,10 @@ export function DispatchCalendar(p: {
       </DndContext>
 
       {/* toasts */}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex flex-col items-center gap-2 px-4">
+      <div
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex flex-col items-center gap-2 px-4"
+      >
         {placer.toasts.map((t) => (
           <output
             key={t.id}
@@ -444,11 +700,20 @@ export function DispatchCalendar(p: {
           >
             <span>{t.text}</span>
             {t.undo.length > 0 && (
-              <button type="button" onClick={() => void placer.undo(t)} className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-slate-700">
+              <button
+                type="button"
+                onClick={() => void placer.undo(t)}
+                className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-extrabold text-white hover:bg-slate-700"
+              >
                 Undo
               </button>
             )}
-            <button type="button" onClick={() => placer.dismiss(t.id)} aria-label="Dismiss" className="shrink-0 text-slate-500 hover:text-slate-900">
+            <button
+              type="button"
+              onClick={() => placer.dismiss(t.id)}
+              aria-label="Dismiss"
+              className="shrink-0 text-slate-500 hover:text-slate-900"
+            >
               <X className="h-4 w-4" />
             </button>
           </output>
