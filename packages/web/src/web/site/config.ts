@@ -66,13 +66,16 @@ export const hero = {
   primary: { label: "Sign up free", href: brand.urls.signUp },
   secondary: { label: "See what your customer sees", href: "/#customer-view" },
   /**
-   * A real photo (Pexels, free licence, no attribution required): a technician
-   * stepping out of his van at a customer's home. Photo by Tima Miroshnichenko,
-   * pexels.com/photo/6195893. Graded like the trade photos; number plate blurred.
+   * A real photo (Pexels, free licence, no attribution required): an
+   * electrician arriving by his van in daylight, tool tote in hand. Photo by
+   * Rene Terp, pexels.com/photo/13821194. Retouched: the company name, its
+   * registration number, the shirt logo, the number plate and the vehicle
+   * badges removed or blurred; background softened so he stays in focus; a
+   * light grade. New file names so no browser shows the old dusk photo.
    */
   photo: {
-    jpg: { small: "/media/site-hero-960.jpg", large: "/media/site-hero-1920.jpg" },
-    webp: { small: "/media/site-hero-960.webp", large: "/media/site-hero-1920.webp" },
+    jpg: { small: "/media/site-hero-day-960.jpg", large: "/media/site-hero-day-1920.jpg" },
+    webp: { small: "/media/site-hero-day-960.webp", large: "/media/site-hero-day-1920.webp" },
     width: 1920,
     height: 1280,
   },

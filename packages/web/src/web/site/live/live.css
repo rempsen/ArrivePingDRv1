@@ -178,6 +178,18 @@
 .site .lv-hero__film--photo img {
   object-position: 27% 50%;
 }
+/* Home hero: a daylight photo, so the shade only covers the copy and lifts
+   right off the technician; the phones and their caption keep a light
+   darkening at the far right and along the bottom. */
+.site .lv-hero__shade--day {
+  background:
+    linear-gradient(90deg, rgb(5 8 15 / 96%) 0%, rgb(5 8 15 / 88%) 32%, rgb(5 8 15 / 34%) 48%, rgb(5 8 15 / 0%) 60%, rgb(5 8 15 / 0%) 78%, rgb(5 8 15 / 26%) 100%),
+    linear-gradient(0deg, rgb(5 8 15 / 82%) 0%, rgb(5 8 15 / 0%) 30%);
+}
+.site .lv-hero .lv-stage__cap {
+  color: #c6d2de;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%), 0 0 14px rgb(5 8 15 / 85%);
+}
 @media (min-width: 1121px) {
   .site .lv-hero__film--photo {
     left: 38%;
@@ -416,6 +428,9 @@
   }
   .site .lv-hero__shade {
     background: linear-gradient(180deg, rgb(5 8 15 / 88%) 0%, rgb(5 8 15 / 80%) 55%, rgb(5 8 15 / 66%) 100%);
+  }
+  .site .lv-hero__shade--day {
+    background: linear-gradient(180deg, rgb(5 8 15 / 86%) 0%, rgb(5 8 15 / 74%) 55%, rgb(5 8 15 / 52%) 100%);
   }
 }
 @media (max-width: 560px) {
