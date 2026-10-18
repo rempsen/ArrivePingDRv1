@@ -374,10 +374,11 @@ export function DispatchCalendar(p: {
             )}
             {view === "month" && (
               <MonthLoad
-                load={load.data}
+                // While another month loads, show the spinner, not last month's days.
+                load={load.isPlaceholderData ? undefined : load.data}
                 month={day.slice(0, 7)}
                 today={today}
-                loading={load.isLoading}
+                loading={load.isLoading || load.isPlaceholderData}
                 onOpenDay={(d) => {
                   setDay(d);
                   setView("week");

@@ -74,6 +74,8 @@ interface UndoClaims {
   /** What the queue entry said before: why it came back (declineReason) and when it was last offered (assignedAt, ISO). */
   d?: string;
   o?: string;
+  /** A move notice this assignment replaced: the time people were last told, to announce again if it's undone. */
+  n?: string;
   /** expiry, ms */
   exp: number;
 }
@@ -135,7 +137,7 @@ export function readAnyUndo(token: unknown, now = Date.now()): AnyUndoClaims | "
   const strings = c.k === "time" ? [c.c, c.b, c.f, c.t] : c.k === undefined || c.k === "assign" ? [c.c, c.b, c.r, c.s, c.a] : null;
   if (!strings || strings.some((x) => typeof x !== "string")) return "invalid";
   if (c.k !== "time" && (typeof c.f !== typeof c.t || (c.f !== undefined && typeof c.f !== "string"))) return "invalid";
-  if (c.k !== "time" && ((c.d !== undefined && typeof c.d !== "string") || (c.o !== undefined && typeof c.o !== "string"))) return "invalid";
+  if (c.k !== "time" && [c.d, c.o, c.n].some((x) => x !== undefined && typeof x !== "string")) return "invalid";
   if (c.k === "time" && c.r !== undefined && typeof c.r !== "string") return "invalid";
   if (now > c.exp) return "expired";
   return c;
@@ -183,6 +185,21 @@ export async function holdNotice(
   }
   graceTimer(() => void runTaskNow(id), NOTIFY_GRACE_MS);
   return true;
+}
+
+/** The "last told" time of a move notice still waiting for this job, if any. */
+async function waitingMoveFrom(companyId: string, bookingId: string): Promise<string | null> {
+  const T = schema.scheduledTasks;
+  const rows = await tdb(companyId).select(T, and(eq(T.bookingId, bookingId), eq(T.status, "pending"), eq(T.kind, RESCHEDULED_NOTICE_TASK)));
+  for (const r of rows) {
+    try {
+      const from = (JSON.parse(r.payload || "{}") as { from?: unknown }).from;
+      if (typeof from === "string") return from;
+    } catch {
+      /* unreadable payload: nothing to carry */
+    }
+  }
+  return null;
 }
 
 async function deferAssignedNotice(companyId: string, bookingId: string, riderId: string): Promise<boolean> {
@@ -247,6 +264,11 @@ export async function dispatchAssign(
   }
   let undo: string | null = null;
   if (undoable) {
+    // The "assigned" notice gives the time, so a move still waiting to be
+    // announced has nothing to add (as on the immediate path in assignJob).
+    // Its "last told" time rides in the token, so an Undo can put it back.
+    const toldFrom = await waitingMoveFrom(companyId, input.bookingId);
+    await cancelTasks({ bookingId: input.bookingId, kind: RESCHEDULED_NOTICE_TASK });
     const from = new Date(was.scheduledAt);
     const moved = new Date(r.booking.scheduledAt).getTime() !== from.getTime();
     undo = signUndo({
@@ -260,11 +282,9 @@ export async function dispatchAssign(
       // Kept short so the token stays a small header-sized string.
       ...(was.declineReason ? { d: was.declineReason.slice(0, MAX_KEPT_REASON) } : {}),
       ...(was.assignedAt ? { o: new Date(was.assignedAt).toISOString() } : {}),
+      ...(toldFrom ? { n: toldFrom } : {}),
       exp: now + UNDO_TOKEN_TTL_MS,
     });
-    // The "assigned" notice gives the time, so a move still waiting to be
-    // announced has nothing to add (as on the immediate path in assignJob).
-    await cancelTasks({ bookingId: input.bookingId, kind: RESCHEDULED_NOTICE_TASK });
     // Already announced (the notice couldn't be held): no Undo to offer.
     if (!(await deferAssignedNotice(companyId, input.bookingId, input.riderId))) undo = null;
     // fireEvent (which normally refreshes open maps) is waiting, so say it here.
@@ -318,6 +338,9 @@ export async function undoAssign(companyId: string, token: unknown, by: string, 
   }
 
   await cancelTasks({ bookingId: c.b, kind: ASSIGNED_NOTICE_TASK });
+  // The move notice this assignment had replaced goes back to waiting; it
+  // announces the time only if it still differs from what people were told.
+  if (c.n) await holdNotice(companyId, { kind: RESCHEDULED_NOTICE_TASK, bookingId: c.b, payload: { from: c.n }, fallback: "rescheduled" });
   await reconcileRiderStatus(companyId, c.r);
   await logJobEvent({
     companyId,
