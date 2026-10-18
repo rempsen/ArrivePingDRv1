@@ -44,13 +44,16 @@ let chosen: Consent | null = null;
 export function getConsent(): Consent | null {
   if (typeof window === "undefined") return null;
   if (navigator.globalPrivacyControl) return "denied";
+  // A choice made on this page wins, even if the browser couldn't store it
+  // over an older one.
+  if (chosen) return chosen;
   try {
     const v = storage()?.getItem(KEY);
     if (v === "granted" || v === "denied") return v;
   } catch {
-    /* fall back to this page's choice */
+    /* nothing stored */
   }
-  return chosen;
+  return null;
 }
 
 /** Reopen the cookie notice (the footer's "Cookie preferences"). */
@@ -71,10 +74,17 @@ function clearHubspotCookies(): void {
 export function setConsent(c: Consent): void {
   const was = getConsent();
   chosen = c;
+  let saved = true;
   try {
     storage()?.setItem(KEY, c);
   } catch {
-    /* private mode: the choice lasts for this page only */
+    // Storage full or read-only: at least drop an older choice, so the next
+    // page asks again rather than going back to it.
+    try {
+      storage()?.removeItem(KEY);
+    } catch {
+      saved = false;
+    }
   }
   if (c === "granted") loadHubspotTracking();
   window.dispatchEvent(new CustomEvent("ap-consent", { detail: c }));
@@ -83,7 +93,9 @@ export function setConsent(c: Consent): void {
     const w = window as unknown as { _hsp?: unknown[][] };
     (w._hsp = w._hsp || []).push(["revokeCookieConsent"]);
     clearHubspotCookies();
-    if (loaded) location.reload();
+    // Reloading drops the tracker, unless an older "granted" we couldn't
+    // clear would bring it straight back; HubSpot has been told either way.
+    if (loaded && saved) location.reload();
   }
 }
 
