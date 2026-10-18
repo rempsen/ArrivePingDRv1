@@ -50,12 +50,11 @@ export const nav = [
 export const hero = {
   /** The three value propositions in the pill above the headline, with a blinking dot between each. */
   pillars: ["Plan with visibility.", "Assign and track.", "Communicate."],
-  title: "The right tech, at the door, right when you said.",
-  /** Both audiences, equal weight: the team and the homeowner. */
-  promise: [
-    { who: "Your team", rest: "always knows the next job." },
-    { who: "Your customers", rest: "always know when you'll arrive, with a text and a live map instead of a phone call." },
-  ],
+  /** The owner's most-felt pain, in the dispatcher's own words (Dan, 2026-10-18). */
+  title: "No more \u201cWhere\u2019s my tech?\u201d calls.",
+  /** The promise against the industry's worst habit, the four-hour window. */
+  subhead: "Give every customer a time, not a window.",
+  lede: "They get a text and a live map the moment your tech heads their way. You get your phone back.",
   /** The four objections a buyer has before clicking, answered before the button. */
   assurances: [
     { icon: "phone", label: "No GPS hardware", sub: "Runs on the phones your team carries" },

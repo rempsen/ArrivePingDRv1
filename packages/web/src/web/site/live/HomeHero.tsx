@@ -84,11 +84,8 @@ export function HomeHero() {
             {hero.title}
           </h1>
           <p className="lv-hero__promise enter enter--3">
-            {hero.promise.map((p) => (
-              <span key={p.who}>
-                <strong>{p.who}</strong> {p.rest}
-              </span>
-            ))}
+            <strong className="lv-hero__sub">{hero.subhead}</strong>
+            <span>{hero.lede}</span>
           </p>
 
           <ul className="lv-assure enter enter--3">
