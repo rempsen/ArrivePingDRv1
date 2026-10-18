@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { PRACTICE_SLOT, slotOf } from "../../services/sample-day";
 import type { Context } from "hono";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
@@ -105,7 +106,11 @@ export const trackingRoutes = new Hono<AppEnv>()
     // in booking-status.ts. Completion stays manual.
     let statusNow = b.status;
     let geofence: { radiusM: number; pauseRadiusM: number; distanceM: number; inside: boolean } | null = null;
-    if (b && b.lat != null && b.lng != null && b.enrouteAt && b.status !== "completed" && b.status !== "cancelled") {
+    // A practice job (services/practice-job.ts) sits at the office, where a new
+    // technician usually is when they try it: never auto-arrive it, so they get
+    // to tap "I've Arrived" themselves.
+    const practice = Boolean(b?.isSample && slotOf(b) === PRACTICE_SLOT);
+    if (b && !practice && b.lat != null && b.lng != null && b.enrouteAt && b.status !== "completed" && b.status !== "cancelled") {
       // Configured radius in metres. Resolved through the shared helper so a
       // missing settings row, a blank field or a 0 can't silently disable
       // auto-arrive — the fallback here used to be 20m while the DB column

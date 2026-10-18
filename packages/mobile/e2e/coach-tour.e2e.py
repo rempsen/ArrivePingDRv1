@@ -49,6 +49,8 @@ APP = f"http://127.0.0.1:{PORT}"
 API = json.load(open(os.path.join(os.path.dirname(__file__), "..", "app.json")))["expo"]["extra"]["apiUrl"].rstrip("/")
 TECH_PASSWORD = "Coach-tour-" + str(random.randint(100000, 999999)) + "!"
 DEVICES = [("iPhone SE", False), ("iPhone 13", False), ("Pixel 7", False), ("iPad Pro 11", False), ("iPad Pro 11", True)]
+if os.environ.get("ONLY_DEVICE"):
+    DEVICES = [d for d in DEVICES if d[0] == os.environ["ONLY_DEVICE"] and not d[1]]
 os.makedirs(SHOT_DIR, exist_ok=True)
 results = []
 
@@ -156,7 +158,7 @@ with sync_playwright() as p:
             card.get_by_text("Done" if k == 3 else "Next", exact=True).click()
         expect(card).to_have_count(0, timeout=5_000)
         page.wait_for_timeout(800)
-        check(f"[{name}] Done returns to Jobs and is remembered", "Practice job" in page.inner_text("body") and page.evaluate("() => localStorage.getItem('tour_seen_v1')") == "1")
+        check(f"[{name}] Done returns to Jobs and is remembered", "Practice job" in page.inner_text("body") and page.evaluate("() => Object.keys(localStorage).some((k) => k.startsWith('tour_seen_v1.') && localStorage.getItem(k) === '1')"))
         page.reload(wait_until="networkidle")
         page.wait_for_timeout(4_000)
         check(f"[{name}] not shown again after a reload", card.count() == 0)
@@ -180,6 +182,22 @@ with sync_playwright() as p:
     page.get_by_text("Show me around again").click()
     expect(card).to_contain_text("1 of 4", timeout=15_000)
     check("Profile → Show me around again replays it", True)
+    card.get_by_text("Skip tour", exact=True).click()
+    expect(card).to_have_count(0, timeout=5_000)
+    # With the practice job removed, replay still has four tips; Start Driving
+    # is explained without a spotlight instead of pointing at nothing.
+    page.evaluate(
+        """async ([url]) => (await fetch(url, { method: 'DELETE', headers: { Authorization: 'Bearer ' + localStorage.getItem('bearer_token') } })).status""",
+        [API + "/api/me/practice-job"],
+    )
+    page.get_by_text("Profile", exact=True).last.click()
+    page.get_by_text("Show me around again").click()
+    expect(card).to_contain_text("1 of 4", timeout=15_000)
+    card.get_by_text("Next", exact=True).click()
+    expect(card).to_contain_text("2 of 4", timeout=15_000)
+    card.get_by_text("Next", exact=True).click()
+    expect(card).to_contain_text("Tap Start Driving when you leave", timeout=3_000)
+    check("replay after removing the practice job: Start Driving tip without a spotlight", page.get_by_test_id("coach-ring").count() == 0 and "3 of 4" in card.inner_text())
     page.context.close()
 
     if os.environ.get("VET_EMAIL"):

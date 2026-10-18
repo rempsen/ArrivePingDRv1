@@ -26,6 +26,7 @@ const { sampleStatus, seedSampleDay, clearSampleDay } = await import("../sample-
 const { fireEvent } = await import("../dispatch");
 const { meRoutes } = await import("../../api/routes/me");
 const { bookingsRoutes } = await import("../../api/routes/bookings");
+const { trackingRoutes } = await import("../../api/routes/tracking");
 
 const CO = "pj-co";
 const NOW = new Date("2026-10-15T15:00:00Z");
@@ -59,7 +60,8 @@ const app = new Hono<any>()
     return next();
   })
   .route("/me", meRoutes)
-  .route("/bookings", bookingsRoutes);
+  .route("/bookings", bookingsRoutes)
+  .route("/tracking", trackingRoutes);
 
 beforeAll(async () => {
   for (const v of Object.values(schema)) if (v instanceof PgTable) await ensureTable(v);
@@ -130,6 +132,21 @@ describe("practice job", () => {
     await addTech("pj-vet");
     await db.insert(schema.bookings).values({ id: "pj-real", companyId: CO, customerId: "pj-office", serviceId: "pj-svc", riderId: "r-pj-vet", status: "completed", scheduledAt: NOW, address: "1 Real St" } as any);
     expect(await ensurePracticeJob(CO, "pj-vet", NOW)).toEqual({ jobId: null, reason: "experienced" });
+  });
+
+  it("never auto-arrives at the office, so the technician taps I've Arrived themselves (Codex on #45)", async () => {
+    await addTech("pj-geo");
+    const { jobId } = (await ensurePracticeJob(CO, "pj-geo", NOW)) as { jobId: string };
+    const [job] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, jobId));
+    await db.update(schema.bookings).set({ status: "enroute", enrouteAt: new Date() } as any).where(eq(schema.bookings.id, jobId));
+    // A real job at the same spot, for contrast: that one does auto-arrive.
+    await db.insert(schema.bookings).values({ id: "pj-geo-real", companyId: CO, customerId: "pj-office", serviceId: "pj-svc", riderId: "r-pj-geo", status: "enroute", enrouteAt: new Date(), scheduledAt: NOW, address: "100 Main St", lat: job!.lat, lng: job!.lng } as any);
+    const ping = (id: string) =>
+      app.request(`/tracking/${id}/ping`, { method: "POST", headers: { "X-Test-User": "pj-geo", "content-type": "application/json" }, body: JSON.stringify({ lat: job!.lat, lng: job!.lng }) });
+    expect((await ping(jobId)).status).toBe(200);
+    expect((await db.select().from(schema.bookings).where(eq(schema.bookings.id, jobId)))[0]!.status).toBe("enroute");
+    expect((await ping("pj-geo-real")).status).toBe(200);
+    expect((await db.select().from(schema.bookings).where(eq(schema.bookings.id, "pj-geo-real")))[0]!.status).toBe("arrived");
   });
 
   it("over the API: POST hands one out, DELETE removes it; Clear sample data removes it too", async () => {

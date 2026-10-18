@@ -15,6 +15,7 @@ import { endAllLiveActivities } from "../../lib/useLiveActivity";
 import { usePushNotifications, setAppBadgeCount } from "../../lib/push";
 import { useNotifySummary } from "../../lib/notify-summary";
 import { useCoach } from "../../components/coach-tour";
+import { authClient } from "../../lib/auth";
 
 export default function RiderLayout() {
   // Rider's own status drives whether native background GPS tracking runs at
@@ -60,12 +61,18 @@ export default function RiderLayout() {
   // register this device for push (job offers, enroute alerts) + handle taps.
   usePushNotifications();
 
-  // First run: four coach marks and a practice job (components/coach-tour.tsx).
-  // Waits for the profile so the tour starts on a loaded Jobs screen.
+  // First run: four coach marks and a practice job (components/coach-tour.tsx),
+  // once per technician per company. Waits for the profile so the tour starts
+  // on a loaded Jobs screen; leaving these screens (sign-out, switching
+  // company) closes it.
   const coach = useCoach();
+  const { data: session } = authClient.useSession();
+  const userId = (session?.user as { id?: string } | undefined)?.id;
   useEffect(() => {
-    if (me.isSuccess) coach.maybeStart();
-  }, [me.isSuccess, coach]);
+    if (me.isSuccess && userId) coach.maybeStart(userId);
+  }, [me.isSuccess, userId, coach]);
+  const cancelCoach = coach.cancel;
+  useEffect(() => () => cancelCoach(), [cancelCoach]);
 
   // Everything that needs the tech's attention, at EVERY company they work for.
   // One query drives all four tab badges and the app-icon count.
