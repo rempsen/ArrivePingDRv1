@@ -333,7 +333,14 @@ export function DispatchCalendar(p: {
           </button>
         )}
         <div className={`grid gap-4 ${view === "day" ? "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]" : ""}`}>
-          <div className="min-w-0">
+          <div className="relative min-w-0" aria-busy={sb.stale && view !== "month"}>
+            {/* Changing dates: the last range is still on screen until the new one
+                arrives. Cover it so it isn't read (or clicked) as the new day. */}
+            {sb.stale && view !== "month" && (
+              <div className="absolute inset-0 z-20 grid place-items-center rounded-2xl bg-ink/60 backdrop-blur-[1px]">
+                <Loader2 className="h-5 w-5 animate-spin text-slate-300" aria-label="Loading" />
+              </div>
+            )}
             {view === "day" && (
               <>
                 <div className="hidden lg:block">
