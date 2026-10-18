@@ -39,11 +39,15 @@ $EAS whoami
 echo "✔ Signed in to Expo"
 
 echo "▶ Building the iOS app on Expo's servers (10–20 min)…"
-$EAS build --platform ios --profile production --non-interactive
+# --json: the finished build on stdout, so the submit below sends exactly this
+# build rather than whichever is newest (another run's, if two overlap).
+$EAS build --platform ios --profile production --non-interactive --json > build.json
+BUILD_ID="$(jq -r '.[0].id // empty' build.json)"
+[ -n "$BUILD_ID" ] || { echo "✘ Couldn't read the build id from eas-cli."; cat build.json; exit 1; }
 echo "✔ Build finished"
 
 echo "▶ Submitting the build to TestFlight…"
-$EAS submit --platform ios --latest --profile production --non-interactive
+$EAS submit --platform ios --id "$BUILD_ID" --profile production --non-interactive
 echo "✔ Submitted to App Store Connect"
 
 echo "DONE — check appstoreconnect.apple.com → ArrivePing → TestFlight"

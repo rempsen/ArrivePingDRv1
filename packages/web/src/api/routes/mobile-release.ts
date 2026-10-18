@@ -41,6 +41,15 @@ function ghHeaders(): Record<string, string> {
   };
 }
 
+/** Runs that haven't finished: queued, waiting, or building. */
+const ACTIVE = new Set(["queued", "in_progress", "waiting", "requested", "pending"]);
+
+/** The workflow's run that is still going, if any. */
+export async function activeShipRun(headers: Record<string, string>): Promise<{ created_at: string; html_url: string } | null> {
+  const data = await gh(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=10`, headers);
+  return ((data.workflow_runs ?? []) as any[]).find((r) => ACTIVE.has(r.status)) ?? null;
+}
+
 async function gh(path: string, headers: Record<string, string>) {
   const res = await fetch(`${GH_API}${path}`, { headers });
   if (!res.ok) throw new Error(`GitHub API ${path} failed (${res.status}): ${await res.text()}`);
@@ -54,6 +63,19 @@ export const mobileReleaseRoutes = new Hono<AppEnv>()
       headers = ghHeaders();
     } catch (e) {
       return c.json({ message: (e as Error).message }, 400);
+    }
+
+    // One release at a time: a second build on top of a running one ends in a
+    // duplicate upload that Apple refuses.
+    try {
+      const busy = await activeShipRun(headers);
+      if (busy)
+        return c.json(
+          { message: "A TestFlight release is already running. Wait for it to finish before starting another.", htmlUrl: busy.html_url },
+          409,
+        );
+    } catch (e) {
+      return c.json({ message: `Couldn't check for a release in progress: ${(e as Error).message}` }, 502);
     }
 
     const user = c.get("user");
@@ -91,7 +113,10 @@ export const mobileReleaseRoutes = new Hono<AppEnv>()
       const runs: any[] = runsData.workflow_runs ?? [];
       // GitHub's dispatch API doesn't return a run id, so match by timing:
       // the newest run created at/after our dispatch (with slack for queueing).
-      const run = runs.find((r) => new Date(r.created_at).getTime() >= lastDispatchAt! - 15_000) ?? runs[0] ?? null;
+      // Until GitHub lists the new run (a few seconds), report "running" rather
+      // than the previous run's result, so the button stays disabled.
+      const ours = runs.find((r) => new Date(r.created_at).getTime() >= lastDispatchAt! - 15_000);
+      const run = ours ?? (Date.now() - lastDispatchAt < 120_000 ? null : runs[0] ?? null);
 
       if (!run) {
         return c.json(
