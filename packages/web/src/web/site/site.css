@@ -811,25 +811,6 @@
   font-size: 11px;
   color: var(--ink-muted);
 }
-.site .ourstory__guarantee {
-  margin-top: 40px;
-  padding: 28px 32px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-card);
-  background: var(--accent-soft);
-}
-.site .ourstory__guarantee h3 {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--ink);
-}
-.site .ourstory__guarantee p {
-  margin-top: 8px;
-  font-size: 15px;
-  color: var(--ink-secondary);
-  max-width: 72ch;
-}
 @media (max-width: 1023px) {
   .site .ourstory {
     grid-template-columns: 1fr;
@@ -866,10 +847,7 @@
   }
 }
 @media (max-width: 639px) {
-  .site .ourstory__guarantee {
-    padding: 22px 20px;
   }
-}
 
 /* ---------- Pricing ---------- */
 .site .tiers {

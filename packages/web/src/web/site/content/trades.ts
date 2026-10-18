@@ -40,19 +40,19 @@ export const hvac: LandingPage = {
   lede: "Match no-heat and no-cool calls to a qualified, nearby technician and text customers a live ETA, all from the phones your crew already carries.",
   answer: {
     q: "What should HVAC dispatch software do?",
-    a: "HVAC dispatch software should show every open call and technician on one board and suggest the best tech by licenses, skills, distance and workload. It should text customers a live ETA once the tech starts driving, record arrival automatically, and require checklists, photos and signatures before a job closes.",
+    a: "HVAC dispatch software should show every open call and technician on one board and suggest the best tech by licenses, skills, distance and workload. It should text customers a live ETA once the tech starts driving, record arrival automatically, require checklist items before a job closes, and keep photos and signatures with each job.",
   },
   trade: {
     media: media("hvac"),
     proof: ["Suggests the best tech by skills and distance", "Live ETA link, no customer app", "Arrival and on-site time logged automatically"],
-    sms: { company: "Northwind Heating", who: "technician", tech: "Devon", eta: 19 },
+    sms: { company: "Northwind Heating", who: "technician", tech: "Devon", eta: 19, time: "6:44 AM" },
     statsTitle: "Why the arrival matters in HVAC",
     stats: [
       { value: "85%", label: "of homeowners say arriving within the estimated window is extremely or very important", ...ONE_HOUR },
       {
         value: "47%",
-        label: "of field appointments don't go as scheduled",
-        source: "Salesforce survey of 350 U.S. mobile workers, 2025",
+        label: "of appointments don't go according to schedule, field workers estimate",
+        source: "Salesforce survey of 350 U.S. field workers, 2025",
         href: "https://www.salesforce.com/en-us/wp-content/uploads/sites/4/documents/service-cloud/fIeld-service-guide-4th-edition.pdf",
       },
       {
@@ -146,17 +146,17 @@ export const plumbing: LandingPage = {
   lede: "Put burst pipes and booked jobs on one board, match each to a nearby licensed plumber, and text customers a live ETA.",
   answer: {
     q: "What should plumbing dispatch software do?",
-    a: "Plumbing dispatch software should put emergencies and booked jobs on one board, match each job to the nearest available plumber with the right license, and tell customers who is coming and when. Look for live ETA texts that need no app, automatic arrival check-in, required checklists, photos and signatures, and location sharing only while on shift.",
+    a: "Plumbing dispatch software should put emergencies and booked jobs on one board, match each job to the nearest available plumber with the right license, and tell customers who is coming and when. Look for live ETA texts that need no app, automatic arrival check-in, checklist items you can make required, photos and signatures on the job, and location sharing only while on shift.",
   },
   trade: {
     media: media("plumbing"),
     proof: ["Live ETA text, no customer app", "Suggests the nearest qualified, available plumber", "Automatic check-in within 150 m"],
-    sms: { company: "Riverbend Plumbing", who: "plumber", tech: "Jordan", eta: 14 },
+    sms: { company: "Riverbend Plumbing", who: "plumber", tech: "Jordan", eta: 14, time: "6:55 AM" },
     statsTitle: "Why minutes matter in plumbing",
     stats: [
       {
         value: "1 in 60",
-        label: "insured homes has a property damage claim from water damage or freezing; the average claim is $15,400",
+        label: "insured homes, roughly, has a property damage claim from water damage or freezing; those claims averaged $15,400",
         source: "Insurance Information Institute, ISO/Verisk data 2019–2023",
         href: "https://www.iii.org/fact-statistic/facts-statistics-homeowners-and-renters-insurance",
       },
@@ -203,7 +203,7 @@ export const plumbing: LandingPage = {
         { title: "License-aware assignment", body: "Tag plumbers as journeyperson, master, gas or backflow-certified, and require that skill on matching work orders." },
         { title: "Nearest qualified plumber, suggested", body: "Suggestions weigh distance, skills, availability and workload. The dispatcher can always override." },
         { title: "Live ETA for worried homeowners", body: "One text shows who's coming and when, with call, text and message buttons. No app or account needed." },
-        { title: "Proof on every job", body: "Required checklist items, photos and signatures document camera inspections, leak checks and cleanouts." },
+        { title: "Proof on every job", body: "Checklist items you can make required, plus photos and a signature on the job, document inspections, leak checks and cleanouts." },
         { title: "Shutoffs and access, noted", body: "Custom fields and access notes give the plumber shutoff locations, lockbox instructions and tenant contacts." },
       ],
     },
@@ -257,7 +257,7 @@ export const electrical: LandingPage = {
   trade: {
     media: media("electrical"),
     proof: ["Suggests by license, distance and workload", "Live ETA link, no customer app", "Arrival logged automatically within 150 m"],
-    sms: { company: "Brightline Electric", who: "electrician", tech: "Malik", eta: 14 },
+    sms: { company: "Brightline Electric", who: "electrician", tech: "Malik", eta: 14, time: "3:44 PM" },
     statsTitle: "Why dispatch matters in electrical work",
     stats: [
       {
@@ -268,8 +268,8 @@ export const electrical: LandingPage = {
       },
       {
         value: "47%",
-        label: "of appointments don't go according to schedule, technicians and tradespeople estimate",
-        source: "Salesforce survey of 350 U.S. technicians and tradespeople, 2025",
+        label: "of appointments don't go according to schedule, field workers estimate",
+        source: "Salesforce survey of 350 U.S. field workers, 2025",
         href: "https://www.salesforce.com/news/stories/field-service-agentic-ai-transformation/",
       },
       {
@@ -356,19 +356,19 @@ export const construction: LandingPage = {
   meta: {
     title: "Installer & Subcontractor Scheduling Software | ArrivePing",
     description:
-      "Schedule installers by skill and distance, track crews between job sites, and text homeowners a live ETA. No GPS hardware. Try it free for 30 days.",
+      "Schedule installers by skill and distance, track installers between job sites, and text homeowners a live ETA. No GPS hardware. Try it free for 30 days.",
   },
   eyebrow: "Installers & specialty subcontractors",
-  h1: "Get the right crew to every site.",
-  lede: "Assign installers by skill and distance, track crews between job sites, and text customers a live ETA from phones they already carry.",
+  h1: "Get the right installer to every site.",
+  lede: "Assign installers by skill and distance, track them between job sites, and text customers a live ETA from the phones they already carry.",
   answer: {
     q: "What should dispatch software for installers do?",
-    a: "Dispatch software for installers should match each job to a qualified, available crew by skill and distance. It should carry site access notes and time windows, and track crews between sites without hardware. It should text the homeowner or site supervisor a live ETA, and record photos, checklists and sign-off as the work is completed.",
+    a: "Dispatch software for installers should match each job to a qualified, available installer by skill and distance. It should carry site access notes and time windows, and track installers between sites without hardware. It should text the homeowner or site supervisor a live ETA, and record photos, checklists and sign-off as the work is completed.",
   },
   trade: {
     media: media("construction"),
-    proof: ["Automatic check-in within 150 m of the site", "Required checklists, photos and signatures", "One installer, several companies' rosters"],
-    sms: { company: "Keystone Interiors", who: "installer", tech: "Marcus", eta: 27 },
+    proof: ["Automatic check-in within 150 m of the site", "Required checklist items before close-out", "One installer, several companies' rosters"],
+    sms: { company: "Keystone Interiors", who: "installer", tech: "Marcus", eta: 27, time: "7:35 AM" },
     statsTitle: "Why scheduling breaks down on site",
     stats: [
       {
@@ -419,9 +419,9 @@ export const construction: LandingPage = {
     },
     features: {
       eyebrow: "Built for installers and subs",
-      title: "Crews, sites and close-out on one board.",
+      title: "Installers, sites and close-out on one board.",
       items: [
-        { title: "Crews matched by skill", body: "Tag installers for tile, plank, shades or cabinets and require skills per job. ArrivePing suggests the nearest qualified, available installer." },
+        { title: "Installers matched by skill", body: "Tag installers for tile, plank, shades or cabinets and require skills per job. ArrivePing suggests the nearest qualified, available installer." },
         { title: "Built for multi-company subs", body: "One installer can be on several companies' rosters and take work from builders and dealers." },
         { title: "Site access notes", body: "Gate codes, loading docks, elevator bookings and time windows travel with the work order." },
         { title: "Deficiency lists with proof", body: "Required checklist items must be done before a deficiency job closes; photos and the signature stay on the job." },
@@ -445,14 +445,14 @@ export const construction: LandingPage = {
     priceFaq("How much does installer scheduling software cost?", "installer", "installers"),
     {
       q: "How do I schedule installers across several job sites?",
-      a: "Unassigned jobs wait in the work queue. Drag them onto the scheduler, or let ArrivePing suggest the best installer based on distance, skills, availability and workload. The live map shows every crew, the dispatcher can override any suggestion, and time windows stay on each work order.",
+      a: "Unassigned jobs wait in the work queue. Drag them onto the scheduler, or let ArrivePing suggest the best installer based on distance, skills, availability and workload. The live map shows every installer, the dispatcher can override any suggestion, and time windows stay on each work order.",
     },
     {
       q: "Can a subcontractor work for more than one company?",
       a: "Yes. An installer can be on more than one company's roster, which suits subs who install for a builder, a dealer and a renovator. They accept jobs, start driving and complete work in the same phone app.",
     },
     {
-      q: "Do I need GPS trackers, and is tracking fair to crews?",
+      q: "Do I need GPS trackers, and is tracking fair to installers?",
       a: "You don't need any hardware. ArrivePing runs on the phones your installers already carry, and installers share their location only while they're on the clock. A customer sees it only after the installer starts driving to their job, and it disappears on arrival. Check your provincial or state rules on monitoring employees.",
     },
     {
@@ -489,7 +489,7 @@ export const property: LandingPage = {
   trade: {
     media: media("property"),
     proof: ["Live ETA text, no resident app", "Automatic check-in records time on site", "Required checklist steps before jobs close"],
-    sms: { company: "Parkside Residences", who: "technician", tech: "Omar", eta: 16 },
+    sms: { company: "Parkside Residences", who: "technician", tech: "Omar", eta: 16, time: "6:58 AM" },
     statsTitle: "What residents expect from maintenance",
     stats: [
       {
@@ -507,7 +507,7 @@ export const property: LandingPage = {
       {
         value: "24%",
         label: "of property owners and managers report being understaffed for maintenance operations",
-        source: "Parks Associates and GE Appliances, 2023",
+        source: "Parks Associates and GE Appliances survey of 100 owners and managers, 2023",
         href: "https://www.parksassociates.com/blogs/pr-smart-home/04252023",
       },
     ],
@@ -534,7 +534,7 @@ export const property: LandingPage = {
         {
           time: "8:05 a.m.",
           title: "Closed, with follow-up booked",
-          body: "The job can't be completed until its required items are ticked: water off, photos taken, entry recorded. Ines books Leo, a drywall subcontractor on two companies' rosters, for Thursday 9–11 a.m., and the office serves Hannah written notice for that window.",
+          body: "The job can't be completed until its required items are ticked: water off, both units checked, entry recorded. Ines books Leo, a drywall subcontractor on two companies' rosters, for Thursday 9–11 a.m., and the office serves Hannah written notice for that window.",
         },
       ],
     },
@@ -599,13 +599,13 @@ export const delivery: LandingPage = {
   },
   trade: {
     media: media("delivery"),
-    proof: ["Live ETA link, no customer app", "Automatic arrival check-in within 150 m", "Photos and signature on every job"],
-    sms: { company: "Maple Home Appliances", who: "driver", tech: "Luis", eta: 17 },
+    proof: ["Live ETA link, no customer app", "Automatic arrival check-in within 150 m", "Photos and a signature as proof of delivery"],
+    sms: { company: "Maple Home Appliances", who: "driver", tech: "Luis", eta: 17, time: "10:05 AM" },
     statsTitle: "Why the delivery window matters",
     stats: [
       {
         value: "44%",
-        label: "of big and bulky deliveries arrived outside the scheduled time window",
+        label: "of shoppers surveyed said their big and bulky items arrived outside the scheduled window",
         source: "DispatchTrack survey of 1,606 U.S. adults, 2022",
         href: "https://www.dispatchtrack.com/blog/big-bulky/",
       },
@@ -617,7 +617,7 @@ export const delivery: LandingPage = {
       },
       {
         value: "41%",
-        label: "agreed they were told when their big and bulky delivery was running late",
+        label: "of recipients agreed they were told their delivery was running late; after a bad delivery, only 19%",
         source: "Ryder consumer study of 1,000 U.S. recipients, 2025",
         href: "https://www.ryder.com/globalassets/media/documents/insights/white-papers/ryder-last-mile/2025-ryder-last-mile-consumer-study-ada.pdf",
       },
@@ -657,8 +657,8 @@ export const delivery: LandingPage = {
         { title: "Live ETA, fewer calls", body: "When the driver starts driving, customers get a live ETA page and can call, text or message them. No app needed." },
         { title: "Say “late” early", body: "Send running-late updates before customers start wondering. Their replies stay on the job for the office." },
         { title: "Right driver, right truck", body: "Tag liftgate, stair-carry or hookup skills. ArrivePing suggests the best driver by distance, skills and workload." },
-        { title: "Proof of delivery, built in", body: "Photos, a signature and required checklist items such as walkthrough and haul-away are captured before the job closes." },
-        { title: "Contract crews, one board", body: "Subcontracted crews can be on several companies' rosters and still use one app." },
+        { title: "Proof of delivery, built in", body: "Make walkthrough and haul-away required before the job closes, and capture photos and the customer's signature on the job." },
+        { title: "Contract drivers, one board", body: "Subcontracted drivers and installers can be on several companies' rosters and still use one app." },
       ],
     },
   },

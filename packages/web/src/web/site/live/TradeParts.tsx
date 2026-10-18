@@ -76,7 +76,7 @@ export function TradeHero({ page, crumbs }: { page: LandingPage; crumbs: ReactNo
           <div className="lv-hero__act enter enter--3">
             <div className="lv-hero__ctas">
               <a href={brand.urls.signUp} className="btn btn--primary beam">
-                Start free for 30 days
+                Sign up free
               </a>
               <a href="#day" className="btn btn--secondary">
                 {t.day.cta}
@@ -87,7 +87,8 @@ export function TradeHero({ page, crumbs }: { page: LandingPage; crumbs: ReactNo
                 <circle cx="8" cy="8" r="7.25" fill="rgb(16 185 129 / 18%)" stroke="#34d399" strokeWidth="1.5" />
                 <path d="M5 8.2l2 1.9 4-4.1" fill="none" stroke="#34d399" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {hero.risk}
+              Free for 30 days with as many users as you like, then from US$49 a month. Nothing is charged until day 30, and you can
+              cancel any time.
             </p>
           </div>
         </div>
@@ -159,7 +160,7 @@ export function TradeDay({ t }: { t: TradeContent }) {
             <div className="tr-day__phones">
               <div className="tr-day__phone">
                 <div className="ap-phone ap-phone--crop">
-                  <SmsScreen from={hero.device.sms.from} body={smsBody(t)} />
+                  <SmsScreen from={hero.device.sms.from} body={smsBody(t)} time={t.sms.time.replace(/\s?[AP]M$/, "")} stamp={`Today ${t.sms.time}`} />
                 </div>
               </div>
               <div className="tr-day__phone tr-day__phone--2">
@@ -168,7 +169,7 @@ export function TradeDay({ t }: { t: TradeContent }) {
                 </div>
               </div>
             </div>
-            <figcaption className="tr-day__cap">The on-the-way text and the real live page · sample data</figcaption>
+            <figcaption className="tr-day__cap">The on-the-way text and the live page it opens · real ArrivePing screens, sample data</figcaption>
           </figure>
           <ol className="tr-day__steps">
             {t.day.steps.map((s, i) => (

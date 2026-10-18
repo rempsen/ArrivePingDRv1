@@ -195,10 +195,6 @@ export function OurStory() {
           </div>
         </div>
 
-        <div className="ourstory__guarantee" data-reveal="">
-          <h3>{story.guarantee.title}</h3>
-          <p>{story.guarantee.body}</p>
-        </div>
       </div>
     </section>
   );

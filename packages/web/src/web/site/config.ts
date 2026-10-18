@@ -257,7 +257,7 @@ export const firstHour = {
     body: "Type any website and run it. This is a labelled sample; your workspace is built from your own site.",
   },
   cta: {
-    label: "Start your 30-day free trial",
+    label: "Sign up free",
     href: brand.urls.signUp,
     price: "30 days free, then from US$49 a month",
     detail: "1 dispatcher + 2 drivers · each added driver is US$30 a month, less from driver 30",
@@ -295,7 +295,7 @@ export const officeView = {
         "Scheduler with day, week and month views",
         "A work queue of unassigned jobs to drag onto a technician",
         "Online booking forms that land as jobs",
-        "Job templates with checklists your team must complete",
+        "Job templates with checklist items you can make required",
       ],
     },
     {
@@ -382,7 +382,7 @@ export const integrations = {
   custom: {
     title: "Custom integrations are welcome.",
     body:
-      "Running something we don't connect to yet, like an ERP, a CRM, telematics or your own software? Tell us. We've built two-way integrations with customers' own systems, and we'll scope yours with you.",
+      "Running something we don't connect to yet, like an ERP, a CRM, telematics or your own software? Tell us, and we'll scope the integration with you.",
     points: ["Available on every plan", "Included with Fleet (30+ drivers)", "QuickBooks and Xero are on our roadmap"],
     cta: {
       label: "Tell us what you use",
@@ -419,7 +419,7 @@ export const trades = [
   {
     key: "construction",
     label: "Installers & construction",
-    line: "The right crew at every site, with proof at close-out.",
+    line: "The right installer at every site, with proof at close-out.",
     href: "/construction-trades",
   },
   {
@@ -472,11 +472,6 @@ export const story = {
     "ArrivePing began as software built for National Interiors, a specialty subcontracting operation that ran more than 800 field technicians. We lived the friction firsthand — dispatchers tied to the phone, customers demanding updates, routes that didn't add up, margin lost in every communication gap. We looked for a platform that fixed it. It didn't exist, so we built one. After National Interiors was sold in 2021, we founded NVC360 to rebuild that tool as a multi-tenant platform. ArrivePing is the result, and we're making it available to every field service team facing the same problem.",
   quote: "800+ technicians. One lesson learned: your customers' time is your reputation.",
   quoteAttribution: "ArrivePing / NVC360 founding team, Winnipeg, MB",
-  guarantee: {
-    title: "Try it for a month, free.",
-    body:
-      "Thirty days with as many users as you like. Your card goes on file but nothing is charged until day 30, and if you cancel before then you pay nothing. No setup fee and no contract.",
-  },
 } as const;
 
 /**
@@ -597,7 +592,7 @@ export const closing = {
   title: "Dispatch your first job today.",
   body: "Sign up, paste your website and the setup agent builds your workspace while you watch. Free for 30 days, then from US$49 a month.",
   steps: [
-    { title: "Sign up", body: "No sales call. Your card goes on file and nothing is charged for 30 days." },
+    { title: "Sign up", body: "No sales call and no demo to book." },
     { title: "Paste your website", body: "The agent builds your brand, services, catalog, job templates and customer texts." },
     { title: "Invite your team", body: "Technicians join from a text on the phone they already carry." },
   ],

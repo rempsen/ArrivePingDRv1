@@ -111,7 +111,7 @@ function GenericBody({ page }: { page: LandingPage }) {
           <p className="lede lp-hero__lede">{page.lede}</p>
           <div className="lp-hero__cta">
             <a href={brand.urls.signUp} className="btn btn--primary">
-              Start free for 30 days
+              Sign up free
             </a>
             <a href={brand.urls.how} className="btn btn--secondary">
               See how it works

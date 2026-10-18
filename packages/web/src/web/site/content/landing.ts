@@ -53,7 +53,7 @@ export type TradeContent = {
   /** Three short proof points under the headline. */
   proof: readonly string[];
   /** The customer's on-the-way text, in ArrivePing's default wording with the trade's own word for the field person (a sample company and person). */
-  sms: { company: string; who: string; tech: string; eta: number };
+  sms: { company: string; who: string; tech: string; eta: number; time: string };
   /** Sourced figures for this trade, set large under this heading. */
   statsTitle: string;
   stats: readonly { value: string; label: string; source: string; href: string }[];
