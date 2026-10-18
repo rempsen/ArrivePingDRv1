@@ -40,7 +40,31 @@ def check(name, ok, detail=""):
     print(("PASS " if ok else "FAIL ") + name + (f" - {detail}" if detail else ""))
 
 
+def mock_tiles(ctx):
+    """The sandbox can't reach the tile host; answer the TileJSON so credits can render, 404 the tiles."""
+    tj = '{"tilejson":"3.0.0","tiles":["https://tiles.openfreemap.org/planet/x/{z}/{x}/{y}.pbf"],"minzoom":0,"maxzoom":14,"attribution":"provider-credit"}'
+    def handle(route):
+        u = route.request.url
+        if u.rstrip("/").endswith("/planet"):
+            route.fulfill(status=200, content_type="application/json", body=tj, headers={"access-control-allow-origin": "*"})
+        else:
+            route.fulfill(status=404, body="", headers={"access-control-allow-origin": "*"})
+    ctx.route("https://tiles.openfreemap.org/**", handle)
+
+
+def credits_ok(pg, label):
+    a = pg.locator(".maplibregl-ctrl-attrib")
+    vis = a.count() > 0 and a.first.is_visible()
+    txt = a.first.inner_text() if a.count() else ""
+    strip = pg.locator(".ap-strip, .ap-sheet").first.bounding_box()
+    box = a.first.bounding_box() if vis else None
+    clear = bool(box and strip and box["y"] + box["height"] <= strip["y"] + 1) if label == "desktop" else vis
+    check(f"{label}: map credits are visible and name OpenStreetMap", vis and "OpenStreetMap" in txt and "OpenFreeMap" in txt, txt.replace("\n", " ")[:80])
+    check(f"{label}: credits sit clear of the panels", clear)
+
+
 def open_page(ctx):
+    mock_tiles(ctx)
     pg = ctx.new_page()
     pg.goto(BASE + "/sign-in", wait_until="networkidle")
     pg.get_by_placeholder("Email address").fill(EMAIL)
@@ -159,6 +183,11 @@ with sync_playwright() as p:
     pg.keyboard.press("Escape")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
+    try:
+        pg.locator(".ap-inspector").wait_for(state="detached", timeout=4000)
+    except Exception:
+        pass
+    pg.wait_for_timeout(900)  # let the panel transition finish; taps are held until it does
     check("desktop: Escape clears the selection", pg.locator(".ap-inspector").count() == 0)
     pg.get_by_role("button", name="Satellite").click()
     pg.wait_for_timeout(500)
@@ -194,9 +223,49 @@ with sync_playwright() as p:
     pg.keyboard.type("diego")
     pg.wait_for_timeout(200)
     pg.keyboard.press("Enter")
-    pg.wait_for_timeout(600)
+    try:
+        pg.locator(".ap-inspector[data-tech]").wait_for(timeout=4000)
+    except Exception:
+        pass
     check("desktop: '/' finds a technician and opens their panel", pg.locator(".ap-inspector[data-tech]").count() == 1)
+    # Message the technician without leaving the map.
+    pg.locator(".ap-inspector").get_by_role("button", name="Message", exact=True).click()
+    pg.wait_for_timeout(500)
+    dlg = pg.locator("dialog.ap-msg[open]")
+    check("desktop: Message opens the in-app thread", dlg.count() == 1)
+    dlg.locator("textarea").fill("On your way? e2e check")
+    dlg.get_by_role("button", name="Send").click()
+    pg.wait_for_timeout(1500)
+    check("desktop: a sent message appears in the thread", dlg.locator(".ap-bubble", has_text="e2e check").count() >= 1)
+    pg.screenshot(path=f"{SHOTS}/desktop-message.png")
+    dlg.get_by_role("button", name="Close").first.click()
+    pg.wait_for_timeout(300)
+    t_btn = pg.locator(".ap-inspector").get_by_role("button", name="Text", exact=True)
+    if t_btn.count():
+        t_btn.click()
+        pg.wait_for_timeout(400)
+        dlg = pg.locator("dialog.ap-msg[open]")
+        dlg.locator("textarea").fill("e2e text")
+        dlg.get_by_role("button", name="Send").click()
+        pg.wait_for_timeout(1500)
+        note = dlg.locator(".ap-ok").inner_text() if dlg.locator(".ap-ok").count() else dlg.locator(".ap-error").inner_text() if dlg.locator(".ap-error").count() else ""
+        check("desktop: Text sends (or logs when texting isn't set up)", "Text sent" in note or "Logged" in note, note)
+        dlg.get_by_role("button", name="Close").first.click()
     pg.keyboard.press("Escape")
+
+    # Hover a team chip: the peek card shows name, status and jobs.
+    pg.locator(".ap-chipbtn").nth(1).hover()
+    pg.wait_for_timeout(700)
+    check("desktop: hovering a technician shows a peek card", pg.locator(".ap-peek").count() == 1, pg.locator(".ap-peek").inner_text().replace("\n", " | ") if pg.locator(".ap-peek").count() else "")
+    pg.screenshot(path=f"{SHOTS}/desktop-peek.png")
+    pg.mouse.move(700, 400)
+    pg.wait_for_timeout(300)
+    check("desktop: the peek goes away when the pointer leaves", pg.locator(".ap-peek").count() == 0)
+    sat = pg.locator(".maplibregl-ctrl-attrib").first.inner_text() if pg.locator(".maplibregl-ctrl-attrib").count() else ""
+    check("desktop: satellite view credits Esri", "Esri" in sat, sat.replace("\n", " ")[:80])
+    pg.get_by_role("button", name="Satellite").click()  # back to the dark map
+    pg.wait_for_timeout(1200)
+    credits_ok(pg, "desktop")
 
     # Installable app: manifest and service worker.
     mf = pg.request.get(BASE + "/admin/manifest.webmanifest")
@@ -228,6 +297,7 @@ with sync_playwright() as p:
     ctx = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
     pg = open_page(ctx)
     check("phone: layout is narrow with a bottom sheet", pg.locator("[data-layout=narrow] .ap-sheet").count() == 1)
+    credits_ok(pg, "phone")
     pg.screenshot(path=f"{SHOTS}/phone-1-open.png")
     pg.locator(".ap-sheet__grip").click()
     pg.wait_for_timeout(500)
@@ -238,6 +308,7 @@ with sync_playwright() as p:
     pg.screenshot(path=f"{SHOTS}/phone-3-job.png")
     # Swipe the grip up and down through the detents.
     pg.keyboard.press("Escape")
+    pg.wait_for_timeout(900)  # panel transition finishes before the swipe
     g = pg.locator(".ap-sheet__grip").bounding_box()
     d0 = pg.locator(".ap-sheet").get_attribute("data-detent")
     pg.mouse.move(g["x"] + g["width"] / 2, g["y"] + 10); pg.mouse.down(); pg.mouse.move(g["x"] + g["width"] / 2, g["y"] - 120, steps=6); pg.mouse.up()

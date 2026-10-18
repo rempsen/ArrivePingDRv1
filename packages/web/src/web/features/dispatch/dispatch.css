@@ -489,3 +489,31 @@ body.ap-dragging * {
 /* Credits sit just above the team strip, never under it. */
 .dispatch-v2.ap-page { --ap-attrib-bottom: 76px; }
 .dispatch-v2[data-layout="narrow"] .maplibregl-ctrl-bottom-right { bottom: auto; top: 62px; }
+
+/* Hover peek and message dialog */
+.dispatch-v2 .ap-peek { position: fixed; z-index: 12; width: 240px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; pointer-events: none; animation: ap-rise 0.16s var(--ease); }
+.dispatch-v2 .ap-peek strong { font-size: 13px; }
+.dispatch-v2 .ap-peek__line { color: var(--text-2); }
+.dispatch-v2 .ap-msg { width: min(440px, calc(100% - 24px)); }
+.dispatch-v2 .ap-msg textarea { resize: vertical; margin-top: 8px; }
+.dispatch-v2 .ap-thread { max-height: 38vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+.dispatch-v2 .ap-bubble { align-self: flex-start; max-width: 82%; background: var(--ink-3); border-radius: 14px; padding: 7px 11px; font-size: 13px; }
+.dispatch-v2 .ap-bubble[data-mine] { align-self: flex-end; background: var(--brand); color: #04121c; }
+.dispatch-v2 .ap-bubble p { margin: 0; }
+.dispatch-v2 .ap-bubble span { font-size: 10px; opacity: 0.65; }
+.dispatch-v2 .ap-error { color: #fca5a5; font-size: 12px; margin: 6px 0 0; }
+.dispatch-v2 .ap-ok { color: #6ee7b7; font-size: 12px; margin: 6px 0 0; }
+.dispatch-v2 .ap-msg .ap-clash__actions { margin-top: 10px; }
+
+/* Screen-to-screen motion: only the panels animate, never the map underneath. */
+.dispatch-v2 .ap-inspector { view-transition-name: ap-inspector; }
+.dispatch-v2 .ap-queue { view-transition-name: ap-queue; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-group(ap-inspector), ::view-transition-group(ap-queue) { animation-duration: 0.28s; animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1); }
+::view-transition-old(ap-inspector):only-child { animation: ap-vt-out 0.18s ease both; }
+::view-transition-new(ap-inspector):only-child { animation: ap-vt-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes ap-vt-in { from { opacity: 0; transform: translateX(24px) scale(0.98); } }
+@keyframes ap-vt-out { to { opacity: 0; transform: translateX(24px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

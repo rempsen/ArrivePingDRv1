@@ -11,13 +11,14 @@ interface Props {
   targetId: string | null;
   jobNoun: string;
   onSelect(id: string): void;
+  onHover?(id: string | null, el: HTMLElement | null): void;
 }
 
 const MAX = 60;
 
 const initials = (n: string) => n.trim().split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 
-export const TeamStrip = forwardRef<HTMLUListElement, Props>(function TeamStrip({ techs, selectedId, fits, targetId, jobNoun, onSelect }, ref) {
+export const TeamStrip = forwardRef<HTMLUListElement, Props>(function TeamStrip({ techs, selectedId, fits, targetId, jobNoun, onSelect, onHover }, ref) {
   // A long roster: keep the strip light. The rest is one Find away.
   const strip = techs.length > MAX ? [...techs.slice(0, MAX - 1), ...techs.filter((t) => t.id === selectedId && !techs.slice(0, MAX - 1).includes(t))] : techs;
   return (
@@ -37,6 +38,8 @@ export const TeamStrip = forwardRef<HTMLUListElement, Props>(function TeamStrip(
             data-best={f?.best ? "" : undefined}
             data-over={targetId === t.id ? "" : undefined}
             onClick={() => onSelect(t.id)}
+            onPointerEnter={(e) => e.pointerType === "mouse" && onHover?.(t.id, e.currentTarget)}
+            onPointerLeave={() => onHover?.(null, null)}
           >
             <span className="ap-chipbtn__face" style={{ boxShadow: `0 0 0 2px ${statusColor(t.status)}` }}>
               {t.photoUrl ? <img src={t.photoUrl} alt="" draggable={false} /> : initials(t.name)}

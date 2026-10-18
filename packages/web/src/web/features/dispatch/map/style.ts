@@ -11,13 +11,19 @@ export type MapMode = "ink" | "satellite";
 
 /** Already on the ink style's vector source; listed here for the tests and the docs. */
 export const INK_CREDIT = "OpenFreeMap © OpenMapTiles Data from OpenStreetMap";
+export const INK_CREDIT_HTML =
+  '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 export const SAT_CREDIT = "Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community";
 
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
 
 /** A fresh copy each time: MapLibre mutates the object it is given. */
 export function inkStyle(): StyleSpecification {
-  return JSON.parse(JSON.stringify(ink)) as StyleSpecification;
+  const style = JSON.parse(JSON.stringify(ink)) as StyleSpecification;
+  // The credit lives in our style as well as the provider's TileJSON, so it can't go missing.
+  const src = style.sources.openmaptiles as { attribution?: string } | undefined;
+  if (src) src.attribution = INK_CREDIT_HTML;
+  return style;
 }
 
 export function satelliteStyle(): StyleSpecification {

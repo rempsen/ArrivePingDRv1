@@ -15,10 +15,11 @@ export function TechInspector({
   onSelectJob,
   onCenter,
   onOpenJob,
+  onMessage,
   tz,
   noun,
   onClose,
-}: Common & { tech: BoardTech; jobs: BoardJob[]; onSelectJob(id: string): void; onCenter(): void; onOpenJob(id: string): void }) {
+}: Common & { tech: BoardTech; jobs: BoardJob[]; onSelectJob(id: string): void; onCenter(): void; onOpenJob(id: string): void; onMessage(mode: "sms" | "chat"): void }) {
   const route = techRoute(jobs, tech.id, Date.now());
   return (
     <aside tabIndex={-1} className="ap-panel ap-inspector ap-glass" aria-label={tech.name} data-drop-tech={tech.id} data-tech={tech.id}>
@@ -40,10 +41,13 @@ export function TechInspector({
             Call
           </a>
         )}
+        <button type="button" className="ap-btn" onClick={() => onMessage("chat")}>
+          Message
+        </button>
         {tech.phone && (
-          <a className="ap-btn" href={`sms:${tech.phone}`}>
+          <button type="button" className="ap-btn" onClick={() => onMessage("sms")}>
             Text
-          </a>
+          </button>
         )}
         <button type="button" className="ap-btn" onClick={onCenter} disabled={tech.lat == null}>
           Center

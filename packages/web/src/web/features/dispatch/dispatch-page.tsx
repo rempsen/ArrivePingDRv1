@@ -4,6 +4,7 @@
  * (a technician or a job), mirrored to ?tech= / ?job= so a link opens the same view.
  */
 import { useQuery } from "@tanstack/react-query";
+import { flushSync } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { apiFetch, apiHeaders } from "../../lib/api";
@@ -21,6 +22,8 @@ import { DispatchMap, type DispatchMapHandle } from "./map/dispatch-map";
 import type { DragFit } from "./map/tech-markers";
 import { FIT_LABEL, firstName, jobSub, jobTitle } from "./panels/format";
 import { JobInspector, TechInspector } from "./panels/inspector";
+import { HoverPeek } from "./panels/hover-peek";
+import { TechMessage, type MessageMode } from "./panels/tech-message";
 import { CommandPalette } from "./panels/command-palette";
 import { QueuePanel } from "./panels/queue-panel";
 import { TeamStrip } from "./panels/team-strip";
@@ -49,6 +52,8 @@ export function DispatchPage() {
   const [hoverJob, setHoverJob] = useState<string | null>(null);
   const swipe = useRef<{ y: number; moved: boolean } | null>(null);
   const swiped = useRef(false);
+  const [peek, setPeek] = useState<{ id: string; el: HTMLElement } | null>(null);
+  const [msg, setMsg] = useState<MessageMode | null>(null);
   const [finding, setFinding] = useState(false);
   const [sheet, setSheet] = useState<"peek" | "half" | "full">("peek");
   const [dragJob, setDragJob] = useState<string | null>(null);
@@ -87,18 +92,24 @@ export function DispatchPage() {
 
   // Selection <-> URL.
   const select = useCallback((next: { tech?: string | null; job?: string | null }) => {
-    setSel((cur) => {
-      const n = { ...cur, ...next };
-      if (next.tech) n.job = null;
-      if (next.job) n.tech = null;
-      const u = new URL(window.location.href);
-      if (n.tech) u.searchParams.set("tech", n.tech);
-      else u.searchParams.delete("tech");
-      if (n.job) u.searchParams.set("job", n.job);
-      else u.searchParams.delete("job");
-      window.history.replaceState(null, "", u);
-      return n;
-    });
+    const apply = () =>
+      setSel((cur) => {
+        const n = { ...cur, ...next };
+        if (next.tech) n.job = null;
+        if (next.job) n.tech = null;
+        const u = new URL(window.location.href);
+        if (n.tech) u.searchParams.set("tech", n.tech);
+        else u.searchParams.delete("tech");
+        if (n.job) u.searchParams.set("job", n.job);
+        else u.searchParams.delete("job");
+        window.history.replaceState(null, "", u);
+        return n;
+      });
+    // Panels glide between states where the browser supports it; otherwise they just switch.
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (doc.startViewTransition && !calm) doc.startViewTransition(() => flushSync(apply));
+    else apply();
   }, []);
 
   // Layout by measured width.
@@ -236,7 +247,7 @@ export function DispatchPage() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || t.closest("dialog, [role=dialog]"))) return;
-      if (openJobId || finding) return;
+      if (openJobId || finding || msg) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") {
         if (engine.current?.active()) engine.current.cancel();
@@ -253,7 +264,7 @@ export function DispatchPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [assigner, select, openJobId, finding]);
+  }, [assigner, select, openJobId, finding, msg]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -344,6 +355,7 @@ export function DispatchPage() {
       onClose={() => select({ tech: null })}
       onSelectJob={(id) => select({ job: id })}
       onOpenJob={setOpenJobId}
+      onMessage={setMsg}
       onCenter={() => {
         const p = mapRef.current?.techs()?.positionOf(tech.id);
         if (p) mapRef.current?.focus(p, 14);
@@ -378,6 +390,7 @@ export function DispatchPage() {
         showJob={showJob}
         onSelectTech={(id) => select({ tech: id })}
         onSelectJob={(id) => select({ job: id })}
+        onHoverTech={(id, el) => setPeek(id && el ? { id, el } : null)}
         onReady={onMapReady}
       />
 
@@ -451,6 +464,7 @@ export function DispatchPage() {
         ref={strip}
         techs={techs}
         selectedId={sel.tech}
+        onHover={(id, el) => setPeek(id && el ? { id, el } : null)}
         fits={stripFits}
         targetId={overTech}
         jobNoun={jobNoun}
@@ -493,6 +507,8 @@ export function DispatchPage() {
           }
         }}
       />
+      {!dragJob && <HoverPeek tech={peek ? techById.get(peek.id) ?? null : null} anchor={peek?.el ?? null} jobs={jobs} tz={tz} noun={jobNoun} />}
+      <TechMessage tech={msg ? tech : null} mode={msg ?? "chat"} onClose={() => setMsg(null)} />
       <Announcer text={assigner.announce} />
 
       <WorkOrderModal open={!!openJobId} editBooking={bookingQ.data?.booking} onClose={() => setOpenJobId(null)} />
