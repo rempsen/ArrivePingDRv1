@@ -8,6 +8,7 @@ import { OnboardingChat } from "../../components/onboarding-chat";
 import { TenantSwitcher } from "../../components/tenant-switcher";
 import { GuideProvider } from "../../guide/GuideProvider";
 import { SampleDayBanner } from "../../guide/SampleDayBanner";
+import { LaunchChecklistCard } from "../../guide/launch";
 import { GuideButton } from "../../guide/GuideButton";
 import { groupAnchor, navAnchor } from "../../guide/anchors";
 import { useAuth } from "../../hooks/use-auth";
@@ -315,6 +316,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return (
       <div className="border-t border-white/[0.06] p-3">
         <div className="mb-2.5">
+          <LaunchChecklistCard />
           <GuideButton variant="sidebar" />
         </div>
         <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-2.5 py-2 ring-1 ring-white/[0.05]">

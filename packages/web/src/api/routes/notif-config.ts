@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
+import { audit } from "../lib/audit";
 import { fireEvent, seedNotificationRules, EVENT_META, defaultTemplateFor, interpolateSample, TEMPLATE_VARS, renderDesignPreview, sendDesignTest, type NvcEvent } from "../../services/dispatch";
 import { starterDesigns, type EmailBlock } from "../../services/email-render";
 import { putObject } from "../lib/storage";
@@ -203,6 +204,24 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     if (body.emailDesign !== undefined)
       patch.emailDesign = typeof body.emailDesign === "string" ? body.emailDesign : JSON.stringify(body.emailDesign);
     const [r] = await t.update(schema.notificationRules, patch as any, eq(schema.notificationRules.id, ruleId));
+    // A change to the WORDS (not a channel toggle) is recorded: it's what the
+    // Launch checklist's "Make a milestone message yours" looks for.
+    const copyChanged =
+      (body.template !== undefined && body.template !== existing.template) ||
+      (body.emailSubject !== undefined && body.emailSubject !== existing.emailSubject) ||
+      (patch.emailDesign !== undefined && patch.emailDesign !== existing.emailDesign);
+    if (copyChanged) {
+      const me = c.get("user") as { id?: string; name?: string; email?: string } | undefined;
+      await audit({
+        companyId: tenantId(c),
+        actorId: me?.id ?? "",
+        actorName: me?.name ?? me?.email ?? "",
+        action: "update",
+        entityType: "notification_copy",
+        entityId: ruleId,
+        summary: `Edited the ${EVENT_META[existing.event as NvcEvent]?.label ?? existing.event} message for ${existing.recipient}`,
+      });
+    }
     return c.json({ rule: r }, 200);
   })
   // bulk set a whole column for an event row (convenience)

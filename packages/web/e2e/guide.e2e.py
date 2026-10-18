@@ -65,6 +65,52 @@ def card(page):
     return page.locator(".ap-guide-card")
 
 
+def panel(page):
+    return page.get_by_role("dialog", name="Guide & help")
+
+
+def help_panel(page, vp_name):
+    """Guide panel: opens with focus in search, finds an article, reads it in
+    place, follows "Show me in ArrivePing" into the matching tour, and Esc
+    closes it with focus back on the launcher."""
+    page.goto(f"{BASE_URL}/admin", wait_until="networkidle")
+    page.locator('[data-tour="guide.button"]:visible').first.click()
+    expect(panel(page)).to_be_visible(timeout=10_000)
+    search = panel(page).get_by_role("searchbox", name="Search help articles")
+    expect(search).to_be_focused()
+    expect(panel(page).get_by_role("region", name="Guided tours").get_by_role("button")).to_have_count(len(CHAPTERS))
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{SHOT_DIR}/{vp_name}-panel.png")
+    search.fill("reply to")
+    expect(panel(page).get_by_role("region", name="Search results")).to_contain_text("Set your reply-to email")
+    page.screenshot(path=f"{SHOT_DIR}/{vp_name}-panel-search.png")
+    panel(page).get_by_role("button", name=re.compile("^Set your reply-to email")).click()
+    expect(panel(page).get_by_role("heading", name="Set your reply-to email")).to_be_visible()
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{SHOT_DIR}/{vp_name}-panel-article.png")
+    panel(page).get_by_role("button", name=re.compile("Show me in ArrivePing")).click()
+    expect(panel(page)).to_have_count(0)
+    expect(card(page)).to_contain_text("Reply-to email", timeout=10_000)
+    page.keyboard.press("Escape")
+    expect(card(page)).to_have_count(0, timeout=5_000)
+    # A click on the shaded area outside the panel closes it.
+    page.locator('[data-tour="guide.button"]:visible').first.click()
+    expect(panel(page)).to_be_visible()
+    vw = page.viewport_size["width"]
+    if vw > 500:  # on a phone the panel fills the screen: there is no outside
+        page.mouse.click(40, 300)
+        expect(panel(page)).to_have_count(0, timeout=3_000)
+    else:
+        page.keyboard.press("Escape")
+    # Esc closes the panel and returns focus to the launcher.
+    page.locator('[data-tour="guide.button"]:visible').first.click()
+    expect(panel(page)).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(panel(page)).to_have_count(0)
+    on_launcher = page.evaluate("() => document.activeElement?.getAttribute('data-tour') === 'guide.button'")
+    assert on_launcher, "focus did not return to the Guide launcher after closing the panel"
+
+
 def welcome(page):
     """First visit: the Welcome sheet opens by itself; 'Plan my week' -> scheduler chapter."""
     page.goto(f"{BASE_URL}/admin", wait_until="networkidle")
@@ -90,7 +136,7 @@ def board_mode_from_menu(page):
     page.goto(f"{BASE_URL}/admin/scheduler", wait_until="networkidle")
     page.get_by_role("button", name="Board").click()
     page.locator('[data-tour="guide.button"]:visible').first.click()
-    page.get_by_role("menuitem", name=re.compile("Scheduler")).click()
+    panel(page).get_by_role("button", name=re.compile(r"3\. Scheduler")).click()
     steps = CHAPTERS["scheduler"]
     for i in range(steps):
         expect(card(page)).to_contain_text(f"{i + 1} of {steps}", timeout=10_000)
@@ -160,6 +206,8 @@ def main() -> int:
                 if vp_name == "desktop":
                     board_mode_from_menu(page)
                     print("PASS desktop: Board mode + focus back to launcher")
+                help_panel(page, vp_name)
+                print(f"PASS {vp_name}: Guide panel (search, article, Show me, Esc)")
                 # Esc exits mid-chapter.
                 page.goto(f"{BASE_URL}/admin?guide=find-your-way", wait_until="networkidle")
                 expect(card(page)).to_be_visible(timeout=10_000)
@@ -170,8 +218,10 @@ def main() -> int:
                 # Guide menu shows a tick per completed chapter.
                 page.reload(wait_until="networkidle")
                 page.locator('[data-tour="guide.button"]:visible').first.click()
-                expect(page.get_by_role("menu").get_by_label("Completed")).to_have_count(len(CHAPTERS), timeout=5_000)
+                expect(panel(page).get_by_label("Completed")).to_have_count(len(CHAPTERS), timeout=5_000)
+                expect(panel(page)).to_contain_text(f"{len(CHAPTERS)} of {len(CHAPTERS)} done")
                 page.keyboard.press("Escape")
+                expect(panel(page)).to_have_count(0)
                 print(f"PASS {vp_name}: progress recorded")
             except (AssertionError, PWTimeout) as e:
                 failures.append(f"{vp_name}: {e}")
@@ -198,7 +248,7 @@ def main() -> int:
                 except PWTimeout:
                     pass
                 page.locator('[data-tour="guide.button"]:visible').first.click()
-                items = page.get_by_role("menu").get_by_role("menuitem")
+                items = panel(page).get_by_role("region", name="Guided tours").get_by_role("button")
                 expect(items).to_have_count(len(NON_ADMIN_CHAPTERS), timeout=5_000)
                 page.keyboard.press("Escape")
                 # An admin-only chapter can't be started by deep link either.

@@ -17,7 +17,9 @@ export const ANCHORS = [
   "nav.jobs",
   "nav.map",
   "guide.button",
+  "guide.panel",
   "sample.banner",
+  "launch.card",
   "topbar.menu",
   // Jobs page + new-job form
   "jobs.new",

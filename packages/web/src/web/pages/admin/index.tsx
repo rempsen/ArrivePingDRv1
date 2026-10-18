@@ -7,6 +7,7 @@ import { lazyRoute } from "../../lib/lazy-route";
 // the scheduler, reports (charts), zones (maps), catalog, etc. Each page splits
 // into its own chunk and loads only when its route is visited.
 const AdminDashboard = lazyRoute(() => import("./dashboard"));
+const GettingStartedPage = lazyRoute(() => import("./getting-started"));
 const FleetPage = lazyRoute(() => import("./fleet"));
 const SchedulerPage = lazyRoute(() => import("./scheduler"));
 const WorkOrdersPage = lazyRoute(() => import("./bookings"));
@@ -87,6 +88,7 @@ export default function AdminApp() {
       <Suspense fallback={<PageFallback />}>
         <Switch>
           <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/getting-started" component={GettingStartedPage} />
           <Route path="/admin/fleet" component={FleetPage} />
           <Route path="/admin/scheduler" component={SchedulerPage} />
           <Route path="/admin/work-orders" component={WorkOrdersPage} />

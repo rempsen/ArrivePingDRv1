@@ -16,6 +16,7 @@ Usage (server running, an admin of a company that has a sample day):
 Set SKIP_TICK=1 to skip the one-minute van check.
 """
 import json
+import re
 import os
 import sys
 import time
@@ -131,7 +132,7 @@ with sync_playwright() as p:
 
     # 5. Add it back from Guide & help
     page.locator('[data-tour="guide.button"]:visible').first.click()
-    page.get_by_role("menuitem", name="Add a sample day").click()
+    page.get_by_role("dialog", name="Guide & help").get_by_role("button", name=re.compile("^Add a sample day")).click()
     expect(banner(page)).to_be_visible(timeout=15_000)
     check("Guide & help can add the sample day back", True)
 
