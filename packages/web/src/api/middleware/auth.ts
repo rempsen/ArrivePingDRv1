@@ -9,6 +9,7 @@ import {
   permAllows,
   isAdminRole,
   isSuperadmin,
+  overrideAt,
 } from "../lib/permissions";
 import { tdb } from "../database/tenant";
 import { STAFF_OFFICE_ROLES, permissionFor } from "../lib/office-access";
@@ -236,7 +237,13 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     c.set("user", {
       ...(u as Record<string, unknown>),
       role: active.role,
-      permissions: active.permissions,
+      // The override that applies HERE (lib/permissions.ts overrideAt).
+      permissions: overrideAt({
+        membership: active.permissions,
+        user: (u as { permissions?: string | null }).permissions,
+        companyId,
+        homeCompany,
+      }),
       staffType: active.staffType,
       managerId: active.managerId,
       companyId,

@@ -500,7 +500,7 @@ export const articles: Article[] = [
           "**Field Staff:** technicians and drivers on the ArrivePing app; they see only their own jobs.",
         ],
       },
-      { type: "p", text: "An admin can widen or narrow any role, or one person, under **People → Technicians & Managers → Roles & Permissions**. Billing, payment setup and API keys always stay with admins." },
+      { type: "p", text: "The roles are the same for every company; **Roles & Permissions** shows exactly what each one includes. An admin can widen or narrow what one person can do: open **People → Technicians & Managers → Internal Team** and use **Permissions** on their row. Buttons for things someone isn't allowed to do (archiving a job, exporting a list) don't appear for them. Billing, payment setup and API keys always stay with admins." },
       { type: "p", text: "Only an admin adds office staff, changes someone's role or changes a team member's sign-in email. A page that isn't part of your role says so; ask an admin on your account if you need it." },
       { type: "p", text: "Every company needs at least one Admin; see [Delete your account](/support/delete-your-account) if you are the only one." },
     ],

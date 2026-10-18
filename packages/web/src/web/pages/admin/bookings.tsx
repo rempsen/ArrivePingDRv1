@@ -20,6 +20,7 @@ import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand"
 import { TechAvatar } from "../../components/tech-avatar";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { EmptyState } from "../../components/empty-state";
+import { useAccess } from "../../hooks/use-access";
 
 const QUICK = [
   { key: "", label: "All" },
@@ -80,6 +81,11 @@ export default function AdminWorkOrders() {
   const { noun } = useWorkerNoun();
   const { noun: customerNoun } = useCustomerNoun();
   const { noun: jobNoun, nounPlural: jobPlural } = useJobNoun();
+  // Archive/restore and the bulk export are refused by the API without these
+  // (api/routes/job-search.ts), so people without them don't get the buttons.
+  const { can } = useAccess();
+  const canArchive = can("work_orders:delete");
+  const canExport = can("reports:export");
   const initialStatus =
     (typeof window !== "undefined" &&
       new URLSearchParams(window.location.search).get("status")) ||
@@ -279,7 +285,7 @@ export default function AdminWorkOrders() {
         subtitle={`Search, filter, dispatch and export every ${jobNoun.toLowerCase()}`}
         actions={
           <div className="flex items-center gap-2">
-            <ExportMenu params={params} columns={facets.data?.columns ?? []} />
+            {canExport && <ExportMenu params={params} columns={facets.data?.columns ?? []} />}
             <button
               data-tour="jobs.new"
               onClick={() => setNewOpen(true)}
@@ -501,7 +507,7 @@ export default function AdminWorkOrders() {
                       )}
                       <div className="ml-auto flex items-center gap-1.5">
                         <RowExportMenu jobId={b.id} jobNumber={b.jobNumber} />
-                        {archived ? (
+                        {!canArchive ? null : archived ? (
                           <button
                             onClick={() => restore.mutate(b.id)}
                             aria-label="Restore"
@@ -681,17 +687,21 @@ export default function AdminWorkOrders() {
                             jobId={b.id}
                             jobNumber={b.jobNumber}
                             archived={archived}
-                            onRestore={() => restore.mutate(b.id)}
-                            onArchive={async () => {
-                              if (
-                                await confirm({
-                                  title: `Archive this ${jobNoun.toLowerCase()}?`,
-                                  message: "It moves to the archive and can be restored later.",
-                                  confirmLabel: "Archive",
-                                })
-                              )
-                                del.mutate(b.id);
-                            }}
+                            onRestore={canArchive ? () => restore.mutate(b.id) : undefined}
+                            onArchive={
+                              canArchive
+                                ? async () => {
+                                    if (
+                                      await confirm({
+                                        title: `Archive this ${jobNoun.toLowerCase()}?`,
+                                        message: "It moves to the archive and can be restored later.",
+                                        confirmLabel: "Archive",
+                                      })
+                                    )
+                                      del.mutate(b.id);
+                                  }
+                                : undefined
+                            }
                           />
                         </div>
                       </td>

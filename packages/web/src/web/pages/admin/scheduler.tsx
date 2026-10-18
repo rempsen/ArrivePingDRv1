@@ -14,6 +14,7 @@ import { PRIORITY_META, STATUS_META } from "../../lib/utils";
 import { qualifies } from "../../../shared/qualify";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { EmptyState } from "../../components/empty-state";
+import { useAccess } from "../../hooks/use-access";
 import {
   Sparkles,
   MapPin,
@@ -95,6 +96,9 @@ export default function SchedulerPage() {
   const { noun: jobNoun, nounPlural: jobNounPlural } = useJobNoun();
   const jobLower = jobNoun.toLowerCase();
   const jobsLower = jobNounPlural.toLowerCase();
+  // Archiving a job needs work_orders:delete (api/routes/job-search.ts); without
+  // it the delete buttons would only ever fail, so they aren't shown.
+  const canArchive = useAccess().can("work_orders:delete");
   const [dragId, setDragId] = useState<string | null>(null);
   const [overTech, setOverTech] = useState<string | null>(null);
   const [aiFor, setAiFor] = useState<string | null>(null);
@@ -731,18 +735,20 @@ export default function SchedulerPage() {
                             {b.title || b.service?.name}
                           </span>
                           <AutoBadge booking={b} size="xs" />
-                          <button
-                            type="button"
-                            aria-label={`Delete ${jobLower}`}
-                            title="Delete"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeJob(b);
-                            }}
-                            className="ml-auto hidden shrink-0 rounded p-0.5 text-white/70 hover:bg-black/30 hover:text-rose-300 group-hover/chip:block"
-                          >
-                            <Trash2 className="h-2.5 w-2.5" />
-                          </button>
+                          {canArchive && (
+                            <button
+                              type="button"
+                              aria-label={`Delete ${jobLower}`}
+                              title="Delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeJob(b);
+                              }}
+                              className="ml-auto hidden shrink-0 rounded p-0.5 text-white/70 hover:bg-black/30 hover:text-rose-300 group-hover/chip:block"
+                            >
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          )}
                         </div>
                       ))}
                       {jobs.length > 5 && (
@@ -982,7 +988,7 @@ export default function SchedulerPage() {
                                 }}
                               >
                                 <AutoBadgeCorner booking={b} />
-                                {density !== "narrow" && (
+                                {canArchive && density !== "narrow" && (
                                   <button
                                     type="button"
                                     aria-label={`Delete ${jobLower}`}
@@ -1257,15 +1263,17 @@ export default function SchedulerPage() {
                                 </p>
                               )}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => removeJob(b)}
-                              aria-label={`Delete ${jobLower}`}
-                              title={`Delete ${jobLower}`}
-                              className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-rose-500/10 hover:text-rose-400"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {canArchive && (
+                              <button
+                                type="button"
+                                onClick={() => removeJob(b)}
+                                aria-label={`Delete ${jobLower}`}
+                                title={`Delete ${jobLower}`}
+                                className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-rose-500/10 hover:text-rose-400"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -1394,16 +1402,18 @@ export default function SchedulerPage() {
                         >
                           <Pencil className="h-3 w-3" /> Edit
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeJob(b);
-                          }}
-                          aria-label={`Delete ${jobLower}`}
-                          className="-mr-1 ml-auto flex min-h-11 items-center gap-1 px-1 text-xs font-semibold text-slate-500 hover:text-rose-400 lg:mr-0 lg:min-h-0 lg:px-0"
-                        >
-                          <Trash2 className="h-3 w-3" /> Delete
-                        </button>
+                        {canArchive && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeJob(b);
+                            }}
+                            aria-label={`Delete ${jobLower}`}
+                            className="-mr-1 ml-auto flex min-h-11 items-center gap-1 px-1 text-xs font-semibold text-slate-500 hover:text-rose-400 lg:mr-0 lg:min-h-0 lg:px-0"
+                          >
+                            <Trash2 className="h-3 w-3" /> Delete
+                          </button>
+                        )}
                       </div>
                       {assignFor === b.id && (
                         <div className="mt-2 rounded-lg border border-white/10 bg-ink-3/60 p-2">
@@ -1700,14 +1710,16 @@ export default function SchedulerPage() {
                           <StatusBadge status={b.status} />
                           <AutoBadge booking={b} />
                         </button>
-                        <button
-                          onClick={() => removeJob(b)}
-                          aria-label={`Delete ${jobLower}`}
-                          title={`Delete ${jobLower}`}
-                          className="grid h-8 w-8 place-items-center rounded text-slate-600 transition hover:bg-rose-500/10 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {canArchive && (
+                          <button
+                            onClick={() => removeJob(b)}
+                            aria-label={`Delete ${jobLower}`}
+                            title={`Delete ${jobLower}`}
+                            className="grid h-8 w-8 place-items-center rounded text-slate-600 transition hover:bg-rose-500/10 hover:text-rose-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     ))
                   )}

@@ -179,5 +179,20 @@ export function resolvePerms(
   return new Set(roleDefaults[role] ?? DEFAULT_ROLE_PERMS[role] ?? []);
 }
 
+/**
+ * The per-person override that applies at one company (null = role defaults).
+ * Overrides are saved on the person's membership there. Older ones were saved
+ * on the user row, which only ever belonged to their home company, so that
+ * copy counts at the home company and nowhere else.
+ */
+export function overrideAt(a: {
+  membership: string | null | undefined;
+  user: string | null | undefined;
+  companyId: string;
+  homeCompany: string | null | undefined;
+}): string | null {
+  return a.membership ?? (a.companyId === a.homeCompany ? (a.user ?? null) : null);
+}
+
 /** Does the permission set satisfy the required key? (Shared with the dashboard.) */
 export { permAllows } from "../../shared/office-pages";

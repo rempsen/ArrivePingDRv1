@@ -8,7 +8,25 @@ import {
   isAdminRole,
   isSuperadmin,
   INTERNAL_ROLES,
+  overrideAt,
 } from "../permissions";
+
+describe("overrideAt: which per-person override applies at a company", () => {
+  const mine = JSON.stringify(["work_orders:view"]);
+  const old = JSON.stringify(["reports:view"]);
+  it("the membership's override wins", () => {
+    expect(overrideAt({ membership: mine, user: old, companyId: "a", homeCompany: "a" })).toBe(mine);
+  });
+  it("an older override on the user row still counts at their home company", () => {
+    expect(overrideAt({ membership: null, user: old, companyId: "a", homeCompany: "a" })).toBe(old);
+  });
+  it("…but never at another company they work for", () => {
+    expect(overrideAt({ membership: null, user: old, companyId: "b", homeCompany: "a" })).toBeNull();
+  });
+  it("no override anywhere means role defaults", () => {
+    expect(overrideAt({ membership: null, user: null, companyId: "a", homeCompany: "a" })).toBeNull();
+  });
+});
 
 describe("resolvePerms", () => {
   it("grants the wildcard to admins", () => {

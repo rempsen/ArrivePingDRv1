@@ -54,6 +54,7 @@ import {
 import { lookupTax, regionFromAddress } from "../../shared/tax";
 import { AddressAutocomplete } from "./address-autocomplete";
 import { useConfirm } from "./confirm-dialog";
+import { useAccess } from "../hooks/use-access";
 import { BusyError } from "../lib/force-confirm";
 import { liveOnSiteMinutes } from "../../shared/clock";
 
@@ -443,6 +444,8 @@ export function WorkOrderModal({
   const isEdit = !!editBooking;
   const qc = useQueryClient();
   const confirm = useConfirm();
+  // Archiving needs work_orders:delete (api/routes/job-search.ts).
+  const canArchive = useAccess().can("work_orders:delete");
   const { noun } = useWorkerNoun();
   const { noun: customerNoun } = useCustomerNoun();
   // "Work Order" / "Booking" / "Visit" — whatever this tenant calls a job.
@@ -1055,9 +1058,10 @@ export function WorkOrderModal({
       footer={
         <div className="flex w-full items-center justify-between gap-2">
           <div>
-            {/* Only an existing work order has anything to archive. New ones
-                just get Cancel, same as before. */}
-            {isEdit ? (
+            {/* Only an existing work order has anything to archive, and only
+                people allowed to archive get the button. Everyone else gets
+                Cancel. */}
+            {isEdit && canArchive ? (
               <BtnDanger onClick={deleteWorkOrder} disabled={busy || deleting}>
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Archiving…" : `Delete ${jobNoun}`}

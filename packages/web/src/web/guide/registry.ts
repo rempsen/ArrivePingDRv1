@@ -237,7 +237,7 @@ export const CHAPTERS: Chapter[] = [
         anchor: "techs.tab.internal",
         placement: "bottom",
         title: "Your office team",
-        body: "Internal Team holds dispatchers and managers. Roles & Permissions sets what each role can see and change.",
+        body: "Internal Team holds dispatchers and managers. Permissions on a person's row tailors what they can do.",
       },
     ],
   },
