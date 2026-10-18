@@ -93,6 +93,15 @@ def help_panel(page, vp_name):
     expect(card(page)).to_contain_text("Reply-to email", timeout=10_000)
     page.keyboard.press("Escape")
     expect(card(page)).to_have_count(0, timeout=5_000)
+    # A click on the shaded area outside the panel closes it.
+    page.locator('[data-tour="guide.button"]:visible').first.click()
+    expect(panel(page)).to_be_visible()
+    vw = page.viewport_size["width"]
+    if vw > 500:  # on a phone the panel fills the screen: there is no outside
+        page.mouse.click(40, 300)
+        expect(panel(page)).to_have_count(0, timeout=3_000)
+    else:
+        page.keyboard.press("Escape")
     # Esc closes the panel and returns focus to the launcher.
     page.locator('[data-tour="guide.button"]:visible').first.click()
     expect(panel(page)).to_be_visible()

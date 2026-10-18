@@ -71,8 +71,11 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end" {...dismiss(onClose)}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-hidden="true" />
+    <div className="fixed inset-0 z-[60] flex justify-end">
+      {/* The shaded backdrop is what a click outside the panel lands on, so the
+          dismiss handler goes here (on the wrapper it never saw target ===
+          currentTarget and the panel wouldn't close). */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" aria-hidden="true" {...dismiss(onClose)} />
       <DialogPanel
         onClose={onClose}
         label="Guide & help"
