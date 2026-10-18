@@ -108,16 +108,19 @@ describe("stage and nudge rules", () => {
 });
 
 describe("the sweep", () => {
+  // Other test files share this in-memory database (bun runs them in one
+  // process) and seed companies of their own, so only this file's are counted.
+  const ours = (to: string) => to.endsWith("@new.test") || to.endsWith("@internal.test") || to.endsWith("@old.test");
   const sent: { to: string; subject: string; headers?: Record<string, string> }[] = [];
   const alerts: string[] = [];
   const stageChanges: string[] = [];
   const deps = {
     send: (async (o: any) => {
-      sent.push({ to: o.to, subject: o.subject, headers: o.headers });
+      if (ours(o.to)) sent.push({ to: o.to, subject: o.subject, headers: o.headers });
       return { ok: true };
     }) as any,
-    slack: (async (co: { name: string }) => {
-      alerts.push(co.name);
+    slack: (async (co: { id: string; name: string }) => {
+      if (co.id.startsWith("lp-")) alerts.push(co.name);
       return true;
     }) as any,
     onStageChange: (id: string) => stageChanges.push(id),

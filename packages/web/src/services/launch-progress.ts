@@ -123,15 +123,21 @@ export function readUnsubscribeToken(token: string): string | null {
 /** Stop tip emails for one person at one company. Returns false for an unknown membership. */
 export async function unsubscribeLaunchTips(membershipId: string): Promise<boolean> {
   // A signed link from an email: there's no session or tenant, so this is a
-  // system write, limited to the one membership the signature names.
-  const [m] = await sdb.select().from(schema.memberships).where(eq(schema.memberships.id, membershipId)).limit(1);
-  if (!m) return false;
-  const state = parseOnboarding(m.onboarding);
-  await sdb
-    .update(schema.memberships)
-    .set({ onboarding: JSON.stringify({ ...state, nudgesOff: true }), updatedAt: new Date() })
-    .where(eq(schema.memberships.id, membershipId));
-  return true;
+  // system write, limited to the one membership the signature names. Read,
+  // merge and write under a row lock, like PATCH /api/me/onboarding, so a
+  // Guide progress save at the same moment can't undo the opt-out (or the
+  // opt-out drop that progress).
+  return sdb.transaction(async (tx) => {
+    const [m] = await tx.select().from(schema.memberships).where(eq(schema.memberships.id, membershipId)).limit(1).for("update");
+    if (!m) return false;
+    const state = parseOnboarding(m.onboarding);
+    if (state.nudgesOff) return true;
+    await tx
+      .update(schema.memberships)
+      .set({ onboarding: JSON.stringify({ ...state, nudgesOff: true }), updatedAt: new Date() })
+      .where(eq(schema.memberships.id, membershipId));
+    return true;
+  });
 }
 
 // ── Emails and Slack ───────────────────────────────────────────────────────
