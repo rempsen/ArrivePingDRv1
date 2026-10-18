@@ -604,7 +604,7 @@ async function deliver(
   event: string,
   meta: EventMeta,
   fallback: (recipient: Recipient) => string,
-  /** Set once the first message is about to go out (see fireCustomEvent). */
+  /** Set at the first message actually created or handed to a provider (see fireCustomEvent). */
   progress?: { sending: boolean },
 ) {
   const { b, companyId, cust, rider, riderUser, vars } = ctx;
@@ -661,7 +661,6 @@ async function deliver(
     }
 
     for (const t of targets) {
-      if (progress) progress.sending = true;
       // in-app
       if (rule.inApp && allowInApp && t.userId && msg) {
         await tdb(companyId).insert(schema.notifications, {
@@ -671,6 +670,8 @@ async function deliver(
           title: meta.defaultTitle,
           body: msg,
         });
+        // The alert now exists: from here on, retrying would send it twice.
+        if (progress) progress.sending = true;
         // Push to the recipient's devices (fire-and-forget). The tech app
         // relies on this for job assignment / enroute alerts when backgrounded.
         sendPush(t.userId, meta.defaultTitle, msg, {
@@ -699,11 +700,14 @@ async function deliver(
           text = msg;
         }
         const subject = rule.emailSubject ? interp(rule.emailSubject) : `${vars.company}: ${meta.label}`;
+        // Marked before the attempt: a provider error can still mean it went.
+        if (progress) progress.sending = true;
         const r = await sendEmail({ to: t.email, subject, html, text, from: emailFrom, replyTo: emailReplyTo }).catch((e) => ({ ok: false, error: e?.message }));
         await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "email", target: t.email, status: (r as any)?.ok === false ? "failed" : "sent", detail: (r as any)?.error || "" });
       }
       // sms
       if (rule.sms && allowSms && t.phone && msg) {
+        if (progress) progress.sending = true;
         const r = await sendSms(t.phone, msg);
         await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "sms", target: t.phone, status: r.ok ? "sent" : r.skipped ? "skipped" : "failed", detail: r.error || (r.skipped ? "sms not configured" : r.sid || "") });
       }
@@ -713,7 +717,6 @@ async function deliver(
     if (rule.webhook && allowWebhook) {
       const eps = await activeWebhooks(companyId, event);
       for (const ep of eps) {
-        if (progress) progress.sending = true;
         const payload = {
           event,
           recipient,
@@ -730,6 +733,7 @@ async function deliver(
           at: new Date().toISOString(),
         };
         try {
+          if (progress) progress.sending = true;
           const res = await fetch(ep.url, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...(ep.secret ? { "X-Webhook-Secret": ep.secret } : {}) },
