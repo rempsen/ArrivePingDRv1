@@ -450,7 +450,7 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
   try {
     const ctx = await context(bookingId);
     if (!ctx) return;
-    const { b, companyId, cust, rider, riderUser, vars } = ctx;
+    const { b, companyId, riderUser, vars } = ctx;
 
     // Append to the job's permanent timeline. Every lifecycle event in the
     // system funnels through fireEvent, so this single call is what gives the
@@ -476,167 +476,251 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
     // nothing: no automations, review asks, in-app/push, email, SMS or
     // webhooks. Office admins are real people and would otherwise be told
     // about a pretend job.
-    if (b.isSample) return;
-
-    // Automation rules + the post-completion review ask. Both are strictly
-    // best-effort side effects: a failure here must never stop the real
-    // notifications below from going out.
-    try {
-      const trigger = EVENT_TO_TRIGGER[event];
-      if (trigger) {
-        await runAutomations(trigger, {
-          companyId,
-          bookingId: b.id,
-          vars: {
-            ...(vars as unknown as Record<string, string | number | null>),
-            customerName: cust?.name ?? "",
-            customerPhone: b.customerPhone || cust?.phone || "",
-            token: b.publicToken,
-          },
-          facts: {
-            priority: b.priority,
-            service: vars.service,
-            status: b.status,
-            region: b.region,
-          },
-        });
-      }
-      if (event === "completed") await scheduleReviewRequest(b.id);
-    } catch (e) {
-      console.error("[dispatch] automation/review hook failed", e);
+    if (!b.isSample) {
+      await notifyForEvent(ctx, event).catch((e) => console.error("[dispatch] notify failed", event, e));
     }
 
-    const rules = await tdb(companyId).select(
-      schema.notificationRules,
-      and(
-        eq(schema.notificationRules.event, event),
-        eq(schema.notificationRules.enabled, true),
-      ),
-    );
-
-    // per-company channel gates (master switches + quiet hours)
-    const [allowInApp, allowEmail, allowSms, allowWebhook] = await Promise.all([
-      channelAllowed(companyId, "inApp"), channelAllowed(companyId, "email"), channelAllowed(companyId, "sms"), channelAllowed(companyId, "webhook"),
-    ]);
-    // sender identity from channel config
-    const chanCfg = await channelConfig(companyId);
-    // Only honor a tenant's custom from-address if its domain is verified in
-    // Resend. Otherwise fall through to undefined so email.ts uses its safe
-    // shared sender (onboarding@resend.dev) and mail still goes out.
-    const sender = pickSender(
-      { ...chanCfg, emailFromName: chanCfg?.emailFromName || vars.company },
-      await verifiedDomainsForCompany(companyId).catch((): string[] => []),
-      PLATFORM_FROM,
-    );
-    const emailFrom = sender.from;
-    const emailReplyTo = sender.replyTo;
-    const emailFooter = chanCfg?.emailFooter || "";
-    const emailBrand: EmailBrand = {
-      company: vars.company,
-      logoUrl: chanCfg?.emailLogoUrl || "",
-      logoHeight: chanCfg?.emailLogoHeight || undefined,
-      brandColor: chanCfg?.emailBrandColor || "#06B6D4",
-      headerStyle: (chanCfg?.emailHeaderStyle as any) || "gradient",
-      bgColor: chanCfg?.emailBgColor || "#f1f5f9",
-      footer: emailFooter,
-      origin: process.env.WEBSITE_URL || process.env.APP_URL || process.env.PUBLIC_URL || "",
-    };
-    const interp = (s: string) => interpolate(s, vars);
-
-    for (const rule of rules) {
-      const recipient = rule.recipient as Recipient;
-      const msg = rule.template ? interpolate(rule.template, vars) : defaultMessage(event, recipient, vars);
-      const meta = EVENT_META[event];
-
-      // resolve targets per recipient
-      let targets: { userId?: string; email?: string; phone?: string; name: string }[] = [];
-      if (recipient === "client" && cust) {
-        targets = [{ userId: cust.id, email: cust.email, phone: b.customerPhone || (cust as any).phone || "", name: cust.name }];
-      } else if (recipient === "tech" && rider && riderUser) {
-        targets = [{ userId: riderUser.id, email: riderUser.email, phone: rider.phone || (riderUser as any).phone || "", name: riderUser.name }];
-      } else if (recipient === "office") {
-        const admins = await officeUsers(companyId);
-        targets = admins.map((a) => ({ userId: a.id, email: a.email, phone: (a as any).phone || "", name: a.name }));
-      }
-
-      for (const t of targets) {
-        // in-app
-        if (rule.inApp && allowInApp && t.userId) {
-          await tdb(companyId).insert(schema.notifications, {
-            userId: t.userId,
-            bookingId: b.id,
-            type: meta.notifType,
-            title: meta.defaultTitle,
-            body: msg,
-          });
-          // Push to the recipient's devices (fire-and-forget). The tech app
-          // relies on this for job assignment / enroute alerts when backgrounded.
-          sendPush(t.userId, meta.defaultTitle, msg, {
-            type: meta.notifType,
-            event,
-            bookingId: b.id,
-          }).catch(() => {});
-          await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "in_app", target: t.userId, status: "sent" });
-        }
-        // email — use the rich block design when present, else the legacy text template
-        if (rule.email && allowEmail && t.email) {
-          let html: string;
-          let text: string | undefined;
-          let design: EmailBlock[] | null = null;
-          if (rule.emailDesign) {
-            try { design = JSON.parse(rule.emailDesign); } catch { design = null; }
-          }
-          if (design && Array.isArray(design) && design.length) {
-            html = renderEmailDesign(design, emailBrand, interp);
-            text = designToText(design, interp);
-          } else {
-            html = emailHtml(meta.defaultTitle, msg, vars, emailFooter, emailBrand);
-            text = msg;
-          }
-          const subject = rule.emailSubject ? interp(rule.emailSubject) : `${vars.company}: ${meta.label}`;
-          const r = await sendEmail({ to: t.email, subject, html, text, from: emailFrom, replyTo: emailReplyTo }).catch((e) => ({ ok: false, error: e?.message }));
-          await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "email", target: t.email, status: (r as any)?.ok === false ? "failed" : "sent", detail: (r as any)?.error || "" });
-        }
-        // sms
-        if (rule.sms && allowSms && t.phone) {
-          const r = await sendSms(t.phone, msg);
-          await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "sms", target: t.phone, status: r.ok ? "sent" : r.skipped ? "skipped" : "failed", detail: r.error || (r.skipped ? "sms not configured" : r.sid || "") });
-        }
-      }
-
-      // webhook (fire once per rule that enables it)
-      if (rule.webhook && allowWebhook) {
-        const eps = await activeWebhooks(companyId, event);
-        for (const ep of eps) {
-          const payload = {
-            event,
-            recipient,
-            bookingId: b.id,
-            shortId: vars.shortId,
-            status: b.status,
-            service: vars.service,
-            tech: vars.techName,
-            address: b.address,
-            scheduledAt: b.scheduledAt,
-            trackUrl: vars.trackUrl,
-            message: msg,
-            at: new Date().toISOString(),
-          };
-          try {
-            const res = await fetch(ep.url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...(ep.secret ? { "X-Webhook-Secret": ep.secret } : {}) },
-              body: JSON.stringify(payload),
-            });
-            await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "webhook", target: ep.url, status: res.ok ? "sent" : "failed", detail: `HTTP ${res.status}` });
-          } catch (e: any) {
-            await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "webhook", target: ep.url, status: "failed", detail: e?.message || "error" });
-          }
-        }
-      }
+    // Then any milestones the company made itself that ride on this event
+    // ("Water restored" on job completed). Loaded lazily: custom-milestones.ts
+    // imports this module. Sample jobs get those timeline lines too, and
+    // fireCustomEvent below sends nothing for them.
+    try {
+      const { onBuiltInEvent } = await import("./custom-milestones");
+      await onBuiltInEvent(event, b);
+    } catch (e) {
+      console.error("[dispatch] custom milestone hook failed", event, e);
     }
   } catch (e) {
     console.error("[dispatch] fireEvent failed", event, e);
+  }
+}
+
+type DispatchContext = NonNullable<Awaited<ReturnType<typeof context>>>;
+
+/** What a notification needs to know about the event it is for. */
+export type EventMeta = { label: string; defaultTitle: string; notifType: string };
+
+/** Automations, the review ask, then the built-in event's notification rules. */
+async function notifyForEvent(ctx: DispatchContext, event: NvcEvent) {
+  const { b, companyId, cust, vars } = ctx;
+  // Automation rules + the post-completion review ask. Both are strictly
+  // best-effort side effects: a failure here must never stop the real
+  // notifications below from going out.
+  try {
+    const trigger = EVENT_TO_TRIGGER[event];
+    if (trigger) {
+      await runAutomations(trigger, {
+        companyId,
+        bookingId: b.id,
+        vars: {
+          ...(vars as unknown as Record<string, string | number | null>),
+          customerName: cust?.name ?? "",
+          customerPhone: b.customerPhone || cust?.phone || "",
+          token: b.publicToken,
+        },
+        facts: {
+          priority: b.priority,
+          service: vars.service,
+          status: b.status,
+          region: b.region,
+        },
+      });
+    }
+    if (event === "completed") await scheduleReviewRequest(b.id);
+  } catch (e) {
+    console.error("[dispatch] automation/review hook failed", e);
+  }
+
+  await deliver(ctx, event, EVENT_META[event], (recipient) => defaultMessage(event, recipient, vars));
+}
+
+/**
+ * Fire a milestone the company made itself (services/custom-milestones.ts) on
+ * a job: a line on the job's timeline, then its notification rules (event key
+ * `custom:<id>`) through the same delivery path as a built-in event, so
+ * channels, quiet hours, branded email and the delivery log all apply.
+ *
+ * A custom milestone has no built-in copy: a recipient nobody wrote a message
+ * for gets nothing in-app or by text. Sample jobs get the timeline line only.
+ */
+export async function fireCustomEvent(input: {
+  companyId: string;
+  bookingId: string;
+  milestoneId: string;
+  meta: EventMeta;
+  customerVisible: boolean;
+  /** false for an admin's Test send: deliver, but leave the job's record alone. */
+  timeline?: boolean;
+}): Promise<void> {
+  const event = `custom:${input.milestoneId}`;
+  try {
+    const ctx = await context(input.bookingId);
+    // The booking is looked up across tenants; a milestone only ever fires on
+    // its own company's jobs.
+    if (!ctx || ctx.companyId !== input.companyId) return;
+    if (input.timeline !== false) {
+      await logJobEvent({
+        companyId: ctx.companyId,
+        bookingId: ctx.b.id,
+        kind: "milestone",
+        actorRole: "system",
+        label: input.meta.label,
+        customerVisible: input.customerVisible,
+        meta: { milestoneId: input.milestoneId },
+      });
+      void publishDispatch(ctx.companyId, { kind: "job", jobId: ctx.b.id });
+    }
+    if (ctx.b.isSample) return;
+    await deliver(ctx, event, input.meta, () => "");
+  } catch (e) {
+    console.error("[dispatch] fireCustomEvent failed", event, e);
+  }
+}
+
+/**
+ * Send one event's enabled notification rules to their recipients. `fallback`
+ * is the copy for a recipient whose rule has no message of its own; an empty
+ * message means nothing goes out in-app or by text (email still can, from a
+ * designed email).
+ */
+async function deliver(
+  ctx: DispatchContext,
+  event: string,
+  meta: EventMeta,
+  fallback: (recipient: Recipient) => string,
+) {
+  const { b, companyId, cust, rider, riderUser, vars } = ctx;
+  const rules = await tdb(companyId).select(
+    schema.notificationRules,
+    and(
+      eq(schema.notificationRules.event, event),
+      eq(schema.notificationRules.enabled, true),
+    ),
+  );
+
+  // per-company channel gates (master switches + quiet hours)
+  const [allowInApp, allowEmail, allowSms, allowWebhook] = await Promise.all([
+    channelAllowed(companyId, "inApp"), channelAllowed(companyId, "email"), channelAllowed(companyId, "sms"), channelAllowed(companyId, "webhook"),
+  ]);
+  // sender identity from channel config
+  const chanCfg = await channelConfig(companyId);
+  // Only honor a tenant's custom from-address if its domain is verified in
+  // Resend. Otherwise fall through to undefined so email.ts uses its safe
+  // shared sender (onboarding@resend.dev) and mail still goes out.
+  const sender = pickSender(
+    { ...chanCfg, emailFromName: chanCfg?.emailFromName || vars.company },
+    await verifiedDomainsForCompany(companyId).catch((): string[] => []),
+    PLATFORM_FROM,
+  );
+  const emailFrom = sender.from;
+  const emailReplyTo = sender.replyTo;
+  const emailFooter = chanCfg?.emailFooter || "";
+  const emailBrand: EmailBrand = {
+    company: vars.company,
+    logoUrl: chanCfg?.emailLogoUrl || "",
+    logoHeight: chanCfg?.emailLogoHeight || undefined,
+    brandColor: chanCfg?.emailBrandColor || "#06B6D4",
+    headerStyle: (chanCfg?.emailHeaderStyle as any) || "gradient",
+    bgColor: chanCfg?.emailBgColor || "#f1f5f9",
+    footer: emailFooter,
+    origin: process.env.WEBSITE_URL || process.env.APP_URL || process.env.PUBLIC_URL || "",
+  };
+  const interp = (s: string) => interpolate(s, vars);
+
+  for (const rule of rules) {
+    const recipient = rule.recipient as Recipient;
+    const msg = rule.template ? interpolate(rule.template, vars) : fallback(recipient);
+
+    // resolve targets per recipient
+    let targets: { userId?: string; email?: string; phone?: string; name: string }[] = [];
+    if (recipient === "client" && cust) {
+      targets = [{ userId: cust.id, email: cust.email, phone: b.customerPhone || (cust as any).phone || "", name: cust.name }];
+    } else if (recipient === "tech" && rider && riderUser) {
+      targets = [{ userId: riderUser.id, email: riderUser.email, phone: rider.phone || (riderUser as any).phone || "", name: riderUser.name }];
+    } else if (recipient === "office") {
+      const admins = await officeUsers(companyId);
+      targets = admins.map((a) => ({ userId: a.id, email: a.email, phone: (a as any).phone || "", name: a.name }));
+    }
+
+    for (const t of targets) {
+      // in-app
+      if (rule.inApp && allowInApp && t.userId && msg) {
+        await tdb(companyId).insert(schema.notifications, {
+          userId: t.userId,
+          bookingId: b.id,
+          type: meta.notifType,
+          title: meta.defaultTitle,
+          body: msg,
+        });
+        // Push to the recipient's devices (fire-and-forget). The tech app
+        // relies on this for job assignment / enroute alerts when backgrounded.
+        sendPush(t.userId, meta.defaultTitle, msg, {
+          type: meta.notifType,
+          event,
+          bookingId: b.id,
+        }).catch(() => {});
+        await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "in_app", target: t.userId, status: "sent" });
+      }
+      // email — use the rich block design when present, else the legacy text template
+      // Nothing written for this recipient (a custom milestone with no message
+      // and no designed email) sends no email: an empty one is worse than none.
+      let design: EmailBlock[] | null = null;
+      if (rule.email && rule.emailDesign) {
+        try { design = JSON.parse(rule.emailDesign); } catch { design = null; }
+      }
+      const hasDesign = !!design && Array.isArray(design) && design.length > 0;
+      if (rule.email && allowEmail && t.email && (hasDesign || msg)) {
+        let html: string;
+        let text: string | undefined;
+        if (design && hasDesign) {
+          html = renderEmailDesign(design, emailBrand, interp);
+          text = designToText(design, interp);
+        } else {
+          html = emailHtml(meta.defaultTitle, msg, vars, emailFooter, emailBrand);
+          text = msg;
+        }
+        const subject = rule.emailSubject ? interp(rule.emailSubject) : `${vars.company}: ${meta.label}`;
+        const r = await sendEmail({ to: t.email, subject, html, text, from: emailFrom, replyTo: emailReplyTo }).catch((e) => ({ ok: false, error: e?.message }));
+        await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "email", target: t.email, status: (r as any)?.ok === false ? "failed" : "sent", detail: (r as any)?.error || "" });
+      }
+      // sms
+      if (rule.sms && allowSms && t.phone && msg) {
+        const r = await sendSms(t.phone, msg);
+        await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "sms", target: t.phone, status: r.ok ? "sent" : r.skipped ? "skipped" : "failed", detail: r.error || (r.skipped ? "sms not configured" : r.sid || "") });
+      }
+    }
+
+    // webhook (fire once per rule that enables it)
+    if (rule.webhook && allowWebhook) {
+      const eps = await activeWebhooks(companyId, event);
+      for (const ep of eps) {
+        const payload = {
+          event,
+          recipient,
+          bookingId: b.id,
+          shortId: vars.shortId,
+          status: b.status,
+          service: vars.service,
+          tech: vars.techName,
+          address: b.address,
+          scheduledAt: b.scheduledAt,
+          trackUrl: vars.trackUrl,
+          label: meta.label,
+          message: msg,
+          at: new Date().toISOString(),
+        };
+        try {
+          const res = await fetch(ep.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(ep.secret ? { "X-Webhook-Secret": ep.secret } : {}) },
+            body: JSON.stringify(payload),
+          });
+          await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "webhook", target: ep.url, status: res.ok ? "sent" : "failed", detail: `HTTP ${res.status}` });
+        } catch (e: any) {
+          await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "webhook", target: ep.url, status: "failed", detail: e?.message || "error" });
+        }
+      }
+    }
   }
 }
 

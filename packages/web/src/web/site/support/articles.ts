@@ -72,6 +72,7 @@ export const support = {
 
 const U = "October 16, 2026";
 const U2 = "October 17, 2026";
+const U3 = "October 18, 2026";
 
 export const articles: Article[] = [
   /* ---------------------------------------------------------------- */
@@ -322,6 +323,38 @@ export const articles: Article[] = [
       { type: "p", text: "During onboarding, ArrivePing drafts your booking, on-the-way, running-late and arrived messages in your voice, including your business name and how the technician is introduced." },
       { type: "p", text: "To change them, open **Setup → Notifications**. Each milestone has its own SMS and email text, and you can turn individual messages off. Changes apply to the next message sent; messages already delivered are not altered." },
       { type: "p", text: "Keep the tracking link in the on-the-way message; without it the customer has no way to see the ETA or contact the technician." },
+    ],
+  },
+  {
+    slug: "custom-milestones",
+    title: "Add your own milestone",
+    summary: "Name a moment like \"Water restored\" or a day-before reminder, choose what sets it off, and who gets a message.",
+    category: "customer-notifications",
+    updated: U3,
+    keywords: ["custom milestone", "own milestone", "new milestone", "reminder", "day before", "follow up", "checklist", "stage", "custom step"],
+    blocks: [
+      { type: "p", text: "Besides the built-in milestones (booked, on the way, arrived, completed and the rest), you can add moments that matter to your business. Open **Setup → Notifications** and click **New milestone**." },
+      {
+        type: "ol",
+        items: [
+          "**Name it** the way your customers would say it, for example \"Water restored\" or \"Day-before reminder\".",
+          "**Choose what sets it off.** A stage (when the tech arrives, when the job is completed and so on), a checklist item the tech ticks, a set time before the appointment, or a set time after the job is completed.",
+          "**Write the messages.** Tick the customer, the technician or the office and write what each receives. Insert live details like the customer's first name or the tracking link.",
+          "**Choose whether it shows on the customer's tracking page** as a line on the job's timeline.",
+        ],
+      },
+      { type: "p", text: "Your milestone then appears in the notifications table with the built-in ones, where you can switch text, email and app alerts on or off for each recipient, edit the wording, design a branded email or send a test." },
+      {
+        type: "ul",
+        items: [
+          "Each milestone goes out **once per job**. Unticking and re-ticking a checklist item doesn't send it again.",
+          "A reminder before the appointment goes out again if the appointment is rescheduled, so the customer hears about the new time.",
+          "Timed milestones go out within a minute of their moment, and are skipped if that moment passed more than an hour ago, so an old job never gets a sudden message.",
+          "A checklist milestone matches the item's wording, ignoring capitals and extra spaces. Use the same wording as in your job templates.",
+          "Sample jobs show the milestone on their timeline but never send anything.",
+        ],
+      },
+      { type: "p", text: "To pause a milestone, open it and switch it off. Deleting it removes its messages; lines already on job timelines stay." },
     ],
   },
   {

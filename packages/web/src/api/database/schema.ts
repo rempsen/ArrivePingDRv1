@@ -1001,6 +1001,46 @@ export const notificationRules = pgTable("notification_rules", {
   companyIdx: index("notifrule_company_idx").on(t.companyId),
 }));
 
+/**
+ * A milestone the company made itself ("Water restored", "Day-before
+ * reminder"), next to the built-in ones. Its messages are ordinary
+ * notification_rules rows keyed `custom:<id>`, so channels, copy, branded
+ * email, quiet hours and the delivery log all work as for a built-in event.
+ * See services/custom-milestones.ts.
+ */
+export const customMilestones = pgTable("custom_milestones", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").notNull().default("default"),
+  name: text("name").notNull(),
+  // stage | checklist | before_start | after_complete
+  trigger: text("trigger").notNull(),
+  // stage: the built-in event it rides on (assigned, enroute, arrived, started, completed, ...)
+  triggerEvent: text("trigger_event").notNull().default(""),
+  // checklist: the item's label, matched case-insensitively
+  checklistLabel: text("checklist_label").notNull().default(""),
+  // before_start / after_complete: how far from the appointment / completion
+  offsetMinutes: integer("offset_minutes").notNull().default(0),
+  // also show it as a line on the customer's tracking-page timeline
+  customerTimeline: boolean("customer_timeline").notNull().default(false),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
+  createdAt: now(),
+}, (t) => ({
+  companyIdx: index("custom_milestone_company_idx").on(t.companyId),
+}));
+
+/** One row per milestone per job: a custom milestone goes out at most once for a job. */
+export const customMilestoneFires = pgTable("custom_milestone_fires", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").notNull().default("default"),
+  milestoneId: text("milestone_id").notNull(),
+  bookingId: text("booking_id").notNull(),
+  firedAt: now(),
+}, (t) => ({
+  companyIdx: index("custom_milestone_fire_company_idx").on(t.companyId),
+  onceIdx: uniqueIndex("custom_milestone_fire_once_uidx").on(t.milestoneId, t.bookingId),
+}));
+
 /** Per-company per-channel delivery configuration (sender identity, quiet hours, master switch). */
 export const notificationChannels = pgTable("notification_channels", {
   id: text("id").primaryKey().default("default"),

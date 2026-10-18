@@ -43,7 +43,8 @@ export async function computeLaunchChecklist(companyId: string): Promise<LaunchC
       ),
     ),
     t.selectOne(schema.notificationChannels),
-    t.selectOne(schema.auditLog, eq(schema.auditLog.entityType, "notification_copy")),
+    // Rewording a built-in message, or writing a milestone of their own.
+    t.selectOne(schema.auditLog, inArray(schema.auditLog.entityType, ["notification_copy", "custom_milestone"])),
     t.selectOne(schema.catalogItems),
     t.selectOne(schema.intakeForms),
     t.selectOne(schema.taskTemplates),

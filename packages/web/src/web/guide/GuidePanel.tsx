@@ -37,6 +37,7 @@ const ARTICLE_TOUR: Record<string, string> = {
   "what-customers-receive": "notifications",
   "not-receiving-notifications": "notifications",
   "customize-messages": "milestones",
+  "custom-milestones": "milestones",
   "running-late": "milestones",
   "set-your-reply-to-email": "reply-to",
   "exports-and-integrations": "export",

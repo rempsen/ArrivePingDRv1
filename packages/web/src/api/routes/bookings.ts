@@ -31,6 +31,7 @@ import { companyTimeZone } from "../../services/company-tz";
 import { findAvailabilityBlock } from "../../services/availability";
 import { zonedDayBounds, fmtInZone } from "../../shared/tz";
 import { isTerminalStatus } from "../../shared/job-status";
+import { onChecklistTicked } from "../../services/custom-milestones";
 import { z } from "zod";
 import { jsonBody,
   id as idField,
@@ -1585,8 +1586,17 @@ export const bookingsRoutes = new Hono<AppEnv>()
     try { checklist = JSON.parse(b.checklistState || "[]"); } catch {}
     if (index < 0 || index >= checklist.length) return c.json({ message: "Invalid index" }, 400);
     const item = checklist[index];
+    const wasDone = typeof item === "object" && item !== null && !!item.done;
     checklist[index] = typeof item === "object" ? { ...item, done } : { label: String(item), done };
     await t.update(schema.bookings, { checklistState: JSON.stringify(checklist) }, eq(schema.bookings.id, id));
+    // A custom milestone waiting on this item ("Water restored") goes off the
+    // first time it's ticked. Unticking and re-ticking never sends it again.
+    if (done && !wasDone) {
+      const label = String(checklist[index]?.label ?? "");
+      await onChecklistTicked(b.companyId, b.id, label).catch((e) =>
+        console.error("[bookings] checklist milestone failed", id, e),
+      );
+    }
     return c.json({ checklist }, 200);
   })
   // Tech saves a field note to the booking record (visible to office/dispatch)

@@ -270,6 +270,8 @@ export const superadminRoutes = new Hono<AppEnv>()
     await sdb.delete(schema.automationRules).where(eqCo(schema.automationRules.companyId));
     await sdb.delete(schema.integrations).where(eqCo(schema.integrations.companyId));
     await sdb.delete(schema.skillLibrary).where(eqCo(schema.skillLibrary.companyId));
+    await sdb.delete(schema.customMilestoneFires).where(eqCo(schema.customMilestoneFires.companyId));
+    await sdb.delete(schema.customMilestones).where(eqCo(schema.customMilestones.companyId));
     await sdb.delete(schema.notificationRules).where(eqCo(schema.notificationRules.companyId));
     await sdb.delete(schema.notificationChannels).where(eqCo(schema.notificationChannels.companyId));
     await sdb.delete(schema.emailTemplates).where(eqCo(schema.emailTemplates.companyId));
