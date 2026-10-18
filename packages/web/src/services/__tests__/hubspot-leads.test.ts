@@ -16,7 +16,7 @@ afterAll(() => {
   mock.module("../email", () => realEmail);
 });
 
-const { findOrCreateLeadContact, createSupportTicket, pushSignupStarted, SIGNUP_LEAD_SOURCE } = await import("../hubspot-leads");
+const { findOrCreateLeadContact, createSupportTicket, pushSignupStarted, SIGNUP_LEAD_SOURCE, pushSetupDemoLead, SETUP_DEMO_LEAD_SOURCE } = await import("../hubspot-leads");
 const { deliverSupportMessage, ticketSubject, SUPPORT_LEAD_SOURCE } = await import("../support-message");
 const { _setHubspotFetch, _resetHubspotForTests } = await import("../hubspot-sync");
 
@@ -131,6 +131,32 @@ describe("pushSignupStarted", () => {
   it("is skipped without a HubSpot token", async () => {
     delete process.env.HUBSPOT_ACCESS_TOKEN;
     expect(await pushSignupStarted({ email: "a@b.co", name: "A" })).toBe("skipped");
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("pushSetupDemoLead", () => {
+  it("makes the visitor a lead with their website and a note", async () => {
+    expect(await pushSetupDemoLead({ email: "Ann@BluestemPlumbing.ca", website: "bluestemplumbing.ca" })).toBe("synced");
+    const p = created()[0]!.body.properties;
+    expect(p).toMatchObject({ arriveping_lead_source: SETUP_DEMO_LEAD_SOURCE, email: "ann@bluestemplumbing.ca", website: "bluestemplumbing.ca", lifecyclestage: "lead" });
+    expect(p.firstname).toBeUndefined();
+    const note = calls.find((c) => c.path === "/crm/v3/objects/notes")!;
+    expect(note.body.properties.hs_note_body).toContain("Tried the setup demo");
+    expect(note.body.properties.hs_note_body).toContain("bluestemplumbing.ca");
+  });
+
+  it("only adds the note to an existing contact", async () => {
+    searchHits["contacts:email=ann@bluestemplumbing.ca"] = [{ id: "77" }];
+    expect(await pushSetupDemoLead({ email: "ann@bluestemplumbing.ca", website: "bluestemplumbing.ca" })).toBe("synced");
+    expect(created()).toHaveLength(0);
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    expect(calls.some((c) => c.path === "/crm/v3/objects/notes")).toBe(true);
+  });
+
+  it("is skipped without a HubSpot token", async () => {
+    delete process.env.HUBSPOT_ACCESS_TOKEN;
+    expect(await pushSetupDemoLead({ email: "a@b.co", website: "b.co" })).toBe("skipped");
     expect(calls).toHaveLength(0);
   });
 });

@@ -45,7 +45,7 @@ export const hvac: LandingPage = {
   trade: {
     media: media("hvac"),
     proof: ["Suggests the best tech by skills and distance", "Live ETA link, no customer app", "Arrival and on-site time logged automatically"],
-    sms: { company: "Northwind Heating", who: "technician", tech: "Devon", eta: 19, time: "6:44 AM" },
+    sms: { company: "Prairie Comfort HVAC", who: "technician", tech: "Devon", eta: 19, time: "6:44 AM" },
     statsTitle: "Why the arrival matters in HVAC",
     stats: [
       { value: "85%", label: "of homeowners say arriving within the estimated window is extremely or very important", ...ONE_HOUR },
@@ -151,7 +151,7 @@ export const plumbing: LandingPage = {
   trade: {
     media: media("plumbing"),
     proof: ["Live ETA text, no customer app", "Suggests the nearest qualified, available plumber", "Automatic check-in within 150 m"],
-    sms: { company: "Riverbend Plumbing", who: "plumber", tech: "Jordan", eta: 14, time: "6:55 AM" },
+    sms: { company: "Bluestem Plumbing", who: "plumber", tech: "Jordan", eta: 14, time: "6:55 AM" },
     statsTitle: "Why minutes matter in plumbing",
     stats: [
       {
@@ -257,7 +257,7 @@ export const electrical: LandingPage = {
   trade: {
     media: media("electrical"),
     proof: ["Suggests by license, distance and workload", "Live ETA link, no customer app", "Arrival logged automatically within 150 m"],
-    sms: { company: "Brightline Electric", who: "electrician", tech: "Malik", eta: 14, time: "3:44 PM" },
+    sms: { company: "Wolf Willow Electric", who: "electrician", tech: "Malik", eta: 14, time: "3:44 PM" },
     statsTitle: "Why dispatch matters in electrical work",
     stats: [
       {
@@ -368,7 +368,7 @@ export const construction: LandingPage = {
   trade: {
     media: media("construction"),
     proof: ["Automatic check-in within 150 m of the site", "Required checklist items before close-out", "One installer, several companies' rosters"],
-    sms: { company: "Keystone Interiors", who: "installer", tech: "Marcus", eta: 27, time: "7:35 AM" },
+    sms: { company: "Snowberry Interiors", who: "installer", tech: "Marcus", eta: 27, time: "7:35 AM" },
     statsTitle: "Why scheduling breaks down on site",
     stats: [
       {
@@ -489,7 +489,7 @@ export const property: LandingPage = {
   trade: {
     media: media("property"),
     proof: ["Live ETA text, no resident app", "Automatic check-in records time on site", "Required checklist steps before jobs close"],
-    sms: { company: "Parkside Residences", who: "technician", tech: "Omar", eta: 16, time: "6:58 AM" },
+    sms: { company: "Aspen Parkland Residences", who: "technician", tech: "Omar", eta: 16, time: "6:58 AM" },
     statsTitle: "What residents expect from maintenance",
     stats: [
       {
@@ -600,7 +600,7 @@ export const delivery: LandingPage = {
   trade: {
     media: media("delivery"),
     proof: ["Live ETA link, no customer app", "Automatic arrival check-in within 150 m", "Photos and a signature as proof of delivery"],
-    sms: { company: "Maple Home Appliances", who: "driver", tech: "Luis", eta: 17, time: "10:05 AM" },
+    sms: { company: "Prairie Rose Appliances", who: "driver", tech: "Luis", eta: 17, time: "10:05 AM" },
     statsTitle: "Why the delivery window matters",
     stats: [
       {

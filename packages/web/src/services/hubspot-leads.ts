@@ -75,6 +75,8 @@ export interface LeadInput {
   /** E.164 (see normalizePhone) */
   phone?: string;
   company?: string;
+  /** The company's website, as they typed it (domain only). */
+  website?: string;
   /** Written to the custom "ArrivePing lead source" property on a NEW contact. */
   source: string;
 }
@@ -105,6 +107,7 @@ export async function findOrCreateLeadContact(lead: LeadInput): Promise<{ contac
     email: lead.email?.toLowerCase() ?? "",
     phone: lead.phone ?? "",
     company: lead.company ?? "",
+    website: lead.website ?? "",
     lifecyclestage: "lead",
     hs_lead_status: "NEW",
     arriveping_lead_source: lead.source,
@@ -195,6 +198,33 @@ export async function pushSignupStarted(i: { email: string; name: string; compan
     return "synced";
   } catch (e) {
     log.error("signup-started: HubSpot push failed", { err: (e as Error).message.slice(0, 300) });
+    return "failed";
+  }
+}
+
+/* ------------------------------------------------------- setup demo */
+
+export const SETUP_DEMO_LEAD_SOURCE = "ArrivePing setup demo";
+
+/**
+ * Someone watched the setup film on arriveping.com and asked to build a
+ * workspace from their own website (they typed the website and their work
+ * email, then went on to signup). Make them a HubSpot lead now, with the
+ * website, so marketing can follow up if the signup isn't finished. An
+ * existing contact is never edited; it only gets the note.
+ */
+export async function pushSetupDemoLead(i: { email: string; website: string }, at = new Date()): Promise<"synced" | "skipped" | "failed"> {
+  if (!hubspotEnabled()) return "skipped";
+  try {
+    const { contactId } = await findOrCreateLeadContact({ name: "", email: i.email, website: i.website, source: SETUP_DEMO_LEAD_SOURCE });
+    const lines = [
+      `<strong>Tried the setup demo on arriveping.com</strong> and asked to build a workspace from <strong>${htmlEsc(i.website)}</strong> (${htmlEsc(at.toISOString().slice(0, 16).replace("T", " "))} UTC).`,
+      "They were sent on to signup with that website. If no ArrivePing company appears for them, the signup was not finished.",
+    ];
+    await addContactNote(contactId, lines.join("<br>"), at, "setup-demo");
+    return "synced";
+  } catch (e) {
+    log.error("setup-demo: HubSpot push failed", { err: (e as Error).message.slice(0, 300) });
     return "failed";
   }
 }

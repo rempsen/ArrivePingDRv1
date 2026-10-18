@@ -67,6 +67,7 @@ import { demoRequestRoutes } from "./routes/demo-request";
 import { supportMessageRoutes } from "./routes/support-message";
 import { contactRequestRoutes } from "./routes/contact-request";
 import { websiteInquiryRoutes } from "./routes/website-inquiry";
+import { setupDemoRoutes } from "./routes/setup-demo";
 import { punchlistRoutes } from "./routes/punchlist";
 import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
 import { guideAskRoutes } from "./routes/guide-ask";
@@ -220,6 +221,7 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/api/public/contact-request", contactRequestRoutes)
   // PUBLIC nvc360.com contact + support forms — HubSpot lead/ticket, team inbox (support also Slack).
   .route("/api/public/website-inquiry", websiteInquiryRoutes)
+  .route("/api/public/setup-demo", setupDemoRoutes)
   // PUBLIC self-serve onboarding — scrape-on-URL-entry + tenant signup.
   // Unauthenticated by design (nobody has a login yet); each op has its own
   // IP-keyed rate limiter (see routes/onboarding.ts).

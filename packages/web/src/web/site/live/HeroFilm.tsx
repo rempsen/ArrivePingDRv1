@@ -109,7 +109,7 @@ export function HeroFilm() {
               <li key={a.label}>
                 <span className="lv-assure__ico">{assuranceIcons[a.icon]}</span>
                 <span>
-                  <strong>{a.label}</strong>
+                  <strong>{"href" in a && a.href ? <a href={a.href} onClick={(e) => go(e, a.href)}>{a.label}</a> : a.label}</strong>
                   <span>{a.sub}</span>
                 </span>
               </li>
