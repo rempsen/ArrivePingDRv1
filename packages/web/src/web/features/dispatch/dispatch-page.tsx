@@ -9,7 +9,7 @@ import { WorkOrderModal } from "../../components/work-order-modal";
 import { apiFetch, apiHeaders } from "../../lib/api";
 import { useJobNoun, useWorkerNoun } from "../../lib/use-brand";
 import { queueOrder } from "../../../shared/job-kind";
-import { Announcer, ClashCard, UndoToast } from "./assign/assign-feedback";
+import { Announcer, ClashCard, UndoToasts } from "./assign/assign-feedback";
 import { useAssign } from "./assign/use-assign";
 import { canInstall, needsManualInstall, onInstallChange, promptInstall, setBadge } from "./pwa/pwa";
 import { setMapV2 } from "./map-switch";
@@ -60,10 +60,10 @@ export function DispatchPage() {
     }
   });
 
-  const { board, isLoading, error, connected, optimistic, commit, refetch } = useBoard(null);
+  const { board, isLoading, error, connected, optimistic, commit, refetch, settle } = useBoard(null);
   const { noun: jobNoun, nounPlural: jobPlural } = useJobNoun();
   const { noun: workerNoun } = useWorkerNoun();
-  const assigner = useAssign({ board, optimistic, commit, refetch });
+  const assigner = useAssign({ board, optimistic, commit, refetch, settle });
 
   const tz = board?.tz ?? "UTC";
   const techs = board?.techs ?? NO_TECHS;
@@ -192,27 +192,49 @@ export function DispatchPage() {
     };
   }, []);
 
-  // Pins on the map are drag sources too.
-  const onMapReady = useCallback((h: DispatchMapHandle) => {
-    mapRef.current = h;
+  // Pins on the map are drag sources too. The map and the engine mount in either order
+  // (children's effects run first), so whichever is ready second does the attaching.
+  const nounRef = useRef(jobNoun);
+  nounRef.current = jobNoun;
+  const detachSurface = useRef<(() => void) | null>(null);
+  const attachPins = useCallback(() => {
+    const h = mapRef.current;
+    const eng = engine.current;
     const host = root.current?.querySelector<HTMLElement>(".ap-map");
-    const layer = h.jobs();
-    if (!host || !layer || !engine.current) return;
-    engine.current.attachSurface(host, (x, y) => {
+    const layer = h?.jobs();
+    if (!eng || !host || !layer || detachSurface.current) return;
+    detachSurface.current = eng.attachSurface(host, (x, y) => {
       const r = host.getBoundingClientRect();
       const hit = layer.hit(x - r.left, y - r.top, 10);
       if (!hit || hit.type !== "job") return null;
       const j = boardRef.current?.jobs.find((q) => q.id === hit.id);
       if (!j || j.riderId) return null;
-      return { jobId: j.id, title: jobTitle(j, jobNoun), sub: jobSub(j, boardRef.current?.tz ?? "UTC") };
+      return { jobId: j.id, title: jobTitle(j, nounRef.current), sub: jobSub(j, boardRef.current?.tz ?? "UTC") };
     });
-  }, [jobNoun]);
+  }, []);
+  const onMapReady = useCallback(
+    (h: DispatchMapHandle) => {
+      mapRef.current = h;
+      // Test hook: lets the browser test find a pin's screen position.
+      if (new URLSearchParams(window.location.search).has("e2e")) (window as unknown as { __apMap?: DispatchMapHandle }).__apMap = h;
+      attachPins();
+    },
+    [attachPins],
+  );
+  useEffect(() => {
+    attachPins();
+    return () => {
+      detachSurface.current?.();
+      detachSurface.current = null;
+    };
+  }, [attachPins]);
 
   // Keyboard: / or Cmd-K focuses nothing yet; F fits, S toggles satellite, Esc clears.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || t.closest("dialog, [role=dialog]"))) return;
+      if (openJobId || finding) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") {
         if (engine.current?.active()) engine.current.cancel();
@@ -226,7 +248,7 @@ export function DispatchPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [assigner, select]);
+  }, [assigner, select, openJobId, finding]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -270,6 +292,14 @@ export function DispatchPage() {
   const [installable, setInstallable] = useState(canInstall);
   useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
   const [iosHint, setIosHint] = useState(false);
+
+  // Move focus into the panel that just opened, so keyboard and screen-reader users land in it.
+  const focusKey = sel.tech ?? sel.job;
+  useEffect(() => {
+    if (!focusKey) return;
+    const id = requestAnimationFrame(() => root.current?.querySelector<HTMLElement>(".ap-inspector")?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(id);
+  }, [focusKey]);
 
   const showJob = useCallback(() => true, []);
   const holder = job?.riderId ? techById.get(job.riderId) ?? null : null;
@@ -417,7 +447,7 @@ export function DispatchPage() {
         </p>
       )}
       {assigner.clash && <ClashCard clash={assigner.clash} onConfirm={assigner.confirmClash} onCancel={assigner.dismissClash} />}
-      {assigner.toast && <UndoToast toast={assigner.toast} onUndo={() => void assigner.undo()} onClose={assigner.dismissToast} />}
+      <UndoToasts toasts={assigner.toasts} onUndo={(id) => void assigner.undo(id)} onClose={assigner.dismissToast} onHold={assigner.holdToast} />
       <CommandPalette
         open={finding}
         techs={techs}

@@ -21,7 +21,7 @@ export function TechInspector({
 }: Common & { tech: BoardTech; jobs: BoardJob[]; onSelectJob(id: string): void; onCenter(): void; onOpenJob(id: string): void }) {
   const route = techRoute(jobs, tech.id, Date.now());
   return (
-    <aside className="ap-panel ap-inspector ap-glass" aria-label={tech.name} data-drop-tech={tech.id} data-tech={tech.id}>
+    <aside tabIndex={-1} className="ap-panel ap-inspector ap-glass" aria-label={tech.name} data-drop-tech={tech.id} data-tech={tech.id}>
       <header className="ap-panel__head">
         <div>
           <h2>{tech.name}</h2>
@@ -100,7 +100,7 @@ export function JobInspector({
 }) {
   const directions = job.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}` : null;
   return (
-    <aside className="ap-panel ap-inspector ap-glass" aria-label={jobTitle(job, noun)}>
+    <aside tabIndex={-1} className="ap-panel ap-inspector ap-glass" aria-label={jobTitle(job, noun)}>
       <header className="ap-panel__head">
         <div>
           <h2

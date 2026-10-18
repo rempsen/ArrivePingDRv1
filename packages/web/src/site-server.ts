@@ -216,7 +216,7 @@ async function serveStatic(
   // body tagged gzip but not actually gzipped -> browser decode failure -> blank
   // page. See the block comment above. `Vary: Accept-Encoding` lets the CDN cache
   // per-encoding variants of the (uncompressed) origin response.
-  const etag = `"${size.toString(16)}-${Bun.hash(filePath).toString(16)}"`;
+  const etag = `"${size.toString(16)}-${Math.floor(file.lastModified).toString(16)}-${Bun.hash(filePath).toString(16)}"`;
   if (request.headers.get("if-none-match") === etag) {
     return new Response(null, {
       status: 304,

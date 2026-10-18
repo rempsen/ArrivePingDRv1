@@ -24,19 +24,41 @@ export function ClashCard({ clash, onConfirm, onCancel }: { clash: PendingClash;
   );
 }
 
-export function UndoToast({ toast, onUndo, onClose }: { toast: Toast; onUndo(): void; onClose(): void }) {
+export function UndoToasts({
+  toasts,
+  onUndo,
+  onClose,
+  onHold,
+}: {
+  toasts: Toast[];
+  onUndo(id: number): void;
+  onClose(id: number): void;
+  onHold(id: number, on: boolean): void;
+}) {
   return (
-    <output className="ap-toast ap-glass" data-tone={toast.tone} key={toast.id}>
-      <span>{toast.text}</span>
-      {toast.undo && (
-        <button type="button" className="ap-btn ap-btn--link" onClick={onUndo}>
-          Undo
-        </button>
-      )}
-      <button type="button" className="ap-btn ap-btn--icon" aria-label="Dismiss" onClick={onClose}>
-        ×
-      </button>
-    </output>
+    <div className="ap-toasts">
+      {toasts.map((t) => (
+        <output
+          key={t.id}
+          className="ap-toast ap-glass"
+          data-tone={t.tone}
+          onMouseEnter={() => onHold(t.id, true)}
+          onMouseLeave={() => onHold(t.id, false)}
+          onFocus={() => onHold(t.id, true)}
+          onBlur={() => onHold(t.id, false)}
+        >
+          <span>{t.text}</span>
+          {t.undo && (
+            <button type="button" className="ap-btn ap-btn--link" onClick={() => onUndo(t.id)}>
+              Undo
+            </button>
+          )}
+          <button type="button" className="ap-btn ap-btn--icon" aria-label="Dismiss" onClick={() => onClose(t.id)}>
+            ×
+          </button>
+        </output>
+      ))}
+    </div>
   );
 }
 

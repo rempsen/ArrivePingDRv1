@@ -47,7 +47,7 @@ def open_page(ctx):
     pg.get_by_placeholder("Password").fill(PASSWORD)
     pg.get_by_role("button", name="Sign in").click()
     pg.wait_for_url("**/admin**", timeout=20_000)
-    pg.goto(BASE + "/admin/fleet?map=v2", wait_until="domcontentloaded")
+    pg.goto(BASE + "/admin/fleet?map=v2&e2e=1", wait_until="domcontentloaded")
     pg.locator("[data-testid=dispatch-page]").wait_for(timeout=20_000)
     # First-visit sheets (welcome, setup) can open a moment late; close whatever shows.
     for _ in range(3):
@@ -86,7 +86,7 @@ def touch_drag(pg, cdp, src, dst):
 
 def toast_text(pg):
     t = pg.locator(".ap-toast")
-    return t.inner_text() if t.count() else ""
+    return t.last.inner_text() if t.count() else ""
 
 
 with sync_playwright() as p:
@@ -119,7 +119,7 @@ with sync_playwright() as p:
     after = pg.locator(".ap-card").count()
     check("desktop: assigned job leaves the queue", after == cards - 1, f"{cards} -> {after}")
     pg.screenshot(path=f"{SHOTS}/desktop-3-assigned.png")
-    pg.get_by_role("button", name="Undo").click()
+    pg.get_by_role("button", name="Undo").last.click()
     pg.wait_for_timeout(1200)
     check("desktop: Undo puts it back", pg.locator(".ap-card").count() == cards, f"{pg.locator('.ap-card').count()} cards")
 
@@ -140,7 +140,7 @@ with sync_playwright() as p:
         if pg.locator(".ap-toast").count():
             btn = pg.get_by_role("button", name="Undo")
             if btn.count():
-                btn.click()
+                btn.last.click()
                 pg.wait_for_timeout(900)
     check("desktop: a drop on an unqualified technician stops to ask", seen_clash)
 
@@ -163,6 +163,31 @@ with sync_playwright() as p:
     pg.get_by_role("button", name="Satellite").click()
     pg.wait_for_timeout(500)
     check("desktop: satellite toggle", pg.get_by_role("button", name="Satellite").get_attribute("aria-pressed") == "true")
+    # Drag a job pin straight off the map onto a technician chip.
+    pin = pg.evaluate("""() => {
+      const h = window.__apMap; if (!h) return null;
+      const board = [...document.querySelectorAll('.ap-card')].map(c => c.dataset.job);
+      const m = h.controller().map; const r = document.querySelector('.ap-map').getBoundingClientRect();
+      for (const id of board) {
+        const ll = h.jobs().positionOf(id); if (!ll) continue;
+        const pt = m.project(ll);
+        const x = r.left + pt.x, y = r.top + pt.y;
+        if (x > r.left + 360 && x < r.right - 380 && y > r.top + 80 && y < r.bottom - 120) return { id, x, y };
+      }
+      return null; }""")
+    if pin:
+        n0 = pg.locator(".ap-card").count()
+        pg.mouse.move(pin["x"], pin["y"]); pg.mouse.down()
+        pg.mouse.move(pin["x"] + 12, pin["y"] + 8, steps=3)
+        tb = pg.locator(".ap-chipbtn").nth(3).bounding_box()
+        pg.mouse.move(tb["x"] + 30, tb["y"] + 20, steps=14); pg.wait_for_timeout(200); pg.mouse.up()
+        pg.wait_for_timeout(1200)
+        t = toast_text(pg)
+        check("desktop: dragging a pin off the map assigns it (or asks on a clash)", "Offered to" in t or pg.locator(".ap-clash").count() == 1, t.replace("\n", " "))
+        if pg.locator(".ap-clash").count(): pg.get_by_role("button", name="Cancel").click()
+    else:
+        check("desktop: a job pin is on screen to drag", False)
+
     # Find: "/" opens the palette, typing narrows, Enter opens the technician.
     pg.keyboard.press("/")
     pg.wait_for_timeout(300)

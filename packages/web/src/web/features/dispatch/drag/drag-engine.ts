@@ -75,7 +75,7 @@ export function createDragEngine(hooks: DragHooks): DragEngine {
     lockedMap: boolean;
   }
   let pending: Pending | null = null;
-  let live: { info: DragInfo; touch: boolean; ghost: HTMLElement; x: number; y: number; tech: string | null; via: "dom" | "magnet" | null; edgeSince: number; raf: number } | null = null;
+  let live: { pointerId: number; info: DragInfo; touch: boolean; ghost: HTMLElement; x: number; y: number; tech: string | null; via: "dom" | "magnet" | null; edgeSince: number; raf: number } | null = null;
 
   const isTouchy = (e: PointerEvent) => e.pointerType === "touch" || e.pointerType === "pen";
 
@@ -130,7 +130,9 @@ export function createDragEngine(hooks: DragHooks): DragEngine {
   function tick() {
     if (!live) return;
     const rect = hooks.mapRect();
-    if (rect && pointInRect({ x: live.x, y: live.y }, rect)) {
+    // Only over the bare map: panels and the strip float inside the same box.
+    const overMap = !!document.elementFromPoint(live.x, live.y)?.closest(".ap-map");
+    if (rect && overMap && pointInRect({ x: live.x, y: live.y }, rect)) {
       const p = edgePan({ x: live.x, y: live.y }, rect);
       if (p.dx || p.dy) {
         live.edgeSince ||= performance.now();
@@ -155,7 +157,7 @@ export function createDragEngine(hooks: DragHooks): DragEngine {
     window.clearTimeout(p.timer);
     pending = null;
     hooks.lockMap(true);
-    live = { info: p.info, touch: p.touch, ghost: makeGhost(p.info), x: p.x, y: p.y, tech: null, via: null, edgeSince: 0, raf: 0 };
+    live = { pointerId: p.pointerId, info: p.info, touch: p.touch, ghost: makeGhost(p.info), x: p.x, y: p.y, tech: null, via: null, edgeSince: 0, raf: 0 };
     document.body.classList.add("ap-dragging");
     update();
     live.raf = requestAnimationFrame(tick);
@@ -190,7 +192,7 @@ export function createDragEngine(hooks: DragHooks): DragEngine {
       const moved = Math.hypot(e.clientX - pending.x0, e.clientY - pending.y0);
       if (!pending.touch && moved >= MOUSE_SLOP) start(pending);
       else if (pending.touch && moved > TOUCH_SLOP) abandon(); // they are scrolling
-    } else if (live) {
+    } else if (live && e.pointerId === live.pointerId) {
       live.x = e.clientX;
       live.y = e.clientY;
       update();
@@ -198,7 +200,7 @@ export function createDragEngine(hooks: DragHooks): DragEngine {
   }
   const onUp = (e: PointerEvent) => {
     if (pending && e.pointerId === pending.pointerId) abandon();
-    else if (live) {
+    else if (live && e.pointerId === live.pointerId) {
       live.x = e.clientX;
       live.y = e.clientY;
       update();
@@ -212,6 +214,7 @@ export function createDragEngine(hooks: DragHooks): DragEngine {
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape" && (live || pending)) {
       e.preventDefault();
+      e.stopImmediatePropagation();
       onCancel();
     }
   };

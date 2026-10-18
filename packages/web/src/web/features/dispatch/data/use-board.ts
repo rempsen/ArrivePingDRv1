@@ -92,6 +92,8 @@ export function useBoard(day: string | null) {
   );
 
   const refetch = useCallback(() => q.refetch(), [q]);
+  /** Drop any board fetch still in flight, so a stale answer can't land over a newer change. */
+  const settle = useCallback(() => qc.cancelQueries({ queryKey: key }), [qc, key]);
 
-  return { board, isLoading: q.isLoading, error: q.error as Error | null, connected, optimistic, commit, refetch };
+  return { board, isLoading: q.isLoading, error: q.error as Error | null, connected, optimistic, commit, refetch, settle };
 }

@@ -483,3 +483,5 @@ body.ap-dragging * {
 .dispatch-v2 .ap-palette__keys { text-align: center; }
 .dispatch-v2 .ap-card { content-visibility: auto; contain-intrinsic-size: auto 92px; }
 .dispatch-v2 .ap-more { margin-top: 8px; align-self: stretch; }
+.dispatch-v2 .ap-toasts { position: absolute; z-index: 9; left: 50%; transform: translateX(-50%); bottom: 84px; display: flex; flex-direction: column-reverse; gap: 8px; align-items: center; }
+.dispatch-v2 .ap-toasts .ap-toast { position: static; transform: none; }

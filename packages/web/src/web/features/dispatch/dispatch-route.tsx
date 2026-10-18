@@ -12,12 +12,18 @@ const ClassicFleet = lazy(() => import("../../pages/admin/fleet"));
 const DispatchPage = lazy(() => import("./dispatch-page").then((m) => ({ default: m.DispatchPage })));
 
 
+let webgl2: boolean | null = null;
+/** Checked once, and the probe context is released straight away. */
 function hasWebGL2(): boolean {
+  if (webgl2 !== null) return webgl2;
   try {
-    return !!document.createElement("canvas").getContext("webgl2");
+    const gl = document.createElement("canvas").getContext("webgl2");
+    webgl2 = !!gl;
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
   } catch {
-    return false;
+    webgl2 = false;
   }
+  return webgl2;
 }
 
 function saved(): boolean | null {
