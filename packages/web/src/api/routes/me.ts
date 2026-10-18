@@ -27,6 +27,8 @@ import { parseLineItems, round2 } from "../../shared/catalog";
 import { jsonBody } from "../lib/validate";
 import { mergeOnboarding, ONBOARDING_MAX_BYTES, parseOnboarding } from "../../shared/onboarding";
 import { OnboardingPatchSchema } from "../../shared/onboarding-schema";
+import { GuideEventsBody } from "../../shared/guide-events-schema";
+import { rateLimit, keyByUser } from "../lib/rate-limit";
 import { ensurePracticeJob, removePracticeJob } from "../../services/practice-job";
 
 type SessionUser = { id: string; role?: string; companyId?: string };
@@ -124,7 +126,21 @@ async function countsForCompany(
   };
 }
 
+const guideEventLimit = rateLimit({ limit: 240, windowMs: 60 * 60 * 1000, keyFn: keyByUser, name: "guide-events" });
+
 export const meRoutes = new Hono<AppEnv>()
+  /**
+   * Guide events from the browser (tour steps, Ask), sent on to PostHog with
+   * the person's id and company. A fixed list of names and fields, so nothing
+   * else (no names, emails or free text) can ride along. No-op without
+   * POSTHOG_KEY. See shared/guide-events.ts.
+   */
+  .post("/guide-events", requireAuth, guideEventLimit, jsonBody(GuideEventsBody), async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    const companyId = (c.get("companyId") as string) ?? "default";
+    for (const { name, ...props } of c.req.valid("json").events) capture(name, me.id, { companyId, ...props });
+    return c.body(null, 204);
+  })
   /**
    * Practice job for a technician's first run of the app: created once per
    * technician per company (sample-flagged, so nobody is messaged), returned

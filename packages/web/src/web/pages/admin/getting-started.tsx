@@ -116,7 +116,7 @@ export default function GettingStarted() {
                   {hasChapter(meta.chapter) && (
                     <button
                       type="button"
-                      onClick={() => startChapter(meta.chapter)}
+                      onClick={() => startChapter(meta.chapter, "checklist")}
                       className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 ring-1 ring-white/10 hover:bg-white/5"
                     >
                       <PlayCircle className="h-4 w-4 text-brand" aria-hidden="true" /> Show me

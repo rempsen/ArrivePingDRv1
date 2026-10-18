@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ChapterSource } from "../../shared/guide-events";
 import { ArrowLeft, Check, CircleHelp, CornerDownLeft, ExternalLink, FlaskConical, LifeBuoy, PlayCircle, Search, Sparkles, X } from "lucide-react";
 import { useAuth } from "../hooks/use-auth";
 import { useAddSampleDay, useSampleDay } from "./SampleDayBanner";
@@ -79,9 +80,9 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
     return id ? chapters.find((c) => c.id === id) : undefined;
   };
 
-  const start = (id: string) => {
+  const start = (id: string, source: ChapterSource = "panel") => {
     onClose();
-    startChapter(id);
+    startChapter(id, source);
   };
   const submitAsk = () => {
     if (!canAsk || !q.trim() || asking.busy) return;
@@ -155,7 +156,7 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
               tour={tourFor(article.slug)}
               terms={terms}
               onBack={() => setSlug(null)}
-              onStart={start}
+              onStart={(id) => start(id, "article")}
               onOpenArticle={setSlug}
             />
           ) : inChat ? (
@@ -167,7 +168,7 @@ export default function GuidePanel({ onClose }: { onClose: () => void }) {
                 asking.reset();
                 searchRef.current?.focus({ preventScroll: true });
               }}
-              onStartTour={start}
+              onStartTour={(id) => start(id, "ask")}
               onOpenArticle={setSlug}
               onNavigate={onClose}
             />

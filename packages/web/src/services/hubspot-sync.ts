@@ -31,6 +31,7 @@
  * include hand-provisioned tenants too. Tenants flagged internal (demo/test)
  * never sync automatically. Missing token = feature off, silently.
  */
+import { parseProgress } from "./launch-progress";
 import { and, avg, count, eq, gte, inArray, isNotNull, isNull, max, min, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { db, sdb } from "../api/database";
@@ -44,6 +45,17 @@ import { parseOnboarding } from "../shared/onboarding";
 export const HUBSPOT_API = "https://api.hubapi.com";
 const APP_URL = (process.env.APP_URL ?? "https://arriveping.com").replace(/\/$/, "");
 const PROPERTY_GROUP = "arriveping";
+
+/** Activation stage from the launch sweep; empty until it has looked at the company. */
+function launchProps(text: string | null | undefined): Props {
+  if (!text) return {};
+  const p = parseProgress(text);
+  return {
+    arriveping_activation_stage: p.stage ?? "",
+    arriveping_launch_steps_done: String(Object.keys(p.done).length),
+    arriveping_activated: p.activatedAt ? dateProp(new Date(p.activatedAt)) : "",
+  };
+}
 
 /* ---------------------------------------------------------------- config */
 
@@ -126,6 +138,11 @@ export const CUSTOM_PROPERTIES: Record<"companies" | "contacts" | "deals", PropD
     { name: "arriveping_trial_ends", label: "ArrivePing trial ends", type: "date", fieldType: "date" },
     { name: "arriveping_signed_up", label: "ArrivePing signed up", type: "date", fieldType: "date" },
     { name: "arriveping_onboarding_done", label: "ArrivePing onboarding finished", ...yesNo },
+    // Launch checklist (services/launch-progress.ts): signed_up → set_up →
+    // first_job → activated (steps 1–3) → live (all five).
+    { name: "arriveping_activation_stage", label: "ArrivePing activation stage", type: "string", fieldType: "text" },
+    { name: "arriveping_launch_steps_done", label: "ArrivePing launch steps done (of 5)", type: "number", fieldType: "number" },
+    { name: "arriveping_activated", label: "ArrivePing activated", type: "date", fieldType: "date" },
     { name: "arriveping_staff_count", label: "ArrivePing office users", type: "number", fieldType: "number" },
     { name: "arriveping_driver_count", label: "ArrivePing drivers/technicians", type: "number", fieldType: "number" },
     { name: "arriveping_terminology", label: "ArrivePing terminology", type: "string", fieldType: "text" },
@@ -442,6 +459,7 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
     arriveping_trial_ends: dateProp(co.billingTrialEndsAt),
     arriveping_signed_up: dateProp(co.createdAt),
     arriveping_onboarding_done: co.onboardingCompletedAt ? "true" : "false",
+    ...launchProps(co.launchProgress),
     arriveping_staff_count: String(office),
     arriveping_driver_count: String(drivers),
     arriveping_terminology: nouns,

@@ -195,6 +195,9 @@ def main() -> int:
             ctx = browser.new_context(viewport=vp)
             page = ctx.new_page()
             page.set_default_timeout(15_000)
+            # Every Guide analytics batch must be accepted (a rejected shape is lost data).
+            event_status = []
+            page.on("response", lambda r: event_status.append(r.status) if "/api/me/guide-events" in r.url else None)
             try:
                 sign_in(page)
                 if vp_name == "desktop":
@@ -223,6 +226,10 @@ def main() -> int:
                 page.keyboard.press("Escape")
                 expect(panel(page)).to_have_count(0)
                 print(f"PASS {vp_name}: progress recorded")
+                page.wait_for_timeout(2_500)  # let the last batch go
+                bad = [st for st in event_status if st != 204]
+                assert event_status and not bad, f"guide events: {len(event_status)} batches, rejected: {bad}"
+                print(f"PASS {vp_name}: {len(event_status)} guide event batches accepted")
             except (AssertionError, PWTimeout) as e:
                 failures.append(f"{vp_name}: {e}")
                 page.screenshot(path=f"{SHOT_DIR}/FAIL-{vp_name}.png")

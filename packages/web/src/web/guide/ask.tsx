@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { trackGuide } from "./events";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { ArrowLeft, ArrowRight, BookOpen, PlayCircle, Sparkles } from "lucide-react";
@@ -114,13 +115,27 @@ export function useAsk(terms: Terms) {
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setTurns((ts) => [...ts, { question, answer: "", actions: [], status: "streaming" }]);
+      // For the analytics event: did it answer, and with how many buttons.
+      let text = "";
+      let buttons = 0;
+      let failed = false;
       try {
         await postAsk({ question, history, terms }, ctrl.signal, {
-          delta: (text) => patchLast((t) => ({ ...t, answer: t.answer + text })),
-          action: (a) => patchLast((t) => ({ ...t, actions: [...t.actions, a] })),
-          error: (m) => patchLast((t) => ({ ...t, status: "error", error: m })),
+          delta: (d) => {
+            text += d;
+            patchLast((t) => ({ ...t, answer: t.answer + d }));
+          },
+          action: (a) => {
+            buttons++;
+            patchLast((t) => ({ ...t, actions: [...t.actions, a] }));
+          },
+          error: (m) => {
+            failed = true;
+            patchLast((t) => ({ ...t, status: "error", error: m }));
+          },
         });
         patchLast((t) => (t.status === "streaming" ? { ...t, status: "done" } : t));
+        trackGuide({ name: "guide.ask_question", answered: Boolean(text.trim()) && !failed, actions: Math.min(5, buttons) });
       } catch (e) {
         if ((e as { name?: string })?.name === "AbortError") return;
         patchLast((t) => ({ ...t, status: "error", error: "Couldn't reach ArrivePing. Check your connection and try again." }));
@@ -272,7 +287,14 @@ function ActionButton({
     const c = chapters.find((ch) => ch.id === action.id);
     if (!c) return null;
     return (
-      <button type="button" className={CHIP} onClick={() => onStartTour(c.id)}>
+      <button
+        type="button"
+        className={CHIP}
+        onClick={() => {
+          trackGuide({ name: "guide.ask_action", type: "tour" });
+          onStartTour(c.id);
+        }}
+      >
         <PlayCircle className="h-3.5 w-3.5 text-brand" aria-hidden="true" /> Show me: {interpolate(c.title, terms)}
       </button>
     );
@@ -281,14 +303,28 @@ function ActionButton({
     const a = articleBySlug[action.slug];
     if (!a) return null;
     return (
-      <button type="button" className={CHIP} onClick={() => onOpenArticle(a.slug)}>
+      <button
+        type="button"
+        className={CHIP}
+        onClick={() => {
+          trackGuide({ name: "guide.ask_action", type: "article" });
+          onOpenArticle(a.slug);
+        }}
+      >
         <BookOpen className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" /> Read: {a.title}
       </button>
     );
   }
   if (!ASK_PAGES.some((p) => p.route === action.route)) return null;
   return (
-    <Link href={action.route} className={CHIP} onClick={onNavigate}>
+    <Link
+      href={action.route}
+      className={CHIP}
+      onClick={() => {
+        trackGuide({ name: "guide.ask_action", type: "page" });
+        onNavigate();
+      }}
+    >
       Open {pageLabel(action.route, terms)} <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
     </Link>
   );

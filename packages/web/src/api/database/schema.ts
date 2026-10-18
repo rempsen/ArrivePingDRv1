@@ -1295,6 +1295,11 @@ export const companies = pgTable("companies", {
   // out by default (services/platform-analytics) so demo traffic never reads
   // as real usage; a superadmin flips it per tenant in Analytics → Tenants.
   isInternal: boolean("is_internal").notNull().default(false),
+  // Launch progress (services/launch-progress.ts), JSON LaunchProgress: when
+  // each checklist step was first done, the activation stage, which tip emails
+  // went out and whether #onboarding was told the company stalled. NULL = the
+  // launch sweep hasn't looked at this company yet.
+  launchProgress: text("launch_progress"),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 });

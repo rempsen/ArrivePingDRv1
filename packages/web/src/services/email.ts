@@ -28,9 +28,11 @@ interface SendEmailOptions {
   from?: string;
   replyTo?: string;
   attachments?: EmailAttachment[];
+  /** Extra headers, e.g. List-Unsubscribe on tip emails. */
+  headers?: Record<string, string>;
 }
 
-export async function sendEmail({ to: toIn, subject, html, text, from, replyTo, attachments }: SendEmailOptions) {
+export async function sendEmail({ to: toIn, subject, html, text, from, replyTo, attachments, headers }: SendEmailOptions) {
   // Sample-day people have .invalid addresses; drop them before anything else.
   const to = (Array.isArray(toIn) ? toIn : [toIn]).filter((a) => !isUndeliverableEmail(a));
   if (!to.length) {
@@ -57,6 +59,7 @@ export async function sendEmail({ to: toIn, subject, html, text, from, replyTo, 
       text: text || subject,
       ...(replyTo ? { replyTo } : {}),
       ...(att?.length ? { attachments: att } : {}),
+      ...(headers ? { headers } : {}),
     });
     if (error) {
       // If the custom domain isn't verified yet, fall back to Resend's
@@ -78,6 +81,7 @@ export async function sendEmail({ to: toIn, subject, html, text, from, replyTo, 
           // on the fallback lands on Resend's unmonitored test inbox.
           ...(replyTo ? { replyTo } : {}),
           ...(att?.length ? { attachments: att } : {}),
+          ...(headers ? { headers } : {}),
         });
         if (retry.error) {
           console.error("Email error (fallback):", retry.error.message);
@@ -333,6 +337,47 @@ function addToCalendar(d: BookingEmailData, brand: TenantEmailBrand = FALLBACK_B
  * the ArrivePing default — but callers should always pass one (see loadEmailBrand).
  */
 export const emailTemplates = {
+  /**
+   * ArrivePing's own day 1 / 3 / 7 tip to a new company's admins
+   * (services/launch-progress.ts). Always ArrivePing-branded: it's from us,
+   * not from the tenant. Ends with a one-click unsubscribe.
+   */
+  launchTip(d: {
+    subject: string;
+    title: string;
+    firstName: string;
+    intro: string;
+    items: { title: string; body: string }[];
+    ctaUrl: string;
+    unsubscribeUrl: string;
+  }) {
+    const list = d.items
+      .map(
+        (i) => `<tr><td style="padding:10px 0;border-top:1px solid #1e293b">
+          <div style="font-weight:700;color:#f1f5f9">${esc(i.title)}</div>
+          <div style="color:#94a3b8;font-size:14px;margin-top:2px">${esc(i.body)}</div></td></tr>`,
+      )
+      .join("");
+    const body = `<p>Hi ${esc(d.firstName)},</p>
+      <p style="margin-top:10px">${esc(d.intro)}</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">${list}</table>
+      <p style="margin-top:16px">Each step has a short tour: open the <b>Guide</b> (the question-mark button) and choose it. Stuck? Reply to this email and a person will help.</p>
+      <div style="margin-top:24px"><a href="${d.ctaUrl}" style="display:inline-block;background:${BRAND};color:${contrastText(BRAND)};text-decoration:none;padding:11px 25px;border:1px solid rgba(15,23,42,0.14);border-radius:10px;font-weight:700;font-size:14px">Open your checklist</a></div>
+      <p style="margin-top:24px;color:#64748b;font-size:12px">You're getting this because you're setting up ArrivePing. <a href="${d.unsubscribeUrl}" style="color:#94a3b8">Stop these tips</a></p>`;
+    const text = [
+      `Hi ${d.firstName},`,
+      "",
+      d.intro,
+      "",
+      ...d.items.map((i) => `- ${i.title}: ${i.body}`),
+      "",
+      `Open your checklist: ${d.ctaUrl}`,
+      "",
+      `Stop these tips: ${d.unsubscribeUrl}`,
+    ].join("\n");
+    // The button sits in the body so the unsubscribe line can come after it.
+    return { subject: d.subject, html: shell(esc(d.title), body, undefined, FALLBACK_BRAND), text };
+  },
   passwordReset(d: { name?: string; url: string }, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
     const co = brand.company || "your";
     const body = `<p>Hi ${d.name || "there"}, we received a request to reset the password for your ${esc(co)} account.</p>

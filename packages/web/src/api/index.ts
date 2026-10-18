@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { launchTipsRoutes } from "./routes/launch-tips";
 import { queueCompanySync } from "../services/hubspot-sync";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
@@ -80,7 +81,9 @@ const ALLOW_ALL = CORS_ORIGINS.includes("*");
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // High-frequency or irrelevant writes that never change CRM-visible data.
-const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections)(\/|$)/;
+// `guide` (Ask ArrivePing) and `me/guide-events` (Guide analytics) are POSTs
+// that change nothing.
+const NO_CRM_SYNC = /^\/api\/(public|track|tracking|fleet|messages|metrics|notifications|ai|uploads|geo|bookings|jobs|payments|punchlist|selections|guide|me\/guide-events)(\/|$)/;
 
 const app = new Hono<{ Variables: Variables }>()
   // request id + per-request logger (correlation across the request lifecycle)
@@ -362,6 +365,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/track", trackRoutes)
   // Public, persistent property hub (no auth) — /p/:token service history.
   .route("/property", propertyPublicRoutes)
+  // Unsubscribe link in the launch tip emails (no auth; signed token).
+  .route("/launch-tips", launchTipsRoutes)
   // Public options/selections page (no auth) — token-based, same trust model as /track.
   .route("/selections", optionSelectionsRoutes)
   // Admin-authenticated options/tier catalog CRUD + attach-rate reporting.

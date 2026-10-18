@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { trackGuide } from "./events";
 import { Joyride, EVENTS, STATUS, ACTIONS, type Controls, type EventData, type Step } from "react-joyride";
 import { useLocation } from "wouter";
 import { ApTooltip } from "./ApTooltip";
@@ -105,8 +106,14 @@ export default function TourRunner({ chapter, terms, onFinish }: TourRunnerProps
 
   const handleEvent = (data: EventData, controls: Controls) => {
     controlsRef.current = controls;
+    // Joyride step ids are "<chapter>.<step>"; report the step part.
+    const stepId = String(data.step?.id ?? "").replace(`${chapter.id}.`, "");
+    if (data.type === EVENTS.TOOLTIP && stepId) {
+      trackGuide({ name: "guide.step_viewed", chapter: chapter.id, step: stepId, index: data.index });
+    }
     if (data.type === EVENTS.TARGET_NOT_FOUND) {
       console.warn(`[guide] anchor missing for ${String(data.step?.id)}; skipping step`);
+      if (stepId) trackGuide({ name: "guide.step_missing", chapter: chapter.id, step: stepId });
       controls.next();
       return;
     }

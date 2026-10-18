@@ -20,15 +20,8 @@ import { db, sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 
-export type LaunchItemId = "first-job" | "invite-tech" | "live-eta" | "reply-to" | "milestone-copy";
-export type SetupItemId = "industry" | "service-area" | "catalog" | "forms" | "templates" | "team";
-
-export interface LaunchChecklist {
-  items: { id: LaunchItemId; done: boolean; waiting?: boolean }[];
-  setup: { id: SetupItemId; done: boolean }[];
-  /** All five launch items done. */
-  complete: boolean;
-}
+import type { LaunchChecklist } from "../shared/launch-items";
+export type { LaunchChecklist, LaunchItemId, SetupItemId } from "../shared/launch-items";
 
 export async function computeLaunchChecklist(companyId: string): Promise<LaunchChecklist> {
   const t = tdb(companyId);

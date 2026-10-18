@@ -3,7 +3,7 @@ import { reconcileAllRiders } from "./services/presence";
 import { rowsNeedingPoll, triggerVerify } from "./services/email-domains";
 import { seedRolePermissions } from "./api/routes/team";
 import { startRetentionSweeps } from "./services/retention";
-import { sweepHubspotSync, hubspotEnabled } from "./services/hubspot-sync";
+import { sweepHubspotSync, hubspotEnabled, queueCompanySync } from "./services/hubspot-sync";
 import { retryContactRequests } from "./services/contact-request";
 import { startScheduler } from "./services/scheduler";
 // Importing these registers their scheduler task handlers (review_request,
@@ -63,6 +63,7 @@ const port = Number(process.env.PORT ?? 3000);
 // Warm up the Turso connection before serving traffic so the first real user
 // request after a cold start / host resume never races the socket coming up.
 import { oncePerTick } from "./services/tick";
+import { sweepLaunch } from "./services/launch-progress";
 import { warmUpDb, pingDb } from "./api/database";
 warmUpDb().catch((e) => console.error("db warm-up (boot) failed", e));
 // Keep the DB socket warm: a cheap `select 1` every 60s stops Turso's
@@ -145,6 +146,17 @@ if (hubspotEnabled()) {
     void oncePerTick("hubspot-sweep", sweepHubspotSync);
   }, 30 * 60 * 1000);
 }
+
+// Launch progress (services/launch-progress.ts): for each company in its first
+// ten days, record checklist steps as they're done, keep the HubSpot activation
+// stage current, send the day 1 / 3 / 7 tip emails (LAUNCH_NUDGES=on) and tell
+// #onboarding once about a company with no real job after two days.
+setTimeout(() => {
+  void oncePerTick("launch-sweep", () => sweepLaunch(new Date(), { onStageChange: queueCompanySync }));
+}, 60 * 1000);
+setInterval(() => {
+  void oncePerTick("launch-sweep", () => sweepLaunch(new Date(), { onStageChange: queueCompanySync }));
+}, 30 * 60 * 1000);
 
 // Homepage "contact me" leads: retry a HubSpot push or sales email that didn't
 // go through (restart mid-call, outage). Backs off per lead; see contact-request.ts.

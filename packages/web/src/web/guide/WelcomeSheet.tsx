@@ -97,7 +97,7 @@ export function WelcomeSheet() {
     void save({ persona, teamSize, goal, welcomeDoneAt: new Date().toISOString() });
     if (start) {
       const id = GOAL_CHAPTER[goal];
-      if (chapterById[id]) startChapter(id);
+      if (chapterById[id]) startChapter(id, "welcome");
     }
   };
 
