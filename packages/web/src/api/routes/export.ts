@@ -30,6 +30,37 @@ export function toCsv(rows: Record<string, any>[], columns?: string[]): string {
   return head + "\n" + body;
 }
 
+/* --------------------------- number tidy ----------------------------- */
+/** Report rows carry raw float sums (e.g. 50675.099999999984). For the text
+ *  formats (CSV, JSON) round money and percentages to what a person would
+ *  write: cents for money, one decimal for percentages, and at most two
+ *  decimals for other numbers. Excel and PDF format numbers themselves. */
+export function tidyNumbers(rows: Record<string, any>[], columns: { key: string; kind?: string }[]): Record<string, any>[] {
+  const places: Record<string, number> = {};
+  for (const c of columns) {
+    if (c.kind === "money" || c.kind === "num") places[c.key] = 2;
+    else if (c.kind === "pct") places[c.key] = 1;
+  }
+  if (!Object.keys(places).length) return rows;
+  return rows.map((r) => {
+    const o = { ...r };
+    for (const [k, p] of Object.entries(places)) {
+      const v = o[k];
+      if (typeof v === "number" && Number.isFinite(v) && !Number.isInteger(v)) o[k] = Math.round(v * 10 ** p) / 10 ** p;
+    }
+    return o;
+  });
+}
+
+/* ------------------------------ JSON -------------------------------- */
+/** Rows as a pretty-printed JSON array, keeping only (and ordering by) the
+ *  given column keys, the same shape the Jobs list's JSON export uses. Dates
+ *  serialize as ISO strings; missing values are null. */
+export function toJson(rows: Record<string, any>[], columns?: string[]): string {
+  const cols = columns?.length ? columns : rows.length ? Object.keys(rows[0]!) : [];
+  return JSON.stringify(rows.map((r) => Object.fromEntries(cols.map((c) => [c, r[c] ?? null]))), null, 2);
+}
+
 /* ------------------------------ XLSX -------------------------------- */
 export async function toXlsx(
   rows: Record<string, any>[],
@@ -768,7 +799,7 @@ async function loadTenantBrand(companyId: string): Promise<JobBrand | null> {
 
 export const exportRoutes = new Hono<AppEnv>()
   // generic report export: client posts the already-computed report rows/columns.
-  // POST /api/export/report?format=csv|xlsx|pdf  body: { title, subtitle, rows, columns }
+  // POST /api/export/report?format=csv|xlsx|json|pdf  body: { title, subtitle, rows, columns }
   .post("/report", requireAuth, async (c) => {
     const format = (c.req.query("format") || "csv").toLowerCase();
     const body = await c.req.json<{ title: string; subtitle?: string; rows: any[]; columns: any[] }>();
@@ -786,10 +817,13 @@ export const exportRoutes = new Hono<AppEnv>()
       const buf = await toPdf(rows, columns, title || "Report", subtitle, await companyTimeZone(tenantId(c)), brand, baseUrl);
       return fileResponse(buf, `${pre}-${slug}-${stamp}.pdf`, "application/pdf");
     }
-    const csv = toCsv(rows, columns.map((c: any) => c.key));
+    if (format === "json") {
+      return fileResponse(toJson(tidyNumbers(rows, columns), columns.map((c: any) => c.key)), `${pre}-${slug}-${stamp}.json`, "application/json; charset=utf-8");
+    }
+    const csv = toCsv(tidyNumbers(rows, columns), columns.map((c: any) => c.key));
     return fileResponse(csv, `${pre}-${slug}-${stamp}.csv`, "text/csv; charset=utf-8");
   })
-  // GET /api/export/:dataset?columns=a,b,c&format=csv|xlsx|pdf
+  // GET /api/export/:dataset?columns=a,b,c&format=csv|xlsx|json|pdf
   .get("/:dataset", requireAuth, async (c) => {
     const dataset = c.req.param("dataset");
     if (!DATASET_COLUMNS[dataset]) return c.json({ message: "Unknown dataset" }, 400);
@@ -814,7 +848,10 @@ export const exportRoutes = new Hono<AppEnv>()
       const buf = await toPdf(rows, cols, title, undefined, await companyTimeZone(tenantId(c)), brand, baseUrl);
       return fileResponse(buf, `${pre}-${dataset}-${stamp}.pdf`, "application/pdf");
     }
-    const csv = toCsv(rows, cols.map((c) => c.key));
+    if (format === "json") {
+      return fileResponse(toJson(tidyNumbers(rows, cols), cols.map((c) => c.key)), `${pre}-${dataset}-${stamp}.json`, "application/json; charset=utf-8");
+    }
+    const csv = toCsv(tidyNumbers(rows, cols), cols.map((c) => c.key));
     return fileResponse(csv, `${pre}-${dataset}-${stamp}.csv`, "text/csv; charset=utf-8");
   })
   // schema preview so the UI can let users pick columns

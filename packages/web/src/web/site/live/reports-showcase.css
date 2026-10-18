@@ -1,0 +1,348 @@
+/* ==========================================================================
+   Integrations · Reporting, built in (ReportsShowcase.tsx)
+   A white card on the light Integrations section: copy and export formats,
+   then a real Reports screen in a browser frame with numbered callouts, two
+   close-ups overlapping its foot, and the numbered points they refer to.
+   ========================================================================== */
+
+.site .ap-rep {
+  margin-top: 16px;
+  padding: clamp(22px, 3.6vw, 40px);
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgb(11 18 32 / 4%);
+}
+
+/* ------------------------------------------------------------------ copy */
+.site .ap-rep__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 20px clamp(28px, 4vw, 56px);
+  align-items: end;
+}
+.site .ap-rep__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0369a1;
+}
+.site .ap-rep__eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0ea5e9;
+}
+.site .ap-rep__head h3 {
+  margin-top: 10px;
+  font-size: clamp(24px, 2.6vw, 34px);
+  line-height: 1.12;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.site .ap-rep__head h3 span {
+  display: block;
+  color: var(--ink-muted);
+}
+.site .ap-rep__head p {
+  margin-top: 12px;
+  max-width: 60ch;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-secondary);
+}
+.site .ap-rep__formatlabel {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.site .ap-rep__formats ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.site .ap-rep__formats li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 650;
+  color: #0b1220;
+  background: #f0f7fc;
+  border: 1px solid rgb(2 132 199 / 22%);
+}
+.site .ap-rep__formats li svg {
+  color: #0284c7;
+}
+.site .ap-rep__formats .ap-rep__usewith {
+  margin-top: 12px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+/* ----------------------------------------------------------------- stage */
+.site .ap-rep__stage {
+  margin-top: clamp(24px, 3.2vw, 36px);
+}
+.site .ap-rep__frame {
+  margin: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0b1220;
+  box-shadow:
+    0 0 0 1px rgb(11 18 32 / 14%),
+    0 34px 70px -34px rgb(11 18 32 / 60%);
+}
+.site .ap-rep__chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  background: #111a2b;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+}
+.site .ap-rep__chrome > span {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 16%);
+}
+.site .ap-rep__chrome em {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 10px;
+  padding: 3px 12px;
+  border-radius: 6px;
+  font: normal 500 12px/1.4 var(--font-body);
+  color: #9fb0c6;
+  background: rgb(255 255 255 / 6%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.site .ap-rep__badge {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #6ee7b7;
+  background: rgb(52 211 153 / 12%);
+  border: 1px solid rgb(52 211 153 / 30%);
+}
+.site .ap-rep__shot {
+  position: relative;
+}
+.site .ap-rep__shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Callouts: a cyan box on the real control, with its number. */
+.site .ap-rep__marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.site .ap-rep__mark {
+  position: absolute;
+  border: 2px solid #38bdf8;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 4px rgb(56 189 248 / 16%),
+    0 0 24px rgb(56 189 248 / 32%);
+  animation: ap-rep-glow 2.8s ease-in-out 3;
+}
+.site .ap-rep__mark b {
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font: 800 13px/1 var(--font-heading);
+  color: #04131f;
+  background: #38bdf8;
+  box-shadow: 0 0 0 3px #0b1220;
+}
+/* Small targets: the number sits outside, to the left, so it hides nothing. */
+.site .ap-rep__mark--side {
+  border-radius: 7px;
+}
+.site .ap-rep__mark--side b {
+  top: 50%;
+  left: -32px;
+  transform: translateY(-50%);
+}
+.site .ap-rep__marks--phone {
+  display: none;
+}
+
+/* Close-ups: overlap the frame's foot. */
+.site .ap-rep__insets {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* widths in proportion to each crop (508 and 440 CSS px), so both read at the same scale */
+  grid-template-columns: minmax(0, 508fr) minmax(0, 440fr);
+  align-items: start;
+  gap: 18px;
+  margin-top: clamp(-80px, -6.5vw, -40px);
+  padding: 0 5%;
+}
+.site .ap-rep__inset {
+  margin: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b1220;
+  box-shadow:
+    0 0 0 5px var(--surface),
+    0 0 0 6px rgb(11 18 32 / 10%),
+    0 26px 50px -22px rgb(11 18 32 / 60%);
+}
+
+.site .ap-rep__insetlabel {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #9fb0c6;
+  background: #111a2b;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+}
+
+/* ---------------------------------------------------------------- points */
+.site .ap-rep__points {
+  list-style: none;
+  margin: clamp(26px, 3.4vw, 36px) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px 24px;
+}
+.site .ap-rep__points li {
+  display: flex;
+  gap: 12px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+.site .ap-rep__points b {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  border-radius: 50%;
+  font: 800 13px/1 var(--font-heading);
+  color: #04131f;
+  background: #38bdf8;
+}
+.site .ap-rep__points strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.site .ap-rep__note {
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+/* ------------------------------------------------------------ responsive */
+@media (max-width: 1000px) {
+  .site .ap-rep__head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .ap-rep__points {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .site .ap-rep__insets {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+    padding: 0;
+  }
+  .site .ap-rep__inset {
+    box-shadow:
+      0 0 0 1px rgb(11 18 32 / 14%),
+      0 20px 40px -24px rgb(11 18 32 / 55%);
+  }
+}
+@media (max-width: 640px) {
+  .site .ap-rep__marks--wide {
+    display: none;
+  }
+  .site .ap-rep__marks--phone {
+    display: block;
+  }
+  .site .ap-rep__chrome em {
+    display: none;
+  }
+  .site .ap-rep__points {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .site .ap-rep__mark b {
+    top: -10px;
+    left: -10px;
+    width: 21px;
+    height: 21px;
+    font-size: 12px;
+  }
+  .site .ap-rep__mark--side b {
+    top: 50%;
+    left: -27px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site .ap-rep__mark {
+    animation: none;
+  }
+}
+.site[data-reduced="true"] .ap-rep__mark {
+  animation: none;
+}
+
+@keyframes ap-rep-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 4px rgb(56 189 248 / 16%),
+      0 0 24px rgb(56 189 248 / 32%);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgb(56 189 248 / 24%),
+      0 0 30px rgb(56 189 248 / 45%);
+  }
+}

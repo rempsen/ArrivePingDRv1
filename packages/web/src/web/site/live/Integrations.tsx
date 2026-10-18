@@ -3,6 +3,7 @@ import { integrations } from "../config";
 import { useAnchorNav } from "../components/SiteHeader";
 import { useLivePlay } from "./shared";
 import { IntegrationTrace } from "./IntegrationTrace";
+import { ReportsShowcase } from "./ReportsShowcase";
 
 /**
  * Integrations — what connects today, and an open door for the rest.
@@ -79,6 +80,9 @@ export function Integrations() {
             </li>
           ))}
         </ul>
+
+        {/* Reporting, built in: a real Reports screen with its filters, sort and exports called out */}
+        <ReportsShowcase />
 
         <div className="ap-int__custom lv" ref={ref} data-play={play} data-reveal="">
           <div className="ap-int__customcopy">
