@@ -35,6 +35,20 @@ export function toCsv(rows: Record<string, any>[], columns?: string[]): string {
  *  formats (CSV, JSON) round money and percentages to what a person would
  *  write: cents for money, one decimal for percentages, and at most two
  *  decimals for other numbers. Excel and PDF format numbers themselves. */
+/** Decimal-safe half-away-from-zero rounding, as Excel and people round:
+ *  1.005 → 1.01 (plain Math.round(v * 100) / 100 gives 1, because 1.005 is
+ *  stored as 1.00499…), and -2.25 → -2.3 rather than toward zero. Shifting
+ *  the exponent in the string keeps the decimal digits exact. */
+export function roundHalfUp(v: number, places: number): number {
+  const sign = v < 0 ? -1 : 1;
+  const abs = Math.abs(v);
+  // Very small or very large values print in exponent form ("1e-7"); they
+  // can't land on a cent midpoint, so plain rounding is exact enough there.
+  if (String(abs).includes("e")) return (sign * Math.round(abs * 10 ** places)) / 10 ** places || 0;
+  const shifted = Math.round(Number(`${abs}e${places}`));
+  return sign * Number(`${shifted}e-${places}`) || 0;
+}
+
 export function tidyNumbers(rows: Record<string, any>[], columns: { key: string; kind?: string }[]): Record<string, any>[] {
   const places: Record<string, number> = {};
   for (const c of columns) {
@@ -46,7 +60,7 @@ export function tidyNumbers(rows: Record<string, any>[], columns: { key: string;
     const o = { ...r };
     for (const [k, p] of Object.entries(places)) {
       const v = o[k];
-      if (typeof v === "number" && Number.isFinite(v) && !Number.isInteger(v)) o[k] = Math.round(v * 10 ** p) / 10 ** p;
+      if (typeof v === "number" && Number.isFinite(v) && !Number.isInteger(v)) o[k] = roundHalfUp(v, p);
     }
     return o;
   });
