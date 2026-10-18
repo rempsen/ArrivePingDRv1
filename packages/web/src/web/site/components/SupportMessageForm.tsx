@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { support } from "../support/articles";
+import { hubspotIdentify } from "../lib/hubspot-tracking";
 
 /**
  * "Send us a message" — a short form in the Help Center's contact card that
@@ -73,6 +74,7 @@ export function SupportMessageForm() {
         }),
       });
       if (r.ok) {
+        hubspotIdentify(f.email); // only with analytics consent
         setStatus({ kind: "sent", email: f.email.trim() });
         setF(EMPTY);
         return;

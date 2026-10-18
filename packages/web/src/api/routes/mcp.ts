@@ -42,7 +42,9 @@ const num = (v: unknown, d?: number) =>
 // Tool implementations
 // ---------------------------------------------------------------------------
 
-const TOOLS: ToolDef[] = [
+// Exported for tests. Sample-day rows (services/sample-day.ts) are left out of
+// every report and export tool, the same as the REST reports and exports.
+export const TOOLS: ToolDef[] = [
   // -------------------- Work orders --------------------
   {
     name: "list_work_orders",
@@ -506,15 +508,12 @@ const TOOLS: ToolDef[] = [
       properties: { since: { type: "string" }, until: { type: "string" } },
     },
     handler: async (a, t) => {
-      const conds = [] as any[];
+      const conds = [eq(schema.bookings.isSample, false)] as any[];
       if (a.since)
         conds.push(gte(schema.bookings.scheduledAt, new Date(a.since)));
       if (a.until)
         conds.push(lte(schema.bookings.scheduledAt, new Date(a.until)));
-      const rows = await t.select(
-        schema.bookings,
-        conds.length ? and(...conds) : undefined,
-      );
+      const rows = await t.select(schema.bookings, and(...conds));
       const completed = rows.filter((r) => r.status === "completed");
       const revenue = completed.reduce(
         (s, r) => s + (r.total || r.price || 0),
@@ -786,6 +785,7 @@ const TOOLS: ToolDef[] = [
               and(
                 eq(userTable.role, "customer"),
                 eq(userTable.companyId, t.companyId),
+                eq(userTable.isSample, false),
               ),
             )
             .limit(limit),
@@ -798,14 +798,20 @@ const TOOLS: ToolDef[] = [
             .select()
             .from(schema.riders)
             .leftJoin(userTable, eq(schema.riders.userId, userTable.id))
-            .where(t.scope(schema.riders))
+            .where(t.scope(schema.riders, eq(schema.riders.isSample, false)))
             .limit(limit),
         );
         return { entity: "technicians", count: rows.length, rows };
       }
       const table = map[String(a.entity)];
       if (!table) throw new Error(`unknown entity "${a.entity}"`);
-      const rows = (await t.select(table)).slice(0, limit);
+      // Sample jobs, and anything hanging off one (invoice, review, photo), stay out.
+      const sampleJobs = new Set(
+        (await t.select(schema.bookings, eq(schema.bookings.isSample, true))).map((b) => b.id),
+      );
+      const rows = (await t.select(table))
+        .filter((r: any) => !r.isSample && !(r.bookingId && sampleJobs.has(r.bookingId)))
+        .slice(0, limit);
       return { entity: a.entity, count: rows.length, rows };
     },
   },

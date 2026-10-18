@@ -90,6 +90,8 @@ export interface Kpi {
   previous: number;
   /** (value - previous) / previous; null when there was nothing before. */
   change: number | null;
+  /** value / previous, for changes too big to read as a percentage; null when there was nothing before. */
+  ratio: number | null;
 }
 
 export interface SeriesPoint {
@@ -191,7 +193,14 @@ export function kpisFrom(h: Headline): Kpi[] {
   return KPI_METRICS.map(([metric, label]) => {
     const value = Number((h as unknown as Record<string, number>)[metric] ?? 0);
     const previous = Number((h as unknown as Record<string, number>)[`${metric}_prev`] ?? 0);
-    return { metric, label, value, previous, change: previous > 0 ? (value - previous) / previous : null };
+    return {
+      metric,
+      label,
+      value,
+      previous,
+      change: previous > 0 ? (value - previous) / previous : null,
+      ratio: previous > 0 ? value / previous : null,
+    };
   });
 }
 
@@ -215,10 +224,8 @@ export async function funnel(p: AnalyticsParams): Promise<Funnel> {
 }
 
 export async function tenants(p: AnalyticsParams): Promise<TenantRow[]> {
-  return cached(keyOf("tenants", p), async () => {
-    const rows = await run<Omit<TenantRow, "industry_label">>(TENANTS, p);
-    return rows.map((r) => ({ ...r, industry_label: industryName(r.industry) }));
-  });
+  // industry_label comes from the SQL (industryLabelSql), the same name the dashboard shows.
+  return cached(keyOf("tenants", p), () => run<TenantRow>(TENANTS, p));
 }
 
 /** Everything the Overview shows, in one round trip. */

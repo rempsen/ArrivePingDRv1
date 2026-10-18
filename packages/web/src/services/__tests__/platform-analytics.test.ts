@@ -21,6 +21,8 @@ const A = await import("../platform-analytics");
 const S = await import("../platform-analytics/sql");
 const { monthlyPrice } = await import("../../web/site/config");
 const { parseParams } = await import("../../api/routes/platform-analytics");
+const D = await import("../platform-analytics/dashboard");
+const { INDUSTRY_LABELS, industryLabel } = await import("../industry-presets");
 
 const IND = "zz-analytics-fixture";
 const SEPT = { start_day: "2026-09-01", end_day: "2026-09-30", industry: IND } as const;
@@ -185,7 +187,7 @@ describe("headline", () => {
 
   it("works out period-over-period change the way the dashboard does", async () => {
     const k = A.kpisFrom(await A.headline(SEPT));
-    expect(k.find((x) => x.metric === "jobs_created")).toEqual({ metric: "jobs_created", label: "Jobs created", value: 5, previous: 1, change: 4 });
+    expect(k.find((x) => x.metric === "jobs_created")).toEqual({ metric: "jobs_created", label: "Jobs created", value: 5, previous: 1, change: 4, ratio: 5 });
     expect(k.find((x) => x.metric === "customers_new")!.change).toBeNull(); // nothing before: no percentage
   });
 });
@@ -223,12 +225,25 @@ describe("series, records, funnel, tenants", () => {
     expect(f.median_days_to_first_job).toBeGreaterThan(2);
   });
 
+  it("lists the milestones one row each for the dashboard, as shares of signups", async () => {
+    const f = await A.funnel(SEPT);
+    const res: any = await db.execute(S.forApp(S.FUNNEL_STEPS, SEPT));
+    const steps = (res.rows ?? res) as { step: string; companies: number; share: number | null; median_days: number | null }[];
+    expect(steps.map((x) => x.step)).toEqual(["signed_up", "onboarded", "added_team", "first_job", "first_completed", "paying"]);
+    for (const x of steps) {
+      expect({ step: x.step, companies: x.companies }).toEqual({ step: x.step, companies: (f as any)[x.step] });
+      expect(x.share!).toBeCloseTo((f as any)[x.step] / f.signed_up, 10);
+    }
+    expect(steps.filter((x) => x.median_days != null).map((x) => [x.step, x.median_days])).toEqual([["first_job", f.median_days_to_first_job]]);
+  });
+
   it("lists companies with their plan, people and activity", async () => {
     const t = await A.tenants(SEPT);
     expect(t.map((x) => x.id)).toEqual(["acme-fx", "bolt-fx", "closed-fx"]);
     const acme = t[0]!;
     expect(acme).toMatchObject({ jobs: 4, completed: 2, jobs_all: 5, team: 3, techs: 2, customers: 2, active_users: 1, customer_updates: 3, plan_seats: 3, plan_value: monthlyPrice(3).total, onboarded: true, internal: false });
     expect(acme.last_active).toBe("2026-09-12T20:00:00Z");
+    expect(acme.industry_label).toBe(IND); // an id with no preset shows as is
     expect(t.find((x) => x.id === "closed-fx")!.health).toBe("closed");
     expect(t.find((x) => x.id === "bolt-fx")!.plan_value).toBe(monthlyPrice(1).total);
   });
@@ -290,13 +305,43 @@ describe("safety and the shared definitions", () => {
     }
   });
 
+  it("names industries in SQL exactly as the app does", async () => {
+    const appName = (id: string) => (!id ? "Not set" : id === "other" ? "Other" : industryLabel(id) || id);
+    for (const id of [...new Set(INDUSTRY_LABELS.map((x) => x.id)), "other", "", "zz-unknown"]) {
+      const res: any = await db.execute(sql.raw(`SELECT ${S.industryLabelSql(`'${id}'`)} AS label`));
+      expect({ id, label: (res.rows ?? res)[0].label }).toEqual({ id, label: appName(id) });
+    }
+    const none: any = await db.execute(sql.raw(`SELECT ${S.industryLabelSql("NULL::text")} AS label`));
+    expect((none.rows ?? none)[0].label).toBe("Not set");
+  });
+
+  it("lists the industries in use for the dashboard's filter, test companies only when asked", async () => {
+    const run = async (p: object) => {
+      const res: any = await db.execute(S.forApp(S.INDUSTRIES, p));
+      return ((res.rows ?? res) as { industry: string; label: string; companies: number }[]).find((r) => r.industry === IND);
+    };
+    expect(await run({})).toEqual({ industry: IND, label: IND, companies: 2 }); // closed and test companies left out
+    expect((await run({ include_test: true }))!.companies).toBe(3);
+  });
+
+  it("describes every dashboard source and stores a query the dashboard accepts", () => {
+    const docs = D.dashboardDatasetDocuments();
+    expect(Object.keys(docs).sort()).toEqual(Object.keys(S.DASHBOARD_QUERIES).sort());
+    for (const [id, doc] of Object.entries(docs)) {
+      expect(doc.title.split(/\s+/).length).toBeLessThanOrEqual(5);
+      expect(doc.description).toMatch(/Reads [a-z_, ]+(and [a-z_]+)?\.$/);
+      expect(doc.source).toMatchObject({ kind: "query", connector: "Supabase", tool: "execute_sql", args: { project_id: D.SUPABASE_PROJECT_ID } });
+      expect(doc.source.args.query).toBe(S.forDashboard(S.DASHBOARD_QUERIES[id as keyof typeof S.DASHBOARD_QUERIES]));
+    }
+  });
+
   it("renders every dashboard query in a form the dashboard accepts", () => {
     for (const [name, q] of Object.entries(S.DASHBOARD_QUERIES)) {
       const d = S.forDashboard(q);
       expect({ name, violations: S.dashboardViolations(d) }).toEqual({ name, violations: [] });
       expect(d.length).toBeLessThan(16_000);
       expect(d).not.toContain("@@");
-      expect(/^\s*WITH\b/i.test(d)).toBe(true);
+      expect(/^\s*(WITH|SELECT)\b/i.test(d)).toBe(true);
       expect(d.split(";").length).toBe(1); // one statement
       for (const m of d.matchAll(/\{\{(\w+)\}\}/g)) expect(Object.keys(S.PARAM_TYPES)).toContain(m[1]!);
       expect(d.replace(/CAST\(\{\{\w+\}\} AS [A-Z]+\)/g, "")).not.toContain("{{");

@@ -10,7 +10,7 @@ process.env.DATABASE_AUTH_TOKEN = "";
 process.env.HUBSPOT_ACCESS_TOKEN = "pat-test";
 process.env.HUBSPOT_OWNER_ID = "83114636";
 
-const { syncCompanyToHubspot, buildSyncPlan, planFingerprint, _setHubspotFetch, _resetHubspotForTests, isSyncedCompany, CUSTOM_PROPERTIES } =
+const { syncCompanyToHubspot, sweepHubspotSync, buildSyncPlan, planFingerprint, _setHubspotFetch, _resetHubspotForTests, isSyncedCompany, CUSTOM_PROPERTIES } =
   await import("../hubspot-sync");
 const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
@@ -211,5 +211,119 @@ describe("syncCompanyToHubspot", () => {
     expect(r.error).toContain("HubSpot 500");
     expect(await isSyncedCompany(CO)).toBe(true);
     expect(await isSyncedCompany("nope")).toBe(false);
+  });
+});
+
+describe("enrichment", () => {
+  beforeAll(async () => {
+    const sql = (db as any).$client;
+    for (const t of [schema.bookings, schema.invoices, schema.techInvites, schema.integrations, schema.intakeForms, schema.intakeSubmissions, schema.reviews, schema.session])
+      await sql.execute(ddlFor(t));
+    const now = Date.now();
+    const daysAgo = (d: number) => new Date(now - d * 86_400_000);
+    await db.insert(schema.bookings).values([
+      { id: "b1", companyId: CO, title: "Furnace", status: "completed", createdAt: daysAgo(90) } as any,
+      { id: "b2", companyId: CO, title: "AC", status: "assigned", createdAt: daysAgo(3) } as any,
+      { id: "b3", companyId: CO, title: "Sample", status: "completed", isSample: true, createdAt: daysAgo(2) } as any,
+      { id: "b4", companyId: CO, title: "Deleted", status: "completed", deletedAt: daysAgo(1), createdAt: daysAgo(1) } as any,
+      { id: "b5", companyId: "other-co", title: "Not ours", status: "completed", createdAt: daysAgo(1) } as any,
+    ]);
+    await db.insert(schema.invoices).values([{ id: "i1", companyId: CO, number: "1", status: "paid", createdAt: daysAgo(5) } as any]);
+    await db.insert(schema.techInvites).values([{ id: "t1", companyId: CO, email: "new@x.ca", token: "tok", status: "pending", createdAt: daysAgo(1) } as any]);
+    await db.insert(schema.integrations).values([
+      { id: "g1", companyId: CO, provider: "quickbooks", status: "connected", createdAt: daysAgo(10) } as any,
+      { id: "g2", companyId: CO, provider: "gmail", status: "disconnected", createdAt: daysAgo(10) } as any,
+    ]);
+    await db.insert(schema.reviews).values([
+      { id: "r1", companyId: CO, bookingId: "b1", rating: 5, createdAt: daysAgo(80) } as any,
+      { id: "r2", companyId: CO, bookingId: "b2", rating: 4, createdAt: daysAgo(2) } as any,
+    ]);
+    await db.insert(schema.session).values([
+      { id: "s1", token: "t-1", userId: "u-ann", expiresAt: daysAgo(-30), createdAt: daysAgo(2), updatedAt: new Date("2026-10-17T15:00:00Z") } as any,
+    ]);
+    await db
+      .update(schema.companySettings)
+      .set({
+        socials: JSON.stringify({ linkedin: "https://linkedin.com/company/prairie", facebook: "https://facebook.com/prairie", twitter: "https://x.com/prairiehvac" }),
+        qualifyingProfile: JSON.stringify({ technicianCount: 6, vehicleCount: 5, jobsPerDay: 12, offersMaintenancePlans: true, offersEmergencyPremium: false, scoutedTeam: [{ name: "Secret" }] }),
+      })
+      .where(eq(schema.companySettings.companyId, CO));
+    await db
+      .update(schema.memberships)
+      .set({ onboarding: JSON.stringify({ v: 1, persona: "owner", goal: "eta", teamSize: "3-9", tours: { a: { status: "completed", at: "x" }, b: { status: "skipped", at: "x" } } }) })
+      .where(eq(schema.memberships.id, "m-ann"));
+  });
+
+  it("adds usage aggregates, the signup profile, socials and per-person activity", async () => {
+    const plan = (await buildSyncPlan(CO))!;
+    expect(plan.company).toMatchObject({
+      arriveping_jobs_total: "2", // sample and deleted jobs excluded, other tenants never counted
+      arriveping_jobs_30d: "1",
+      arriveping_jobs_completed: "1",
+      arriveping_invoices_paid: "1",
+      arriveping_pending_invites: "1",
+      arriveping_integrations: "quickbooks",
+      arriveping_review_count: "2",
+      arriveping_avg_rating: "4.5",
+      arriveping_customer_count: "1",
+      arriveping_last_active: "2026-10-17",
+      arriveping_reported_technicians: "6",
+      arriveping_reported_vehicles: "5",
+      arriveping_reported_jobs_per_day: "12",
+      arriveping_maintenance_plans: "true",
+      arriveping_emergency_premium: "false",
+      linkedin_company_page: "https://linkedin.com/company/prairie",
+      facebook_company_page: "https://facebook.com/prairie",
+      twitterhandle: "prairiehvac",
+    });
+    // scouted staff names and other profile internals are not sent
+    expect(JSON.stringify(plan.company)).not.toContain("Secret");
+    const ann = plan.contacts.find((c) => c.email.startsWith("ann"))!;
+    expect(ann.props).toMatchObject({
+      arriveping_last_active: "2026-10-17",
+      arriveping_guide_persona: "owner",
+      arriveping_guide_goal: "eta",
+      arriveping_guide_team_size: "3-9",
+      arriveping_guide_chapters_done: "1",
+    });
+    // every new arriveping_* property is declared
+    const declared = new Set(CUSTOM_PROPERTIES.companies.map((p) => p.name));
+    for (const k of Object.keys(plan.company)) if (k.startsWith("arriveping_")) expect(declared.has(k)).toBe(true);
+    const cdeclared = new Set(CUSTOM_PROPERTIES.contacts.map((p) => p.name));
+    for (const k of Object.keys(ann.props)) if (k.startsWith("arriveping_")) expect(cdeclared.has(k)).toBe(true);
+  });
+});
+
+describe("which tenants sync", () => {
+  it("never auto-syncs an internal tenant, even one already linked", async () => {
+    await db.insert(schema.companies).values([{ id: "linked-demo", name: "Linked Demo", isInternal: true, hubspotCompanyId: "999", billingCustomerId: "cus_x" } as any]);
+    expect(await isSyncedCompany("linked-demo")).toBe(false);
+    calls = [];
+    await sweepHubspotSync();
+    expect(JSON.stringify(calls)).not.toContain("linked-demo");
+    process.env.HUBSPOT_SYNC_ALL = "1";
+    try {
+      expect(await isSyncedCompany("linked-demo")).toBe(false);
+      calls = [];
+      await sweepHubspotSync();
+      expect(JSON.stringify(calls)).not.toContain("linked-demo");
+    } finally {
+      delete process.env.HUBSPOT_SYNC_ALL;
+    }
+  });
+
+  it("HUBSPOT_SYNC_ALL adds hand-made tenants but never internal (demo/test) ones", async () => {
+    await db.insert(schema.companies).values([
+      { id: "hand-made", name: "Hand Made Co" } as any,
+      { id: "demo-co", name: "Demo Co", isInternal: true } as any,
+    ]);
+    expect(await isSyncedCompany("hand-made")).toBe(false);
+    process.env.HUBSPOT_SYNC_ALL = "1";
+    try {
+      expect(await isSyncedCompany("hand-made")).toBe(true);
+      expect(await isSyncedCompany("demo-co")).toBe(false);
+    } finally {
+      delete process.env.HUBSPOT_SYNC_ALL;
+    }
   });
 });

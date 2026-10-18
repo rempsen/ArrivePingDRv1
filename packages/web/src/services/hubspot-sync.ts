@@ -28,9 +28,10 @@
  * Config: HUBSPOT_ACCESS_TOKEN (a Private App token with crm.objects.
  * companies/contacts/deals read+write and crm.schemas.* write), optional
  * HUBSPOT_OWNER_ID (owner stamped on new records), HUBSPOT_SYNC_ALL=1 to
- * include every tenant. Missing token = feature off, silently.
+ * include hand-provisioned tenants too. Tenants flagged internal (demo/test)
+ * never sync automatically. Missing token = feature off, silently.
  */
-import { eq, isNotNull, or } from "drizzle-orm";
+import { and, avg, count, eq, gte, inArray, isNotNull, isNull, max, min, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { db, sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
@@ -38,6 +39,7 @@ import * as schema from "../api/database/schema";
 import { log } from "../api/lib/logger";
 import { monthlyPrice } from "../web/site/config";
 import { industryLabel } from "./industry-presets";
+import { parseOnboarding } from "../shared/onboarding";
 
 export const HUBSPOT_API = "https://api.hubapi.com";
 const APP_URL = (process.env.APP_URL ?? "https://arriveping.com").replace(/\/$/, "");
@@ -130,12 +132,41 @@ export const CUSTOM_PROPERTIES: Record<"companies" | "contacts" | "deals", PropD
     { name: "arriveping_services", label: "ArrivePing services", type: "string", fieldType: "textarea" },
     { name: "arriveping_service_area", label: "ArrivePing service area", type: "string", fieldType: "text" },
     { name: "arriveping_hours", label: "ArrivePing hours", type: "string", fieldType: "textarea" },
+    // What they told us at signup (onboarding qualifying questions)
+    { name: "arriveping_reported_technicians", label: "ArrivePing technicians (self-reported)", type: "number", fieldType: "number" },
+    { name: "arriveping_reported_vehicles", label: "ArrivePing vehicles (self-reported)", type: "number", fieldType: "number" },
+    { name: "arriveping_reported_jobs_per_day", label: "ArrivePing jobs per day (self-reported)", type: "number", fieldType: "number" },
+    { name: "arriveping_maintenance_plans", label: "ArrivePing offers maintenance plans", ...yesNo },
+    { name: "arriveping_emergency_premium", label: "ArrivePing charges an emergency premium", ...yesNo },
+    // How they actually use the product (aggregates only; never their customers' details)
+    { name: "arriveping_plan", label: "ArrivePing plan", type: "string", fieldType: "text" },
+    { name: "arriveping_payments_enabled", label: "ArrivePing card payments enabled", ...yesNo },
+    { name: "arriveping_jobs_total", label: "ArrivePing jobs (all time)", type: "number", fieldType: "number" },
+    { name: "arriveping_jobs_30d", label: "ArrivePing jobs (last 30 days)", type: "number", fieldType: "number" },
+    { name: "arriveping_jobs_completed", label: "ArrivePing jobs completed", type: "number", fieldType: "number" },
+    { name: "arriveping_first_job", label: "ArrivePing first job created", type: "date", fieldType: "date" },
+    { name: "arriveping_last_job", label: "ArrivePing last job created", type: "date", fieldType: "date" },
+    { name: "arriveping_customer_count", label: "ArrivePing customers on file", type: "number", fieldType: "number" },
+    { name: "arriveping_invoices_paid", label: "ArrivePing invoices paid", type: "number", fieldType: "number" },
+    { name: "arriveping_pending_invites", label: "ArrivePing pending team invites", type: "number", fieldType: "number" },
+    { name: "arriveping_integrations", label: "ArrivePing connected integrations", type: "string", fieldType: "text" },
+    { name: "arriveping_forms_active", label: "ArrivePing active booking forms", type: "number", fieldType: "number" },
+    { name: "arriveping_form_submissions_30d", label: "ArrivePing form submissions (last 30 days)", type: "number", fieldType: "number" },
+    { name: "arriveping_review_count", label: "ArrivePing customer reviews", type: "number", fieldType: "number" },
+    { name: "arriveping_avg_rating", label: "ArrivePing average review rating", type: "number", fieldType: "number" },
+    { name: "arriveping_last_active", label: "ArrivePing last active (any staff)", type: "date", fieldType: "date" },
   ],
   contacts: [
     { name: "arriveping_company_id", label: "ArrivePing tenant id", type: "string", fieldType: "text" },
     { name: "arriveping_user_id", label: "ArrivePing user id", type: "string", fieldType: "text" },
     { name: "arriveping_role", label: "ArrivePing role", type: "string", fieldType: "text" },
     { name: "arriveping_member_status", label: "ArrivePing membership status", type: "string", fieldType: "text" },
+    { name: "arriveping_last_active", label: "ArrivePing last active", type: "date", fieldType: "date" },
+    { name: "arriveping_joined", label: "ArrivePing joined", type: "date", fieldType: "date" },
+    { name: "arriveping_guide_persona", label: "ArrivePing guide: role", type: "string", fieldType: "text" },
+    { name: "arriveping_guide_goal", label: "ArrivePing guide: main goal", type: "string", fieldType: "text" },
+    { name: "arriveping_guide_team_size", label: "ArrivePing guide: team size", type: "string", fieldType: "text" },
+    { name: "arriveping_guide_chapters_done", label: "ArrivePing guide chapters completed", type: "number", fieldType: "number" },
     // Set on contacts created from the website's "contact me" choice (services/contact-request.ts).
     { name: "arriveping_lead_source", label: "ArrivePing lead source", type: "string", fieldType: "text" },
   ],
@@ -235,6 +266,136 @@ function splitName(u: { name: string; firstName: string | null; lastName: string
   return [parts[0] ?? "", parts.slice(1).join(" ")];
 }
 
+/* ------------------------------------------------------------ usage */
+
+/**
+ * How a tenant actually uses ArrivePing, as aggregates. Deliberately counts
+ * and dates only: a tenant's own customers (names, addresses, jobs) are their
+ * data, not NVC360's, and never leave the product. Each metric is read on its
+ * own and skipped if its query fails, so one missing table never blocks a sync.
+ */
+export interface TenantUsage {
+  jobsTotal?: number;
+  jobs30d?: number;
+  jobsCompleted?: number;
+  firstJob?: Date | null;
+  lastJob?: Date | null;
+  customers?: number;
+  invoicesPaid?: number;
+  pendingInvites?: number;
+  integrations?: string[];
+  formsActive?: number;
+  formSubmissions30d?: number;
+  reviews?: number;
+  avgRating?: number | null;
+  lastActiveByUser?: Map<string, Date>;
+}
+
+async function metric<T>(name: string, fn: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch (e) {
+    log.warn("hubspot: usage metric skipped", { metric: name, err: (e as Error).message.slice(0, 160) });
+    return undefined;
+  }
+}
+
+export async function collectUsage(companyId: string, staffUserIds: string[], now = new Date()): Promise<TenantUsage> {
+  const t = tdb(companyId);
+  const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const B = schema.bookings;
+  const real = and(eq(B.isSample, false), isNull(B.deletedAt));
+  const u: TenantUsage = {};
+
+  const jobs = await metric("jobs", () =>
+    t.transaction(async (tx) => {
+      const [r] = await tx
+        .select({ n: count(), first: min(B.createdAt), last: max(B.createdAt) })
+        .from(B)
+        .where(t.scope(B, real));
+      const [r30] = await tx.select({ n: count() }).from(B).where(t.scope(B, and(real, gte(B.createdAt, since))));
+      const [done] = await tx.select({ n: count() }).from(B).where(t.scope(B, and(real, eq(B.status, "completed"))));
+      return { total: Number(r?.n ?? 0), first: r?.first ?? null, last: r?.last ?? null, d30: Number(r30?.n ?? 0), done: Number(done?.n ?? 0) };
+    }),
+  );
+  if (jobs) Object.assign(u, { jobsTotal: jobs.total, jobs30d: jobs.d30, jobsCompleted: jobs.done, firstJob: jobs.first, lastJob: jobs.last });
+
+  u.customers = await metric("customers", async () =>
+    (await t.select(schema.memberships)).filter((m) => m.role === "customer" && m.status !== "removed").length,
+  );
+  u.invoicesPaid = await metric("invoices", () =>
+    t.transaction(async (tx) => Number((await tx.select({ n: count() }).from(schema.invoices).where(t.scope(schema.invoices, eq(schema.invoices.status, "paid"))))[0]?.n ?? 0)),
+  );
+  u.pendingInvites = await metric("invites", async () => (await t.select(schema.techInvites, eq(schema.techInvites.status, "pending"))).length);
+  u.integrations = await metric("integrations", async () =>
+    [...new Set((await t.select(schema.integrations, eq(schema.integrations.status, "connected"))).map((i) => i.provider))].sort(),
+  );
+  u.formsActive = await metric("forms", async () => (await t.select(schema.intakeForms, eq(schema.intakeForms.active, true))).length);
+  u.formSubmissions30d = await metric("form submissions", () =>
+    t.transaction(async (tx) =>
+      Number((await tx.select({ n: count() }).from(schema.intakeSubmissions).where(t.scope(schema.intakeSubmissions, gte(schema.intakeSubmissions.createdAt, since))))[0]?.n ?? 0),
+    ),
+  );
+  const rev = await metric("reviews", () =>
+    t.transaction(async (tx) => (await tx.select({ n: count(), a: avg(schema.reviews.rating) }).from(schema.reviews).where(t.scope(schema.reviews)))[0]),
+  );
+  if (rev) {
+    u.reviews = Number(rev.n ?? 0);
+    u.avgRating = rev.a == null ? null : Math.round(Number(rev.a) * 10) / 10;
+  }
+  // Sessions live in the auth schema (not tenant-owned); read only the latest
+  // activity of this tenant's own staff, by user id.
+  if (staffUserIds.length) {
+    u.lastActiveByUser = await metric("last active", async () => {
+      const rows = await sdb
+        .select({ userId: schema.session.userId, last: max(schema.session.updatedAt) })
+        .from(schema.session)
+        .where(inArray(schema.session.userId, staffUserIds))
+        .groupBy(schema.session.userId);
+      return new Map(rows.filter((r) => r.last).map((r) => [r.userId, r.last as Date]));
+    });
+  }
+  return u;
+}
+
+function num(n: number | null | undefined): string {
+  return n == null || Number.isNaN(n) ? "" : String(n);
+}
+function bool(b: boolean | null | undefined): string {
+  return b == null ? "" : b ? "true" : "false";
+}
+function jsonObj(s: string | null | undefined): Record<string, any> {
+  try {
+    const v = JSON.parse(s || "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+/** HubSpot's own social properties, from company_settings.socials. */
+function socialProps(socials: string | null | undefined): Props {
+  const s = jsonObj(socials);
+  const pick = (...keys: string[]) => keys.map((k) => s[k]).find((v) => typeof v === "string" && v.trim()) ?? "";
+  const twitter = String(pick("twitter", "x")).trim();
+  return {
+    linkedin_company_page: String(pick("linkedin")).trim(),
+    facebook_company_page: String(pick("facebook")).trim(),
+    // HubSpot wants the handle, not the URL
+    twitterhandle: twitter.replace(/^https?:\/\/(www\.)?(twitter|x)\.com\//i, "").replace(/^@/, "").split(/[/?]/)[0] ?? "",
+  };
+}
+
+/** The in-app Guide's answers (persona, goal, team size) and how far they got. */
+function guideProps(onboarding: string | null | undefined): Props {
+  const g = parseOnboarding(onboarding);
+  return {
+    arriveping_guide_persona: g.persona ?? "",
+    arriveping_guide_goal: g.goal ?? "",
+    arriveping_guide_team_size: g.teamSize ?? "",
+    arriveping_guide_chapters_done: String(Object.values(g.tours ?? {}).filter((c) => c?.status === "completed").length),
+  };
+}
+
 /** Everything HubSpot should know about a tenant, computed from the DB. */
 export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null> {
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
@@ -255,6 +416,12 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
   const website = settings?.website || "";
   const industry = co.industry === "other" ? co.industryOther || "Other" : industryLabel(co.industry) || co.industry;
   const nouns = settings ? `${settings.workerNoun} / ${settings.customerNoun} / ${settings.jobNoun}` : "";
+  const usage = await collectUsage(
+    companyId,
+    staff.map((m) => m.userId),
+  );
+  const q = jsonObj(settings?.qualifyingProfile);
+  const lastActive = usage.lastActiveByUser?.size ? new Date(Math.max(...[...usage.lastActiveByUser.values()].map((d) => d.getTime()))) : null;
 
   const company: Props = {
     name: co.name,
@@ -281,6 +448,28 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
     arriveping_services: jsonList(settings?.services ?? "").slice(0, 2000),
     arriveping_service_area: settings?.serviceArea || "",
     arriveping_hours: hoursText(settings?.hours ?? "").slice(0, 1000),
+    ...socialProps(settings?.socials),
+    arriveping_reported_technicians: typeof q.technicianCount === "number" ? String(q.technicianCount) : "",
+    arriveping_reported_vehicles: typeof q.vehicleCount === "number" ? String(q.vehicleCount) : "",
+    arriveping_reported_jobs_per_day: typeof q.jobsPerDay === "number" ? String(q.jobsPerDay) : "",
+    arriveping_maintenance_plans: typeof q.offersMaintenancePlans === "boolean" ? bool(q.offersMaintenancePlans) : "",
+    arriveping_emergency_premium: typeof q.offersEmergencyPremium === "boolean" ? bool(q.offersEmergencyPremium) : "",
+    arriveping_plan: co.plan || "",
+    arriveping_payments_enabled: bool(co.stripeChargesEnabled),
+    arriveping_jobs_total: num(usage.jobsTotal),
+    arriveping_jobs_30d: num(usage.jobs30d),
+    arriveping_jobs_completed: num(usage.jobsCompleted),
+    arriveping_first_job: dateProp(usage.firstJob),
+    arriveping_last_job: dateProp(usage.lastJob),
+    arriveping_customer_count: num(usage.customers),
+    arriveping_invoices_paid: num(usage.invoicesPaid),
+    arriveping_pending_invites: num(usage.pendingInvites),
+    arriveping_integrations: usage.integrations ? usage.integrations.join(", ") || "none" : "",
+    arriveping_forms_active: num(usage.formsActive),
+    arriveping_form_submissions_30d: num(usage.formSubmissions30d),
+    arriveping_review_count: num(usage.reviews),
+    arriveping_avg_rating: num(usage.avgRating),
+    arriveping_last_active: dateProp(lastActive),
   };
   const isCustomer = co.billingStatus === "active" || co.billingStatus === "past_due";
   if (isCustomer) company.lifecyclestage = "customer";
@@ -308,6 +497,9 @@ export async function buildSyncPlan(companyId: string): Promise<SyncPlan | null>
       arriveping_user_id: u.id,
       arriveping_role: m.role,
       arriveping_member_status: m.status,
+      arriveping_last_active: dateProp(usage.lastActiveByUser?.get(u.id)),
+      arriveping_joined: dateProp(m.acceptedAt ?? m.createdAt),
+      ...guideProps(m.onboarding),
     };
     if (isCustomer) props.lifecyclestage = "customer";
     const onCreate: Props = { lifecyclestage: "lead", hs_lead_status: "New" };
@@ -476,12 +668,17 @@ const lastRun = new Map<string, number>();
 
 /** Is this tenant one we mirror automatically? */
 export async function isSyncedCompany(companyId: string): Promise<boolean> {
-  if (process.env.HUBSPOT_SYNC_ALL === "1") return true;
   const [co] = await db
-    .select({ a: schema.companies.hubspotCompanyId, b: schema.companies.billingCustomerId })
+    .select({ a: schema.companies.hubspotCompanyId, b: schema.companies.billingCustomerId, internal: schema.companies.isInternal })
     .from(schema.companies)
     .where(eq(schema.companies.id, companyId));
-  return Boolean(co && (co.a || co.b));
+  // A tenant a superadmin flagged internal (demo, test, our own sandboxes) is
+  // never synced automatically, even if it was linked before; a superadmin
+  // "Sync to HubSpot" (force) still can.
+  if (!co || co.internal) return false;
+  // HUBSPOT_SYNC_ALL=1 adds hand-provisioned customers.
+  if (process.env.HUBSPOT_SYNC_ALL === "1") return true;
+  return Boolean(co.a || co.b);
 }
 
 /**
@@ -513,8 +710,8 @@ export async function sweepHubspotSync(): Promise<{ checked: number; pushed: num
     .from(schema.companies)
     .where(
       process.env.HUBSPOT_SYNC_ALL === "1"
-        ? undefined
-        : or(isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId)),
+        ? eq(schema.companies.isInternal, false)
+        : and(eq(schema.companies.isInternal, false), or(isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId))),
     );
   for (const r of rows) {
     if (r.id === "default") continue;
