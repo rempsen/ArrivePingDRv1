@@ -50,6 +50,11 @@ describe("normalizeImportRow", () => {
     expect(normalizeImportRow("customer", { "Customer Type": "residential" }).customerType).toBe("one_time");
   });
 
+  it("keeps only the fields this kind of import has", () => {
+    expect(normalizeImportRow("customer", { Skills: "HVAC", "Hourly Rate": "28" })).toEqual({});
+    expect(normalizeImportRow("rider", { Company: "Acme", City: "Winnipeg", Name: "Alex" })).toEqual({ name: "Alex" });
+  });
+
   it("drops columns it doesn't know and blank cells", () => {
     expect(normalizeImportRow("customer", { "Balance Owing": "120.00", "Name": "  " })).toEqual({});
   });

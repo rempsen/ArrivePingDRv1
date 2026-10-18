@@ -160,7 +160,7 @@ export const articles: Article[] = [
       {
         type: "ul",
         items: [
-          "**Customers aren't contacted.** Importing doesn't send them a text or an email. They hear from you only when you book them a job.",
+          "**New customers aren't contacted.** Importing doesn't send them a text or an email; they hear from you when you book them a job. The one exception: someone who already has an ArrivePing account with another company gets an email asking them to join yours.",
           "**Technicians get a welcome email** with a link to set their password and get the app, the same as when you add one by hand. See [Invite your technicians](/support/invite-your-technicians).",
           "**No duplicates.** Someone whose email is already in your account is skipped, so you can upload the same file again after fixing a few rows.",
           "**Missing details are fine.** A row without an email still imports. Add the email later on the person's profile. A technician needs one before they can sign in.",

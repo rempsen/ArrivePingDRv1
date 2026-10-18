@@ -683,7 +683,7 @@ export const faqs = [
   },
   {
     q: "Can we bring over our existing customers and technicians?",
-    a: "Yes, all at once. Upload the CSV or Excel file you already have, from your old software or your own spreadsheet, or download our template, fill it in and upload it. Customers aren't contacted when they're imported, and technicians get an email to set their password. Prefer not to do it yourself? Send us the file and we'll import it for you.",
+    a: "Yes, all at once. Upload the CSV or Excel file you already have, from your old software or your own spreadsheet, or download our template, fill it in and upload it. New customers aren't contacted when they're imported, and technicians get an email to set their password. Prefer not to do it yourself? Send us the file and we'll import it for you.",
   },
   {
     q: "Does it replace our scheduling or invoicing tools?",

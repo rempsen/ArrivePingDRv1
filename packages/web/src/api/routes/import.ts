@@ -131,7 +131,11 @@ export function normalizeImportRow(type: ImportType, raw: Record<string, string>
     lookup.set(squash(col.key), col.key);
     lookup.set(squash(col.label), col.key);
   }
+  // Only the fields this import has (plus the name parts a full name is built
+  // from), so a column meant for another kind of import doesn't make a row.
+  const allowed = new Set([...TEMPLATE_COLUMNS[type].map((c) => c.key), "name", "firstName", "lastName"]);
   for (const [key, names] of Object.entries(COLUMN_ALIASES)) {
+    if (!allowed.has(key)) continue;
     for (const n of names) if (!lookup.has(squash(n))) lookup.set(squash(n), key);
   }
   const out: Record<string, string> = {};
