@@ -108,6 +108,8 @@ interface Headline {
   churned_prev: number;
   paying_start: number;
   paying_start_prev: number;
+  conversion_rate: number | null;
+  churn_rate: number | null;
   techs_per_account: number | null;
   techs_per_paying: number | null;
 }
@@ -1150,8 +1152,6 @@ function GrowthView({ qs, rangeLabel }: { qs: string; rangeLabel: string }) {
   };
   const weeks = wk.data?.weeks ?? [];
   const loading = !h;
-  const ended = h ? h.conversions + h.trials_lost : 0;
-  const churnRate = h && h.paying_start > 0 ? h.churned / h.paying_start : null;
   const caption = GROWTH_CHARTS.find((c) => c.value === chart)?.caption;
 
   return (
@@ -1177,7 +1177,7 @@ function GrowthView({ qs, rangeLabel }: { qs: string; rangeLabel: string }) {
         <Tile
           label="Trial-to-paid conversion"
           loading={loading}
-          value={ended ? fmt.pct(h!.conversions / ended) : "—"}
+          value={fmt.pct(h?.conversion_rate)}
           delta={delta("conversions")}
           sub={h && `${fmt.int(h.conversions)} converted · ${fmt.int(h.trials_lost)} lost`}
           sparkColor="#10b981"
@@ -1187,7 +1187,7 @@ function GrowthView({ qs, rangeLabel }: { qs: string; rangeLabel: string }) {
         <Tile
           label="Churn"
           loading={loading}
-          value={churnRate == null ? fmt.int(h?.churned) : fmt.pct(churnRate)}
+          value={fmt.pct(h?.churn_rate)}
           delta={delta("churned", false)}
           sub={h && `${fmt.int(h.churned)} of ${fmt.int(h.paying_start)} paying companies lost`}
           sparkColor="#f43f5e"

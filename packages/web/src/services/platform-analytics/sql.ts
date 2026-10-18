@@ -310,11 +310,21 @@ rv AS (
 ),
 ${HIST}`;
 
-const lifecycle = (from: string, to: string, suffix: string) => `(SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.trial_at")}) AS trial_starts${suffix},
-  (SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.paid_at", "lc.trial_at < lc.paid_at")}) AS conversions${suffix},
-  (SELECT COUNT(*)::int FROM lost WHERE ${inRange(from, to, "lost.lost_at")}) AS trials_lost${suffix},
-  (SELECT COUNT(DISTINCT churn_ev.company_id)::int FROM churn_ev WHERE ${inRange(from, to, "churn_ev.at", `churn_ev.company_id IN ${payingIds(from)}`)}) AS churned${suffix},
-  (SELECT COUNT(*)::int FROM ${payingIds(from)} pz) AS paying_start${suffix}`;
+const lifecycleSql = (from: string, to: string) => ({
+  trial_starts: `(SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.trial_at")})`,
+  conversions: `(SELECT COUNT(*)::int FROM lc WHERE ${inRange(from, to, "lc.paid_at", "lc.trial_at < lc.paid_at")})`,
+  trials_lost: `(SELECT COUNT(*)::int FROM lost WHERE ${inRange(from, to, "lost.lost_at")})`,
+  churned: `(SELECT COUNT(DISTINCT churn_ev.company_id)::int FROM churn_ev WHERE ${inRange(from, to, "churn_ev.at", `churn_ev.company_id IN ${payingIds(from)}`)})`,
+  paying_start: `(SELECT COUNT(*)::int FROM ${payingIds(from)} pz)`,
+});
+const lifecycle = (from: string, to: string, suffix: string) =>
+  Object.entries(lifecycleSql(from, to)).map(([k, v]) => `${v} AS ${k}${suffix}`).join(",\n  ");
+/** The period's conversion and churn as shares (null when there is nothing to divide by). */
+const lifecycleRates = () => {
+  const x = lifecycleSql("rng.t0", "rng.t1");
+  return `(${x.conversions}::float8 / NULLIF(${x.conversions} + ${x.trials_lost}, 0))::float8 AS conversion_rate,
+  (${x.churned}::float8 / NULLIF(${x.paying_start}, 0))::float8 AS churn_rate`;
+};
 
 const HEADLINE_COLUMNS = `rng.d0::text AS start_day,
   rng.d1::text AS end_day,
@@ -363,6 +373,7 @@ const HEADLINE_COLUMNS = `rng.d0::text AS start_day,
   (SELECT top.n::float8 / NULLIF((SELECT COUNT(*) FROM bk WHERE bk.created_at >= rng.t0 AND bk.created_at < rng.t1), 0) FROM top) AS top_tenant_share,
   ${lifecycle("rng.t0", "rng.t1", "")},
   ${lifecycle("rng.p0", "rng.t0", "_prev")},
+  ${lifecycleRates()},
   (SELECT COALESCE(SUM(rd.techs), 0)::float8 FROM rd JOIN co ON co.id = rd.company_id WHERE co.status <> 'closed')
     / NULLIF((SELECT COUNT(*) FROM co WHERE co.status <> 'closed'), 0) AS techs_per_account,
   (SELECT COALESCE(SUM(rd.techs), 0)::float8 FROM rd JOIN pl ON pl.id = rd.company_id WHERE pl.billing_status IN ('active', 'past_due'))

@@ -97,6 +97,9 @@ export interface Headline {
   /** Companies paying when the period began (the churn rate's base). */
   paying_start: number;
   paying_start_prev: number;
+  /** conversions / (conversions + trials_lost), and churned / paying_start; null with nothing to divide. */
+  conversion_rate: number | null;
+  churn_rate: number | null;
   /** Approved technicians per open company, and per paying company, today. */
   techs_per_account: number | null;
   techs_per_paying: number | null;

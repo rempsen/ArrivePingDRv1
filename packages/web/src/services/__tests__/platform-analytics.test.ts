@@ -231,6 +231,8 @@ describe("trials, conversion, churn and technicians", () => {
     expect([h.conversions, h.conversions_prev]).toEqual([2, 0]); // Acme and Flash
     expect(h.trials_lost).toBe(1); // Gone, deleted on trial (Flash paid first)
     expect([h.churned, h.paying_start]).toEqual([1, 1]); // Closed was paying on Sep 1; Flash wasn't, so it isn't churn here
+    expect(h.conversion_rate).toBeCloseTo(2 / 3, 5);
+    expect(h.churn_rate).toBe(1);
     expect(h.techs_per_account).toBeCloseTo(1, 5); // 2 technicians, 2 open companies
     expect(h.techs_per_paying).toBeCloseTo(2, 5);
     const k = A.kpisFrom(h);
