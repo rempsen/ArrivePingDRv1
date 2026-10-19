@@ -8,6 +8,9 @@
  *   POST   /directory/properties      create one
  *   PATCH  /directory/properties/:id  rename, move, change manager or notes
  *   DELETE /directory/properties/:id  remove (residents become unassigned)
+ *   GET    /directory/ask             { available }: is the AI reading on?
+ *   POST   /directory/ask             a question → filter + answer, or a filter
+ *                                     sent back to re-sort / page that answer
  *
  * Office access (lib/office-access.ts): reading is clients:view, assigning is
  * clients:edit, properties follow the clients module. Rules live in
@@ -34,6 +37,8 @@ import {
   updateProperty,
 } from "../../services/directory";
 import type { AppEnv } from "../env";
+import { ASK_LIMITS, DirectoryFilter } from "../../shared/directory-ask";
+import { askDirectory, chipsForFilter, companyNouns, directoryAskAvailable, runDirectoryFilter } from "../../services/directory-ask";
 
 type SessionUser = { id: string; name?: string };
 
@@ -44,6 +49,15 @@ const PropertyCreate = z.object({
   managerId: id("Manager").nullable().optional(),
 });
 const PropertyPatch = PropertyCreate.partial().refine((b) => Object.keys(b).length > 0, { error: "Nothing to update" });
+const AskBody = z
+  .object({
+    question: z.string().trim().min(1).max(ASK_LIMITS.question).optional(),
+    filter: DirectoryFilter.optional(),
+    page: z.number().int().min(1).max(100_000).optional(),
+    pageSize: z.number().int().min(1).max(500).optional(),
+    withIds: z.boolean().optional(),
+  })
+  .refine((b) => !!b.question !== !!b.filter, { error: "Send a question or a filter" });
 const AssignBody = z.object({
   userIds: idList("People", 5000),
   propertyId: id("Property").nullable(),
@@ -132,6 +146,24 @@ export const directoryRoutes = new Hono<AppEnv>()
     } catch (e) {
       return fail(c, e);
     }
+  })
+  .get("/ask", requireAdmin, (c) => c.json({ available: directoryAskAvailable() }, 200))
+  .post("/ask", requireAdmin, jsonBody(AskBody), async (c) => {
+    const cid = tenantId(c);
+    const me = c.get("user") as SessionUser;
+    const body = c.req.valid("json");
+    const nouns = await companyNouns(cid);
+    if (body.question) {
+      const out = await askDirectory(cid, body.question, { userId: me.id, nouns, page: body.page, pageSize: body.pageSize, abortSignal: c.req.raw.signal });
+      return c.json(
+        { ...out.result, ask: { question: body.question, filter: out.filter, chips: out.chips, summary: out.summary, notes: out.notes, usedAI: out.usedAI } },
+        200,
+      );
+    }
+    const filter = body.filter!;
+    const result = await runDirectoryFilter(cid, filter, { page: body.page, pageSize: body.pageSize, withIds: body.withIds });
+    const chips = await chipsForFilter(cid, filter, nouns);
+    return c.json({ ...result, ask: { question: "", filter, chips, summary: "", notes: [] as string[], usedAI: false } }, 200);
   })
   .delete("/properties/:id", requireAdmin, async (c) => {
     const cid = tenantId(c);

@@ -37,6 +37,8 @@ import {
   ArrowUp,
   ArrowDown,
   Building2,
+  Sparkles,
+  Info,
 } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
 import {
@@ -48,6 +50,7 @@ import {
   type DirectorySort,
   type SortDir,
 } from "../../../shared/directory-query";
+import type { DirectoryFilter } from "../../../shared/directory-ask";
 import {
   DirectoryProperties,
   invalidateDirectory,
@@ -102,6 +105,9 @@ const EMPTY_ADD_FORM: NewUserForm = {
 };
 
 type Tab = DirectoryKind | "properties";
+
+/** An AI search answer being shown: the question, and the filter it became. */
+type AskState = { question: string; filter: DirectoryFilter; summary: string; notes: string[]; usedAI: boolean };
 
 /** The import each tab offers. */
 const IMPORT_FOR_TAB: Record<Tab, ImportType | undefined> = {
@@ -173,6 +179,8 @@ export default function AdminClients() {
   const [detail, setDetail] = useState<DirectoryRow | null>(null);
   const [err, setErr] = useState("");
   const [form, setForm] = useState({ ...EMPTY_ADD_FORM });
+  const [ask, setAsk] = useState<AskState | null>(null);
+  const [askErr, setAskErr] = useState("");
 
   // Type, then wait a moment: one query per pause, not per keystroke.
   useEffect(() => {
@@ -180,9 +188,10 @@ export default function AdminClients() {
     return () => clearTimeout(t);
   }, [qInput]);
 
+  // An AI answer's own order and grouping aren't the viewer's saved view.
   useEffect(() => {
-    saveView({ groupBy, sort, dir, pageSize });
-  }, [groupBy, sort, dir, pageSize]);
+    if (!ask) saveView({ groupBy, sort, dir, pageSize });
+  }, [groupBy, sort, dir, pageSize, ask]);
 
   // A new filter is a new list: back to page 1, and nothing hidden stays selected.
   useEffect(() => {
@@ -206,10 +215,63 @@ export default function AdminClients() {
 
   const directory = useQuery({
     queryKey: ["directory", params],
+    enabled: !ask,
     placeholderData: keepPreviousData,
     queryFn: async () => ok(await api.directory.$get({ query: params })),
   });
   const props = useDirectoryProperties();
+
+  // An AI answer re-runs its filter (never the model) to sort, group or page.
+  const askFilter: DirectoryFilter | null = ask
+    ? { ...ask.filter, kind: peopleTab, sort, dir, groupBy: params.groupBy as DirectoryGroup }
+    : null;
+  const askKey = (f: DirectoryFilter | null, pg: number, size: number) => ["directory", "ask", f, pg, size];
+  const asked = useQuery({
+    queryKey: askKey(askFilter, page, pageSize),
+    enabled: !!askFilter,
+    placeholderData: keepPreviousData,
+    queryFn: async () => ok(await api.directory.ask.$post({ json: { filter: askFilter!, page, pageSize } })),
+  });
+  const askAvailable = useQuery({
+    queryKey: ["directory-ask-available"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => (await ok(await api.directory.ask.$get())).available,
+  });
+
+  const runAsk = useMutation({
+    mutationFn: async (question: string) => ok(await api.directory.ask.$post({ json: { question, pageSize } })),
+    onSuccess: (data, question) => {
+      const f = data.ask.filter;
+      setAskErr("");
+      setTab(f.kind);
+      setSort(f.sort);
+      setDir(f.dir);
+      setGroupBy(f.groupBy);
+      setPropertyId("");
+      setManagerId("");
+      setPage(1);
+      setAsk({ question, filter: f, summary: data.ask.summary, notes: data.ask.notes, usedAI: data.ask.usedAI });
+      // The answer is already here: seed the re-run query so it isn't fetched again.
+      const staff = f.kind === "field" || f.kind === "office";
+      const g = staff && (f.groupBy === "property" || f.groupBy === "manager") ? "none" : f.groupBy;
+      qc.setQueryData(askKey({ ...f, groupBy: g }, 1, pageSize), data);
+    },
+    onError: (e: Error) => setAskErr(e.message || "Couldn't search just now"),
+  });
+  const submitAsk = () => {
+    const question = qInput.trim();
+    if (question.length >= 2 && !runAsk.isPending) runAsk.mutate(question);
+  };
+  const clearAsk = () => {
+    setAsk(null);
+    setAskErr("");
+    setQInput("");
+    setQ("");
+    const v = loadView();
+    setSort(v.sort ?? "name");
+    setDir(v.dir ?? "asc");
+    setGroupBy(v.groupBy ?? "none");
+  };
 
   const create = useMutation({
     mutationFn: async () => {
@@ -242,7 +304,10 @@ export default function AdminClients() {
   });
 
   const selectAllMatching = useMutation({
-    mutationFn: async () => ok(await api.directory.$get({ query: { ...params, page: "1", withIds: "1" } })),
+    mutationFn: async () =>
+      askFilter
+        ? ok(await api.directory.ask.$post({ json: { filter: askFilter, page: 1, pageSize, withIds: true } }))
+        : ok(await api.directory.$get({ query: { ...params, page: "1", withIds: "1" } })),
     onSuccess: (r) => setSelected(new Set(r.ids ?? [])),
   });
 
@@ -275,18 +340,19 @@ export default function AdminClients() {
               },
             };
 
-  if (directory.isLoading && !directory.data) return <FullLoader label="Loading directory…" />;
-  const result = directory.data;
+  if (!ask && directory.isLoading && !directory.data) return <FullLoader label="Loading directory…" />;
+  const result = ask ? asked.data : directory.data;
+  const fetching = ask ? asked.isFetching && asked.isPlaceholderData : directory.isFetching && directory.isPlaceholderData;
   const rows = result?.rows ?? [];
   const kinds = result?.facets.kinds ?? { all: 0, customer: 0, field: 0, office: 0 };
-  const propertyCount = props.data?.properties.length ?? result?.propertyCount ?? 0;
+  const propertyCount = props.data?.properties.length ?? directory.data?.propertyCount ?? 0;
   const effectiveGroup = (result?.groupBy ?? "none") as DirectoryGroup;
   const groupInfo = new Map((result?.groups ?? []).map((g) => [g.key, g]));
   const showPlacement = tab === "all" || tab === "customer";
   const selectable = (r: DirectoryRow) => r.kind === "customer";
   const pageSelectable = rows.filter(selectable);
   const allOnPage = pageSelectable.length > 0 && pageSelectable.every((r) => selected.has(r.id));
-  const filtersOn = !!(propertyId || managerId || q);
+  const filtersOn = !!(propertyId || managerId || q || ask);
 
   // Property and manager pickers: what's in this tab and search, plus whatever
   // is picked (a property with nobody in it yet still shows its name).
@@ -378,7 +444,7 @@ export default function AdminClients() {
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand/15 text-xs font-bold text-cyan-glow">
               {r.name?.[0]?.toUpperCase() ?? "U"}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 max-w-[52vw] md:max-w-none">
               <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
                 <span className="truncate">{r.name || r.email}</span>
                 {r.status === "invited" && <span className="rounded-full bg-cyan-glow/10 px-1.5 py-px text-[10px] font-semibold text-cyan-glow">Invited</span>}
@@ -512,18 +578,42 @@ export default function AdminClients() {
       ) : (
         <>
           <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative lg:w-80">
+            {/* Typing searches as you go; Enter or Ask reads it as a question. */}
+            <form
+              className="relative lg:w-[30rem]"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitAsk();
+              }}
+            >
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden />
               <input
-                aria-label="Search the directory"
+                aria-label="Search the directory, or ask a question"
                 value={qInput}
-                onChange={(e) => setQInput(e.target.value)}
-                placeholder={showPlacement ? "Search name, phone, unit, property…" : "Search name, email or phone…"}
-                className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
+                maxLength={300}
+                onChange={(e) => {
+                  setQInput(e.target.value);
+                  // Editing the question goes back to searching as you type.
+                  if (ask) setAsk(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && (ask || qInput)) clearAsk();
+                }}
+                placeholder={showPlacement ? "Search, or ask: “Maple Court residents with open requests”" : "Search, or ask a question…"}
+                className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-24 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
               />
-            </div>
+              <button
+                type="submit"
+                disabled={qInput.trim().length < 2 || runAsk.isPending}
+                title={askAvailable.data ? "Ask in plain words (AI)" : "Ask in plain words (keyword reading: AI search is off)"}
+                className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full bg-brand/15 px-3 py-1.5 text-xs font-semibold text-cyan-glow transition hover:bg-brand/25 disabled:opacity-40"
+              >
+                <Sparkles className={`h-3.5 w-3.5 ${runAsk.isPending ? "animate-pulse" : ""}`} aria-hidden />
+                {runAsk.isPending ? "Asking…" : "Ask"}
+              </button>
+            </form>
             <div className="flex flex-wrap items-center gap-2">
-              {showPlacement && (
+              {showPlacement && !ask && (
                 <>
                   <select aria-label="Filter by property" className={selectCls} value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
                     <option value="">All properties</option>
@@ -572,7 +662,7 @@ export default function AdminClients() {
                 {showPlacement && <option value="manager">Group by manager</option>}
                 <option value="role">Group by type</option>
               </select>
-              {filtersOn && (
+              {filtersOn && !ask && (
                 <button
                   onClick={() => {
                     setQInput("");
@@ -587,6 +677,46 @@ export default function AdminClients() {
               )}
             </div>
           </div>
+
+          {askErr && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{askErr}</p>}
+          {ask && (
+            <div className="mb-3 rounded-xl border border-brand/30 bg-brand/[0.06] px-4 py-3" aria-live="polite">
+              <div className="flex flex-wrap items-start gap-2">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-cyan-glow" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-white">
+                    {ask.summary || `“${ask.question}”`}
+                    <span className="ml-2 text-xs font-normal text-slate-400">
+                      {(result?.total ?? 0).toLocaleString()} {(result?.total ?? 0) === 1 ? "match" : "matches"}
+                    </span>
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(asked.data?.ask.chips ?? []).map((chip) => (
+                      <span key={chip} className="rounded-full border border-white/10 bg-ink-2 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+                        {chip}
+                      </span>
+                    ))}
+                    {!ask.usedAI && (
+                      <span
+                        title="AI search is off or busy right now, so the question was read by its keywords and property and team names."
+                        className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
+                      >
+                        Keyword reading
+                      </span>
+                    )}
+                  </div>
+                  {ask.notes.map((n) => (
+                    <p key={n} className="mt-1.5 flex items-center gap-1 text-xs text-amber-300">
+                      <Info className="h-3 w-3 shrink-0" aria-hidden /> {n}
+                    </p>
+                  ))}
+                </div>
+                <button onClick={clearAsk} className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-slate-400 hover:text-white">
+                  <X className="h-3.5 w-3.5" aria-hidden /> Clear
+                </button>
+              </div>
+            </div>
+          )}
 
           {selected.size > 0 && (
             <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand/40 bg-ink-2/95 px-4 py-2.5 text-sm shadow-xl backdrop-blur">
@@ -609,7 +739,7 @@ export default function AdminClients() {
             </div>
           )}
 
-          <div className={`nvc-card overflow-hidden transition-opacity ${directory.isFetching && directory.isPlaceholderData ? "opacity-70" : ""}`}>
+          <div className={`nvc-card overflow-hidden transition-opacity ${fetching || runAsk.isPending ? "opacity-70" : ""}`}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
