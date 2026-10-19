@@ -19,6 +19,7 @@
  * hours and the delivery log all treat a custom milestone like a built-in one.
  * Sample jobs get the timeline line and nothing else (fireCustomEvent).
  */
+import { hasDesign } from "../shared/email/design";
 import { sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
@@ -64,13 +65,7 @@ export type MilestoneMessages = Partial<Record<MilestoneRecipient, { on: boolean
 
 /** Whether a rule has a branded email designed (it can go out with no plain-text message). */
 export function hasEmailDesign(emailDesign: string | null | undefined): boolean {
-  if (!emailDesign) return false;
-  try {
-    const d = JSON.parse(emailDesign);
-    return Array.isArray(d) && d.length > 0;
-  } catch {
-    return false;
-  }
+  return hasDesign(emailDesign);
 }
 
 /** Keep only the field the trigger uses, so a milestone never carries a stale one. */

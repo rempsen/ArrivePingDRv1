@@ -1181,6 +1181,9 @@ export const notificationChannels = pgTable("notification_channels", {
   emailBrandColor: text("email_brand_color").notNull().default("#06B6D4"), // header gradient + button color
   emailHeaderStyle: text("email_header_style").notNull().default("gradient"), // gradient | solid | minimal
   emailBgColor: text("email_bg_color").notNull().default("#f1f5f9"), // outer page background
+  // Company email theme (JSON, shared/email/design.ts EmailTheme): font, corners,
+  // button shape, layout, header, logo alignment, social links. "" = defaults.
+  emailTheme: text("email_theme").notNull().default(""),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   createdAt: now(),
 }, (t) => ({

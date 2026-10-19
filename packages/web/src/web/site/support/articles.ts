@@ -841,6 +841,32 @@ export const articles: Article[] = [
     ],
   },
   {
+    slug: "design-your-emails",
+    title: "Design your notification emails",
+    summary: "Lay out any notification email with arrival times, the technician card and buttons, and set one look for every email you send.",
+    category: "customer-notifications",
+    updated: U,
+    keywords: ["email design", "email designer", "branded email", "html email", "logo", "theme", "template", "eta", "technician card", "columns", "social links", "font", "colour", "color"],
+    blocks: [
+      { type: "p", text: "Every email goes out in your branded frame: your logo, colours and footer. A **simple message** puts the message text inside that frame. A **designed email** lets you lay it out yourself." },
+      { type: "h3", text: "Design one email" },
+      {
+        type: "ol",
+        items: [
+          "Open **Setup → Notifications**, find the event (for example **En route**) and choose **Edit**.",
+          "Under **Email format**, choose **Designed email**. The email designer opens with a ready-made layout for that message.",
+          "Click any part of the email to change it in the panel on the right. Drag blocks from the left onto the email, or drag the handle on a block to move it. **Undo** works for everything.",
+          "On the **Email** tab, set the subject and the **preview text** (the grey line after the subject in the inbox). Pick a different starting point under **Templates**, or write a sentence under **Describe it** and let AI draft it.",
+          "Use **Phone** to see it on a small screen and **Preview** for the exact email. **Send a test** to your own inbox, then choose **Save & apply**.",
+        ],
+      },
+      { type: "p", text: "Blocks include headings, text with bold, links and lists, buttons, pictures, a details table, a highlighted note, a big **ETA banner**, a **technician card** with their photo and name, two columns that stack on phones, and your social links. Fill-ins like the customer's first name and the arrival time are added with **Insert**." },
+      { type: "h3", text: "One look for every email" },
+      { type: "p", text: "The **Theme** tab (also on **Channels → Email look**) sets your logo, brand colour, header style, font, corners, button shape, background and social links. It applies to every email your company sends, designed or simple. Pale brand colours automatically get dark buttons so they stay readable." },
+      { type: "p", text: "Logos should be PNG or JPG: Gmail and Outlook don't show SVG images." },
+    ],
+  },
+  {
     slug: "sms-consent",
     title: "SMS consent and Canadian CASL rules",
     summary: "Appointment updates are transactional messages about a service the customer booked; keep promotions in a separate, opted-in channel.",

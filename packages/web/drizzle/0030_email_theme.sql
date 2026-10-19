@@ -1,0 +1,1 @@
+ALTER TABLE "notification_channels" ADD COLUMN "email_theme" text DEFAULT '' NOT NULL;

@@ -12,7 +12,8 @@ import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { eq, and } from "drizzle-orm";
 import { sendEmail, PLATFORM_FROM } from "./email";
-import { renderEmailDesign, designToText, logoDims, type EmailBlock, type EmailBrand } from "./email-render";
+import { renderEmail, renderPlainMessage, type EmailBrand } from "../shared/email/render";
+import { EMAIL_SAMPLE_VARS, designToText, normalizeDesign, normalizeTheme, parseDesign, type EmailTheme } from "../shared/email/design";
 import { verifiedDomainsForCompany } from "./email-domains";
 import { pickSender } from "./sender";
 import { sendSms, trackingUrl } from "./sms";
@@ -156,6 +157,8 @@ interface Vars {
   jobNumber: string;
   firstName: string;
   techName: string;
+  /** Absolute URL of the technician's headshot, "" when there isn't one. */
+  techPhoto: string;
   address: string;
   when: string;
   eta: number | null;
@@ -204,27 +207,7 @@ export const TEMPLATE_VARS: { key: keyof Vars; label: string }[] = [
 ];
 
 /** Sample values used for live preview in the template editor. */
-const SAMPLE_VARS: Vars = {
-  company: "ArrivePing by NVC360",
-  service: "Furnace Tune-Up",
-  jobName: "Furnace Tune-Up",
-  jobNumber: "A1B2C3",
-  firstName: "Alex",
-  techName: "Jordan Lee",
-  address: "423 Main Street, Winnipeg",
-  when: "Jun 4, 2:30 PM",
-  eta: 12,
-  price: "149.00",
-  shortId: "A1B2C3",
-  trackUrl: "https://arriveping.com/t/abc123",
-  bookingUrl: "https://arriveping.com/t/abc123",
-  workerNoun: "Technician",
-  jobNoun: "Job",
-  customerNoun: "Customer",
-  propertyUrl: "https://arriveping.com/p/abc123def456",
-  delayMins: 20,
-  newWhen: "2:50 PM",
-};
+const SAMPLE_VARS: Vars = { ...EMAIL_SAMPLE_VARS };
 
 /** Default copy for a given event+recipient (exposed so the editor can show/restore it). */
 export function defaultTemplateFor(event: NvcEvent, recipient: Recipient): string {
@@ -247,53 +230,72 @@ async function channelConfig(companyId: string) {
   return tdb(companyId).selectOne(schema.notificationChannels);
 }
 
-/** Render a full branded email design against sample data — for the live editor preview. */
-export async function renderDesignPreview(companyId: string, blocks: EmailBlock[], opts?: { footer?: string; origin?: string }): Promise<string> {
-  const cfg = await channelConfig(companyId);
-  const companyName = cfg?.emailFromName || SAMPLE_VARS.company;
-  // {{company}} inside block text/tokens must reflect the ACTIVE tenant, not the
-  // hardcoded sample — otherwise switching tenants (e.g. ArrivePing -> BMD Materials)
-  // leaves stale copy like "reply to this email, ArrivePing" in another company's emails.
-  const vars: Vars = { ...SAMPLE_VARS, company: companyName };
-  const brand: EmailBrand = {
-    company: companyName,
-    logoUrl: cfg?.emailLogoUrl || "",
-    logoHeight: cfg?.emailLogoHeight || undefined,
-    brandColor: cfg?.emailBrandColor || "#06B6D4",
-    headerStyle: (cfg?.emailHeaderStyle as any) || "gradient",
-    bgColor: cfg?.emailBgColor || "#f1f5f9",
-    footer: opts?.footer ?? cfg?.emailFooter ?? "",
-    origin: opts?.origin || "",
-  };
-  return renderEmailDesign(blocks || [], brand, (s) => interpolate(s, vars));
+/** Brand overrides the designer sends so previews and tests show unsaved changes. */
+export interface BrandOverride {
+  brandColor?: string;
+  bgColor?: string;
+  logoUrl?: string;
+  logoHeight?: number;
+  theme?: unknown;
 }
 
-/** Send a one-off test email rendered from a block design. */
-export async function sendDesignTest(companyId: string, to: string, subject: string, blocks: EmailBlock[], origin?: string): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** A company's email brand: the channel row's colours/logo/footer plus its theme. */
+export function emailBrandFrom(
+  cfg: { emailLogoUrl?: string | null; emailLogoHeight?: number | null; emailBrandColor?: string | null; emailBgColor?: string | null; emailHeaderStyle?: string | null; emailFooter?: string | null; emailTheme?: string | null } | null | undefined,
+  company: string,
+  origin: string,
+  over: BrandOverride = {},
+): EmailBrand {
+  const theme: EmailTheme = normalizeTheme(over.theme !== undefined ? over.theme : cfg?.emailTheme, cfg?.emailHeaderStyle);
+  const color = over.brandColor && HEX.test(over.brandColor) ? over.brandColor : cfg?.emailBrandColor || "#06B6D4";
+  const bg = over.bgColor && HEX.test(over.bgColor) ? over.bgColor : cfg?.emailBgColor || "#f1f5f9";
+  const h = over.logoHeight !== undefined ? over.logoHeight : cfg?.emailLogoHeight;
+  return {
+    company,
+    logoUrl: over.logoUrl !== undefined ? over.logoUrl : cfg?.emailLogoUrl || "",
+    logoHeight: h && h >= 20 && h <= 400 ? h : undefined,
+    brandColor: color,
+    bgColor: bg,
+    footer: cfg?.emailFooter || "",
+    origin,
+    theme,
+  };
+}
+
+/** Render a design against sample data, for previews. */
+export async function renderDesignPreview(companyId: string, design: unknown, opts?: { origin?: string; brand?: BrandOverride }): Promise<string> {
+  const cfg = await channelConfig(companyId);
+  const companyName = cfg?.emailFromName || SAMPLE_VARS.company;
+  // {{company}} must reflect the ACTIVE tenant, not the hardcoded sample.
+  const vars: Vars = { ...SAMPLE_VARS, company: companyName };
+  return renderEmail(normalizeDesign(design), emailBrandFrom(cfg, companyName, opts?.origin || "", opts?.brand), vars);
+}
+
+/** Send a one-off test email rendered from a design (unsaved brand changes included). */
+export async function sendDesignTest(
+  companyId: string,
+  to: string,
+  subject: string,
+  design: unknown,
+  origin?: string,
+  over?: BrandOverride,
+): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
   const cfg = await channelConfig(companyId);
   const companyName = cfg?.emailFromName || SAMPLE_VARS.company;
   const vars: Vars = { ...SAMPLE_VARS, company: companyName };
-  const brand: EmailBrand = {
-    company: companyName,
-    logoUrl: cfg?.emailLogoUrl || "",
-    logoHeight: cfg?.emailLogoHeight || undefined,
-    brandColor: cfg?.emailBrandColor || "#06B6D4",
-    headerStyle: (cfg?.emailHeaderStyle as any) || "gradient",
-    bgColor: cfg?.emailBgColor || "#f1f5f9",
-    footer: cfg?.emailFooter || "",
-    origin: origin || "",
-  };
-  const interp = (s: string) => interpolate(s, vars);
-  const html = renderEmailDesign(blocks || [], brand, interp);
-  const text = designToText(blocks || [], interp);
+  const d = normalizeDesign(design);
+  const brand = emailBrandFrom(cfg, companyName, origin || "", over);
+  const html = renderEmail(d, brand, vars);
+  const text = designToText(d, vars);
   const sender = pickSender(
     { ...cfg, emailFromName: cfg?.emailFromName || SAMPLE_VARS.company },
     await verifiedDomainsForCompany(companyId).catch((): string[] => []),
     PLATFORM_FROM,
   );
-  const emailFrom = sender.from;
-  const subj = interp(subject || `${brand.company}: test email`);
-  const r: any = await sendEmail({ to, subject: `[TEST] ${subj}`, html, text, from: emailFrom, replyTo: sender.replyTo }).catch((e) => ({ error: e?.message }));
+  const subj = interpolate(subject || `${brand.company}: test email`, vars);
+  const r: any = await sendEmail({ to, subject: `[TEST] ${subj}`, html, text, from: sender.from, replyTo: sender.replyTo }).catch((e) => ({ error: e?.message }));
   if (r?.skipped) return { ok: false, skipped: true };
   if (r?.error) return { ok: false, error: r.error };
   return { ok: true };
@@ -415,6 +417,7 @@ async function context(bookingId: string) {
     jobNumber: b.id.slice(0, 6).toUpperCase(),
     firstName: (cust?.name || "").trim().split(/\s+/)[0] || "there",
     techName: riderUser?.name || "your technician",
+    techPhoto: absUrl(rider?.photoUrl || ""),
     address: b.address || "",
     when,
     eta: b.etaMins ?? null,
@@ -726,16 +729,8 @@ async function emailEnv(companyId: string, vars: Vars) {
     PLATFORM_FROM,
   );
   const emailFooter = chanCfg?.emailFooter || "";
-  const emailBrand: EmailBrand = {
-    company: vars.company,
-    logoUrl: chanCfg?.emailLogoUrl || "",
-    logoHeight: chanCfg?.emailLogoHeight || undefined,
-    brandColor: chanCfg?.emailBrandColor || "#06B6D4",
-    headerStyle: (chanCfg?.emailHeaderStyle as any) || "gradient",
-    bgColor: chanCfg?.emailBgColor || "#f1f5f9",
-    footer: emailFooter,
-    origin: process.env.WEBSITE_URL || process.env.APP_URL || process.env.PUBLIC_URL || "",
-  };
+  const emailBrand = emailBrandFrom(chanCfg, vars.company, process.env.WEBSITE_URL || process.env.APP_URL || process.env.PUBLIC_URL || "");
+
   return {
     chanCfg,
     emailFrom: sender.from,
@@ -754,15 +749,12 @@ function ruleEmail(
   vars: Vars,
   env: Awaited<ReturnType<typeof emailEnv>>,
 ): { subject: string; html: string; text?: string } | null {
-  let design: EmailBlock[] | null = null;
-  if (rule.emailDesign) {
-    try { design = JSON.parse(rule.emailDesign); } catch { design = null; }
-  }
-  const hasDesign = !!design && Array.isArray(design) && design.length > 0;
-  if (!hasDesign && !msg) return null;
+  const design = parseDesign(rule.emailDesign);
+  if (!design && !msg) return null;
   const subject = rule.emailSubject ? env.interp(rule.emailSubject) : `${vars.company}: ${meta.label}`;
-  if (design && hasDesign) return { subject, html: renderEmailDesign(design, env.emailBrand, env.interp), text: designToText(design, env.interp) };
-  return { subject, html: emailHtml(meta.defaultTitle, msg, vars, env.emailFooter, env.emailBrand), text: msg };
+  if (design) return { subject, html: renderEmail(design, env.emailBrand, vars), text: designToText(design, vars) };
+  // No design: the plain message, escaped, in the same branded frame.
+  return { subject, html: renderPlainMessage(meta.defaultTitle, msg, env.emailBrand, vars), text: msg };
 }
 
 /* ---------------------------------------------------------------- tests -- */
@@ -892,37 +884,6 @@ function absUrl(url: string): string {
   return base ? `${base}${url.startsWith("/") ? "" : "/"}${url}` : url;
 }
 
-function emailHtml(
-  title: string,
-  msg: string,
-  v: Vars,
-  footer = "",
-  brand?: EmailBrand,
-): string {
-  const color = brand?.brandColor || "#06B6D4";
-  const logo = absUrl(brand?.logoUrl || "");
-  const { height: logoH, maxWidth: logoMaxW } = logoDims(brand?.logoHeight);
-  // Header: tenant logo when we have one, else the company name wordmark.
-  const header = logo
-    ? `<img src="${logo}" alt="${v.company}" style="max-height:${logoH}px;max-width:${logoMaxW}px;display:block" />`
-    : `<div style="color:#fff;font-size:18px;font-weight:800">${v.company}</div>`;
-  const headerBg = logo
-    ? "#ffffff"
-    : `linear-gradient(135deg,${color},${color})`;
-  const headerBorder = logo ? `border-bottom:3px solid ${color};` : "";
-  return `<div style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#fff">
-    <div style="background:${headerBg};${headerBorder}border-radius:16px 16px 0 0;padding:20px 24px">
-      ${header}
-    </div>
-    <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:24px">
-      <h2 style="margin:0 0 12px;font-size:18px;color:#0f172a">${title}</h2>
-      <p style="font-size:14px;line-height:1.6;color:#334155;margin:0">${msg}</p>
-      <a href="${v.trackUrl}" style="display:inline-block;margin-top:18px;background:${color};color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:11px 20px;border-radius:10px">View details</a>
-      <p style="margin-top:20px;font-size:12px;color:#94a3b8">${v.service} · ${v.when}${v.address ? ` · ${v.address}` : ""}</p>
-      ${footer ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.5;color:#94a3b8">${footer}</div>` : ""}
-    </div>
-  </div>`;
-}
 
 /**
  * Build a branded email footer (HTML) from a company's contact details.

@@ -6,7 +6,10 @@ import { eq } from "drizzle-orm";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { sendTestMessages, seedNotificationRules, EVENT_META, defaultTemplateFor, interpolateSample, TEMPLATE_VARS, renderDesignPreview, sendDesignTest, type NvcEvent } from "../../services/dispatch";
-import { starterDesigns, type EmailBlock } from "../../services/email-render";
+import { STARTERS } from "../../shared/email/starters";
+import { normalizeDesign, normalizeTheme, serializeDesign } from "../../shared/email/design";
+import { EmailGenerateError, generateEmailDraft } from "../../services/email-generate";
+import { rateLimit, keyByUser } from "../lib/rate-limit";
 import { putObject } from "../lib/storage";
 import { resendAvailable, triggerVerify, removeDomain } from "../../services/email-domains";
 import { isFreeMailboxDomain } from "../../services/sender";
@@ -106,16 +109,39 @@ const BulkBody = z.object({
 
 const PreviewBody = z.object({ template: longText(20_000).optional() });
 
+/** A design as the designer sends it: a v2 object, or a v1 list of blocks. */
+const DesignInput = jsonBlob(200_000);
+
+/** Unsaved brand changes the designer previews and test-sends. */
+const BrandOverrideBody = z
+  .object({
+    brandColor: z.union([hexColor("Brand colour"), z.literal("")]).optional(),
+    bgColor: z.union([hexColor("Background colour"), z.literal("")]).optional(),
+    logoUrl: z.string().trim().max(2_000).optional(),
+    logoHeight: z.union([z.literal(0), pixelSize("Logo height", 20, 400)]).optional(),
+    theme: jsonBlob(20_000).optional(),
+  })
+  .optional();
+
 const RenderBody = z.object({
-  design: z.array(jsonBlob(50_000), { error: "Design must be a list of blocks" }).max(200).optional(),
-  footer: optText(2_000),
+  design: DesignInput.optional(),
+  brand: BrandOverrideBody,
 });
 
 const TestEmailBody = z.object({
   to: email("Recipient"),
   subject: shortText("Subject", 200).optional(),
-  design: z.array(jsonBlob(50_000), { error: "Design must be a list of blocks" }).max(200).optional(),
+  design: DesignInput.optional(),
+  brand: BrandOverrideBody,
 });
+
+const GenerateBody = z.object({
+  description: z.string().trim().min(12, "Describe the email in a sentence or two.").max(1500, "Keep the description under 1,500 characters"),
+  event: z.string().trim().max(80).optional(),
+  recipient: z.enum(["client", "tech", "office"]).optional(),
+});
+
+const generateLimit = rateLimit({ limit: 20, windowMs: 60 * 60 * 1000, keyFn: keyByUser, name: "email-generate" });
 
 const TemplateFields = {
   name: shortText("Name", 120),
@@ -158,9 +184,11 @@ const ChannelsPatch = z
     // see DEFAULT_LOGO_HEIGHT in email-render.ts).
     emailLogoHeight: z.union([z.literal(0), pixelSize("Logo height", 20, 400)]),
     emailBrandColor: z.union([hexColor("Brand colour"), z.literal("")]),
-    emailHeaderStyle: z.enum(["gradient", "solid", "plain", "logo"], {
-      error: "Header style must be gradient, solid, plain or logo",
+    emailHeaderStyle: z.enum(["gradient", "solid", "minimal", "plain", "logo"], {
+      error: "Header style must be gradient, solid, minimal, plain or logo",
     }),
+    // The company email theme (font, corners, buttons, header, social links).
+    emailTheme: z.union([z.string().max(20_000), jsonBlob(20_000)]),
     emailBgColor: z.union([hexColor("Background colour"), z.literal("")]),
   })
   .partial()
@@ -327,8 +355,12 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     const existing = await t.selectOne(schema.notificationRules, eq(schema.notificationRules.id, ruleId));
     if (!existing) return c.json({ message: "Notification rule not found" }, 404);
     const patch: Record<string, unknown> = { ...body, updatedAt: new Date() };
-    if (body.emailDesign !== undefined)
-      patch.emailDesign = typeof body.emailDesign === "string" ? body.emailDesign : JSON.stringify(body.emailDesign);
+    if (body.emailDesign !== undefined) {
+      // "" = no design (plain message). Anything else is stored as a cleaned v2 design.
+      const blank = body.emailDesign === "" || body.emailDesign === null;
+      const d = blank ? null : normalizeDesign(body.emailDesign);
+      patch.emailDesign = d && d.blocks.length ? serializeDesign(d) : "";
+    }
     const [r] = await t.update(schema.notificationRules, patch as any, eq(schema.notificationRules.id, ruleId));
     // A change to the WORDS (not a channel toggle) is recorded: it's what the
     // Launch checklist's "Make a milestone message yours" looks for.
@@ -396,29 +428,46 @@ export const notifConfigRoutes = new Hono<AppEnv>()
 
   // ---- render a full branded HTML email from a block design (live editor preview) ----
   .post("/email/render", requireAdmin, jsonBody(RenderBody), async (c) => {
-    const { design, footer } = c.req.valid("json");
+    const { design, brand } = c.req.valid("json");
     const origin = new URL(c.req.url).origin;
-    const html = await renderDesignPreview(tenantId(c), Array.isArray(design) ? (design as EmailBlock[]) : [], { footer, origin });
+    const html = await renderDesignPreview(tenantId(c), design ?? [], { origin, brand });
     return c.json({ html }, 200);
   })
 
-  // ---- send a test email rendered from a block design ----
+  // ---- send a test email rendered from a design ----
   .post("/email/test", requireAdmin, jsonBody(TestEmailBody), async (c) => {
-    const { to, subject, design } = c.req.valid("json");
+    const { to, subject, design, brand } = c.req.valid("json");
     const origin = new URL(c.req.url).origin;
-    const r = await sendDesignTest(tenantId(c), to, subject || "", Array.isArray(design) ? (design as EmailBlock[]) : [], origin);
+    const r = await sendDesignTest(tenantId(c), to, subject || "", design ?? [], origin, brand);
     return c.json(r, 200);
+  })
+
+  // ---- "Describe it": AI drafts an email for review (nothing saved) ----
+  .post("/email/generate", requireAdmin, generateLimit, jsonBody(GenerateBody), async (c) => {
+    const b = c.req.valid("json");
+    const co = await tx(c).selectOne(schema.companySettings);
+    const eventLabelText = b.event ? await eventLabel(tenantId(c), b.event) : undefined;
+    try {
+      const draft = await generateEmailDraft({ description: b.description, eventLabel: eventLabelText, recipient: b.recipient, companyName: co?.name || undefined });
+      return c.json({ draft }, 200);
+    } catch (e) {
+      if (e instanceof EmailGenerateError) return c.json({ message: e.message }, 502);
+      throw e;
+    }
   })
 
   // ---- reusable email templates library ----
   .get("/email/templates", requireAdmin, async (c) => {
     const t = tx(c);
-    // seed builtin starters once (per company)
+    // Keep the built-in starters in step with the current set: add new ones,
+    // refresh ones whose design changed (built-ins can't be edited by tenants).
     const existing = await t.select(schema.emailTemplates, eq(schema.emailTemplates.isBuiltin, true));
-    if (existing.length === 0) {
-      for (const s of starterDesigns()) {
-        await t.insert(schema.emailTemplates, { name: s.name, description: s.description, subject: s.subject, design: JSON.stringify(s.design), isBuiltin: true });
-      }
+    for (const st of STARTERS) {
+      const design = JSON.stringify(st.design);
+      const row = existing.find((r) => r.name === st.name);
+      if (!row) await t.insert(schema.emailTemplates, { name: st.name, description: st.description, subject: st.subject, design, isBuiltin: true });
+      else if (row.design !== design || row.description !== st.description || row.subject !== st.subject)
+        await t.update(schema.emailTemplates, { design, description: st.description, subject: st.subject, updatedAt: new Date() }, eq(schema.emailTemplates.id, row.id));
     }
     const rows = await t.select(schema.emailTemplates);
     rows.sort((a, b) =>
@@ -433,7 +482,7 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       name: b.name || "Untitled template",
       description: b.description || "",
       subject: b.subject || "",
-      design: typeof b.design === "string" ? b.design : JSON.stringify(b.design || []),
+      design: serializeDesign(normalizeDesign(b.design ?? [])),
       isBuiltin: false,
     });
     return c.json({ template: t }, 201);
@@ -447,8 +496,7 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     if (existing.isBuiltin) return c.json({ message: "Builtin templates can't be edited — duplicate it first" }, 400);
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const k of ["name", "description", "subject"] as const) if (b[k] !== undefined) patch[k] = b[k];
-    if (b.design !== undefined)
-      patch.design = typeof b.design === "string" ? b.design : JSON.stringify(b.design);
+    if (b.design !== undefined) patch.design = serializeDesign(normalizeDesign(b.design));
     const [row] = await t.update(schema.emailTemplates, patch as any, eq(schema.emailTemplates.id, templateId));
     return c.json({ template: row }, 200);
   })
@@ -466,8 +514,10 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     const file = form.get("file");
     if (!(file instanceof File)) return c.json({ message: "No file" }, 400);
     if (file.size > 4 * 1024 * 1024) return c.json({ message: "Logo too large (max 4MB)" }, 400);
-    if (file.type && !["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"].includes(file.type))
-      return c.json({ message: `Unsupported type ${file.type}` }, 400);
+    if (file.type === "image/svg+xml" || /\.svg$/i.test(file.name))
+      return c.json({ message: "Gmail and Outlook can't show SVG images. Upload a PNG or JPG instead." }, 400);
+    if (file.type && !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type))
+      return c.json({ message: `Unsupported type ${file.type}. Upload a PNG or JPG.` }, 400);
     const ext = (file.name.split(".").pop() || "png").toLowerCase().slice(0, 8);
     const key = `email-logos/${crypto.randomUUID()}.${ext}`;
     const stored = await putObject(
@@ -475,7 +525,9 @@ export const notifConfigRoutes = new Hono<AppEnv>()
       Buffer.from(await file.arrayBuffer()),
       file.type || "image/png",
     );
-    // persist on this company's channel config
+    // Body images (?persist=0) are just uploaded; a header logo is also saved
+    // on this company's channel config.
+    if (c.req.query("persist") === "0") return c.json({ url: stored.url }, 200);
     const existing = await getOrCreateChannels(c);
     await tx(c).update(schema.notificationChannels, { emailLogoUrl: stored.url, updatedAt: new Date() }, eq(schema.notificationChannels.id, existing.id));
     return c.json({ url: stored.url }, 200);
@@ -490,6 +542,8 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     const b = c.req.valid("json");
     const patch: Record<string, unknown> = { ...b, updatedAt: new Date() };
     const existing = await getOrCreateChannels(c);
+    // Stored cleaned: unknown keys dropped, unsafe social links removed.
+    if (b.emailTheme !== undefined) patch.emailTheme = JSON.stringify(normalizeTheme(b.emailTheme, b.emailHeaderStyle ?? existing.emailHeaderStyle));
     const [row] = await tx(c).update(schema.notificationChannels, patch as any, eq(schema.notificationChannels.id, existing.id));
     return c.json({ channels: row }, 200);
   })

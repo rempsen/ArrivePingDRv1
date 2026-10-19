@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { DialogPanel } from "../../components/dialog-panel";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, apiHeaders } from "../../lib/api";
+import { api } from "../../lib/api";
 import { dismiss } from "../../lib/utils";
 import { FullLoader } from "../../components/loader";
 import { PageWrap } from "../../components/brand";
@@ -10,14 +10,16 @@ import { Modal, Field, inputCls, BtnPrimary, BtnGhost, ConfirmModal } from "../.
 import {
   Bell, Webhook, ScrollText, Send, Plus, Trash2, Check, X, Smartphone,
   Mail, MessageSquare, Globe, RefreshCw, UserPlus, Copy, Sliders, Pencil,
-  RotateCcw, Moon, Sparkles, Image as ImageIcon, Palette, AlignLeft,
+  RotateCcw, Moon, Sparkles, Palette, AlignLeft,
   Bold, Italic, Link as LinkIcon, PenLine, Loader2, Settings2,
 } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun, useIndustryNotificationGuidance } from "../../lib/use-brand";
 const recipLabel = (r: { key: string; label: string }, noun: string, customerNoun: string) =>
   r.key === "tech" ? noun : r.key === "client" ? customerNoun : r.label;
-import { EmailEditor, type EmailBlock } from "../../components/email-editor";
-import { starterDesignForRecipient } from "../../lib/email-starters";
+import { EmailDesigner } from "../../components/email-designer";
+import { parseDesign } from "../../../shared/email/design";
+import { makeCtx, renderHeader, renderAboveCard } from "../../../shared/email/render";
+import { useEmailBrand } from "../../components/email-designer/use-email-brand";
 import { CustomMilestoneDialog } from "./custom-milestone-dialog";
 import { NotificationTestDialog } from "./notification-test-dialog";
 import { useAuth } from "../../hooks/use-auth";
@@ -643,10 +645,9 @@ function RecipientCard({
   const [composerOpen, setComposerOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
 
-  const parsedDesign: EmailBlock[] = (() => {
-    try { const d = JSON.parse(rule.emailDesign || "[]"); return Array.isArray(d) && d.length ? d : []; } catch { return []; }
-  })();
-  const hasDesign = parsedDesign.length > 0;
+  const design = parseDesign(rule.emailDesign);
+  const hasDesign = !!design;
+  const blockCount = design?.blocks.length ?? 0;
 
   const tpl: string = rule.template || "";
   const effective = tpl || fallback;
@@ -689,19 +690,19 @@ function RecipientCard({
               onClick={() => hasDesign && onSave({ emailDesign: "" })}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${emailMode === "text" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
             >
-              <AlignLeft className="h-3.5 w-3.5" /> Plain text
+              <AlignLeft className="h-3.5 w-3.5" /> Simple message
             </button>
             <button
               onClick={() => !hasDesign && setEmailOpen(true)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${emailMode === "html" ? "bg-brand text-white" : "text-slate-400 hover:text-white"}`}
             >
-              <Sparkles className="h-3.5 w-3.5" /> Branded HTML
+              <Sparkles className="h-3.5 w-3.5" /> Designed email
             </button>
           </div>
           {emailMode === "html" ? (
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1 text-[11px] text-slate-400">
-                Sends a designed HTML email &middot; <span className="text-slate-300">{parsedDesign.length} block{parsedDesign.length > 1 ? "s" : ""}</span>
+                Sends your designed email &middot; <span className="text-slate-300">{blockCount} block{blockCount === 1 ? "" : "s"}</span>
                 {rule.emailSubject ? <> &middot; subject "{rule.emailSubject}"</> : null}
               </div>
               <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-deep">
@@ -710,7 +711,7 @@ function RecipientCard({
               <button onClick={() => onSave({ emailDesign: "" })} title="Switch back to plain text" className="rounded-lg border border-white/10 bg-ink px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 hover:text-red-400">Discard design</button>
             </div>
           ) : (
-            <p className="text-[11px] text-slate-400">Email uses the <span className="text-slate-200">plain-text message below</span> — same copy as SMS / in-app. Switch to Branded HTML for a designed layout with logo, buttons and tables.</p>
+            <p className="text-[11px] text-slate-400">Sends the <span className="text-slate-200">message text below</span> inside your branded email (logo, colours, footer). Choose Designed email to lay it out with arrival times, the technician card, buttons and more.</p>
           )}
         </div>
       )}
@@ -758,12 +759,17 @@ function RecipientCard({
       )}
 
       {emailOpen && (
-        <EmailEditor
+        <EmailDesigner
           contextLabel={`${eventLabel} \u2192 ${recipientLabel}`}
-          initialDesign={hasDesign ? parsedDesign : starterDesignForRecipient(rule.recipient, eventLabel)}
+          event={rule.event}
+          recipient={rule.recipient}
+          eventLabel={eventLabel}
+          initialDesign={design}
           initialSubject={rule.emailSubject || ""}
-          saving={saving}
-          onSave={(subject, design) => { onSave({ emailSubject: subject, emailDesign: JSON.stringify(design) }); setEmailOpen(false); }}
+          draftKey={`email-draft:${rule.id}`}
+          onSave={(subject, d) => {
+            onSave({ emailSubject: subject, emailDesign: JSON.stringify(d) });
+          }}
           onClose={() => setEmailOpen(false)}
         />
       )}
@@ -823,99 +829,38 @@ function BodyTemplateCard({
   );
 }
 
-/* ---------------- Email brand identity card ---------------- */
-function EmailBrandCard({ f, set }: { f: any; set: (k: string, v: any) => void }) {
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const logo = f.emailLogoUrl || "";
-  const color = f.emailBrandColor || "#06B6D4";
-  const headerStyle = f.emailHeaderStyle || "gradient";
+/* ---------------- Email look (logo, colours, theme) ---------------- */
 
-  const upload = async (file: File) => {
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/notif-config/email/logo", { method: "POST", body: fd, credentials: "include", headers: apiHeaders() });
-      const d = await res.json();
-      if (d.url) set("emailLogoUrl", d.url);
-    } finally { setUploading(false); }
-  };
+/** The email look is saved by the designer; the Channels form never sends it, so it can't overwrite a newer theme. */
+const LOOK_KEYS = ["emailLogoUrl", "emailLogoHeight", "emailBrandColor", "emailHeaderStyle", "emailBgColor", "emailTheme"];
+function withoutLook(f: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(f).filter(([k]) => !LOOK_KEYS.includes(k)));
+}
 
-  const styles = [
-    { key: "gradient", label: "Gradient" },
-    { key: "solid", label: "Solid" },
-    { key: "minimal", label: "Minimal (white)" },
-  ];
-
+function EmailLookCard() {
+  const [open, setOpen] = useState(false);
+  const look = useEmailBrand();
+  const ctx = look.brand ? makeCtx(look.brand, look.vars) : null;
   return (
     <div className="rounded-2xl border border-white/5 nvc-card p-5">
-      <h3 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-300"><Palette className="h-4 w-4" /> Email branding</h3>
-      <p className="mb-4 text-[11px] text-slate-500">Logo, color, and header style applied to every branded HTML email.</p>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* logo */}
-        <div>
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Header logo</div>
-          <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-ink p-3">
-            <div className="grid h-14 w-24 place-items-center rounded-lg bg-white/90 p-1">
-              {logo ? <img src={logo} alt="logo" className="max-h-12 max-w-full object-contain" /> : <span className="text-[10px] text-slate-400">No logo</span>}
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-deep">
-                <ImageIcon className="h-3.5 w-3.5" /> {uploading ? "Uploading…" : "Upload"}
-              </button>
-              {logo && <button onClick={() => set("emailLogoUrl", "")} className="ml-1.5 text-[11px] font-semibold text-slate-400 hover:text-red-400">Remove</button>}
-            </div>
-          </div>
-          <input aria-label="…or paste a logo URL" className={`${inputCls} mt-1.5 text-xs`} value={logo} onChange={(e) => set("emailLogoUrl", e.target.value)} placeholder="…or paste a logo URL" />
-          <input aria-label="File upload" ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <label htmlFor="brand-logo-height" className="shrink-0 text-[11px] font-semibold text-slate-500">Logo size</label>
-            <input
-              id="brand-logo-height"
-              aria-label="Logo height in pixels"
-              type="number"
-              min={20}
-              max={400}
-              className={`${inputCls} h-8 text-xs`}
-              value={f.emailLogoHeight || ""}
-              onChange={(e) => set("emailLogoHeight", e.target.value ? Math.round(Number(e.target.value)) : 0)}
-              placeholder="80"
-            />
-            <span className="shrink-0 text-[11px] text-slate-500">px tall (blank = 80px default)</span>
-          </div>
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-300"><Palette className="h-4 w-4" /> Email look</h3>
+          <p className="text-[12px] text-slate-400">Logo, colours, font, buttons, header and social links, used by every email your company sends.</p>
+          <button type="button" onClick={() => setOpen(true)} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-deep">
+            <Sparkles className="h-3.5 w-3.5" /> Edit the email theme
+          </button>
         </div>
-
-        {/* color + style */}
-        <div className="space-y-3">
-          <div>
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Brand color</div>
-            <div className="flex items-center gap-2">
-              <input aria-label="Color" type="color" value={color} onChange={(e) => set("emailBrandColor", e.target.value)} className="h-10 w-12 cursor-pointer rounded-lg border border-white/10 bg-ink p-1" />
-              <input aria-label="#06B6D4" className={inputCls} value={color} onChange={(e) => set("emailBrandColor", e.target.value)} placeholder="#06B6D4" />
+        {ctx && (
+          <div aria-hidden="true" className="pointer-events-none w-full max-w-[300px] overflow-hidden rounded-xl border border-white/10" style={{ background: ctx.pageBg }}>
+            <div style={{ width: 600, transform: "scale(0.5)", transformOrigin: "top left", height: 150, marginBottom: -75, padding: "16px 12px 0" }}>
+              <div dangerouslySetInnerHTML={{ __html: renderAboveCard(ctx) }} />
+              <div style={{ background: "#fff", borderRadius: ctx.radius.card, overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: renderHeader(ctx) }} />
             </div>
           </div>
-          <div>
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Header style</div>
-            <div className="flex gap-1.5">
-              {styles.map((s) => (
-                <button key={s.key} onClick={() => set("emailHeaderStyle", s.key)} className={`flex-1 rounded-lg border px-2 py-2 text-[11px] font-semibold ${headerStyle === s.key ? "border-brand/50 bg-brand/15 text-cyan-glow" : "border-white/10 bg-ink text-slate-400 hover:text-white"}`}>{s.label}</button>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* mini header preview */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
-        <div className="px-4 py-5 text-center" style={{
-          background: headerStyle === "gradient" ? `linear-gradient(135deg, ${color}, ${color}cc)` : headerStyle === "solid" ? color : "#ffffff",
-          borderBottom: headerStyle === "minimal" ? "1px solid #e2e8f0" : "none",
-        }}>
-          {logo ? <img src={logo} alt="" className="mx-auto max-h-9" /> : <span className="text-lg font-extrabold" style={{ color: headerStyle === "minimal" ? "#0f172a" : "#fff" }}>{f.emailFromName || "ArrivePing by NVC360"}</span>}
-        </div>
-      </div>
+      {open && <EmailDesigner mode="theme" onClose={() => setOpen(false)} />}
     </div>
   );
 }
@@ -1261,11 +1206,11 @@ function Channels() {
       </div>
 
       {/* email sender */}
-      <EmailSenderCard f={f} set={set} onSave={() => save.mutate(f)} saving={save.isPending} dirty={!!form} />
+      <EmailSenderCard f={f} set={set} onSave={() => save.mutate(withoutLook(f))} saving={save.isPending} dirty={!!form} />
 
 
-      {/* email brand identity (logo, color, header style) */}
-      <EmailBrandCard f={f} set={set} />
+      {/* email look (logo, colours, theme): edited in the email designer */}
+      <EmailLookCard />
 
       {/* email default body template */}
       <BodyTemplateCard
@@ -1338,7 +1283,7 @@ function Channels() {
 
       <div className="flex items-center justify-end gap-3">
         {saved && <span className="text-xs font-semibold text-green-400">Saved</span>}
-        <BtnPrimary onClick={() => save.mutate(f)} disabled={save.isPending || !form}>{save.isPending ? "Saving…" : "Save settings"}</BtnPrimary>
+        <BtnPrimary onClick={() => save.mutate(withoutLook(f))} disabled={save.isPending || !form}>{save.isPending ? "Saving…" : "Save settings"}</BtnPrimary>
       </div>
     </div>
   );
