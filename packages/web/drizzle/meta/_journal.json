@@ -176,6 +176,13 @@
       "when": 1792360487297,
       "tag": "0024_tenant_history",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792369387762,
+      "tag": "0025_control_hub",
+      "breakpoints": true
     }
   ]
 }

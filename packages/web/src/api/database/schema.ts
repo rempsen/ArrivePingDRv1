@@ -735,6 +735,10 @@ export const companySettings = pgTable("company_settings", {
   // metric | imperial — how every distance is shown and typed (m/km vs ft/mi).
   // Storage is always metric; see shared/units.ts.
   distanceUnit: text("distance_unit").notNull().default("metric"),
+  // May ArrivePing support sign in as this company's people (Control Hub
+  // act-as)? On by default; a tenant admin can turn it off in Settings →
+  // Security. Every session shows in this company's Audit Log either way.
+  allowSupportAccess: boolean("allow_support_access").notNull().default(true),
   // ── Review requests ────────────────────────────────────────────────────
   // A completed job schedules ONE review-request SMS this many minutes later
   // (services/reviews.ts). 0 or disabled = never ask.
@@ -989,6 +993,10 @@ export const auditLog = pgTable("audit_log", {
   entityId: text("entity_id").notNull().default(""),
   summary: text("summary").notNull().default(""),
   meta: text("meta").notNull().default("{}"),
+  // Set when ArrivePing support made this change while signed in as one of
+  // the company's people (Control Hub act-as): the staff member behind it.
+  supportActorId: text("support_actor_id").notNull().default(""),
+  supportActorName: text("support_actor_name").notNull().default(""),
   createdAt: now(),
 }, (t) => ({
   entityIdx: index("audit_entity_idx").on(t.entityType, t.entityId),
@@ -1355,6 +1363,14 @@ export const companies = pgTable("companies", {
   // out by default (services/platform-analytics) so demo traffic never reads
   // as real usage; a superadmin flips it per tenant in Analytics → Tenants.
   isInternal: boolean("is_internal").notNull().default(false),
+  // What this tenant is (Control Hub): customer | demo | test | internal.
+  // Drives the default feature switches for its kind (shared/features.ts).
+  // `isInternal` is kept equal to kind <> 'customer' so analytics and the
+  // history trigger keep working unchanged (services/tenant-kind.ts).
+  kind: text("kind").notNull().default("customer"),
+  // Demo tenants made in the Control Hub stop refreshing after this date
+  // (services/demo-factory.ts). NULL = not a hub demo, or no end date.
+  demoExpiresAt: timestamp("demo_expires_at", { mode: "date", withTimezone: true }),
   // Launch progress (services/launch-progress.ts), JSON LaunchProgress: when
   // each checklist step was first done, the activation stage, which tip emails
   // went out and whether #onboarding was told the company stalled. NULL = the
@@ -1839,5 +1855,89 @@ export const contactRequests = pgTable(
   (t) => ({
     createdIdx: index("contact_requests_created_idx").on(t.createdAt),
     retryIdx: index("contact_requests_retry_idx").on(t.emailStatus, t.hubspotStatus),
+  }),
+);
+
+// ─── Control Hub (platform staff only) ──────────────────────────────────────
+// Every table below is the platform's, not a tenant's: RLS is enabled with no
+// policy, so the tenant runtime role can't see them and only the system
+// connection (`sdb`) reads or writes them.
+
+/**
+ * NVC360 staff who may use the Control Hub, and what they may do there:
+ * owner (everything), staff (support: all tenants, no roster/plan/kind/delete),
+ * sales (demo and test tenants, leads). Being a `superadmin` user is still
+ * required (domain-restricted); this list narrows who keeps those powers.
+ */
+export const platformStaff = pgTable("platform_staff", {
+  userId: text("user_id").primaryKey(),
+  role: text("role").notNull().default("staff"), // owner | staff | sales
+  addedBy: text("added_by").notNull().default(""),
+  createdAt: now(),
+});
+
+/**
+ * Per-tenant feature switches that differ from the tenant's plan and kind
+ * defaults (shared/features.ts). An expired override is ignored when read.
+ */
+export const tenantFeatureOverrides = pgTable(
+  "tenant_feature_overrides",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull(),
+    featureKey: text("feature_key").notNull(),
+    enabled: boolean("enabled").notNull(),
+    reason: text("reason").notNull().default(""),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }),
+    setBy: text("set_by").notNull().default(""),
+    setByName: text("set_by_name").notNull().default(""),
+    setAt: timestamp("set_at", { mode: "date", withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (t) => ({
+    oneIdx: uniqueIndex("tenant_feature_overrides_company_key_uidx").on(t.companyId, t.featureKey),
+  }),
+);
+
+/** Control Hub act-as sessions: a staff member signed in as one of a tenant's people. */
+export const actAsSessions = pgTable(
+  "act_as_sessions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    actorUserId: text("actor_user_id").notNull(),
+    actorName: text("actor_name").notNull().default(""),
+    targetUserId: text("target_user_id").notNull(),
+    targetName: text("target_name").notNull().default(""),
+    companyId: text("company_id").notNull(),
+    reason: text("reason").notNull(),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: true }).notNull().default(sql`now()`),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { mode: "date", withTimezone: true }),
+    endedReason: text("ended_reason").notNull().default(""), // exit | expired | replaced | revoked
+  },
+  (t) => ({
+    actorIdx: index("act_as_sessions_actor_idx").on(t.actorUserId, t.endedAt),
+    companyIdx: index("act_as_sessions_company_idx").on(t.companyId, t.startedAt),
+  }),
+);
+
+/** Control Hub actions and tenant switches, across every tenant. */
+export const platformAudit = pgTable(
+  "platform_audit",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    actorId: text("actor_id").notNull().default(""),
+    actorName: text("actor_name").notNull().default(""),
+    action: text("action").notNull(),
+    companyId: text("company_id").notNull().default(""),
+    entityType: text("entity_type").notNull().default(""),
+    entityId: text("entity_id").notNull().default(""),
+    summary: text("summary").notNull().default(""),
+    meta: text("meta").notNull().default("{}"),
+    createdAt: now(),
+  },
+  (t) => ({
+    createdIdx: index("platform_audit_created_idx").on(t.createdAt),
+    companyIdx: index("platform_audit_company_idx").on(t.companyId, t.createdAt),
+    actorIdx: index("platform_audit_actor_idx").on(t.actorId, t.createdAt),
   }),
 );
