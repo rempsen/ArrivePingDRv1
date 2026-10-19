@@ -7,7 +7,7 @@
  *
  * Cached briefly: every keystroke on an address field asks for it.
  */
-import { eq } from "drizzle-orm";
+import { and, between, eq, isNull } from "drizzle-orm";
 import { db } from "../api/database";
 import * as schema from "../api/database/schema";
 import { tdb } from "../api/database/tenant";
@@ -94,17 +94,35 @@ export async function syncOfficeFromBusinessAddress(
   const hit = await geocode(addr).catch(() => null);
   out.geocoded = !!hit;
 
+  // Re-check "still empty / still default" in the UPDATE itself: the geocode
+  // above can take seconds, and an admin may save their own office or
+  // business coordinates meanwhile. Fill-empty must not overwrite that.
   if (officeEmpty) {
-    await db
+    const rows = await db
       .update(schema.companies)
       .set({ officeAddress: addr, ...(hit ? { officeLat: hit.lat, officeLng: hit.lng } : {}), updatedAt: new Date() } as never)
-      .where(eq(schema.companies.id, companyId));
-    out.office = true;
+      .where(
+        and(
+          eq(schema.companies.id, companyId),
+          eq(schema.companies.officeAddress, ""),
+          isNull(schema.companies.officeLat),
+          isNull(schema.companies.officeLng),
+        ),
+      )
+      .returning({ id: schema.companies.id });
+    out.office = rows.length > 0;
     cache.delete(companyId);
   }
   if (coordsDefault && hit) {
-    await t.update(schema.companySettings, { lat: hit.lat, lng: hit.lng } as never);
-    out.businessCoords = true;
+    const rows = (await t.update(
+      schema.companySettings,
+      { lat: hit.lat, lng: hit.lng } as never,
+      and(
+        between(schema.companySettings.lat, SETTINGS_DEFAULT_LAT - 1e-4, SETTINGS_DEFAULT_LAT + 1e-4),
+        between(schema.companySettings.lng, SETTINGS_DEFAULT_LNG - 1e-4, SETTINGS_DEFAULT_LNG + 1e-4),
+      ),
+    )) as unknown[];
+    out.businessCoords = rows.length > 0;
   }
   return out;
 }

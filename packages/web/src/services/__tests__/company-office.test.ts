@@ -90,4 +90,19 @@ describe("syncOfficeFromBusinessAddress", () => {
     expect(r.office).toBe(true);
     expect(r.geocoded).toBe(false);
   });
+
+  it("does not overwrite an office or business coords saved while geocoding", async () => {
+    await makeCo("co-race", {}, { address: ADDR });
+    const slowGeocode = async () => {
+      // the admin saves their own office and business coords mid-geocode
+      await db.update(schema.companies).set({ officeAddress: "9 Admin Rd, Winnipeg", officeLat: 49.95, officeLng: -97.2 } as any).where(eq(schema.companies.id, "co-race"));
+      await db.update(schema.companySettings).set({ lat: 49.7, lng: -97.0 } as any).where(eq(schema.companySettings.id, "co-race"));
+      return HIT;
+    };
+    const r = await syncOfficeFromBusinessAddress("co-race", ADDR, { geocode: slowGeocode });
+    expect(r.office).toBe(false);
+    expect(r.businessCoords).toBe(false);
+    expect((await office("co-race")).officeAddress).toBe("9 Admin Rd, Winnipeg");
+    expect((await settings("co-race")).lat).toBeCloseTo(49.7, 3);
+  });
 });
