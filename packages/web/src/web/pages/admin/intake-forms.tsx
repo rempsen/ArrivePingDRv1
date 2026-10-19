@@ -7,7 +7,7 @@ import { Modal, Field, inputCls, BtnPrimary, BtnGhost, ConfirmModal } from "../.
 import {
   FileText, Plus, Copy, Check, Trash2, ExternalLink, Code2, Pencil,
   GripVertical, ChevronDown, ChevronUp, Mail, LayoutList, Wrench, AlertTriangle, Image as ImageIcon,
-  ListChecks, Sparkles,
+  ListChecks, Sparkles, Eye,
 } from "lucide-react";
 import { formServiceIds } from "../../../shared/intake-services";
 
@@ -328,6 +328,8 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
   const [allowTechAssign, setAllowTechAssign] = useState(form?.allowTechAssign ?? true);
   const [title, setTitle] = useState(form?.title ?? (isWorkOrder ? "Create Work Order" : "Request Service"));
   const [intro, setIntro] = useState(form?.intro ?? "");
+  // Swaps the editor for a live render of the form as a visitor would see it.
+  const [preview, setPreview] = useState(false);
   const [slug, setSlug] = useState(form?.slug ?? "");
   const [brandColor, setBrandColor] = useState(form?.brandColor ?? "#06b6d4");
   const [logoUrl, setLogoUrl] = useState(form?.logoUrl ?? "");
@@ -641,6 +643,8 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
             <LayoutList className="h-4 w-4 text-slate-400" />
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{isWorkOrder ? "Extra questions (optional)" : "Form fields"}</span>
             <div className="ml-auto flex gap-2">
+              <button type="button" aria-pressed={preview} onClick={() => setPreview((p) => !p)}
+                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${preview ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20" : "border-white/10 text-slate-300 hover:bg-white/5"}`}><Eye className="h-3.5 w-3.5" /> Preview</button>
               <button type="button" onClick={addSection} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5"><Plus className="h-3.5 w-3.5" /> Section</button>
             </div>
           </div>
@@ -650,6 +654,12 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
             </p>
           )}
 
+          {preview ? (
+            <FormPreview
+              fields={fields} sections={sections} brandColor={brandColor}
+              serviceNames={(ticked.length ? allServices.filter((x) => ticked.includes(x.id)) : allServices).map((x) => x.name)}
+            />
+          ) : (
           <div className="space-y-4">
             {groups.map(({ sec, items }) => (
               <div key={sec?.id ?? "_unsectioned"} className="rounded-xl border border-white/10 bg-ink-3/30 p-3">
@@ -686,6 +696,7 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
               </div>
             ))}
           </div>
+          )}
         </div>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -696,6 +707,75 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
         {saveM.isError && <p className="text-sm text-rose-400">{String((saveM.error as Error)?.message)}</p>}
       </div>
     </Modal>
+  );
+}
+
+// ---------------------------------------------------------------- live preview
+/** Just the fields, laid out as a visitor sees them, from the editor's unsaved
+ * state. Inputs are live but nothing is submitted. */
+function FormPreview({ fields, sections, serviceNames, brandColor }: {
+  fields: FieldCfg[]; sections: SectionCfg[]; serviceNames: string[]; brandColor: string;
+}) {
+  const ctl = "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400";
+  const typeMap: Record<string, string> = { email: "email", phone: "tel", number: "number", date: "date" };
+  const render = (f: FieldCfg) => {
+    const opts = f.key === "serviceType" ? serviceNames : (f.options || []).filter(Boolean);
+    let input: React.ReactNode;
+    if (f.type === "textarea") input = <textarea aria-label={f.label} rows={4} className={ctl} placeholder={f.placeholder} />;
+    else if (f.type === "select") input = (
+      <select aria-label={f.label} className={ctl} defaultValue="">
+        <option value="">{f.placeholder || "Select…"}</option>
+        {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+    else if (f.type === "radio" || f.type === "checkbox") input = (
+      <div className="space-y-1.5">
+        {opts.map((o) => (
+          <label key={o} className="flex items-center gap-2 text-sm text-slate-700">
+            <input type={f.type} name={f.id} aria-label={o} style={{ accentColor: brandColor }} /> {o}
+          </label>
+        ))}
+      </div>
+    );
+    else if (f.type === "file") input = (
+      <input aria-label={f.label} type="file" accept="image/*"
+        className="block w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700" />
+    );
+    else input = <input aria-label={f.label} type={typeMap[f.type] || "text"} className={ctl} placeholder={f.type === "address" ? f.placeholder || "Start typing an address…" : f.placeholder} />;
+    return (
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold text-slate-600">{f.label}{f.required && <span className="text-red-500"> *</span>}</span>
+        {input}
+      </label>
+    );
+  };
+  const enabled = fields.filter((f) => f.enabled);
+  const groups = [{ id: "", title: "", description: "" }, ...sections];
+  return (
+    <div className="rounded-xl bg-slate-50 p-4">
+      <div className="mx-auto w-full max-w-lg space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+        {groups.map((sec) => {
+          const inSec = enabled.filter((f) => (f.sectionId || "") === sec.id);
+          if (!inSec.length) return null;
+          return (
+            <div key={sec.id || "_default"} className="space-y-4">
+              {sec.title && (
+                <div className="border-b border-slate-100 pb-2">
+                  <h2 className="text-sm font-bold text-slate-800">{sec.title}</h2>
+                  {sec.description && <p className="mt-0.5 text-xs text-slate-500">{sec.description}</p>}
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {inSec.map((f) => (
+                  <div key={f.id} className={f.width === "half" ? "sm:col-span-1" : "sm:col-span-2"}>{render(f)}</div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+        {enabled.length === 0 && <p className="text-center text-sm text-slate-400">No visible fields yet.</p>}
+      </div>
+    </div>
   );
 }
 
@@ -712,23 +792,27 @@ function FieldRow({ f, sections, noEntries, onPatch, onRemove, onMoveUp, onMoveD
   const [open, setOpen] = useState(false);
   // The Service type dropdown's choices are the form's services, set above.
   const showOptions = hasOptions(f.type) && f.key !== "serviceType";
+  // Full-width rows have room, so the type gets its natural width; half-width rows squeeze it.
+  const half = f.width === "half";
   return (
     <div className={`rounded-lg border border-white/10 bg-ink-2/60 ${f.width === "half" ? "" : "sm:col-span-2"}`}>
-      <div className="flex flex-wrap items-center gap-2 px-2.5 py-2">
+      <div className="flex items-center gap-1.5 px-2.5 py-2">
         <GripVertical className="h-4 w-4 shrink-0 text-slate-600" />
         <div className="flex shrink-0 flex-col">
           <button type="button" onClick={onMoveUp} className="text-slate-500 hover:text-white" aria-label="Move up"><ChevronUp className="h-3 w-3" /></button>
           <button type="button" onClick={onMoveDown} className="text-slate-500 hover:text-white" aria-label="Move down"><ChevronDown className="h-3 w-3" /></button>
         </div>
-        <input aria-label="Field label" className="min-w-[8rem] flex-1 rounded-md border border-white/10 bg-ink-3 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan-500/50"
+        <input aria-label="Field label" className="min-w-0 flex-1 basis-24 rounded-md border border-white/10 bg-ink-3 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan-500/50"
           value={f.label} onChange={(e) => onPatch({ label: e.target.value })} disabled={f.fixed && f.core ? false : false} />
+        {/* Everything stays on one line; the label and type give up width first. */}
+        <div className={`ml-auto flex items-center gap-1.5 ${half ? "min-w-0 shrink" : "shrink-0"}`}>
         {!noEntries || f.fixed || TYPE_LOCKED_KEYS.includes(f.key) ? (
           <span
-            className="shrink-0 rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-400"
+            className={`rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-400 ${half ? "min-w-0 max-w-[7rem] shrink truncate" : "shrink-0"}`}
             title={!noEntries && !f.fixed && !TYPE_LOCKED_KEYS.includes(f.key) ? "Field types are locked once the form has entries" : undefined}
           >{FIELD_TYPES.find((t) => t.value === f.type)?.label ?? f.type}</span>
         ) : (
-          <select aria-label="Field type" className="shrink-0 rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-500/50"
+          <select aria-label="Field type" className={`rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-500/50 ${half ? "w-24 min-w-0 shrink" : "shrink-0"}`}
             value={f.type} onChange={(e) => onPatch({ type: e.target.value as FieldType })}>
             {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
@@ -746,6 +830,7 @@ function FieldRow({ f, sections, noEntries, onPatch, onRemove, onMoveUp, onMoveD
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {!f.fixed && <button type="button" onClick={onRemove} className="shrink-0 rounded-md p-1 text-rose-300 hover:bg-white/5" aria-label="Remove field"><Trash2 className="h-4 w-4" /></button>}
+        </div>
       </div>
 
       {open && (
