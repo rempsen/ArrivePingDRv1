@@ -174,11 +174,24 @@ describe("custom milestones API", () => {
     expect((await call("GET", `/events/${encodeURIComponent("custom:nope")}`)).status).toBe(404);
   });
 
-  it("Test sends against this company's job without using up the real one", async () => {
-    const res = await call("POST", `/test/${encodeURIComponent(`custom:${id}`)}`, { bookingId: "cmr-job" });
+  it("Test sends the messages to the person testing only, and leaves the job alone", async () => {
+    const eventsBefore = (await db.select().from(schema.jobEvents).where(eq(schema.jobEvents.bookingId, "cmr-job"))).length;
+    const res = await call("POST", `/test/${encodeURIComponent(`custom:${id}`)}`, { phone: "(204) 777-0123", email: "me@example.test" });
     expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.results.length).toBeGreaterThan(0);
+    for (const r of body.results) expect(["(204) 777-0123", "me@example.test"]).toContain(r.target);
+    // Texting isn't set up in tests: the result says so in words, not silence.
+    const sms = body.results.find((r: any) => r.channel === "sms");
+    if (sms) expect(sms.detail).toMatch(/isn't set up/);
+    // Nothing on the job: the real milestone is still to come, and no timeline line.
     const fires = await db.select().from(schema.customMilestoneFires).where(eq(schema.customMilestoneFires.milestoneId, id));
     expect(fires.length).toBe(0);
+    const eventsAfter = (await db.select().from(schema.jobEvents).where(eq(schema.jobEvents.bookingId, "cmr-job"))).length;
+    expect(eventsAfter).toBe(eventsBefore);
+    // Every logged test delivery went to the tester.
+    const logged = await db.select().from(schema.notificationDeliveries).where(eq(schema.notificationDeliveries.event, `custom:${id}`));
+    for (const d of logged) expect(["(204) 777-0123", "me@example.test"]).toContain(d.target);
     // The delivery log names it the way people know it.
     await db.insert(schema.notificationDeliveries).values([
       { companyId: CO, event: `custom:${id}`, bookingId: "cmr-job", recipient: "client", channel: "sms", status: "skipped" },
@@ -188,11 +201,29 @@ describe("custom milestones API", () => {
     const labels = log.deliveries.map((d: any) => d.eventLabel);
     expect(labels).toContain("Water restored");
     expect(labels).toContain("En route (on the way)");
-    // Another company's job id is not accepted as a test target.
-    const theirs = await call("POST", `/test/${encodeURIComponent(`custom:${id}`)}`, { bookingId: "cmr-their-job" });
-    expect(theirs.status).toBe(400);
-    const builtIn = await call("POST", "/test/enroute", { bookingId: "cmr-their-job" });
-    expect(builtIn.status).toBe(400);
+  });
+
+  it("Test asks for somewhere to send it, and a real mobile number", async () => {
+    const none = await call("POST", "/test/enroute", {});
+    expect(none.status).toBe(400);
+    expect(((await none.json()) as any).message).toMatch(/mobile number or email/);
+    const short = await call("POST", "/test/enroute", { phone: "555-1234" });
+    expect(short.status).toBe(400);
+    expect(((await short.json()) as any).message).toMatch(/area code/);
+    const ok = await call("POST", "/test/enroute", { phone: "+1 204 777 0123" });
+    expect(ok.status).toBe(200);
+  });
+
+  it("Test says why a text didn't go: texts switched off, or a sample number", async () => {
+    await db.insert(schema.notificationRules).values({ companyId: CO, event: "arrived", recipient: "office", sms: true, enabled: true } as any);
+    const sample = (await (await call("POST", "/test/arrived", { phone: "(204) 555-0142" })).json()) as any;
+    expect(sample.results.find((r: any) => r.channel === "sms").detail).toMatch(/sample number/);
+    const [existing] = await db.select().from(schema.notificationChannels).where(eq(schema.notificationChannels.companyId, CO));
+    if (existing) await db.update(schema.notificationChannels).set({ smsEnabled: false }).where(eq(schema.notificationChannels.companyId, CO));
+    else await db.insert(schema.notificationChannels).values({ id: "cmr-channels", companyId: CO, smsEnabled: false } as any);
+    const off = (await (await call("POST", "/test/arrived", { phone: "(204) 777-0123" })).json()) as any;
+    expect(off.results.find((r: any) => r.channel === "sms")).toMatchObject({ status: "skipped", detail: expect.stringMatching(/switched off/) });
+    await db.update(schema.notificationChannels).set({ smsEnabled: true }).where(eq(schema.notificationChannels.companyId, CO));
   });
 
   it("edits, pauses and reports the change", async () => {

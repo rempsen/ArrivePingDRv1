@@ -19,6 +19,9 @@ const recipLabel = (r: { key: string; label: string }, noun: string, customerNou
 import { EmailEditor, type EmailBlock } from "../../components/email-editor";
 import { starterDesignForRecipient } from "../../lib/email-starters";
 import { CustomMilestoneDialog } from "./custom-milestone-dialog";
+import { NotificationTestDialog } from "./notification-test-dialog";
+import { useAuth } from "../../hooks/use-auth";
+import { authClient } from "../../lib/auth";
 
 type Channel = "inApp" | "email" | "sms" | "webhook";
 const CHANNELS: { key: Channel; label: string; icon: any }[] = [
@@ -71,6 +74,73 @@ export default function AdminNotifications() {
   );
 }
 
+/**
+ * Office texts go to each office admin's own mobile number. A new company's
+ * admin usually hasn't added one, so those texts (and a test text) had
+ * nowhere to go and nothing said why. Ask for it at the top, once.
+ */
+function MobileNumberPrompt() {
+  const { user, refetchSession } = useAuth();
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  if (!user || (user.phone || "").trim()) return null;
+  const digits = phone.replace(/[^0-9]/g, "");
+  const save = async () => {
+    if (digits.length < 10) {
+      setError("Enter your mobile number with its area code, like (204) 555-0123.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const res = await authClient.updateUser({ phone: phone.trim() } as any);
+      if ((res as any)?.error) throw new Error((res as any).error.message || "Couldn't save your number");
+      await refetchSession?.();
+    } catch (e: any) {
+      setError(e?.message || "Couldn't save your number. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <section className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] p-4" aria-label="Add your mobile number">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[16rem] flex-1">
+          <p className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+            <MessageSquare className="h-4 w-4" aria-hidden="true" /> Add your mobile number to get office texts
+          </p>
+          <p className="mt-1 text-xs text-amber-100/70">
+            Texts marked for the Office go to your own mobile. Your profile doesn't have one yet, so they can't reach you, and neither can a test text.
+          </p>
+        </div>
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            aria-label="Your mobile number"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="(204) 555-0123"
+            className={`${inputCls.replace("w-full", "")} w-52`}
+          />
+          <BtnPrimary type="submit" disabled={saving || !phone.trim()}>
+            {saving ? "Saving…" : "Save"}
+          </BtnPrimary>
+        </form>
+      </div>
+      {error && <p className="mt-2 text-xs text-red-300" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 /* ---------------- Rules matrix ---------------- */
 function RulesMatrix() {
   const qc = useQueryClient();
@@ -100,9 +170,7 @@ function RulesMatrix() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["notif-rules"] }),
   });
 
-  const test = useMutation({
-    mutationFn: async (event: string) => (await api["notif-config"].test[":event"].$post({ param: { event }, json: {} })).json(),
-  });
+  const [testing, setTesting] = useState<{ event: string; label: string } | null>(null);
 
   if (rules.isLoading) return <FullLoader label="Loading rules…" />;
   const data = rules.data as any;
@@ -175,7 +243,8 @@ function RulesMatrix() {
       </td>
       <td className="px-4 py-3 text-right">
         <button
-          onClick={() => test.mutate(ev.event)}
+          onClick={() => setTesting({ event: ev.event, label: ev.label })}
+          title="Send this event's messages to yourself"
           className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-ink px-3 py-1.5 text-xs font-semibold text-slate-300 hover:border-brand/40 hover:text-cyan-glow"
         >
           <Send className="h-3.5 w-3.5" /> Test
@@ -184,8 +253,11 @@ function RulesMatrix() {
     </tr>
   );
 
+  const officeTexts = allRules.some((r: any) => r.recipient === "office" && r.sms && r.enabled !== false);
+
   return (
     <div className="space-y-3">
+      {officeTexts && <MobileNumberPrompt />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-400">
           Toggle a channel for each recipient on each event. Changes save instantly and apply to the whole work-order lifecycle.
@@ -252,7 +324,17 @@ function RulesMatrix() {
           <span key={c.key} className="inline-flex items-center gap-1.5"><c.icon className="h-3.5 w-3.5" /> {c.label}</span>
         ))}
       </div>
-      {test.isSuccess && <p className="px-1 text-xs text-green-400">Test event fired against the latest work order — check the Delivery Log.</p>}
+      {testing && (
+        <NotificationTestDialog
+          event={testing.event}
+          label={testing.label}
+          plan={RECIPIENTS.map((rc) => {
+            const r = byKey(testing.event, rc.key);
+            return { recipientLabel: recipLabel(rc, noun, customerNoun), sms: !!(r?.enabled !== false && r?.sms), email: !!(r?.enabled !== false && r?.email) };
+          })}
+          onClose={() => setTesting(null)}
+        />
+      )}
       {openEvent && <EventDrawer event={openEvent.event} label={openEvent.label} onClose={() => setOpenEvent(null)} />}
       {milestone !== undefined && <CustomMilestoneDialog milestoneId={milestone} onClose={() => setMilestone(undefined)} />}
     </div>

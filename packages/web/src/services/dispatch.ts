@@ -620,30 +620,8 @@ async function deliver(
   const [allowInApp, allowEmail, allowSms, allowWebhook] = await Promise.all([
     channelAllowed(companyId, "inApp"), channelAllowed(companyId, "email"), channelAllowed(companyId, "sms"), channelAllowed(companyId, "webhook"),
   ]);
-  // sender identity from channel config
-  const chanCfg = await channelConfig(companyId);
-  // Only honor a tenant's custom from-address if its domain is verified in
-  // Resend. Otherwise fall through to undefined so email.ts uses its safe
-  // shared sender (onboarding@resend.dev) and mail still goes out.
-  const sender = pickSender(
-    { ...chanCfg, emailFromName: chanCfg?.emailFromName || vars.company },
-    await verifiedDomainsForCompany(companyId).catch((): string[] => []),
-    PLATFORM_FROM,
-  );
-  const emailFrom = sender.from;
-  const emailReplyTo = sender.replyTo;
-  const emailFooter = chanCfg?.emailFooter || "";
-  const emailBrand: EmailBrand = {
-    company: vars.company,
-    logoUrl: chanCfg?.emailLogoUrl || "",
-    logoHeight: chanCfg?.emailLogoHeight || undefined,
-    brandColor: chanCfg?.emailBrandColor || "#06B6D4",
-    headerStyle: (chanCfg?.emailHeaderStyle as any) || "gradient",
-    bgColor: chanCfg?.emailBgColor || "#f1f5f9",
-    footer: emailFooter,
-    origin: process.env.WEBSITE_URL || process.env.APP_URL || process.env.PUBLIC_URL || "",
-  };
-  const interp = (s: string) => interpolate(s, vars);
+  const env = await emailEnv(companyId, vars);
+  const { emailFrom, emailReplyTo } = env;
 
   for (const rule of rules) {
     const recipient = rule.recipient as Recipient;
@@ -684,22 +662,9 @@ async function deliver(
       // email — use the rich block design when present, else the legacy text template
       // Nothing written for this recipient (a custom milestone with no message
       // and no designed email) sends no email: an empty one is worse than none.
-      let design: EmailBlock[] | null = null;
-      if (rule.email && rule.emailDesign) {
-        try { design = JSON.parse(rule.emailDesign); } catch { design = null; }
-      }
-      const hasDesign = !!design && Array.isArray(design) && design.length > 0;
-      if (rule.email && allowEmail && t.email && (hasDesign || msg)) {
-        let html: string;
-        let text: string | undefined;
-        if (design && hasDesign) {
-          html = renderEmailDesign(design, emailBrand, interp);
-          text = designToText(design, interp);
-        } else {
-          html = emailHtml(meta.defaultTitle, msg, vars, emailFooter, emailBrand);
-          text = msg;
-        }
-        const subject = rule.emailSubject ? interp(rule.emailSubject) : `${vars.company}: ${meta.label}`;
+      const mail = rule.email && allowEmail && t.email ? ruleEmail(rule, msg, meta, vars, env) : null;
+      if (mail && t.email) {
+        const { subject, html, text } = mail;
         // Marked before the attempt: a provider error can still mean it went.
         if (progress) progress.sending = true;
         const r = await sendEmail({ to: t.email, subject, html, text, from: emailFrom, replyTo: emailReplyTo }).catch((e) => ({ ok: false, error: e?.message }));
@@ -746,6 +711,177 @@ async function deliver(
       }
     }
   }
+}
+
+/** Sender, branding and template filling for a company's emails. */
+async function emailEnv(companyId: string, vars: Vars) {
+  // sender identity from channel config
+  const chanCfg = await channelConfig(companyId);
+  // Only honor a tenant's custom from-address if its domain is verified in
+  // Resend. Otherwise fall through to undefined so email.ts uses its safe
+  // shared sender (onboarding@resend.dev) and mail still goes out.
+  const sender = pickSender(
+    { ...chanCfg, emailFromName: chanCfg?.emailFromName || vars.company },
+    await verifiedDomainsForCompany(companyId).catch((): string[] => []),
+    PLATFORM_FROM,
+  );
+  const emailFooter = chanCfg?.emailFooter || "";
+  const emailBrand: EmailBrand = {
+    company: vars.company,
+    logoUrl: chanCfg?.emailLogoUrl || "",
+    logoHeight: chanCfg?.emailLogoHeight || undefined,
+    brandColor: chanCfg?.emailBrandColor || "#06B6D4",
+    headerStyle: (chanCfg?.emailHeaderStyle as any) || "gradient",
+    bgColor: chanCfg?.emailBgColor || "#f1f5f9",
+    footer: emailFooter,
+    origin: process.env.WEBSITE_URL || process.env.APP_URL || process.env.PUBLIC_URL || "",
+  };
+  return {
+    chanCfg,
+    emailFrom: sender.from,
+    emailReplyTo: sender.replyTo,
+    emailFooter,
+    emailBrand,
+    interp: (s: string) => interpolate(s, vars),
+  };
+}
+
+/** The email a rule would send: its designed email, else the plain message in the branded frame. */
+function ruleEmail(
+  rule: { emailDesign?: string | null; emailSubject?: string | null },
+  msg: string,
+  meta: EventMeta,
+  vars: Vars,
+  env: Awaited<ReturnType<typeof emailEnv>>,
+): { subject: string; html: string; text?: string } | null {
+  let design: EmailBlock[] | null = null;
+  if (rule.emailDesign) {
+    try { design = JSON.parse(rule.emailDesign); } catch { design = null; }
+  }
+  const hasDesign = !!design && Array.isArray(design) && design.length > 0;
+  if (!hasDesign && !msg) return null;
+  const subject = rule.emailSubject ? env.interp(rule.emailSubject) : `${vars.company}: ${meta.label}`;
+  if (design && hasDesign) return { subject, html: renderEmailDesign(design, env.emailBrand, env.interp), text: designToText(design, env.interp) };
+  return { subject, html: emailHtml(meta.defaultTitle, msg, vars, env.emailFooter, env.emailBrand), text: msg };
+}
+
+/* ---------------------------------------------------------------- tests -- */
+
+export type TestSendResult = {
+  recipient: Recipient;
+  /** The company's word for who this message is for ("Resident", "Property manager", "Office"). */
+  recipientLabel: string;
+  channel: "sms" | "email";
+  status: "sent" | "failed" | "skipped";
+  target: string;
+  /** Plain words: what went wrong, or what to do. */
+  detail: string;
+};
+
+/**
+ * The Test button on an event: send each message the event's rules would
+ * send (text and email, for every recipient switched on) to the person
+ * testing, and to nobody else. The messages are filled in from the
+ * company's latest job, sample-day ones included, or from example values
+ * when there is no job yet; the job itself is never touched (no timeline
+ * line, no automations, no webhooks). Quiet hours don't apply to a test;
+ * a channel switched off on the Channels tab does, and says so.
+ */
+export async function sendTestMessages(input: {
+  companyId: string;
+  event: string;
+  meta: EventMeta;
+  to: { phone?: string; email?: string };
+}): Promise<{ results: TestSendResult[]; jobLabel: string | null }> {
+  const { companyId, event, meta } = input;
+  const t = tdb(companyId);
+  const jobs = await t.select(schema.bookings);
+  jobs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const ctx = jobs[0] ? await context(jobs[0].id) : null;
+  const co = ctx?.co ?? (await t.selectOne(schema.companySettings));
+  const vars: Vars = ctx?.vars ?? {
+    ...SAMPLE_VARS,
+    company: co?.name || SAMPLE_VARS.company,
+    workerNoun: co?.workerNoun || "Technician",
+    jobNoun: co?.jobNoun || "Job",
+    customerNoun: co?.customerNoun || "Customer",
+  };
+  const builtIn = (EVENT_META as Record<string, EventMeta | undefined>)[event] ? (event as NvcEvent) : null;
+  const rules = await t.select(
+    schema.notificationRules,
+    and(eq(schema.notificationRules.event, event), eq(schema.notificationRules.enabled, true)),
+  );
+  const env = await emailEnv(companyId, vars);
+  const label = (r: Recipient) => (r === "client" ? vars.customerNoun : r === "tech" ? vars.workerNoun : "Office");
+  const order: Recipient[] = ["client", "tech", "office"];
+  rules.sort((a, b) => order.indexOf(a.recipient as Recipient) - order.indexOf(b.recipient as Recipient));
+
+  const results: TestSendResult[] = [];
+  for (const rule of rules) {
+    const recipient = rule.recipient as Recipient;
+    const who = label(recipient);
+    const msg = rule.template ? interpolate(rule.template, vars) : builtIn ? defaultMessage(builtIn, recipient, vars) : "";
+    const base = { recipient, recipientLabel: who };
+    if (rule.sms) {
+      const phone = input.to.phone || "";
+      let r: TestSendResult;
+      if (!phone) r = { ...base, channel: "sms", status: "skipped", target: "", detail: "Add your mobile number to get the text." };
+      else if (env.chanCfg && !env.chanCfg.smsEnabled) r = { ...base, channel: "sms", status: "skipped", target: phone, detail: "Texts are switched off for your company on the Channels tab." };
+      else if (!msg) r = { ...base, channel: "sms", status: "skipped", target: phone, detail: `No text is written for the ${who.toLowerCase()} yet. Choose Edit to write one.` };
+      else {
+        const sent = await sendSms(phone, `[Test for ${who}] ${msg}`);
+        r = sent.ok
+          ? { ...base, channel: "sms", status: "sent", target: phone, detail: "" }
+          : {
+              ...base,
+              channel: "sms",
+              status: sent.skipped ? "skipped" : "failed",
+              target: phone,
+              detail: sent.error === "sample contact"
+                ? "That's a sample number (555-01xx), so nothing was sent. Use a real mobile number."
+                : sent.skipped
+                  ? "Texting isn't set up on this server yet. Contact ArrivePing support."
+                  : smsErrorInWords(sent.error),
+            };
+      }
+      results.push(r);
+      if (r.status !== "skipped" || phone) {
+        await logDelivery({ companyId, event, recipient, channel: "sms", target: r.target, status: r.status, detail: `Test: ${r.detail || "sent"}` });
+      }
+    }
+    if (rule.email) {
+      const email = input.to.email || "";
+      let r: TestSendResult;
+      const mail = ruleEmail(rule, msg, meta, vars, env);
+      if (!email) r = { ...base, channel: "email", status: "skipped", target: "", detail: "Add your email address to get the email." };
+      else if (env.chanCfg && !env.chanCfg.emailEnabled) r = { ...base, channel: "email", status: "skipped", target: email, detail: "Emails are switched off for your company on the Channels tab." };
+      else if (!mail) r = { ...base, channel: "email", status: "skipped", target: email, detail: `No email is written for the ${who.toLowerCase()} yet. Choose Edit to write one.` };
+      else {
+        const sent = await sendEmail({
+          to: email,
+          subject: `[Test for ${who}] ${mail.subject}`,
+          html: mail.html,
+          text: mail.text,
+          from: env.emailFrom,
+          replyTo: env.emailReplyTo,
+        }).catch((e) => ({ ok: false, error: e?.message }));
+        const ok = (sent as any)?.ok !== false;
+        r = { ...base, channel: "email", status: ok ? "sent" : "failed", target: email, detail: ok ? "" : (sent as any)?.error || "The email couldn't be sent." };
+      }
+      results.push(r);
+      if (email) await logDelivery({ companyId, event, recipient, channel: "email", target: r.target, status: r.status, detail: `Test: ${r.detail || "sent"}` });
+    }
+  }
+  return { results, jobLabel: ctx ? `${vars.jobName} (#${vars.shortId})${ctx.b.isSample ? ", a sample job" : ""}` : null };
+}
+
+/** Twilio's reasons, in words an office manager can act on. */
+function smsErrorInWords(error?: string): string {
+  const e = (error || "").toLowerCase();
+  if (/not a valid phone|invalid.*'to'|is not a mobile|landline/.test(e)) return "That number can't receive texts. Check it's a mobile number with its area code.";
+  if (/unsubscribed|blacklist|opted out/.test(e)) return "This number replied STOP earlier, so texts to it are blocked. Text START to the sending number to allow them again.";
+  if (/permission|region|geo/.test(e)) return "Texts to that country aren't allowed yet. Contact ArrivePing support.";
+  return error ? `The text couldn't be sent: ${error}` : "The text couldn't be sent.";
 }
 
 /** Make a stored/relative logo URL absolute so email clients can load it. */

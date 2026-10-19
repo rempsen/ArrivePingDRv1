@@ -1,10 +1,11 @@
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import * as schema from "../database/schema";
+import { sdb } from "../database";
 import { eq } from "drizzle-orm";
 import { requireAdmin, tx, tenantId } from "../middleware/auth";
 import { audit } from "../lib/audit";
-import { fireEvent, seedNotificationRules, EVENT_META, defaultTemplateFor, interpolateSample, TEMPLATE_VARS, renderDesignPreview, sendDesignTest, type NvcEvent } from "../../services/dispatch";
+import { sendTestMessages, seedNotificationRules, EVENT_META, defaultTemplateFor, interpolateSample, TEMPLATE_VARS, renderDesignPreview, sendDesignTest, type NvcEvent } from "../../services/dispatch";
 import { starterDesigns, type EmailBlock } from "../../services/email-render";
 import { putObject } from "../lib/storage";
 import { resendAvailable, triggerVerify, removeDomain } from "../../services/email-domains";
@@ -29,7 +30,6 @@ import {
   checklistLabels,
   createMilestone,
   deleteMilestone,
-  fireMilestone,
   getMilestone,
   hasEmailDesign,
   listMilestones,
@@ -45,7 +45,6 @@ import { jsonBody,
   longText,
   optText,
   email,
-  id,
   jsonBlob,
   hhmm,
   bool,
@@ -180,7 +179,20 @@ const WebhookPatch = z
   .partial()
   .refine((b) => Object.keys(b).length > 0, { error: "Nothing to update" });
 
-const TestEventBody = z.object({ bookingId: id("Work order id").optional() });
+/** Where a Test goes: the person testing, never a customer. */
+const TestEventBody = z.object({
+  phone: z.string().trim().max(40, "That phone number is too long").optional(),
+  email: z.string().trim().max(254).optional(),
+  /** Save the number on the tester's own profile, so office texts reach them too. */
+  rememberPhone: z.boolean().optional(),
+});
+
+/** A mobile number with its area code (10 digits, or 11+ with a country code), or a clear reason it isn't one. */
+export function testPhoneProblem(phone: string): string | null {
+  const digits = phone.replace(/[^0-9]/g, "");
+  if (digits.length < 10 || digits.length > 15) return "Enter your mobile number with its area code, like (204) 555-0123.";
+  return null;
+}
 
 const MilestoneMessage = z.object({
   on: bool("Send"),
@@ -249,17 +261,6 @@ async function milestoneView(t: ReturnType<typeof tx>, m: CustomMilestone) {
 }
 
 /** A booking id from the request, only if it is this company's. */
-async function ownBookingId(c: any, bookingId: string | undefined): Promise<string | undefined> {
-  const t = tx(c);
-  if (bookingId) {
-    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
-    return b?.id;
-  }
-  const rows = await t.select(schema.bookings);
-  rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  return rows[0]?.id;
-}
-
 /**
  * Resolve (creating if needed) the single notification_channels row for the
  * active company. Tenancy: one row per company, keyed by companyId. The legacy
@@ -555,23 +556,34 @@ export const notifConfigRoutes = new Hono<AppEnv>()
     return c.json({ deliveries: rows.slice(0, 200).map((r) => ({ ...r, eventLabel: label(r.event) })) }, 200);
   })
 
-  // ---- fire a test event against a real booking ----
+  // ---- send an event's messages to the person testing (never to a customer) ----
   .post("/test/:event", requireAdmin, jsonBody(TestEventBody), async (c) => {
     const event = c.req.param("event") as NvcEvent;
     const customId = customMilestoneId(event);
     const custom = customId ? await getMilestone(tenantId(c), customId) : undefined;
     if (customId && !custom) return c.json({ message: "That milestone no longer exists" }, 404);
     if (!custom && !EVENT_META[event]) return c.json({ message: "unknown event" }, 404);
-    const { bookingId } = c.req.valid("json");
-    // Only ever this company's own work order: the id in the body is checked,
-    // not trusted.
-    const bid = await ownBookingId(c, bookingId);
-    if (!bid) return c.json({ message: "no booking to test with" }, 400);
-    // A custom milestone's test sends its messages without marking the job as
-    // having had it, so the real one still goes out later.
-    if (custom) await fireMilestone(custom, bid, { test: true });
-    else await fireEvent(event, bid);
-    return c.json({ ok: true, event, bookingId: bid }, 200);
+    const body = c.req.valid("json");
+    const phone = body.phone || "";
+    const mail = body.email || "";
+    if (!phone && !mail) return c.json({ message: "Enter your mobile number or email address to get the test." }, 400);
+    if (phone) {
+      const problem = testPhoneProblem(phone);
+      if (problem) return c.json({ message: problem }, 400);
+    }
+    if (mail && !email().safeParse(mail).success) return c.json({ message: "Enter a valid email address." }, 400);
+    const me = c.get("user") as { id?: string; phone?: string } | undefined;
+    // Only fills an empty profile number: a test never overwrites one.
+    if (phone && body.rememberPhone && me?.id && !me.phone) {
+      await sdb.update(schema.user).set({ phone, updatedAt: new Date() }).where(eq(schema.user.id, me.id));
+    }
+    const out = await sendTestMessages({
+      companyId: tenantId(c),
+      event,
+      meta: custom ? milestoneMeta(custom) : EVENT_META[event],
+      to: { phone: phone || undefined, email: mail || undefined },
+    });
+    return c.json({ ok: true, event, ...out }, 200);
   })
 
   // ---- custom milestones (services/custom-milestones.ts) ----
