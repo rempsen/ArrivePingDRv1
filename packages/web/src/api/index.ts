@@ -32,6 +32,7 @@ import { fleetRoutes } from "./routes/fleet";
 import { dispatchRoutes } from "./routes/dispatch";
 import { aiRoutes } from "./routes/ai";
 import { templatesRoutes } from "./routes/templates";
+import { jobFormsRoutes } from "./routes/job-forms";
 import { automationRoutes } from "./routes/automation";
 import { integrationsRoutes } from "./routes/integrations";
 import { exportRoutes } from "./routes/export";
@@ -401,6 +402,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/dispatch", dispatchRoutes)
   .route("/ai", aiRoutes)
   .route("/templates", templatesRoutes)
+  // Job forms v2: the form a technician fills in on a job.
+  .route("/job-forms", jobFormsRoutes)
   .route("/automation", automationRoutes)
   .route("/maintenance", maintenanceRoutes)
   .route("/integrations", integrationsRoutes)

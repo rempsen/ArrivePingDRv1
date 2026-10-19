@@ -1,17 +1,27 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { parseTechPayModel } from "../../shared/tech-pay";
 import { ensureFormCategories } from "../../services/form-categories";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, tenantId, tx } from "../middleware/auth";
+import { requireAuth, requireOffice, tenantId, tx } from "../middleware/auth";
 import { z } from "zod";
 import { jsonBody, shortText, longText, hexColor } from "../lib/validate";
 import type { AppEnv } from "../env";
+import { formProblems, normalizeForm, questionCount, templateForm } from "../../shared/forms/form-model";
+import { toLegacy } from "../../shared/forms/legacy";
+import { listVersions, publishVersion, templateStats } from "../../services/job-forms";
+import { audit } from "../lib/audit";
 
 /**
- * Work-order templates. `fields`/`checklist` are builder-authored arrays and
- * `rateModel` may arrive as either an object or an already-stringified snapshot,
- * so those stay loose — everything a human types is bounded.
+ * Work-order templates. `fields`/`checklist` are the legacy (schema 1)
+ * builder output; `form` is the Job forms v2 schema-2 form. When `form` is
+ * saved, the legacy columns are rewritten from it (shared/forms/legacy.ts) so
+ * older readers keep working. Every change to questions, prices or pay is
+ * published as a new immutable version (services/job-forms.ts), so jobs
+ * already booked keep the version they were booked with.
+ *
+ * Reading is open to anyone signed in at the company (the phone app lists
+ * them); writing is office-only (`mod("forms")` in lib/office-access.ts).
  */
 const TemplateBody = z.object({
   name: shortText("Name", 120),
@@ -19,12 +29,14 @@ const TemplateBody = z.object({
   icon: shortText("Icon", 64).optional(),
   color: hexColor().optional(),
   description: longText(2_000).optional(),
-  fields: z.array(z.unknown()).optional(),
-  checklist: z.array(z.unknown()).optional(),
+  fields: z.array(z.unknown()).max(500).optional(),
+  checklist: z.array(z.unknown()).max(500).optional(),
+  form: z.unknown().optional(),
   estimatedMins: z.number().int().min(0).max(43_200).optional(),
   rateModel: z.unknown().optional(),
   techPayModel: z.unknown().optional(),
   collectPayment: z.enum(["", "on_site"]).optional(),
+  sendCustomerCopy: z.boolean().optional(),
   active: z.boolean().optional(),
 });
 
@@ -37,10 +49,52 @@ export function techPayModelJson(v: unknown): string {
 
 const TemplatePatch = TemplateBody.partial();
 
+type Body = z.infer<typeof TemplatePatch>;
+
+/** The columns a create/patch body sets, with `form` fanned out to the legacy columns. */
+function columnsFrom(body: Body): { set: Record<string, unknown>; problem?: string } {
+  const set: Record<string, unknown> = {};
+  for (const k of ["name", "category", "icon", "color", "description", "estimatedMins", "active", "sendCustomerCopy"] as const)
+    if (body[k] !== undefined) set[k] = body[k];
+  if (body.fields !== undefined) set.fields = JSON.stringify(body.fields);
+  if (body.checklist !== undefined) set.checklist = JSON.stringify(body.checklist);
+  if (body.form !== undefined) {
+    const def = normalizeForm(body.form);
+    const problems = formProblems(def);
+    if (problems.length) return { set, problem: problems[0]!.message };
+    const legacy = toLegacy(def);
+    set.form = JSON.stringify(def);
+    set.fields = JSON.stringify(legacy.fields);
+    set.checklist = JSON.stringify(legacy.checklist);
+  }
+  if (body.rateModel !== undefined)
+    set.rateModel = typeof body.rateModel === "string" ? body.rateModel : JSON.stringify(body.rateModel);
+  if (body.techPayModel !== undefined) set.techPayModel = techPayModelJson(body.techPayModel);
+  if (body.collectPayment !== undefined) set.collectPayment = body.collectPayment;
+  return { set };
+}
+
+/** A template row plus its parsed form and usage, for the builder and lists. */
+function present(t: typeof schema.taskTemplates.$inferSelect, stats?: { jobs: number; version: number }) {
+  const formDef = templateForm(t);
+  return { ...t, formDef, questionCount: questionCount(formDef), jobCount: stats?.jobs ?? 0, version: stats?.version ?? 0 };
+}
+
+type Ctx = Context<AppEnv>;
+const actorOf = (c: Ctx) => {
+  const u = c.get("user") as { name?: string; email?: string } | null;
+  return u?.name || u?.email || "";
+};
+function log(c: Ctx, action: string, entityId: string, summary: string) {
+  const u = c.get("user") as { id?: string } | null;
+  return audit({ companyId: tenantId(c), actorId: u?.id ?? "", actorName: actorOf(c), action, entityType: "template", entityId, summary });
+}
+
 export const templatesRoutes = new Hono<AppEnv>()
   .get("/", requireAuth, async (c) => {
     const rows = await tx(c).select(schema.taskTemplates);
-    return c.json({ templates: rows }, 200);
+    const stats = await templateStats(tenantId(c)).catch(() => new Map());
+    return c.json({ templates: rows.map((t) => present(t, stats.get(t.id))) }, 200);
   })
   .get("/:id", requireAuth, async (c) => {
     const t = await tx(c).selectOne(
@@ -48,65 +102,71 @@ export const templatesRoutes = new Hono<AppEnv>()
       eq(schema.taskTemplates.id, c.req.param("id")),
     );
     if (!t) return c.json({ message: "Not found" }, 404);
-    return c.json({ template: t }, 200);
+    const stats = await templateStats(tenantId(c)).catch(() => new Map());
+    return c.json({ template: present(t, stats.get(t.id)) }, 200);
   })
-  .post("/", requireAuth, jsonBody(TemplateBody), async (c) => {
+  .get("/:id/versions", requireOffice, async (c) => {
+    return c.json({ versions: await listVersions(tenantId(c), c.req.param("id")) }, 200);
+  })
+  .post("/", requireOffice, jsonBody(TemplateBody), async (c) => {
     const body = c.req.valid("json");
+    const { set, problem } = columnsFrom(body);
+    if (problem) return c.json({ message: problem }, 400);
     if (body.category) await ensureFormCategories(tenantId(c), [body.category]);
     const [t] = await tx(c).insert(schema.taskTemplates, {
+      category: "General",
+      icon: "clipboard-list",
+      color: "#0ea5e9",
+      description: "",
+      fields: "[]",
+      checklist: "[]",
+      estimatedMins: 60,
+      rateModel: "",
+      techPayModel: "",
+      collectPayment: "",
+      ...set,
       name: body.name,
-      category: body.category ?? "General",
-      icon: body.icon ?? "clipboard-list",
-      color: body.color ?? "#0ea5e9",
-      description: body.description ?? "",
-      fields: JSON.stringify(body.fields ?? []),
-      checklist: JSON.stringify(body.checklist ?? []),
-      estimatedMins: body.estimatedMins ?? 60,
-      rateModel:
-        body.rateModel !== undefined
-          ? typeof body.rateModel === "string"
-            ? body.rateModel
-            : JSON.stringify(body.rateModel)
-          : "",
-      techPayModel: techPayModelJson(body.techPayModel),
-      collectPayment: body.collectPayment ?? "",
-    });
-    return c.json({ template: t }, 201);
+      updatedAt: new Date(),
+      updatedBy: actorOf(c),
+    } as never);
+    const v = await publishVersion(tenantId(c), t!.id, actorOf(c));
+    await log(c, "template.create", t!.id, `Created template ${t!.name}`);
+    return c.json({ template: present({ ...t!, currentVersionId: v?.id ?? null }, { jobs: 0, version: v?.version ?? 0 }) }, 201);
   })
-  .patch("/:id", requireAuth, jsonBody(TemplatePatch), async (c) => {
+  .patch("/:id", requireOffice, jsonBody(TemplatePatch), async (c) => {
+    const id = c.req.param("id");
     const body = c.req.valid("json");
-    const set: Record<string, unknown> = {};
-    for (const k of ["name", "category", "icon", "color", "description", "estimatedMins", "active"] as const)
-      if (body[k] !== undefined) set[k] = body[k];
-    if (body.fields !== undefined) set.fields = JSON.stringify(body.fields);
-    if (body.checklist !== undefined) set.checklist = JSON.stringify(body.checklist);
-    if (body.rateModel !== undefined)
-      set.rateModel =
-        typeof body.rateModel === "string" ? body.rateModel : JSON.stringify(body.rateModel);
-    if (body.techPayModel !== undefined) set.techPayModel = techPayModelJson(body.techPayModel);
-    if (body.collectPayment !== undefined) set.collectPayment = body.collectPayment;
+    const { set, problem } = columnsFrom(body);
+    if (problem) return c.json({ message: problem }, 400);
+    if (body.category) await ensureFormCategories(tenantId(c), [body.category]);
     const [t] = await tx(c).update(
       schema.taskTemplates,
-      set,
-      eq(schema.taskTemplates.id, c.req.param("id")),
+      { ...set, updatedAt: new Date(), updatedBy: actorOf(c) },
+      eq(schema.taskTemplates.id, id),
     );
-    return c.json({ template: t }, 200);
+    if (!t) return c.json({ message: "Not found" }, 404);
+    const v = await publishVersion(tenantId(c), id, actorOf(c));
+    const stats = await templateStats(tenantId(c)).catch(() => new Map());
+    await log(c, "template.update", id, `Saved template ${t.name} (v${v?.version ?? "?"})`);
+    return c.json({ template: present({ ...t, currentVersionId: v?.id ?? t.currentVersionId }, stats.get(id)) }, 200);
   })
-  .delete("/:id", requireAuth, async (c) => {
+  .delete("/:id", requireOffice, async (c) => {
     const id = c.req.param("id");
+    const existing = await tx(c).selectOne(schema.taskTemplates, eq(schema.taskTemplates.id, id));
     // bookings.templateId -> task_templates.id has no ON DELETE action, so a
     // template still referenced by a work order fails the delete with a raw
     // FK-constraint 500 ("Server error — nothing was saved") even though the
     // UI's own confirm copy promises "work orders already using it are
     // unaffected." Detach existing bookings from the template first so that
-    // promise is actually true — the work order keeps its own snapshot of
-    // fields/checklist/price, it just stops pointing at a template that no
-    // longer exists.
+    // promise is actually true — the work order keeps its own snapshot (and,
+    // on Job forms v2, its template version) — it just stops pointing at a
+    // template that no longer exists.
     await tx(c).update(
       schema.bookings,
       { templateId: null },
       eq(schema.bookings.templateId, id),
     );
     await tx(c).delete(schema.taskTemplates, eq(schema.taskTemplates.id, id));
+    if (existing) await log(c, "template.delete", id, `Deleted template ${existing.name}`);
     return c.json({ ok: true }, 200);
   });

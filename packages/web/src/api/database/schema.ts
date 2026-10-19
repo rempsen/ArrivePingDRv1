@@ -102,9 +102,68 @@ export const taskTemplates = pgTable("task_templates", {
   techPayModel: text("tech_pay_model").notNull().default(""), // TechPayModel JSON, "" = tech's own rates
   collectPayment: text("collect_payment").notNull().default(""), // "" | "on_site"
   active: boolean("active").notNull().default(true),
+  // Job forms v2 (shared/forms/form-model.ts): the schema-2 form, "" until the
+  // new builder saves it (then `fields`/`checklist` are legacy, kept as-is).
+  form: text("form").notNull().default(""),
+  // The published version new jobs are booked against (template_versions.id).
+  currentVersionId: text("current_version_id"),
+  // Email the customer a copy of the filled form when the job is done.
+  sendCustomerCopy: boolean("send_customer_copy").notNull().default(false),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
+  updatedBy: text("updated_by").notNull().default(""),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("tasktpl_company_idx").on(t.companyId),
+}));
+
+/**
+ * Every published version of a template: immutable, so a job booked against
+ * version 3 keeps version 3's questions and prices whatever happens later.
+ */
+export const templateVersions = pgTable("template_versions", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").notNull().default("default"),
+  templateId: text("template_id").notNull(),
+  version: integer("version").notNull(),
+  name: text("name").notNull().default(""),
+  form: text("form").notNull().default(""), // schema-2 FormDef JSON
+  rateModel: text("rate_model").notNull().default(""),
+  techPayModel: text("tech_pay_model").notNull().default(""),
+  collectPayment: text("collect_payment").notNull().default(""),
+  createdBy: text("created_by").notNull().default(""),
+  createdAt: now(),
+}, (t) => ({
+  companyIdx: index("tplver_company_idx").on(t.companyId),
+  templateVersionUq: uniqueIndex("tplver_template_version_uq").on(t.templateId, t.version),
+}));
+
+/**
+ * A job's filled-in form: one row per job and template version. `answers` is
+ * a JSON Answers map keyed by question id (shared/forms/form-model.ts).
+ */
+export const jobFormResponses = pgTable("job_form_responses", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").notNull().default("default"),
+  bookingId: text("booking_id")
+    .notNull()
+    .references(() => bookings.id, { onDelete: "cascade" }),
+  templateVersionId: text("template_version_id").notNull(),
+  answers: text("answers").notNull().default("{}"),
+  status: text("status").notNull().default("in_progress"), // in_progress | complete
+  answeredCount: integer("answered_count").notNull().default(0),
+  flaggedCount: integer("flagged_count").notNull().default(0),
+  missingCount: integer("missing_count").notNull().default(0),
+  completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+  updatedBy: text("updated_by").notNull().default(""),
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
+  createdAt: now(),
+}, (t) => ({
+  companyIdx: index("jobform_company_idx").on(t.companyId),
+  bookingVersionUq: uniqueIndex("jobform_booking_version_uq").on(t.bookingId, t.templateVersionId),
 }));
 
 /** Shared, reusable skill library for technicians (dropdown + type-to-add). */
@@ -224,6 +283,8 @@ export const jobPhotos = pgTable("job_photos", {
   // Defaults on — techs can mark a shot internal (e.g. a damaged part close-up
   // the office wants but the customer shouldn't be alarmed by).
   customerVisible: boolean("customer_visible").notNull().default(true),
+  // Job forms v2: the form question this photo answers ("" = a general job photo).
+  formItemId: text("form_item_id").notNull().default(""),
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("jobphoto_company_idx").on(t.companyId),
@@ -244,6 +305,9 @@ export const bookings = pgTable("bookings", {
     .references(() => services.id),
   riderId: text("rider_id").references(() => riders.id),
   templateId: text("template_id").references(() => taskTemplates.id),
+  // Job forms v2: the template version this job was booked with (its form,
+  // prices and pay). Null for jobs booked before forms v2.
+  templateVersionId: text("template_version_id"),
   title: text("title").notNull().default(""),
   priority: text("priority").notNull().default("normal"), // low | normal | high | urgent
   status: text("status").notNull().default("pending"),

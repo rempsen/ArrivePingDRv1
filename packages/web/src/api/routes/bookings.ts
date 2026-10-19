@@ -33,6 +33,8 @@ import { findAvailabilityBlock } from "../../services/availability";
 import { zonedDayBounds, fmtInZone } from "../../shared/tz";
 import { isTerminalStatus } from "../../shared/job-status";
 import { onChecklistTicked } from "../../services/custom-milestones";
+import { closeJobForm, currentVersion, missingForJob } from "../../services/job-forms";
+import { isFeatureOn } from "../../services/features";
 import { z } from "zod";
 import { jsonBody,
   id as idField,
@@ -108,7 +110,9 @@ function templateFieldsToCustomFields(rawFields: string | null | undefined): any
       type: TYPE_MAP[f.type],
       label: f.label || "",
       required: !!f.required,
-      ...(f.type === "select" ? { options: Array.isArray(f.options) ? f.options : [] } : {}),
+      // checkbox fields carry their list of items too (dropping them left a
+      // "Checklist" with nothing to tick on the job)
+      ...(f.type === "select" || f.type === "checkbox" ? { options: Array.isArray(f.options) ? f.options : [] } : {}),
     }));
 }
 
@@ -754,9 +758,24 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // Tech pay + field payment: what the office set on this work order, else the template's.
     let techPayModel = body.techPayModel !== undefined ? techPayModelJson(body.techPayModel) : "";
     let collectPayment: string = body.collectPayment ?? "";
+    // Job forms v2: book the job against the template's current version, so
+    // it keeps these questions, prices and pay whatever happens to the
+    // template later. The form replaces the separate checklist.
+    let templateVersionId: string | null = null;
     if (body.templateId) {
       const tpl = await t.selectOne(schema.taskTemplates, eq(schema.taskTemplates.id, body.templateId));
-      if (tpl) {
+      const ver = tpl && (await isFeatureOn(co, "forms.v2")) ? await currentVersion(co, tpl.id) : null;
+      if (tpl && ver) {
+        templateVersionId = ver.id;
+        if (body.techPayModel === undefined) techPayModel = ver.techPayModel || "";
+        if (body.collectPayment === undefined) collectPayment = ver.collectPayment || "";
+        const hasOwnFields = Array.isArray(body.fieldData?._customFields) && body.fieldData._customFields.length > 0;
+        // Older phone builds still read _customFields (read-only labels).
+        if (!hasOwnFields) {
+          const seeded = templateFieldsToCustomFields(tpl.fields);
+          if (seeded.length) fieldData = JSON.stringify({ ...body.fieldData, _customFields: seeded });
+        }
+      } else if (tpl) {
         if (body.techPayModel === undefined) techPayModel = tpl.techPayModel || "";
         if (body.collectPayment === undefined) collectPayment = tpl.collectPayment || "";
         const hasOwnFields = Array.isArray(body.fieldData?._customFields) && body.fieldData._customFields.length > 0;
@@ -787,6 +806,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       serviceId: body.serviceId,
       riderId: assignedRider,
       templateId: body.templateId ?? null,
+      templateVersionId,
       title: body.title || svc.name,
       priority: body.priority ?? "normal",
       status: assignedRider ? "assigned" : "confirmed",
@@ -971,7 +991,15 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if ((body as any).staffNotes !== undefined) set.staffNotes = (body as any).staffNotes;
     if (body.customerId !== undefined) set.customerId = body.customerId;
     if (body.serviceId !== undefined) set.serviceId = body.serviceId;
-    if (body.templateId !== undefined) set.templateId = body.templateId || null;
+    if (body.templateId !== undefined) {
+      set.templateId = body.templateId || null;
+      // Job forms v2: a different template means its current version (answers
+      // already given to the old form stay stored against the old version).
+      if ((body.templateId || null) !== (prev.templateId ?? null)) {
+        const ver = body.templateId && (await isFeatureOn(co, "forms.v2")) ? await currentVersion(co, body.templateId) : null;
+        set.templateVersionId = ver?.id ?? null;
+      }
+    }
     if (body.region !== undefined) set.region = body.region ?? "";
     if (body.lat !== undefined) set.lat = body.lat;
     if (body.lng !== undefined) set.lng = body.lng;
@@ -1141,15 +1169,38 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // board); the field app cannot skip or reverse a stage. Without this a
     // driver could go enroute -> completed: no arrival, no transit time, no
     // on-site clock, and no "your technician is here" for the customer.
+    const office = await officeCan(u, "work_orders:edit");
+    // Job forms v2: a technician on a form-aware app (X-Forms: 2) can't
+    // finish the job while required questions are unanswered. Older phone
+    // builds can't fill the form, so they aren't blocked (the office sees the
+    // form as unfinished instead); the office can always complete.
+    if (status === "completed" && !office && c.req.header("X-Forms") === "2") {
+      const cur = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
+      if (cur?.templateVersionId) {
+        const missing = await missingForJob(co, cur);
+        if (missing.length)
+          return c.json(
+            {
+              message: `Answer the required questions first: ${missing.slice(0, 3).map((m) => m.label).join(", ")}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}.`,
+              reason: "form_incomplete",
+              missing: missing.map((m) => ({ id: m.id, label: m.label })),
+            },
+            409,
+          );
+      }
+    }
     let b;
     try {
-      b = await applyBookingStatus(co, id, status, { force: await officeCan(u, "work_orders:edit") });
+      b = await applyBookingStatus(co, id, status, { force: office });
     } catch (e) {
       if (e instanceof StatusTransitionError)
         return c.json({ message: e.message, from: e.from, to: e.to }, 409);
       throw e;
     }
     if (!b) return c.json({ error: "not found" }, 404);
+    if (status === "completed" && b.templateVersionId) {
+      await closeJobForm(co, b, u.name || u.email || "").catch((e) => console.error("[bookings] close form failed", id, e));
+    }
     return c.json({ booking: await enrich(b) }, 200);
   })
   /**
@@ -1405,6 +1456,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const phase = ["before", "during", "after"].includes(rawPhase) ? rawPhase : "during";
     // techs can mark a shot office-only (default: the homeowner sees it)
     const customerVisible = String(form.get("customerVisible") ?? "true") !== "false";
+    // Job forms v2: the question this photo answers (tags the photo only; the
+    // answer itself is saved through /api/job-forms with the returned id).
+    const formItemId = String(form.get("formItemId") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
     if (!(file instanceof File)) return c.json({ message: "No file" }, 400);
     if (file.size > 15 * 1024 * 1024) return c.json({ message: "Image too large (max 15MB)" }, 400);
     const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
@@ -1424,6 +1478,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       source: "upload",
       phase,
       customerVisible,
+      formItemId,
     });
     if (!p) throw new Error("Failed to insert job photo");
     // Timeline entry so the photo shows up in the customer's job history and

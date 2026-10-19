@@ -20,11 +20,22 @@ export async function resolveRateModel(companyId: string, b: typeof schema.booki
   const t = tdb(companyId);
   const fromBooking = parseRateModel(b.rateModel);
   if (fromBooking) return fromBooking;
+  // Job forms v2: the prices of the template version the job was booked
+  // with, so editing a template later never reprices jobs already booked.
+  if (b.templateVersionId) {
+    const ver = await t.selectOne(schema.templateVersions, eq(schema.templateVersions.id, b.templateVersionId));
+    const fromVer = parseRateModel(ver?.rateModel);
+    if (ver) return fromVer ?? (await serviceOrLegacy(t, b));
+  }
   if (b.templateId) {
     const tpl = await t.selectOne(schema.taskTemplates, eq(schema.taskTemplates.id, b.templateId));
     const fromTpl = parseRateModel(tpl?.rateModel);
     if (fromTpl) return fromTpl;
   }
+  return serviceOrLegacy(t, b);
+}
+
+async function serviceOrLegacy(t: ReturnType<typeof tdb>, b: typeof schema.bookings.$inferSelect): Promise<RateModel> {
   const svc = await t.selectOne(schema.services, eq(schema.services.id, b.serviceId));
   const fromSvc = parseRateModel(svc?.rateModel);
   if (fromSvc) return fromSvc;

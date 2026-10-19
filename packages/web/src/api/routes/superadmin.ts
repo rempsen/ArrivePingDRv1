@@ -217,6 +217,7 @@ export const superadminRoutes = new Hono<AppEnv>()
 
     // 1) everything hanging off a booking
     await sdb.delete(schema.jobPhotos).where(eqCo(schema.jobPhotos.companyId));
+    await sdb.delete(schema.jobFormResponses).where(eqCo(schema.jobFormResponses.companyId));
     await sdb.delete(schema.messages).where(eqCo(schema.messages.companyId));
     await sdb.delete(schema.trackingPings).where(eqCo(schema.trackingPings.companyId));
     await sdb.delete(schema.bookingOptionSelections).where(eqCo(schema.bookingOptionSelections.companyId));
@@ -242,6 +243,7 @@ export const superadminRoutes = new Hono<AppEnv>()
     await sdb.delete(schema.optionCategoryItems).where(eqCo(schema.optionCategoryItems.companyId));
     await sdb.delete(schema.optionCategories).where(eqCo(schema.optionCategories.companyId));
     await sdb.delete(schema.catalogItems).where(eqCo(schema.catalogItems.companyId));
+    await sdb.delete(schema.templateVersions).where(eqCo(schema.templateVersions.companyId));
     await sdb.delete(schema.taskTemplates).where(eqCo(schema.taskTemplates.companyId));
 
     // maintenance plans — reference services (NO ACTION), properties (CASCADE)

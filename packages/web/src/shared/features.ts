@@ -61,6 +61,15 @@ export const FEATURES = [
     removeBy: "2027-03-31",
   },
   {
+    key: "forms.v2",
+    label: "Job forms v2",
+    description: "The new form builder (sections, logic, photos, sign-off, versions) and forms technicians fill in on site, with answers on the report and PDF.",
+    kind: "rollout",
+    group: "Operations",
+    kindDefaults: { customer: false, demo: true, test: true, internal: true },
+    removeBy: "2027-04-30",
+  },
+  {
     key: "maintenance.plans",
     label: "Maintenance plans",
     description: "Recurring service agreements that book their own visits.",
