@@ -95,6 +95,16 @@ export async function companyInfo(id: string): Promise<{ name: string; kind: str
   return (await loadCompanyDirectory()).dir.get(id);
 }
 /**
+ * May someone with this Control Hub role sign in as people at this tenant?
+ * Sales: demo and test accounts only (not customers, not our own).
+ */
+export async function platformMayActAs(role: PlatformRole | null | undefined, companyId: string): Promise<boolean> {
+  if (!role) return false;
+  if (atLeast(role, "staff")) return true;
+  const kind = (await companyInfo(companyId))?.kind;
+  return kind === "demo" || kind === "test";
+}
+/**
  * May someone with this Control Hub role open this tenant? Sales stay in demo,
  * test and the platform's own tenants; staff and owners may open any.
  */
@@ -219,12 +229,16 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   let platformRole: PlatformRole | null = null;
   if (isSuperadmin(baseRole)) {
     platformRole = await platformRoleOf(u as { id: string; email?: string; role?: string });
-    if (!platformRole) {
+    // Off the list: an admin of their own company. Sales: never a super
+    // admin either (dozens of routes check that role inline), just an admin
+    // inside the demo, test and our own accounts they may open (below).
+    if (!platformRole || platformRole === "sales") {
       u = { ...(u as Record<string, unknown>), role: "admin" } as unknown as typeof u;
       baseRole = "admin";
     }
   }
   c.set("platformRole", platformRole);
+  const sales = platformRole === "sales";
 
   // ---- Control Hub act-as ---------------------------------------------------
   // A staff member signed in as one of a tenant's people (services/act-as.ts).
@@ -235,7 +249,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   const actHeader = (c.req.header("X-Act-As") || c.req.header("x-act-as") || "").trim();
   if (actHeader && platformRole) {
     const r = await resolveActAs(actHeader, userId);
-    if (r.ok && (await platformMayOpen(platformRole, r.session.companyId))) {
+    if (r.ok && (await platformMayActAs(platformRole, r.session.companyId))) {
       const { session, target } = r;
       const tu = target.user as Record<string, unknown> & { id: string; name: string; role?: string | null; permissions?: string | null; companyId?: string | null };
       const tm = target.membership;
@@ -266,9 +280,14 @@ export const authMiddleware = createMiddleware(async (c, next) => {
       }
       return withRequestFacts({ supportActor: { id: userId, name: (u as { name?: string }).name ?? "", sessionId: session.id } }, () => next());
     }
-    // Ended, expired or no longer allowed: carry on as the staff member and
-    // tell the browser to drop the header.
+    // Ended, expired or no longer allowed: tell the browser to drop the
+    // header. A read carries on as the staff member; a write is refused, so
+    // a save made a second after time ran out never lands as the staff
+    // member's own (super admin) change in the customer's account.
     c.header("X-Act-As-Ended", r.ok ? "not_allowed" : r.reason);
+    if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method.toUpperCase())) {
+      return c.json({ error: { code: "act_as_ended", message: "Your act-as session has ended, so this wasn't saved. Start a new one to keep going." } }, 409);
+    }
   }
 
   let companyId = homeCompany;
@@ -279,9 +298,11 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     // header. Unauthorised values are ignored, never honoured.
     if (isSuperadmin(baseRole)) {
       const allowed = await loadCompanyIds();
+      if (allowed.has(requested)) companyId = requested;
+    } else if (sales) {
       // Sales staff only open demo, test and our own tenants; a customer's
       // id in the header is ignored for them, like any unauthorised value.
-      if (allowed.has(requested) && (await platformMayOpen(platformRole, requested))) companyId = requested;
+      if (await platformMayOpen("sales", requested)) companyId = requested;
     } else if (memberships.some((m) => m.companyId === requested)) {
       companyId = requested;
     }
@@ -293,10 +314,14 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   if (
     memberships.length > 0 &&
     !memberships.some((m) => m.companyId === companyId) &&
-    !isSuperadmin(baseRole)
+    !isSuperadmin(baseRole) &&
+    !sales
   ) {
     companyId = memberships[0]!.companyId;
   }
+  // Sales never land in a customer's account, whatever their saved home
+  // company says (it could have been set while they were a super admin).
+  if (sales && !(await platformMayOpen("sales", companyId))) companyId = "default";
 
   // Deactivated here (Settings → Team → Deactivate): the membership row is
   // "disabled", so loadMemberships() left it out. Without this check a person
@@ -485,7 +510,9 @@ export function requirePlatform(min: PlatformRole) {
     const user = c.get("user");
     if (!user) return c.json({ message: "Unauthorized" }, 401);
     if (c.get("actAs")) return c.json({ message: "Leave act-as to use the Control Hub." }, 403);
-    if (!isSuperadmin((user as { role?: string }).role) || !atLeast(c.get("platformRole") ?? null, min))
+    // platformRole is only ever set for an NVC360 super admin on the staff
+    // list (sales are then demoted to admin, so the role isn't checked here).
+    if (!atLeast(c.get("platformRole") ?? null, min))
       return c.json({ message: "Forbidden" }, 403);
     return next();
   });

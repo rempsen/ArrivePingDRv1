@@ -16,7 +16,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../env";
-import { requireSuperadmin } from "../middleware/auth";
+import { requirePlatform, requireSuperadmin } from "../middleware/auth";
+import { platformAudit } from "../../services/platform-audit";
 import { audit } from "../lib/audit";
 import { jsonBody } from "../lib/validate";
 import {
@@ -130,7 +131,9 @@ export const platformAnalyticsRoutes = new Hono<AppEnv>()
     }
   })
 
-  .patch("/tenants/:id", jsonBody(z.object({ internal: z.boolean() })), async (c) => {
+  // Marking a tenant test changes its kind (who may open it, what it gets),
+  // so it is an Owner decision, like a kind change in the Control Hub.
+  .patch("/tenants/:id", requirePlatform("owner"), jsonBody(z.object({ internal: z.boolean() })), async (c) => {
     const me = c.get("user") as SessionUser | undefined;
     const id = c.req.param("id");
     const { internal } = c.req.valid("json");
@@ -146,6 +149,14 @@ export const platformAnalyticsRoutes = new Hono<AppEnv>()
         ? `Marked "${row.name}" as a test tenant (left out of platform analytics)`
         : `Counted "${row.name}" in platform analytics again`,
       companyId: id,
+    });
+    await platformAudit({
+      actor: { id: me?.id ?? "", name: me?.name ?? "" },
+      action: "tenant.update",
+      companyId: id,
+      entityType: "company",
+      entityId: id,
+      summary: internal ? `${row.name}: marked test (from Analytics)` : `${row.name}: counted as a customer again (from Analytics)`,
     });
     return c.json({ tenant: row });
   });

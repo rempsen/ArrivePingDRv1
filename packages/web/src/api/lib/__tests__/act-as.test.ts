@@ -153,6 +153,23 @@ describe("during a session", () => {
   });
 });
 
+describe("review fixes", () => {
+  it("keeps sales out of our own account's people", async () => {
+    await expect(start({ actor: { id: sales.id, name: sales.name }, role: "sales", companyId: "default", targetUserId: "aa-tom" })).rejects.toMatchObject({ code: "no_company" });
+    await db.insert(schema.companies).values({ id: "default", name: "ArrivePing", kind: "internal" } as never).catch(() => {});
+    await expect(start({ actor: { id: sales.id, name: sales.name }, role: "sales", companyId: "default", targetUserId: "aa-tom" })).rejects.toMatchObject({ code: "not_allowed" });
+  });
+  it("refuses a write sent under a session that has run out, instead of saving it as the staff member", async () => {
+    const s = await start({ now: new Date(Date.now() - 31 * 60_000) });
+    current = staff;
+    const r = await app.request("/api/bookings", { method: "POST", headers: H(s.id, { "X-Company-Id": "aa-cust" }), body: "{}" });
+    expect(r.status).toBe(409);
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe("act_as_ended");
+    const rows = await sdb.select().from(schema.auditLog).where(and(eq(schema.auditLog.companyId, "aa-cust"), eq(schema.auditLog.action, "create"), eq(schema.auditLog.actorId, "aa-staff")));
+    expect(rows.length).toBe(0);
+  });
+});
+
 describe("ending", () => {
   it("leaves from inside the session and logs it", async () => {
     const s = await start();

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import * as schema from "../database/schema";
 import { db } from "../database";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
-import { isAdminRole } from "../lib/permissions";
+import { isAdminRole, isSuperadmin } from "../lib/permissions";
 import { invalidateSupportAccess } from "../../services/act-as";
 import { audit } from "../lib/audit";
 import { putObject } from "../lib/storage";
@@ -140,6 +140,8 @@ export const settingsRoutes = new Hono<AppEnv>()
   .put("/support-access", requireAdmin, jsonBody(z.object({ allow: z.boolean() })), async (c) => {
     const me = c.get("user") as SessionUser & { role?: string };
     if (!isAdminRole(me?.role)) return c.json({ message: "Only an admin can change this." }, 403);
+    // The company's own consent: ArrivePing staff can never change it for them.
+    if (isSuperadmin(me?.role) || c.get("platformRole")) return c.json({ message: "Only the company's own admins can change this." }, 403);
     const { allow } = c.req.valid("json");
     await getOrInit(c);
     await tx(c).update(schema.companySettings, { allowSupportAccess: allow } as never, undefined);

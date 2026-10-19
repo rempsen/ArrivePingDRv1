@@ -48,13 +48,10 @@ async function companyRow(id: string) {
   return co ?? null;
 }
 
-/**
- * Sales may change demo and test tenants only; staff and owners any tenant.
- * Our own tenant counts as theirs too, since sales books its meetings there.
- */
+/** Sales may change demo and test tenants only; staff and owners any tenant. */
 function mayTouch(role: PlatformRole | null | undefined, kind: string, id: string) {
   if (atLeast(role, "staff")) return true;
-  return role === "sales" && (id === "default" || kind === "demo" || kind === "test");
+  return role === "sales" && id !== "default" && (kind === "demo" || kind === "test");
 }
 
 const FeatureBody = z.object({
@@ -124,7 +121,11 @@ export const hubRoutes = new Hono<AppEnv>()
   })
 
   // ── command center ─────────────────────────────────────────────────────
-  .get("/overview", requirePlatform("sales"), async (c) => c.json(await hubOverview()))
+  .get("/overview", requirePlatform("sales"), async (c) => {
+    const o = await hubOverview();
+    // The audit trail (act-as reasons, changes to customers) is for staff.
+    return c.json(atLeast(c.get("platformRole"), "staff") ? o : { ...o, activity: [] });
+  })
 
   // ── tenants ────────────────────────────────────────────────────────────
   .get("/tenants", requirePlatform("sales"), async (c) => c.json({ tenants: await listHubTenants(), kinds: TENANT_KINDS.map((k) => ({ id: k, label: TENANT_KIND_LABELS[k] })), plans: Object.values(PLANS).map((p) => ({ id: p.id, label: p.label })) }))

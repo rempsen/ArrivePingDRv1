@@ -51,6 +51,12 @@ export function invalidateRoster() {
   rosterCache = null;
 }
 
+/**
+ * The staff list, or null when it can't be read right now. A missing table
+ * (the release is running before its migration) reads as an empty list, so
+ * super admins keep the powers they had before the hub; any other database
+ * error gives nobody a hub role for that request (fail closed).
+ */
 async function loadRoster(): Promise<Map<string, PlatformRole> | null> {
   if (rosterCache && Date.now() - rosterCache.at < 30_000) return rosterCache.map;
   try {
@@ -59,8 +65,10 @@ async function loadRoster(): Promise<Map<string, PlatformRole> | null> {
     for (const r of rows) if (isPlatformRole(r.role)) map.set(r.userId, r.role);
     rosterCache = { at: Date.now(), map };
     return map;
-  } catch {
-    // Table missing (pre-migration boot): behave as before the hub existed.
+  } catch (e) {
+    const msg = String((e as { message?: string })?.message ?? e);
+    const code = (e as { code?: string })?.code;
+    if (code === "42P01" || /platform_staff" does not exist|relation .* does not exist/i.test(msg)) return new Map();
     return null;
   }
 }
@@ -73,7 +81,8 @@ export async function platformRoleOf(user: { id: string; email?: string | null; 
   if (!user || user.role !== "superadmin" || !canBeSuperadmin(user.email)) return null;
   if (breakGlassEmails().has((user.email ?? "").toLowerCase())) return "owner";
   const roster = await loadRoster();
-  if (!roster || roster.size === 0) return "owner";
+  if (!roster) return null;
+  if (roster.size === 0) return "owner";
   return roster.get(user.id) ?? null;
 }
 
@@ -119,8 +128,11 @@ export class StaffError extends Error {
   }
 }
 
-async function ownerCount(): Promise<number> {
-  const rows = await sdb.select({ id: schema.platformStaff.userId }).from(schema.platformStaff).where(eq(schema.platformStaff.role, "owner"));
+type Tx = Parameters<Parameters<typeof sdb.transaction>[0]>[0];
+
+/** Owners, locked for the rest of the transaction so two demotions can't both pass. */
+async function lockedOwnerCount(tx: Tx): Promise<number> {
+  const rows = await tx.select({ id: schema.platformStaff.userId }).from(schema.platformStaff).where(eq(schema.platformStaff.role, "owner")).for("update");
   return rows.length;
 }
 
@@ -134,26 +146,30 @@ export async function upsertStaff(a: { email: string; role: PlatformRole; actorI
   if (!canBeSuperadmin(email)) throw new StaffError("not_nvc360", "Only NVC360 email addresses can be added.");
   const [u] = await sdb.select().from(schema.user).where(eq(schema.user.email, email)).limit(1);
   if (!u) throw new StaffError("not_found", "No account uses that email yet. Ask them to sign in once first.");
-  const [existing] = await sdb.select().from(schema.platformStaff).where(eq(schema.platformStaff.userId, u.id)).limit(1);
-  if (existing?.role === "owner" && a.role !== "owner" && (await ownerCount()) <= 1) {
-    throw new StaffError("last_owner", "There has to be at least one Owner.");
-  }
-  if (existing) {
-    await sdb.update(schema.platformStaff).set({ role: a.role }).where(eq(schema.platformStaff.userId, u.id));
-  } else {
-    await sdb.insert(schema.platformStaff).values({ userId: u.id, role: a.role, addedBy: a.actorId });
-  }
-  if (u.role !== "superadmin") await sdb.update(schema.user).set({ role: "superadmin" }).where(eq(schema.user.id, u.id));
+  const existing = await sdb.transaction(async (tx) => {
+    const owners = await lockedOwnerCount(tx);
+    const [row] = await tx.select().from(schema.platformStaff).where(eq(schema.platformStaff.userId, u.id)).limit(1);
+    if (row?.role === "owner" && a.role !== "owner" && owners <= 1) {
+      throw new StaffError("last_owner", "There has to be at least one Owner.");
+    }
+    if (row) await tx.update(schema.platformStaff).set({ role: a.role }).where(eq(schema.platformStaff.userId, u.id));
+    else await tx.insert(schema.platformStaff).values({ userId: u.id, role: a.role, addedBy: a.actorId });
+    if (u.role !== "superadmin") await tx.update(schema.user).set({ role: "superadmin" }).where(eq(schema.user.id, u.id));
+    return row;
+  });
   invalidateRoster();
   return { userId: u.id, name: u.name, email: u.email, role: a.role, addedBy: existing?.addedBy ?? a.actorId, createdAt: existing?.createdAt ?? new Date() };
 }
 
 /** Take someone off the list. They keep an admin role at their own company. */
 export async function removeStaff(userId: string): Promise<void> {
-  const [existing] = await sdb.select().from(schema.platformStaff).where(eq(schema.platformStaff.userId, userId)).limit(1);
-  if (!existing) throw new StaffError("not_found", "They aren't on the list.");
-  if (existing.role === "owner" && (await ownerCount()) <= 1) throw new StaffError("last_owner", "There has to be at least one Owner.");
-  await sdb.delete(schema.platformStaff).where(eq(schema.platformStaff.userId, userId));
-  await sdb.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, userId));
+  await sdb.transaction(async (tx) => {
+    const owners = await lockedOwnerCount(tx);
+    const [existing] = await tx.select().from(schema.platformStaff).where(eq(schema.platformStaff.userId, userId)).limit(1);
+    if (!existing) throw new StaffError("not_found", "They aren't on the list.");
+    if (existing.role === "owner" && owners <= 1) throw new StaffError("last_owner", "There has to be at least one Owner.");
+    await tx.delete(schema.platformStaff).where(eq(schema.platformStaff.userId, userId));
+    await tx.update(schema.user).set({ role: "admin" }).where(eq(schema.user.id, userId));
+  });
   invalidateRoster();
 }

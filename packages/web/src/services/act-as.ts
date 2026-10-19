@@ -83,7 +83,7 @@ export async function startActAs(a: StartArgs): Promise<Session> {
   if (!(ACT_AS_MINUTES as readonly number[]).includes(a.minutes)) throw new ActAsError("bad_length", "Choose 15, 30 or 60 minutes.");
   const [co] = await sdb.select({ id: schema.companies.id, name: schema.companies.name, kind: schema.companies.kind }).from(schema.companies).where(eq(schema.companies.id, a.companyId)).limit(1);
   if (!co) throw new ActAsError("no_company", "No such company.", 404);
-  if (!atLeast(a.role, "staff") && co.kind === "customer") throw new ActAsError("not_allowed", "Sales can sign in as people in demo and test accounts only.", 403);
+  if (!atLeast(a.role, "staff") && co.kind !== "demo" && co.kind !== "test") throw new ActAsError("not_allowed", "Sales can sign in as people in demo and test accounts only.", 403);
   if (!(await supportAccessAllowed(a.companyId))) throw new ActAsError("support_off", `${co.name} has switched off support access. Ask an admin there to turn it on in Settings → Security.`, 403);
   const t = await targetAt(a.targetUserId, a.companyId);
   if (!t) throw new ActAsError("no_person", "That person isn't active at this company.", 404);

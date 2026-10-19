@@ -95,6 +95,14 @@ describe("with a staff list", () => {
     expect((await who(u("ps-sales"), "ps-demo")).companyId).toBe("ps-demo");
     expect((await who(u("ps-sales"), "ps-cust")).companyId).toBe("default");
   });
+  it("sales are never super admins: an admin inside the accounts they may open", async () => {
+    expect(await who(u("ps-sales"), "ps-demo")).toEqual({ companyId: "ps-demo", role: "admin", platformRole: "sales" });
+  });
+  it("sales can't reach a customer through a saved home company either", async () => {
+    const salesAtAcme = { ...u("ps-sales"), companyId: "ps-cust" };
+    expect((await who(salesAtAcme)).companyId).toBe("default");
+    expect((await who(salesAtAcme, "ps-cust")).companyId).toBe("default");
+  });
   it("staff and owners open any tenant", async () => {
     expect((await who(u("ps-staff"), "ps-cust")).companyId).toBe("ps-cust");
     expect((await who(u("ps-owner"), "ps-cust")).platformRole).toBe("owner");

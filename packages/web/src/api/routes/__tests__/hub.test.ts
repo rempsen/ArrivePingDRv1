@@ -100,6 +100,13 @@ describe("access", () => {
     const s = (await (await req("GET", "/tenants/hub-cust", "staff")).json()) as { people: { email: string }[] };
     expect(s.people.map((p) => p.email)).toContain("alex@acme.test");
   });
+  it("keeps the audit feed off the overview for sales", async () => {
+    await sdb.insert(schema.platformAudit).values({ actorId: "x", actorName: "X", action: "actas.start", summary: "secret reason" });
+    const sales = (await (await req("GET", "/overview", "sales")).json()) as { activity: unknown[] };
+    expect(sales.activity).toEqual([]);
+    const staff = (await (await req("GET", "/overview", "staff")).json()) as { activity: unknown[] };
+    expect(staff.activity.length).toBeGreaterThan(0);
+  });
   it("reports what each role can do", async () => {
     const me = (await (await req("GET", "/me", "staff")).json()) as { can: Record<string, boolean> };
     expect(me.can).toMatchObject({ actAs: true, editPlans: false, manageTeam: false });
@@ -179,7 +186,7 @@ describe("tenant changes", () => {
     expect((await sdb.select().from(schema.companies).where(eq(schema.companies.id, "hub-cust")))[0]!.isInternal).toBe(false);
   });
   it("won't change ArrivePing's own account kind", async () => {
-    await db.insert(schema.companies).values({ id: "default", name: "ArrivePing", kind: "internal" } as never);
+    await db.insert(schema.companies).values({ id: "default", name: "ArrivePing", kind: "internal" } as never).onConflictDoNothing();
     expect((await req("PATCH", "/tenants/default", "owner", { kind: "customer" })).status).toBe(400);
   });
   it("lists plans with how many accounts are on each", async () => {
