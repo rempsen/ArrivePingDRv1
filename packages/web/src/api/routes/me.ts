@@ -10,6 +10,7 @@
  * validates membership on every request. That means a revoked membership takes
  * effect immediately, instead of a stale session continuing to work.
  */
+import { enabledFeatures } from "../../services/features";
 import { Hono } from "hono";
 import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
@@ -217,12 +218,23 @@ export const meRoutes = new Hono<AppEnv>()
   .get("/access", requireAuth, async (c) => {
     const me = c.get("user") as unknown as { role?: string; permissions?: string | null };
     const perms = resolvePerms(me, await loadRoleDefaults());
+    const companyId = (c.get("companyId") as string) ?? "default";
+    const act = c.get("actAs");
     return c.json({
       role: me.role ?? "customer",
       admin: isAdminRole(me.role),
       superadmin: isSuperadmin(me.role),
       office: isOfficeRole(me.role),
       permissions: [...perms].sort(),
+      // Control Hub: the feature switches that are on for this company, this
+      // person's hub role (null for everyone but NVC360 staff), and the
+      // act-as session behind this request, if any.
+      companyId,
+      features: await enabledFeatures(companyId),
+      platformRole: act ? null : (c.get("platformRole") ?? null),
+      actingAs: act
+        ? { sessionId: act.sessionId, actorName: act.actorName, targetName: act.targetName, companyId: act.companyId, reason: act.reason, expiresAt: act.expiresAt }
+        : null,
     });
   })
   .get("/companies", requireAuth, async (c) => {

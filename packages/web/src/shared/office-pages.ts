@@ -11,7 +11,9 @@
  * super admin tools are theirs alone.
  */
 
-export type PageNeed = string | "admin" | "superadmin";
+import { featureForPage } from "./features";
+
+export type PageNeed = string | "admin" | "superadmin" | "platform";
 
 /** Longest prefix wins, so /admin/work-orders/123 follows /admin/work-orders. */
 export const PAGE_ACCESS: { prefix: string; need: PageNeed }[] = [
@@ -47,6 +49,8 @@ export const PAGE_ACCESS: { prefix: string; need: PageNeed }[] = [
   { prefix: "/admin/companies", need: "superadmin" },
   { prefix: "/admin/analytics", need: "superadmin" },
   { prefix: "/admin/mobile-release", need: "superadmin" },
+  // Control Hub: NVC360 platform staff (owner, staff or sales), inside our own tenant.
+  { prefix: "/admin/hub", need: "platform" },
 ];
 
 /** Does a permission set satisfy a key? "*" = all; edit/create/delete/manage imply view. */
@@ -78,12 +82,21 @@ export interface OfficeAccess {
   admin: boolean;
   superadmin?: boolean;
   permissions: string[];
+  /** Control Hub role (NVC360 staff only). */
+  platformRole?: "owner" | "staff" | "sales" | null;
+  /** Feature switches that are on for the acting company (shared/features.ts). */
+  features?: string[];
 }
 
 /** May this person open this dashboard path? Unknown /admin paths are admin-only. */
 export function canOpen(path: string, a: OfficeAccess): boolean {
-  if (a.superadmin || a.role === "superadmin") return true;
   const need = pageNeed(path);
+  if (need === "platform") return Boolean(a.platformRole);
+  // A page whose feature is switched off for this company is closed to everyone.
+  const feature = featureForPage(path);
+  if (feature && a.features && !a.features.includes(feature)) return false;
+  if (a.platformRole === "sales" && need === "superadmin") return false;
+  if (a.superadmin || a.role === "superadmin") return true;
   if (need === "superadmin") return false;
   if (a.admin) return true;
   if (!need || need === "admin") return false;

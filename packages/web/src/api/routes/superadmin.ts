@@ -25,7 +25,7 @@ import { eq, and, ne } from "drizzle-orm";
 import { db, sdb } from "../database";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
-import { requireSuperadmin, invalidateCompanyCache } from "../middleware/auth";
+import { requireSuperadmin, requirePlatform, invalidateCompanyCache } from "../middleware/auth";
 import { demoHealth, demoStatus, demoTick, resolveDemoTenant } from "../../services/demo-refresh";
 import { audit } from "../lib/audit";
 import { ensureDefaultTenantKey } from "../lib/tenant-keys";
@@ -181,7 +181,8 @@ export const superadminRoutes = new Hono<AppEnv>()
   // tenant's entire history: bookings, riders, catalog, forms, templates,
   // invoices, users... everything stamped with this companyId. "default" is
   // the platform's own bootstrap tenant and can never be deleted this way.
-  .delete("/companies/:id", requireSuperadmin, jsonBody(DeleteCompanyBody), async (c) => {
+  // Owners only (Control Hub): staff and sales can suspend, never delete.
+  .delete("/companies/:id", requireSuperadmin, requirePlatform("owner"), jsonBody(DeleteCompanyBody), async (c) => {
     const me = c.get("user") as SessionUser;
     const id = c.req.param("id");
     if (id === "default")

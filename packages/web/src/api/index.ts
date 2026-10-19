@@ -60,6 +60,7 @@ import { meRoutes } from "./routes/me";
 import { sampleDayRoutes } from "./routes/sample-day";
 import { teamRoutes } from "./routes/team";
 import { superadminRoutes } from "./routes/superadmin";
+import { hubRoutes } from "./routes/hub";
 import { platformAnalyticsRoutes } from "./routes/platform-analytics";
 import { mobileReleaseRoutes } from "./routes/mobile-release";
 import { formsRoutes } from "./routes/forms";
@@ -425,6 +426,7 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/me", meRoutes)
   .route("/sample-day", sampleDayRoutes)
   .route("/team", teamRoutes)
+  .route("/hub", hubRoutes)
   .route("/superadmin/analytics", platformAnalyticsRoutes)
   .route("/superadmin", superadminRoutes)
   .route("/mobile-release", mobileReleaseRoutes)
