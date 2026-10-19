@@ -11,6 +11,7 @@ import { companyTimeZone } from "../../services/company-tz";
 import { ensureSnappedRoute } from "../../services/route-snap";
 import { log } from "../lib/logger";
 import { publishDispatch } from "../../services/realtime";
+import { jobForm } from "../../services/job-forms";
 import { fmtInZone } from "../../shared/tz";
 import type { AppEnv } from "../env";
 
@@ -497,8 +498,20 @@ export const jobSearchRoutes = new Hono<AppEnv>()
       route = pingRows.map((p: any) => ({ lat: p.lat, lng: p.lng, phase: p.phase }));
     } catch { /* skip route if query fails */ }
 
+    // Job forms v2: the filled form (null for jobs booked before forms v2).
+    // This is the internal job sheet (it carries tech pay), so the office
+    // audience: office-only questions and flags included.
+    const form = await jobForm(cid, b).catch((e) => {
+      log.warn("job pdf: form load failed", { bookingId: id, err: String(e) });
+      return null;
+    });
+
     const baseUrl = new URL(c.req.url).origin;
-    const buf = await buildJobPdf(rows, unitLines, `Job ${jobNumber(b.id)} — ${enriched.customerName}`, enriched.address, jobPhotos, brand, route, baseUrl);
+    const buf = await buildJobPdf(rows, unitLines, `Job ${jobNumber(b.id)} — ${enriched.customerName}`, enriched.address, jobPhotos, brand, route, baseUrl, {
+      form,
+      audience: "office",
+      tz: detailTz,
+    });
     return fileResponse(buf, `${pre}-job-${jobNumber(b.id)}-${stamp}.pdf`, "application/pdf");
   })
 
@@ -519,12 +532,18 @@ export const jobSearchRoutes = new Hono<AppEnv>()
     // set_config + query + COMMIT), so done one after another this endpoint
     // cost ~3.7 s from a far-away client; in parallel it's one round of
     // latency. The Jobs-list detail view opens on every row tap, so it matters.
-    const [svc, cust, rp, photoRows, pingRows] = await Promise.all([
+    const [svc, cust, rp, photoRows, pingRows, form] = await Promise.all([
       b.serviceId ? t.selectOne(schema.services, eq(schema.services.id, b.serviceId)) : Promise.resolve(undefined),
       b.customerId ? t.selectOne(schema.user, eq(schema.user.id, b.customerId)) : Promise.resolve(undefined),
       b.riderId ? t.selectOne(schema.riders, eq(schema.riders.id, b.riderId)) : Promise.resolve(undefined),
       t.select(schema.jobPhotos, eq(schema.jobPhotos.bookingId, id)),
       t.select(schema.trackingPings, eq(schema.trackingPings.bookingId, id)),
+      // Job forms v2 (null for jobs booked before forms v2). Office page:
+      // office-only questions included; the page renders it for the office.
+      jobForm(tenantId(c), b).catch((e) => {
+        log.warn("job report: form load failed", { bookingId: id, err: String(e) });
+        return null;
+      }),
     ]);
     let rider: any = null;
     if (rp) {
@@ -587,6 +606,7 @@ export const jobSearchRoutes = new Hono<AppEnv>()
           ? { provider: snapped.provider, distanceKm: snapped.distanceKm, points: snapped.points }
           : null,
         photos: photoRows.map((p: any) => ({ id: p.id, url: p.url, caption: p.caption, createdAt: p.createdAt })),
+        form,
         pricing: {
           lineItems,
           // The full invoice breakdown (time, mileage, catalog lines) as billed.

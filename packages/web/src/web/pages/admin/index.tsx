@@ -12,6 +12,7 @@ const FleetPage = lazyRoute(() => import("../../features/dispatch/dispatch-route
 const SchedulerPage = lazyRoute(() => import("./scheduler"));
 const WorkOrdersPage = lazyRoute(() => import("./bookings"));
 const BuilderPage = lazyRoute(() => import("./builder"));
+const TemplateEditorPage = lazyRoute(() => import("./builder/editor"));
 const TechsPage = lazyRoute(() => import("./riders"));
 const ClientsPage = lazyRoute(() => import("./users"));
 const AutomationPage = lazyRoute(() => import("./automation"));
@@ -105,6 +106,7 @@ export default function AdminApp() {
           <Route path="/admin/work-orders" component={WorkOrdersPage} />
           <Route path="/admin/jobs/:id/report" component={JobReportPage} />
           <Route path="/admin/builder" component={BuilderPage} />
+          <Route path="/admin/builder/:id" component={TemplateEditorPage} />
           <Route path="/admin/techs" component={TechsPage} />
           <Route path="/admin/clients" component={ClientsPage} />
           <Route path="/admin/automation" component={AutomationPage} />

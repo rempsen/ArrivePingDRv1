@@ -63,6 +63,9 @@ import { useConfirm } from "./confirm-dialog";
 import { useAccess } from "../hooks/use-access";
 import { BusyError } from "../lib/force-confirm";
 import { liveOnSiteMinutes } from "../../shared/clock";
+import { OfficeFormEditor } from "./forms/office-form-editor";
+import { FormAnswers } from "./forms/form-answers";
+import { formStatusLine, type JobFormView } from "../../shared/forms/form-results";
 
 // ─── Custom field types ──────────────────────────────────────────────────────
 
@@ -1657,6 +1660,7 @@ export function WorkOrderModal({
       {isEdit && editBooking?.id && (
         <div className="mt-4 space-y-4">
           <PunchlistPanel bookingId={editBooking.id} />
+          {editBooking.templateVersionId && <JobFormPanel bookingId={editBooking.id} />}
           <JobPhotosPanel bookingId={editBooking.id} />
           <FieldRecordPanel bookingId={editBooking.id} />
         </div>
@@ -1899,6 +1903,79 @@ function TimeMileagePanel({ booking }: { booking: any }) {
         </p>
       )}
     </Field>
+  );
+}
+
+// ─── Job Form Panel ──────────────────────────────────────────────────────────
+// Job forms v2: what the technician answered on this job's form, read-only,
+// with a plain status line. Renders nothing for jobs booked before forms v2
+// (GET /api/job-forms/:id returns form: null).
+//
+// `editAnswers` is the slot for a future "Edit answers" button: give it a
+// render function and whatever it returns sits in the form's header.
+
+function JobFormPanel({
+  bookingId,
+  editAnswers,
+}: {
+  bookingId: string;
+  editAnswers?: (form: JobFormView) => React.ReactNode;
+}) {
+  const q = useQuery({
+    queryKey: ["job-form", bookingId],
+    queryFn: async () => {
+      const res = await fetch(`/api/job-forms/${bookingId}`, { headers: apiHeaders() });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { form: JobFormView | null };
+      return data.form;
+    },
+    refetchInterval: 20000,
+  });
+  const [editing, setEditing] = useState(false);
+  const form = q.data;
+  if (!form) return null;
+  const status = formStatusLine(form);
+  const tone =
+    status.tone === "ok"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      : status.tone === "warn"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+        : "border-white/10 bg-white/5 text-slate-300";
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-white">
+          <ClipboardList className="h-4 w-4 text-brand" /> Form
+        </p>
+        <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${tone}`}>{status.text}</span>
+      </div>
+      <div className="rounded-xl border border-white/10 bg-ink-3/40 p-3">
+        {editing ? (
+          <>
+            <div className="mb-2 flex justify-end">
+              <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-white/5">
+                Done
+              </button>
+            </div>
+            <OfficeFormEditor bookingId={bookingId} />
+          </>
+        ) : (
+          <FormAnswers
+            form={form}
+            bookingId={bookingId}
+            audience="office"
+            actions={
+              editAnswers?.(form) ?? (
+                <button type="button" onClick={() => setEditing(true)} className="rounded-lg border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-white/5">
+                  Edit answers
+                </button>
+              )
+            }
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

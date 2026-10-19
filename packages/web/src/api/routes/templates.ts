@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { parseTechPayModel } from "../../shared/tech-pay";
 import { ensureFormCategories } from "../../services/form-categories";
 import * as schema from "../database/schema";
+import { sdb } from "../database";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireOffice, tenantId, tx } from "../middleware/auth";
 import { z } from "zod";
@@ -11,6 +12,18 @@ import { formProblems, normalizeForm, questionCount, templateForm } from "../../
 import { toLegacy } from "../../shared/forms/legacy";
 import { listVersions, publishVersion, templateStats } from "../../services/job-forms";
 import { audit } from "../lib/audit";
+import { libraryFor } from "../../shared/forms/library";
+import { getIndustryPreset } from "../../services/industry-presets";
+import { GenerateError, generateTemplateDraft } from "../../services/form-generate";
+import { rateLimit, keyByUser } from "../lib/rate-limit";
+
+const generateLimit = rateLimit({ limit: 20, windowMs: 60 * 60 * 1000, keyFn: keyByUser, name: "template-generate" });
+
+async function companyIndustry(companyId: string): Promise<{ id: string; label: string | null; name: string }> {
+  const co = await sdb.select({ industry: schema.companies.industry, name: schema.companies.name }).from(schema.companies).where(eq(schema.companies.id, companyId)).limit(1);
+  const id = co[0]?.industry ?? "";
+  return { id, label: getIndustryPreset(id)?.label ?? null, name: co[0]?.name ?? "" };
+}
 
 /**
  * Work-order templates. `fields`/`checklist` are the legacy (schema 1)
@@ -56,7 +69,11 @@ function columnsFrom(body: Body): { set: Record<string, unknown>; problem?: stri
   const set: Record<string, unknown> = {};
   for (const k of ["name", "category", "icon", "color", "description", "estimatedMins", "active", "sendCustomerCopy"] as const)
     if (body[k] !== undefined) set[k] = body[k];
-  if (body.fields !== undefined) set.fields = JSON.stringify(body.fields);
+  if (body.fields !== undefined) {
+    set.fields = JSON.stringify(body.fields);
+    // The old builder saved: its fields win over a stale schema-2 form.
+    if (body.form === undefined) set.form = "";
+  }
   if (body.checklist !== undefined) set.checklist = JSON.stringify(body.checklist);
   if (body.form !== undefined) {
     const def = normalizeForm(body.form);
@@ -95,6 +112,23 @@ export const templatesRoutes = new Hono<AppEnv>()
     const rows = await tx(c).select(schema.taskTemplates);
     const stats = await templateStats(tenantId(c)).catch(() => new Map());
     return c.json({ templates: rows.map((t) => present(t, stats.get(t.id))) }, 200);
+  })
+  // The starter library for this company's trade (industry matches first, then general).
+  .get("/library", requireOffice, async (c) => {
+    const ind = await companyIndustry(tenantId(c));
+    return c.json({ industry: ind.id || null, industryLabel: ind.label, templates: structuredClone(libraryFor(ind.id)) }, 200);
+  })
+  // "Describe it": an AI draft for review in the editor. Never saved here.
+  .post("/generate", requireOffice, generateLimit, jsonBody(z.object({ description: z.string().trim().min(12, "Describe the job in a sentence or two.").max(1500) })), async (c) => {
+    const { description } = c.req.valid("json");
+    const ind = await companyIndustry(tenantId(c));
+    try {
+      const draft = await generateTemplateDraft({ description, industry: ind.id, companyName: ind.name });
+      return c.json({ draft }, 200);
+    } catch (e) {
+      if (e instanceof GenerateError) return c.json({ message: e.message }, 502);
+      throw e;
+    }
   })
   .get("/:id", requireAuth, async (c) => {
     const t = await tx(c).selectOne(

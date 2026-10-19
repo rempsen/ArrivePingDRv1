@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
-import { CollectPaymentToggle, TechPayEditor } from "../../components/tech-pay-editor";
-import { parseTechPayModel, type TechPayModel } from "../../../shared/tech-pay";
+import { CollectPaymentToggle, TechPayEditor } from "../../../components/tech-pay-editor";
+import { parseTechPayModel, type TechPayModel } from "../../../../shared/tech-pay";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { ok } from "../../lib/api-ok";
-import { FullLoader } from "../../components/loader";
-import { PageWrap } from "../../components/brand";
-import { PageHead } from "./shell";
-import { ConfirmModal } from "../../components/modal";
-import { RateModelEditor } from "../../components/rate-model-editor";
-import { CategoryManagerButton } from "../../components/category-manager";
-import { EMPTY_RATE_MODEL, parseRateModel, type RateModel } from "../../../shared/pricing";
+import { api } from "../../../lib/api";
+import { ok } from "../../../lib/api-ok";
+import { FullLoader } from "../../../components/loader";
+import { PageWrap } from "../../../components/brand";
+import { PageHead } from "../shell";
+import { ConfirmModal } from "../../../components/modal";
+import { RateModelEditor } from "../../../components/rate-model-editor";
+import { CategoryManagerButton } from "../../../components/category-manager";
+import { EMPTY_RATE_MODEL, parseRateModel, type RateModel } from "../../../../shared/pricing";
 import {
   Type,
   Hash,
@@ -61,7 +61,7 @@ const PALETTE: { type: FieldType; label: string; icon: any }[] = [
 const iconFor = (t: FieldType) => PALETTE.find((p) => p.type === t)?.icon ?? Type;
 const uid = () => Math.random().toString(36).slice(2);
 
-export default function BuilderPage() {
+export default function LegacyBuilderPage() {
   const qc = useQueryClient();
   // Category options are the SHARED list managed in Settings / Catalog
   // (form_categories table) — no longer hardcoded per industry, so admins can

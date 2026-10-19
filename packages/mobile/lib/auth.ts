@@ -118,11 +118,18 @@ export async function clearToken() {
  * The company header is omitted when no company has been chosen, which makes
  * the backend fall back to the driver's home company — the right behaviour for
  * a single-company driver who never sees the picker.
+ *
+ * `X-Forms: 2` tells the server this build can fill in Job forms v2, so it may
+ * refuse "Complete job" while required questions are unanswered (older builds
+ * without the header are never blocked by a form they can't show).
  */
+export const FORMS_HEADER = { "X-Forms": "2" } as const;
+
 export function authHeaders(extra?: Record<string, string>): Record<string, string> {
   const token = getToken();
   const company = getActiveCompany();
   return {
+    ...FORMS_HEADER,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(company ? { "X-Company-Id": company } : {}),
     ...extra,

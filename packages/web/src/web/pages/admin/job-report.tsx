@@ -12,7 +12,7 @@ import { useParams, useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Clock, Route as RouteIcon, Camera, FileText, Receipt,
-  DollarSign, Phone, Mail, MapPin, Pencil, Download, X, Archive, Loader2, ClipboardList,
+  DollarSign, Phone, Mail, MapPin, Pencil, Download, X, Archive, Loader2, ClipboardList, ClipboardCheck,
 } from "lucide-react";
 import { PageWrap, StatusBadge } from "../../components/brand";
 import { FullLoader } from "../../components/loader";
@@ -23,6 +23,8 @@ import { useAuth } from "../../hooks/use-auth";
 import { useConfirm } from "../../components/confirm-dialog";
 import { RouteHistoryMap } from "../../components/route-history-map";
 import { WorkOrderModal } from "../../components/work-order-modal";
+import { FormAnswers } from "../../components/forms/form-answers";
+import { formStatusLine, type JobFormView } from "../../../shared/forms/form-results";
 
 async function jget<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: "include", headers: apiHeaders() });
@@ -130,6 +132,27 @@ function PunchlistCard({ bookingId }: { bookingId: string }) {
           ))}
         </div>
       )}
+    </Card>
+  );
+}
+
+/** Job forms v2: the technician's answers (office view). Nothing for jobs
+ *  booked before forms v2 — the report carries `form: null` for those. */
+function FormCard({ form, bookingId, photos }: { form: JobFormView; bookingId: string; photos: { id: string; url: string; caption?: string }[] }) {
+  const status = formStatusLine(form);
+  const tone =
+    status.tone === "ok"
+      ? "bg-emerald-500/15 text-emerald-400"
+      : status.tone === "warn"
+        ? "bg-amber-500/15 text-amber-300"
+        : "bg-slate-500/15 text-slate-300";
+  return (
+    <Card
+      title="Form"
+      icon={<ClipboardCheck className="h-4 w-4 text-brand" />}
+      right={<span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone}`}>{status.text}</span>}
+    >
+      <FormAnswers form={form} bookingId={bookingId} audience="office" photos={photos} />
     </Card>
   );
 }
@@ -370,6 +393,8 @@ export default function JobReportPage() {
               <p className="py-4 text-center text-sm text-slate-500">{isCompleted ? "No photos attached to this job." : "Photos the technician takes on site appear here."}</p>
             )}
           </Card>
+
+          {j.form && <FormCard form={j.form} bookingId={id!} photos={j.photos ?? []} />}
 
           <PunchlistCard bookingId={id!} />
 

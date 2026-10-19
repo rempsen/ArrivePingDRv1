@@ -3,13 +3,15 @@ import { Hono } from "hono";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
-import { requireAuth, tenantId } from "../middleware/auth";
+import { officeCan, requireAuth, tenantId } from "../middleware/auth";
+import { formResponsesExport } from "../../services/form-export";
 import { tdb, type TenantDb } from "../database/tenant";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { slugifyName, fetchRouteBasemap, fetchSiteBasemap, type JobRoutePoint } from "../lib/export-map";
 import { companyTimeZone } from "../../services/company-tz";
 import { fmtInZone } from "../../shared/tz";
+import { formResults, formStatusLine, resultsProgress, signatureImageKind, type FormAudience, type JobFormView } from "../../shared/forms/form-results";
 import type { AppEnv } from "../env";
 
 export { slugifyName, fetchRouteBasemap, fetchSiteBasemap };
@@ -386,6 +388,21 @@ export async function tenantFilePrefix(companyId: string): Promise<string> {
   }
 }
 
+/** Extra parts of the job PDF. */
+export type JobPdfOptions = {
+  /** Job forms v2: the job's filled form (null/absent = not a forms-v2 job). */
+  form?: JobFormView | null;
+  /**
+   * Who the PDF is for. "office" (default) is the internal job sheet.
+   * "customer" leaves out office-only form questions and flags, the
+   * per-unit pay table and the internal-copy notice: use it for anything a
+   * customer can open.
+   */
+  audience?: FormAudience;
+  /** Tenant's IANA zone, for the form's "last updated" time. */
+  tz?: string | null;
+};
+
 export async function buildJobPdf(
   details: { field: string; value: any; group?: string }[],
   unitLines: JobUnitLine[],
@@ -395,7 +412,10 @@ export async function buildJobPdf(
   brand?: JobBrand | null,
   route?: JobRoutePoint[],
   baseUrl?: string,
+  opts: JobPdfOptions = {},
 ): Promise<Buffer> {
+  const audience: FormAudience = opts.audience ?? "office";
+  const forCustomer = audience === "customer";
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -440,6 +460,126 @@ export async function buildJobPdf(
   let y = pageH - margin;
   const ensure = (need: number) => {
     if (y < margin + need) { page = doc.addPage([pageW, pageH]); y = pageH - margin; }
+  };
+
+  /** Text the standard fonts can draw (emoji etc. stripped), so measuring never throws. */
+  const drawable = (text: string, f = font): string => {
+    try {
+      f.widthOfTextAtSize(text, 8);
+      return text;
+    } catch {
+      return Array.from(text).filter((ch) => (ch.codePointAt(0) ?? 0) <= 0x7f).join("");
+    }
+  };
+  /** Word-wrap to a width, at most `maxLines` lines (the last one ellipsized). */
+  const wrap = (raw: string, f: typeof font, size: number, width: number, maxLines: number): string[] => {
+    const text = drawable(raw.replace(/\s+/g, " ").trim(), f);
+    if (!text) return [""];
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let cur = "";
+    for (const w of words) {
+      const next = cur ? `${cur} ${w}` : w;
+      if (f.widthOfTextAtSize(next, size) <= width) { cur = next; continue; }
+      if (cur) lines.push(cur);
+      cur = f.widthOfTextAtSize(w, size) <= width ? w : fitText(w, f, size, width);
+      if (lines.length >= maxLines) break;
+    }
+    if (cur && lines.length < maxLines) lines.push(cur);
+    if (lines.length > maxLines) lines.length = maxLines;
+    const used = lines.join(" ").length;
+    if (used < text.length && lines.length) lines[lines.length - 1] = fitText(`${lines[lines.length - 1]}…`, f, size, width);
+    return lines;
+  };
+
+  /** The job's form: header line, then each section's questions and answers. */
+  const drawFormSection = async (f: JobFormView) => {
+    const groups = formResults(f, audience);
+    if (!groups.length) return;
+    const p = resultsProgress(groups);
+    ensure(70);
+    sectionHeader(`Form — ${f.templateName}${f.version ? ` (version ${f.version})` : ""}`);
+    const status = formStatusLine(f);
+    const meta = [
+      `${p.answered} of ${p.total} answered`,
+      forCustomer ? (f.status === "complete" ? "Complete" : "In progress") : status.text,
+      f.updatedAt
+        ? `Last updated ${f.updatedBy ? `by ${f.updatedBy} ` : ""}${fmtInZone(f.updatedAt, opts.tz, { dateStyle: "medium", timeStyle: "short" }, "en-CA", "")}`
+        : "",
+    ].filter(Boolean).join("  ·  ");
+    dt(drawable(meta), { x: margin, y: y - 2, size: 8, font, color: status.tone === "warn" && !forCustomer ? rgb(0.72, 0.45, 0.05) : muted });
+    y -= 16;
+
+    const labelX = margin + 4;
+    const labelW = 200;
+    const valueX = margin + labelW + 14;
+    const valueW = pageW - margin - valueX - 4;
+    const flagColor = rgb(0.75, 0.2, 0.12);
+    const missingColor = rgb(0.72, 0.3, 0.3);
+    let stripe = 0;
+    for (const g of groups) {
+      if (g.section) {
+        ensure(34);
+        y -= 4;
+        const head = g.section.label + (g.internal && !forCustomer ? "  (office only)" : "");
+        dt(drawable(head, bold), { x: margin, y: y - 8, size: 9.5, font: bold, color: brandColor });
+        y -= 16;
+      }
+      for (const r of g.rows) {
+        const label = r.item.label + (r.internal && !g.internal && !forCustomer ? " (office only)" : "");
+        const labelLines = wrap(label, bold, 8, labelW, 3);
+        let valueText: string;
+        let valueColor = ink;
+        let valueFont = font;
+        if (r.missing) {
+          valueText = "Not answered";
+          valueColor = missingColor;
+        } else {
+          valueText = r.text;
+          if (r.item.type === "photo" && r.answered) valueText = `${r.text} (see Field Photos)`;
+          if (r.flagged) {
+            valueText = `FLAGGED: ${valueText}`;
+            valueColor = flagColor;
+            valueFont = bold;
+          }
+        }
+        const valueLines = wrap(valueText, valueFont, 8, valueW, 6);
+        const sigKind = r.item.type === "signature" && r.answered ? signatureImageKind(r.answer?.value) : null;
+        const sigUrl = r.item.type === "signature" && r.answered && !sigKind && typeof r.answer?.value === "string" && /^(https?:\/\/|\/)/.test(r.answer.value) ? r.answer.value : "";
+        const sigH = sigKind || sigUrl ? 46 : 0;
+        const rowH = Math.max(labelLines.length, valueLines.length) * 11 + 5 + sigH;
+        ensure(rowH + 6);
+        if (stripe++ % 2 === 0) page.drawRectangle({ x: margin, y: y - rowH + 3, width: usableW, height: rowH, color: rgb(0.96, 0.97, 0.98) });
+        labelLines.forEach((ln, i) => dt(ln, { x: labelX, y: y - 8 - i * 11, size: 8, font: bold, color: rgb(0.25, 0.3, 0.36) }));
+        valueLines.forEach((ln, i) => dt(ln, { x: valueX, y: y - 8 - i * 11, size: 8, font: valueFont, color: valueColor }));
+        if (sigH) {
+          const top = y - valueLines.length * 11 - 4;
+          let img: any = null;
+          try {
+            if (sigKind) {
+              const b64 = String(r.answer!.value).split(",")[1] ?? "";
+              const bytes = Buffer.from(b64, "base64");
+              img = sigKind === "png" ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+            } else if (sigUrl) {
+              const resp = await fetch(absoluteUrl(sigUrl, baseUrl || ""));
+              if (resp.ok) {
+                const buf = Buffer.from(await resp.arrayBuffer());
+                const ct = resp.headers.get("content-type") || "";
+                img = ct.includes("png") ? await doc.embedPng(buf) : ct.includes("jpeg") || ct.includes("jpg") ? await doc.embedJpg(buf) : null;
+              }
+            }
+          } catch {
+            img = null; // an SVG or broken image: the "Signed by" line above stands on its own
+          }
+          if (img) {
+            const scale = Math.min(160 / img.width, 40 / img.height, 1);
+            page.drawImage(img, { x: valueX, y: top - img.height * scale, width: img.width * scale, height: img.height * scale });
+          }
+        }
+        y -= rowH;
+      }
+    }
+    y -= 16;
   };
 
   // --- branded header ---
@@ -496,14 +636,18 @@ export async function buildJobPdf(
   if (subtitle) { dt(String(subtitle).slice(0, 90), { x: margin, y, size: 9, font, color: muted }); y -= 16; }
   // "Internal copy" as a bordered callout rather than a bare line of red
   // text — reads as a deliberate document notice, not an error message.
-  const noticeText = "INTERNAL COPY — includes technician pay. Not for the customer.";
-  const noticeW = bold.widthOfTextAtSize(noticeText, 8) + 16;
-  page.drawRectangle({
-    x: margin, y: y - 15, width: noticeW, height: 18,
-    color: rgb(0.99, 0.94, 0.93), borderColor: rgb(0.86, 0.55, 0.48), borderWidth: 0.75,
-  });
-  dt(noticeText, { x: margin + 8, y: y - 10, size: 8, font: bold, color: rgb(0.7, 0.22, 0.15) });
-  y -= 30;
+  if (!forCustomer) {
+    const noticeText = "INTERNAL COPY — includes technician pay. Not for the customer.";
+    const noticeW = bold.widthOfTextAtSize(noticeText, 8) + 16;
+    page.drawRectangle({
+      x: margin, y: y - 15, width: noticeW, height: 18,
+      color: rgb(0.99, 0.94, 0.93), borderColor: rgb(0.86, 0.55, 0.48), borderWidth: 0.75,
+    });
+    dt(noticeText, { x: margin + 8, y: y - 10, size: 8, font: bold, color: rgb(0.7, 0.22, 0.15) });
+    y -= 30;
+  } else {
+    y -= 8;
+  }
 
   // --- details, grouped into named sections (carried via each row's
   // `group`) instead of one 29-row undifferentiated list. Falls back to a
@@ -533,6 +677,9 @@ export async function buildJobPdf(
     });
     y -= 16;
   });
+
+  // --- Job forms v2: the filled form, section by section. ---
+  if (opts.form) await drawFormSection(opts.form);
 
   // --- route section ---
   // Primary: a REAL street-level basemap (Google Static Maps, scale=2) with the
@@ -621,8 +768,8 @@ export async function buildJobPdf(
     y -= 20;
   }
 
-  // --- per-unit breakdown table ---
-  if (unitLines.length) {
+  // --- per-unit breakdown table (tech pay: never on a customer's copy) ---
+  if (unitLines.length && !forCustomer) {
     ensure(60);
     sectionHeader("Per-Unit Work & Pay");
     const cols = [
@@ -720,7 +867,7 @@ export async function buildJobPdf(
   allPages.forEach((p, i) => {
     const footerY = 24;
     p.drawLine({ start: { x: margin, y: footerY + 10 }, end: { x: pageW - margin, y: footerY + 10 }, thickness: 0.5, color: rgb(0.88, 0.9, 0.93) });
-    const left = [brand?.name, "Internal job report"].filter(Boolean).join(" · ");
+    const left = [brand?.name, forCustomer ? "Job report" : "Internal job report"].filter(Boolean).join(" · ");
     if (left) p.drawText(left, { x: margin, y: footerY, size: 7, font, color: muted });
     const pageLabel = `Page ${i + 1} of ${allPages.length}`;
     const pw = font.widthOfTextAtSize(pageLabel, 7);
@@ -844,6 +991,26 @@ export const exportRoutes = new Hono<AppEnv>()
     }
     const csv = toCsv(tidyNumbers(rows, columns), columns.map((c: any) => c.key), columns.map((c: any) => String(c.label ?? c.key)));
     return fileResponse(csv, `${pre}-${slug}-${stamp}.csv`, "text/csv; charset=utf-8");
+  })
+  // Job forms v2: every job's answers for one template, one row per job.
+  // GET /api/export/form-responses?templateId=…&from=YYYY-MM-DD&to=YYYY-MM-DD
+  // Office only (reports:export) — office-only questions are included.
+  // Registered before /:dataset, which would otherwise swallow it.
+  .get("/form-responses", requireAuth, async (c) => {
+    const u = c.get("user") as { role?: string; permissions?: string | null } | null;
+    if (!(await officeCan(u, "reports:export"))) return c.json({ message: "Forbidden" }, 403);
+    const templateId = (c.req.query("templateId") || "").trim();
+    if (!templateId) return c.json({ message: "Pick a form template to export." }, 400);
+    const day = /^\d{4}-\d{2}-\d{2}$/;
+    const from = c.req.query("from") || undefined;
+    const to = c.req.query("to") || undefined;
+    if ((from && !day.test(from)) || (to && !day.test(to))) return c.json({ message: "Dates must look like 2026-10-19." }, 400);
+    const out = await formResponsesExport(tenantId(c), templateId, { from, to });
+    if (!out) return c.json({ message: "Not found" }, 404);
+    const pre = await tenantFilePrefix(tenantId(c));
+    const slug = slugifyName(out.templateName) || "form";
+    const csv = toCsv(out.rows, out.columns.map((col) => col.key), out.columns.map((col) => col.label));
+    return fileResponse(csv, `${pre}-${slug}-answers-${Date.now()}.csv`, "text/csv; charset=utf-8");
   })
   // GET /api/export/:dataset?columns=a,b,c&format=csv|xlsx|json|pdf
   .get("/:dataset", requireAuth, async (c) => {

@@ -34,6 +34,7 @@ import { zonedDayBounds, fmtInZone } from "../../shared/tz";
 import { isTerminalStatus } from "../../shared/job-status";
 import { onChecklistTicked } from "../../services/custom-milestones";
 import { closeJobForm, currentVersion, missingForJob } from "../../services/job-forms";
+import { sendFormCopy } from "../../services/form-copy";
 import { isFeatureOn } from "../../services/features";
 import { z } from "zod";
 import { jsonBody,
@@ -1200,6 +1201,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (!b) return c.json({ error: "not found" }, 404);
     if (status === "completed" && b.templateVersionId) {
       await closeJobForm(co, b, u.name || u.email || "").catch((e) => console.error("[bookings] close form failed", id, e));
+      // The customer's copy of the form, when the template asks for one.
+      // Fire-and-forget: never holds up or fails the status change.
+      void sendFormCopy(co, b.id).catch((e) => console.error("[bookings] form copy failed", id, e));
     }
     return c.json({ booking: await enrich(b) }, 200);
   })

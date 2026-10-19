@@ -65,6 +65,10 @@ import { SignaturePad } from "../../components/signature-pad";
 import { isVoiceNoteSupported, startVoiceNote, uploadVoiceNote, type Recording } from "../../lib/voice-note";
 import { CoachAnchor } from "../../components/coach-tour";
 import { isPracticeJob, isSampleJob } from "../../lib/practice";
+import { JobForm, type JobFormHandle } from "../../components/job-form";
+import { jobFormKey, jobFormScope, useJobForm } from "../../lib/forms/use-job-form";
+import { formIncomplete, missingSummary, type MissingQuestion } from "../../lib/forms/job-form-data";
+import { uploadJobPhoto } from "../../lib/job-photos";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -152,6 +156,11 @@ export default function JobDetail() {
   const [defExpanded, setDefExpanded] = useState<string | null>(null);
   const [defNoteDraft, setDefNoteDraft] = useState<Record<string, string>>({});
   const [defUploading, setDefUploading] = useState<string | null>(null);
+  // Job forms v2: the page ScrollView (so the form can scroll to a question)
+  // and the form itself (flush drafts / ask what's missing before completing).
+  const scrollRef = useRef<ScrollView>(null);
+  const formRef = useRef<JobFormHandle>(null);
+  const [formHighlight, setFormHighlight] = useState<string[] | undefined>(undefined);
 
   const job = useQuery({
     queryKey: ["job", id],
@@ -162,6 +171,28 @@ export default function JobDetail() {
     },
     refetchInterval: 15000,
   });
+
+  // Job forms v2. `null` = this job wasn't booked on a v2 form, so the
+  // read-only custom fields and the legacy checklist below stay as they were.
+  const jobForm = useJobForm(id);
+  const hasForm = !!jobForm.data;
+
+  // Required questions still open: say which, then jump to the first one.
+  function showFormMissing(missing: MissingQuestion[]) {
+    if (!missing.length) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    setFormHighlight(missing.map((m) => m.id));
+    Alert.alert(
+      "Finish the form first",
+      `Answer ${missing.length === 1 ? "this required question" : "these required questions"} before completing:\n\n${missingSummary(missing)}`,
+      [
+        {
+          text: "Show me",
+          onPress: () => formRef.current?.scrollToItem(missing[0]!.id, { highlight: missing.map((m) => m.id) }),
+        },
+      ],
+    );
+  }
 
   // Practice job (lib/practice.ts): the technician can drop it any time.
   const removePractice = useMutation({
@@ -296,6 +327,9 @@ export default function JobDetail() {
   }
 
   const setStatus = useMutation({
+    // With a v2 form, status changes queue behind the form's answer saves, so
+    // an offline "Complete job" can't reach the server before the answers do.
+    scope: hasForm ? { id: jobFormScope(id) } : undefined,
     mutationFn: async (status: string) => {
       const res = await api.bookings[":id"].status.$post({ param: { id: id! }, json: { status } } as any);
       if (!res.ok) {
@@ -303,6 +337,13 @@ export default function JobDetail() {
         // before completing this job"), so pass it through verbatim instead of
         // collapsing every failure into "Failed".
         const body = (await res.json().catch(() => null)) as any;
+        // Job forms v2: required questions unanswered (409 form_incomplete).
+        const incomplete = formIncomplete(res.status, body);
+        if (incomplete) {
+          const err = new Error(incomplete.message) as Error & { formMissing?: MissingQuestion[] };
+          err.formMissing = incomplete.missing;
+          throw err;
+        }
         throw new Error(
           body?.message ||
             body?.error?.message ||
@@ -321,6 +362,15 @@ export default function JobDetail() {
     // "Complete Job", nothing moved, and they tapped again. Offline is a
     // different case and is already covered by the paused-mutation hint.
     onError: (e: any) => {
+      if (Array.isArray(e?.formMissing)) {
+        // The server knows best what's missing (answers may have changed on
+        // another device): pull the form fresh and point at the questions.
+        qc.invalidateQueries({ queryKey: jobFormKey(id) });
+        if (e.formMissing.length) {
+          showFormMissing(e.formMissing);
+          return;
+        }
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert("Couldn't update this job", e?.message || "Try again in a moment.", [
         { text: "OK" },
@@ -622,21 +672,9 @@ export default function JobDetail() {
     const asset = result.assets[0];
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", {
-        uri: asset.uri,
-        name: asset.fileName || "job.jpg",
-        type: asset.mimeType || "image/jpeg",
-      } as any);
       // Tag the stage this shot documents — before/after is what makes the
       // photo set usable as proof of condition later.
-      form.append("phase", phase);
-      const res = await fetch(`${API}/api/bookings/${id}/photos`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: form,
-      });
-      if (!res.ok) throw new Error("Upload failed");
+      await uploadJobPhoto({ bookingId: id!, asset, phase });
       await qc.invalidateQueries({ queryKey: ["photos", id] });
     } catch (e: any) {
       Alert.alert("Upload failed", e?.message || "Try again");
@@ -801,6 +839,7 @@ export default function JobDetail() {
         keyboardVerticalOffset={80}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={s.scroll}
           showsVerticalScrollIndicator={false}
           // iOS lets a vertical ScrollView drift horizontally mid-gesture
@@ -1116,13 +1155,29 @@ export default function JobDetail() {
             ) : null}
           </View>
 
+          {/* Job forms v2 — the fillable form replaces the read-only template
+              fields and the legacy checklist (both kept below for jobs
+              without a v2 form). */}
+          {jobForm.data && (
+            <JobForm
+              ref={formRef}
+              bookingId={id!}
+              data={jobForm.data}
+              photos={photos.data}
+              scrollRef={scrollRef}
+              readOnly={j.status === "completed" || j.status === "cancelled"}
+              highlightIds={formHighlight}
+            />
+          )}
+
           {/* Job fields (template custom fields) — typed rendering */}
           {(() => {
             // Prefer structured _customFields array for proper typed rendering
             let customFieldDefs: any[] = [];
             try { customFieldDefs = Array.isArray(fields._customFields) ? fields._customFields : []; } catch {}
 
-            // Render typed fields
+            // Render typed fields (a v2 form shows these questions itself)
+            if (customFieldDefs.length > 0 && hasForm) return null;
             if (customFieldDefs.length > 0) {
               return (
                 <View style={s.block}>
@@ -1277,8 +1332,8 @@ export default function JobDetail() {
             </View>
           )}
 
-          {/* Checklist — tappable */}
-          {checklist.length > 0 && (
+          {/* Checklist — tappable (a v2 form carries its own checklists) */}
+          {!hasForm && checklist.length > 0 && (
             <View style={s.block}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <Text style={s.blockTitle}>Checklist</Text>
@@ -1779,6 +1834,15 @@ export default function JobDetail() {
               loading={setStatus.isPending}
               onPress={() => {
                 if (action.next === "completed") {
+                  // Job forms v2: commit any half-typed answer, then block on
+                  // required questions still open and jump to the first one.
+                  // (The server enforces the same rule and answers 409.)
+                  const formMissing = hasForm ? formRef.current?.flush() ?? [] : [];
+                  if (formMissing.length > 0) {
+                    showFormMissing(formMissing);
+                    return;
+                  }
+
                   // Hard gate on required checklist items — these represent a
                   // real compliance/quality-verification step the industry
                   // treats as mandatory before a job can be closed (e.g. a
@@ -1787,7 +1851,8 @@ export default function JobDetail() {
                   // completion instead of just showing a dismissible warning
                   // — a soft nag doesn't reliably change behavior, a real
                   // gate does.
-                  const uncheckedRequired = checklist.filter(
+                  // (Not for a v2 form job: the legacy checklist isn't shown there.)
+                  const uncheckedRequired = hasForm ? [] : checklist.filter(
                     (i: any) => typeof i === "object" && i.required === true && !i.done,
                   );
                   if (uncheckedRequired.length > 0) {
@@ -1802,7 +1867,7 @@ export default function JobDetail() {
                   }
 
                   // Show debrief summary before completing
-                  const unchecked = checklist.filter((i: any) => !(typeof i === "object" ? i.done : false)).length;
+                  const unchecked = hasForm ? 0 : checklist.filter((i: any) => !(typeof i === "object" ? i.done : false)).length;
                   const photoCount = photos.data?.length ?? 0;
                   const onSiteMin = j.onSiteMinutes ?? 0;
                   const timeStr = onSiteMin >= 60
@@ -1817,6 +1882,12 @@ export default function JobDetail() {
                   if (mileageStr) lines.push(`📍 Total mileage: ${mileageStr}`);
                   lines.push(`📸 Photos: ${photoCount}`);
                   if (unchecked > 0) lines.push(`⚠️ ${unchecked} checklist item${unchecked > 1 ? "s" : ""} not done`);
+                  if (jobForm.data) {
+                    const fp = jobForm.data.progress;
+                    lines.push(`📝 Form: ${fp.answered} of ${fp.total} answered`);
+                    if (jobForm.data.flagged.length > 0)
+                      lines.push(`🚩 ${jobForm.data.flagged.length} answer${jobForm.data.flagged.length > 1 ? "s" : ""} flagged for the office`);
+                  }
                   if (techPay > 0) lines.push(`💰 Earning: ${money(techPay)}`);
 
                   Alert.alert(

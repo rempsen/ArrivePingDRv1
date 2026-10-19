@@ -13,6 +13,9 @@ import { LiveMap } from "../../components/live-map";
 import { StatusBadge } from "../../components/brand";
 import { FullLoader, Loader } from "../../components/loader";
 import { fmtDate } from "../../lib/utils";
+import { FormFill } from "../../components/forms/form-fill";
+import { completeJob, useJobForm } from "../../components/forms/use-job-form";
+import { missingRequired } from "../../../shared/forms/form-model";
 import {
   ArrowLeft, MapPin, Phone, Navigation, CheckCircle2, Play, Flag, Radio, Check, X, AlertTriangle, HandMetal,
 } from "lucide-react";
@@ -66,8 +69,34 @@ export default function RiderActive() {
     },
   });
 
+  // Job forms v2: the form the tech fills in on this job (null = none).
+  const jf = useJobForm(id);
+  const [formMissing, setFormMissing] = useState<string[]>([]);
+  const [formMsg, setFormMsg] = useState("");
+
   const setStatus = useMutation({
     mutationFn: async (status: JobStatus) => {
+      if (status === "completed" && jf.data) {
+        // Answers still being sent go first, then the server checks the form.
+        await jf.settled();
+        const missing = missingRequired(jf.data.form, jf.answers);
+        if (missing.length) {
+          setFormMissing(missing.map((m) => m.id));
+          setFormMsg(`Answer the required questions first: ${missing.slice(0, 3).map((m) => m.label).join(", ")}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}.`);
+          document.getElementById(`ff-item-${missing[0]!.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+          return;
+        }
+        const r = await completeJob(id);
+        if (!r.ok) {
+          setFormMissing(r.missing.map((m) => m.id));
+          setFormMsg(r.message);
+          if (r.missing[0]) document.getElementById(`ff-item-${r.missing[0].id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+          return;
+        }
+        setFormMissing([]);
+        setFormMsg("");
+        return;
+      }
       await api.bookings[":id"].status.$post({ param: { id }, json: { status } });
     },
     onSuccess: () => {
@@ -277,6 +306,30 @@ export default function RiderActive() {
           ) : (
             <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 py-4 font-bold text-green-600">
               <CheckCircle2 className="h-5 w-5" /> Job completed
+            </div>
+          )}
+
+          {jf.data && ["arrived", "in_progress", "completed"].includes(b.status) && (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between px-1">
+                <p className="text-sm font-semibold text-white">{jf.data.templateName || "Job form"}</p>
+                <span aria-live="polite" className={`text-[11px] ${jf.saveState === "error" ? "text-red-400" : "text-slate-500"}`}>
+                  {jf.saveState === "saving" ? "Saving…" : jf.saveState === "error" ? "Not saved, check your connection" : "Saved"}
+                </span>
+              </div>
+              <FormFill
+                form={jf.data.form}
+                answers={jf.answers}
+                onAnswer={(qid, a) => {
+                  jf.answer(qid, a);
+                  if (formMissing.includes(qid)) setFormMissing((m) => m.filter((x) => x !== qid));
+                }}
+                uploadPhoto={jf.uploadPhoto}
+                photoUrls={jf.photoUrls}
+                highlight={formMissing}
+                disabled={b.status === "completed"}
+              />
+              {formMsg && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{formMsg}</p>}
             </div>
           )}
 

@@ -13,6 +13,8 @@
  * the same tenant a superadmin would have built for them by hand — same
  * catalog, same starter forms/templates, same branding pipeline.
  */
+import { libraryFor } from "../shared/forms/library";
+import { toLegacy } from "../shared/forms/legacy";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, sdb } from "../api/database";
@@ -742,6 +744,28 @@ export async function provisionCompany(
       });
     }
     templatesSeeded = tpls.length;
+    // Job forms v2: add up to three hand-written library forms for this trade
+    // (sections, logic, photos, sign-off), skipping any name already seeded.
+    const have = new Set(tpls.map((x) => x.name.toLowerCase()));
+    const picks = libraryFor(resolvedIndustry || null)
+      .filter((l) => l.industries.length > 0 && !have.has(l.name.toLowerCase()))
+      .slice(0, 3);
+    for (const l of picks) {
+      const legacy = toLegacy(l.form);
+      await t.insert(schema.taskTemplates, {
+        name: l.name,
+        category: l.category,
+        icon: l.icon,
+        color: l.color,
+        description: l.description,
+        form: JSON.stringify(l.form),
+        fields: JSON.stringify(legacy.fields),
+        checklist: JSON.stringify(legacy.checklist),
+        estimatedMins: l.estimatedMins,
+        active: true,
+      });
+      templatesSeeded++;
+    }
     console.log(`[provisioning] seeded ${templatesSeeded} work-order templates for "${slug}" (${source})`);
   } catch (e) {
     console.error("[provisioning] starter-template seeding failed", e);

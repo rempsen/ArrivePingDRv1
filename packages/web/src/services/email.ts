@@ -497,6 +497,47 @@ export const emailTemplates = {
       html: shell("Service Completed", body, { label: "Leave a review", url: link("bookings") }, brand),
     };
   },
+  /**
+   * Job forms v2: the customer's copy of the filled form, sent when the job is
+   * done and the template has "Email the customer a copy" on
+   * (services/form-copy.ts). Callers pass only what the customer may see:
+   * answered questions, never office-only ones.
+   */
+  formCopy(
+    d: {
+      customerName: string;
+      formName: string;
+      serviceName: string;
+      sections: { title: string; rows: { label: string; value: string }[] }[];
+      url?: string;
+    },
+    brand: TenantEmailBrand = FALLBACK_BRAND,
+  ) {
+    const co = brand.company || FALLBACK_BRAND.company;
+    const sections = d.sections
+      .map(
+        (s) => `${s.title ? `<p style="margin:18px 0 4px;font-size:12px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:#94a3b8">${esc(s.title)}</p>` : ""}
+      <table style="width:100%;border-collapse:collapse;font-size:14px">${s.rows.map((r) => detailRow(esc(r.label), esc(r.value))).join("")}</table>`,
+      )
+      .join("");
+    const body = `<p>Hi ${esc(d.customerName || "there")}, here's a copy of the <b>${esc(d.formName)}</b> your technician filled in for your ${esc(d.serviceName)} visit.</p>
+      ${sections}
+      ${d.url ? `<p style="margin-top:16px;color:#94a3b8;font-size:13px">Your job record, with photos, stays at the link below.</p>` : ""}`;
+    const text = [
+      `Hi ${d.customerName || "there"},`,
+      "",
+      `Here's a copy of the ${d.formName} your technician filled in for your ${d.serviceName} visit.`,
+      ...d.sections.flatMap((s) => ["", ...(s.title ? [s.title.toUpperCase()] : []), ...s.rows.map((r) => `${r.label}: ${r.value}`)]),
+      ...(d.url ? ["", `Your job record: ${d.url}`] : []),
+      "",
+      `— ${co}`,
+    ].join("\n");
+    return {
+      subject: `Your ${d.formName} — ${co}`,
+      html: shell(esc(d.formName), body, d.url ? { label: "View your job", url: d.url } : undefined, brand),
+      text,
+    };
+  },
   reminder(d: BookingEmailData, brand: TenantEmailBrand = FALLBACK_BRAND, tz?: string | null) {
     const body = `<p>Hi ${d.customerName}, this is a friendly reminder about your upcoming appointment.</p>
       <table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:14px">

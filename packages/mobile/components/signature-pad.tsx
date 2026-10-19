@@ -29,7 +29,8 @@ type Point = [number, number];
 const PAD_HEIGHT = 180;
 const STROKE = 2.5;
 
-function Segment({ a, b, color }: { a: Point; b: Point; color: string }) {
+/** One straight ink segment (also used by the job form's signature preview). */
+export function Segment({ a, b, color }: { a: Point; b: Point; color: string }) {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const len = Math.max(1, Math.hypot(dx, dy));

@@ -461,6 +461,79 @@ function RawExports() {
           </div>
         ))}
       </div>
+      <FormAnswersExport canExport={canExport} />
+    </div>
+  );
+}
+
+/** Job forms v2: every job's answers for one form template, as CSV
+ *  (GET /api/export/form-responses). Office-only questions included. */
+function FormAnswersExport({ canExport }: { canExport: boolean }) {
+  const { can } = useAccess();
+  const templates = useQuery({
+    queryKey: ["templates", "form-answers-export"],
+    queryFn: async () => {
+      const res = await fetch("/api/templates", { headers: apiHeaders() });
+      if (!res.ok) return [] as { id: string; name: string }[];
+      const data = (await res.json()) as { templates?: { id: string; name: string }[] };
+      return data.templates ?? [];
+    },
+    enabled: can("forms:view"),
+  });
+  const [templateId, setTemplateId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const list = templates.data ?? [];
+  if (!list.length) return null;
+  async function dl() {
+    if (!templateId) return;
+    setBusy(true);
+    try {
+      const qs = new URLSearchParams({ templateId });
+      if (from) qs.set("from", from);
+      if (to) qs.set("to", to);
+      const res = await fetch(`/api/export/form-responses?${qs}`, { headers: apiHeaders() });
+      await saveDownload(res, "form-answers.csv");
+    } catch (e) {
+      exportFailed(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-3 rounded-xl border border-white/10 bg-ink-3/40 p-3">
+      <ClipboardList className="mb-2 h-5 w-5 shrink-0 text-slate-400" />
+      <label className="flex min-w-[12rem] flex-1 flex-col gap-1 text-[11px] font-semibold text-slate-400">
+        Form answers
+        <select
+          value={templateId}
+          onChange={(e) => setTemplateId(e.target.value)}
+          className="rounded-lg border border-white/10 bg-ink-2 px-2.5 py-1.5 text-sm font-normal text-slate-200"
+        >
+          <option value="">Choose a form…</option>
+          {list.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-400">
+        From
+        <input type="date" aria-label="From date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-white/10 bg-ink-2 px-2.5 py-1.5 text-sm font-normal text-slate-200" />
+      </label>
+      <label className="flex flex-col gap-1 text-[11px] font-semibold text-slate-400">
+        To
+        <input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-white/10 bg-ink-2 px-2.5 py-1.5 text-sm font-normal text-slate-200" />
+      </label>
+      <button
+        type="button"
+        onClick={dl}
+        disabled={!canExport || !templateId || busy}
+        title={canExport ? undefined : "Exporting needs the Export permission on Reports. Ask an admin."}
+        className="rounded-lg bg-white/5 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-brand hover:text-white disabled:opacity-50"
+      >
+        {busy ? "Exporting…" : "Export answers (CSV)"}
+      </button>
     </div>
   );
 }
