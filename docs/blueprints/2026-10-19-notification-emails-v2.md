@@ -74,11 +74,11 @@ Sources: prospeo.io/s/html-emails, hackernoon "Why email HTML in 2026 is still a
   - `social{}`: uses the theme's links.
   - `divider`, `spacer{sm|md|lg}`
 - **Company theme:** a new `notification_channels.email_theme` JSON column, plus the existing brand colour, background, logo, logo height, header style and footer.
-  - Theme fields: font (system/modern/classic/rounded/mono), heading weight, corners (sharp/soft/round), button shape (square/rounded/pill), layout (card/flat), header (brand/gradient/light/none), logo alignment, text colour, social links `[{label,url}]` (up to 8) and a "show company footer" toggle.
-  - `resolveTheme()` maps legacy header styles: gradient→gradient, solid→brand, minimal/plain/logo→light.
+  - Theme fields: font (system/modern/geometric/rounded/classic), heading weight, corners (sharp/soft/round), button shape (square/rounded/pill), layout (card/flat), header (brand/gradient/light/none), logo alignment, text colour, social links `[{label,url}]` (up to 8) and a "show company footer" toggle.
+  - `normalizeTheme()` (via `legacyHeader()`) maps legacy header styles: gradient→gradient, solid→brand, minimal/plain/logo→light.
 
 ### Rendering
-`renderEmail(design, theme, brand, interp)` produces the full document.
+`renderEmail(design, brand, vars)` produces the full document; the brand carries the theme.
 
 **Head and document frame:**
 - `lang`/`dir`, the x-apple meta tags, and `color-scheme: light dark` with `prefers-color-scheme` and `[data-ogsc]` dark styles.
