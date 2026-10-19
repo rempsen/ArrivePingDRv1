@@ -757,6 +757,10 @@ export const companySettings = pgTable("company_settings", {
   // shops where the owner does the work too (Sityr: Ryler books AND sits).
   // Off hides those profiles from assignment without deleting history.
   officeStaffAssignable: boolean("office_staff_assignable").notNull().default(true),
+  // The Directory's place layer (properties / communities / buildings / teams):
+  // "auto" follows the industry and the company's words, "on" / "off" are an
+  // admin's choice (shared/directory-vocab.ts).
+  directoryPlaces: text("directory_places").notNull().default("auto"),
   // ── Customer-initiated appointment changes ─────────────────────────────
   // Who owns a change to a booked appointment is a per-company decision, so it
   // lives here rather than being hardcoded. Defaults match the shipped policy

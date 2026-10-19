@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { parseDistanceUnit } from "../../shared/units";
+import { parsePlacesMode } from "../../shared/directory-vocab";
 import { eq } from "drizzle-orm";
 import * as schema from "../database/schema";
 import { db } from "../database";
@@ -183,10 +184,13 @@ export const settingsRoutes = new Hono<AppEnv>()
       "officeStaffAssignable",
       // running-late notices (shared/delay-policy.ts)
       "delayNoticeEnabled", "delayNoticeThresholdMins", "delayNoticeAutoSendAfterMins",
+      // the Directory's place layer: auto | on | off (shared/directory-vocab.ts)
+      "directoryPlaces",
     ];
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const k of allowed) if (k in body) patch[k] = body[k];
     if ("distanceUnit" in patch) patch.distanceUnit = parseDistanceUnit(patch.distanceUnit);
+    if ("directoryPlaces" in patch) patch.directoryPlaces = parsePlacesMode(patch.directoryPlaces);
     // This endpoint stores whatever it is handed, so the three change-policy
     // fields are normalised here: a NaN / negative / absurd cutoff would either
     // blow up the integer column or hand out a policy nobody chose.

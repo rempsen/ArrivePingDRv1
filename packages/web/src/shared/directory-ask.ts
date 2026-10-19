@@ -87,6 +87,39 @@ export const DirectoryFilter = z.object({
 });
 export type DirectoryFilter = z.infer<typeof DirectoryFilter>;
 
+/**
+ * The tenant's words for chips, notes and the keyword reading: its places
+ * (shared/directory-vocab.ts), work and people. `placesEnabled` false means the
+ * Directory has no place layer, so a question can't filter by one.
+ */
+export interface AskWords {
+  placesEnabled: boolean;
+  place: string;
+  places: string;
+  unit: string | null;
+  manager: string;
+  job: string;
+  jobs: string;
+  customer: string;
+  customers: string;
+  worker: string;
+  workers: string;
+}
+export const DEFAULT_ASK_WORDS: AskWords = {
+  placesEnabled: true,
+  place: "Property",
+  places: "Properties",
+  unit: "Unit",
+  manager: "Manager",
+  job: "Job",
+  jobs: "Jobs",
+  customer: "Customer",
+  customers: "Customers",
+  worker: "Technician",
+  workers: "Technicians",
+};
+const lower = (s: string) => s.toLowerCase();
+
 /** Matches no property id: a name in the question that isn't one of theirs. */
 export const UNMATCHED = "unmatched";
 
@@ -185,19 +218,50 @@ export function suggestNames(text: string, list: Named[]): string[] {
 
 const didYouMean = (names: string[]) => (names.length ? ` Did you mean ${names.join(" or ")}?` : "");
 
+/**
+ * A filter for a Directory without places: nothing in it can be about places,
+ * including the sort and grouping the page re-sends with an answer.
+ */
+export function placeFreeFilter(f: DirectoryFilter): DirectoryFilter {
+  return {
+    ...f,
+    propertyIds: [],
+    managerIds: [],
+    units: [],
+    missing: f.missing.filter((m) => m !== "property" && m !== "unit"),
+    sort: f.sort === "property" || f.sort === "unit" || f.sort === "manager" ? "name" : f.sort,
+    groupBy: f.groupBy === "property" || f.groupBy === "manager" ? "none" : f.groupBy,
+  };
+}
+
 /** Names → this company's ids. Notes say what didn't match, so the answer is never silently wider. */
 export function resolveInterpretation(
-  i: AskInterpretation,
+  input: AskInterpretation,
   properties: Named[],
   staff: Named[],
+  words: AskWords = DEFAULT_ASK_WORDS,
 ): { filter: DirectoryFilter; notes: string[] } {
   const notes: string[] = [];
+  // No place layer: nothing in the answer can be about places.
+  const i: AskInterpretation = words.placesEnabled
+    ? input
+    : {
+        ...input,
+        properties: [],
+        noProperty: false,
+        managers: [],
+        noManager: false,
+        units: [],
+        missing: input.missing.filter((m) => m !== "property" && m !== "unit"),
+        sort: input.sort === "property" || input.sort === "unit" || input.sort === "manager" ? "name" : input.sort,
+        groupBy: input.groupBy === "property" || input.groupBy === "manager" ? "none" : input.groupBy,
+      };
   const propertyIds = new Set<string>();
   for (const p of i.properties) {
     const hit = matchNames(p, properties);
     if (hit.length) hit.forEach((h) => propertyIds.add(h.id));
     else {
-      notes.push(`No property called “${p}”.${didYouMean(suggestNames(p, properties))}`);
+      notes.push(`No ${lower(words.place)} called “${p}”.${didYouMean(suggestNames(p, properties))}`);
       propertyIds.add(UNMATCHED);
     }
   }
@@ -304,59 +368,67 @@ export function filterPredicate(f: DirectoryFilter, jobCustomers: Set<string> | 
   };
 }
 
-const SORT_LABEL: Record<(typeof SORTS)[number], string> = {
-  name: "name",
-  property: "property",
-  unit: "unit",
-  manager: "manager",
-  email: "email",
-  phone: "phone",
-  role: "type",
-  joined: "date joined",
-  openJobs: "open requests",
-  lastVisit: "last visit",
-};
+function sortLabel(sort: (typeof SORTS)[number], w: AskWords): string {
+  switch (sort) {
+    case "property":
+      return lower(w.place);
+    case "unit":
+      return lower(w.unit ?? "unit");
+    case "manager":
+      return lower(w.manager);
+    case "role":
+      return "type";
+    case "joined":
+      return "date joined";
+    case "openJobs":
+      return `open ${lower(w.jobs)}`;
+    case "lastVisit":
+      return `last ${lower(w.job)}`;
+    default:
+      return sort;
+  }
+}
 
 const fmtDay = (d: string) =>
   new Date(`${d}T12:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 /** The filter as short chips the page shows, so the person can see how the question was read. */
-export function filterChips(
-  f: DirectoryFilter,
-  names: { properties: Named[]; staff: Named[]; customerNounPlural: string; workerNounPlural: string },
-): string[] {
+export function filterChips(f: DirectoryFilter, names: { properties: Named[]; staff: Named[]; words?: AskWords }): string[] {
+  const w = names.words ?? DEFAULT_ASK_WORDS;
+  const jobs = lower(w.jobs);
   const chips: string[] = [];
-  if (f.kind === "customer") chips.push(names.customerNounPlural);
-  else if (f.kind === "field") chips.push(names.workerNounPlural);
+  if (f.kind === "customer") chips.push(w.customers);
+  else if (f.kind === "field") chips.push(w.workers);
   else if (f.kind === "office") chips.push("Office staff");
   const nameOf = (list: Named[], idv: string) => list.find((x) => x.id === idv)?.name;
   for (const p of f.propertyIds) {
-    if (p === NONE) chips.push("No property");
-    else if (p !== UNMATCHED) chips.push(nameOf(names.properties, p) ?? "A property");
+    if (p === NONE) chips.push(`No ${lower(w.place)}`);
+    else if (p !== UNMATCHED) chips.push(nameOf(names.properties, p) ?? `A ${lower(w.place)}`);
   }
   for (const m of f.managerIds) {
-    if (m === NONE) chips.push("No manager");
-    else if (m !== UNMATCHED) chips.push(`Manager: ${nameOf(names.staff, m) ?? "a team member"}`);
+    if (m === NONE) chips.push(`No ${lower(w.manager)}`);
+    else if (m !== UNMATCHED) chips.push(`${w.manager}: ${nameOf(names.staff, m) ?? "a team member"}`);
   }
-  if (f.units.length) chips.push(`Unit ${f.units.join(", ")}`);
+  if (f.units.length) chips.push(`${w.unit ?? "Unit"} ${f.units.join(", ")}`);
   if (f.city) chips.push(`In ${f.city}`);
-  for (const m of f.missing) chips.push(m === "property" ? "No property" : m === "unit" ? "No unit" : `No ${m}`);
-  if (f.minOpenRequests !== null && f.minOpenRequests > 1) chips.push(`${f.minOpenRequests}+ open requests`);
-  else if (f.openRequests === "some" || f.minOpenRequests === 1) chips.push("Open requests");
-  if (f.openRequests === "none") chips.push("No open requests");
-  if (f.neverVisited) chips.push("Never visited");
-  if (f.lastVisitAfter) chips.push(`Visited since ${fmtDay(f.lastVisitAfter)}`);
-  if (f.lastVisitBefore) chips.push(`Last visit before ${fmtDay(f.lastVisitBefore)}`);
+  for (const m of f.missing) chips.push(m === "property" ? `No ${lower(w.place)}` : m === "unit" ? `No ${lower(w.unit ?? "unit")}` : `No ${m}`);
+  if (f.minOpenRequests !== null && f.minOpenRequests > 1) chips.push(`${f.minOpenRequests}+ open ${jobs}`);
+  else if (f.openRequests === "some" || f.minOpenRequests === 1) chips.push(`Open ${jobs}`);
+  if (f.openRequests === "none") chips.push(`No open ${jobs}`);
+  if (f.neverVisited) chips.push(`No completed ${jobs}`);
+  if (f.lastVisitAfter) chips.push(`Last ${lower(w.job)} since ${fmtDay(f.lastVisitAfter)}`);
+  if (f.lastVisitBefore) chips.push(`Last ${lower(w.job)} before ${fmtDay(f.lastVisitBefore)}`);
   if (f.joinedAfter) chips.push(`Joined since ${fmtDay(f.joinedAfter)}`);
   if (f.joinedBefore) chips.push(`Joined before ${fmtDay(f.joinedBefore)}`);
-  if (f.jobText) chips.push(`${f.jobOpenOnly ? "Open work orders" : "Work orders"} mentioning “${f.jobText}”`);
-  else if (f.jobOpenOnly && (f.jobAfter || f.jobBefore)) chips.push("Open work orders");
-  if (f.jobAfter) chips.push(`Work order since ${fmtDay(f.jobAfter)}`);
-  if (f.jobBefore) chips.push(`Work order before ${fmtDay(f.jobBefore)}`);
+  if (f.jobText) chips.push(`${f.jobOpenOnly ? `Open ${jobs}` : w.jobs} mentioning “${f.jobText}”`);
+  else if (f.jobOpenOnly && (f.jobAfter || f.jobBefore)) chips.push(`Open ${jobs}`);
+  if (f.jobAfter) chips.push(`${w.job} since ${fmtDay(f.jobAfter)}`);
+  if (f.jobBefore) chips.push(`${w.job} before ${fmtDay(f.jobBefore)}`);
   if (f.status !== "any") chips.push(f.status === "disabled" ? "Deactivated" : f.status === "invited" ? "Invited" : "Active");
   if (f.keywords) chips.push(`“${f.keywords}”`);
-  if (f.groupBy !== "none") chips.push(`Grouped by ${f.groupBy === "role" ? "type" : f.groupBy}`);
-  if (f.sort !== "name" || f.dir !== "asc") chips.push(`Sorted by ${SORT_LABEL[f.sort]}${f.dir === "desc" ? ", highest first" : ""}`);
+  if (f.groupBy !== "none")
+    chips.push(`Grouped by ${f.groupBy === "role" ? "type" : f.groupBy === "property" ? lower(w.place) : lower(w.manager)}`);
+  if (f.sort !== "name" || f.dir !== "asc") chips.push(`Sorted by ${sortLabel(f.sort, w)}${f.dir === "desc" ? ", highest first" : ""}`);
   return chips;
 }
 
@@ -380,15 +452,25 @@ const STOP = new Set(
  * common phrases, and use what's left as keywords. Never as clever as the
  * model, but it always answers.
  */
-export function heuristicInterpretation(question: string, properties: Named[], staff: Named[]): AskInterpretation {
+export function heuristicInterpretation(question: string, properties: Named[], staff: Named[], words: AskWords = DEFAULT_ASK_WORDS): AskInterpretation {
   const out = emptyInterpretation();
   let text = ` ${norm(question)} `;
   const q = text;
   const take = (n: string) => {
     text = text.replace(` ${n} `, " ");
   };
+  // The tenant's own words count as plain words too ("communities", "lot", "coach").
+  const own = [words.place, words.places, words.unit ?? "", words.manager, words.job, words.jobs, words.customer, words.customers, words.worker, words.workers]
+    .flatMap((x) => norm(x).split(" "))
+    .filter(Boolean);
+  const alt = (...xs: string[]) => [...new Set(xs.map((x) => norm(x)).filter(Boolean))].map((x) => x.replace(/ /g, "\\s+")).join("|");
+  const placeWords = alt(words.place, words.places, "property", "building");
+  const unitWords = alt(words.unit ?? "unit", "unit", "apt", "apartment", "suite", "lot");
+  const managerWords = alt(words.manager, "manager");
+  const jobWords = alt(words.jobs, words.job, "requests", "request", "work orders", "work order", "jobs", "job", "tickets", "ticket");
+  const places = words.placesEnabled;
   // Longest names first, so "Maple Court East" wins over "Maple Court".
-  for (const p of [...properties].sort((a, b) => b.name.length - a.name.length)) {
+  for (const p of places ? [...properties].sort((a, b) => b.name.length - a.name.length) : []) {
     const n = norm(p.name);
     if (n && text.includes(` ${n} `)) {
       out.properties.push(p.name);
@@ -397,7 +479,7 @@ export function heuristicInterpretation(question: string, properties: Named[], s
   }
   // A team member's name means "their residents" only when the question says
   // so; "Jordan Patel's phone" is a search for Jordan.
-  if (/\b(manag\w*|pm|looks? after|responsible|run by|handled by|assigned to)\b/.test(text)) {
+  if (places && (new RegExp(`\\b(${managerWords})\\b`).test(text) || /\b(manag\w*|pm|looks? after|responsible|run by|handled by|assigned to)\b/.test(text))) {
     for (const s of [...staff].sort((a, b) => b.name.length - a.name.length)) {
       const n = norm(s.name);
       if (n && text.includes(` ${n} `)) {
@@ -409,32 +491,37 @@ export function heuristicInterpretation(question: string, properties: Named[], s
   const has = (re: RegExp) => re.test(q);
   if (has(/\b(no|without|missing)( an?)? (e ?mail|email address)\b/)) out.missing.push("email");
   if (has(/\b(no|without|missing)( an?)? (phone|cell|mobile|number|phone number)\b/)) out.missing.push("phone");
-  if (has(/\b(no|without|missing)( an?)? unit\b/)) out.missing.push("unit");
-  if (has(/\b(no|without)( an?)? (property|building)\b|\bunassigned\b/)) out.noProperty = true;
-  if (has(/\b(no|without)( an?)? manager\b|\bunmanaged\b/)) out.noManager = true;
-  if (has(/\bno open (requests?|work orders?|jobs?|tickets?)\b/)) out.openRequests = "none";
-  else if (has(/\bopen (requests?|work orders?|jobs?|tickets?)\b|\boutstanding\b|\bpending (requests?|work orders?|jobs?)\b/)) out.openRequests = "some";
+  const re = (src: string) => new RegExp(src);
+  if (places && has(re(`\\b(no|without|missing)( an?)? (${unitWords})\\b`))) out.missing.push("unit");
+  if (places && (has(re(`\\b(no|without)( an?)? (${placeWords})\\b`)) || has(/\bunassigned\b/))) out.noProperty = true;
+  if (places && (has(re(`\\b(no|without)( an?)? (${managerWords})\\b`)) || has(/\bunmanaged\b/))) out.noManager = true;
+  if (has(re(`\\bno open (${jobWords})\\b`))) out.openRequests = "none";
+  else if (has(re(`\\bopen (${jobWords})\\b`)) || has(/\boutstanding\b/) || has(re(`\\bpending (${jobWords})\\b`))) out.openRequests = "some";
   if (has(/\bnever (been )?(visited|serviced|seen)\b|\bno visits?\b/)) out.neverVisited = true;
-  const unit = /\b(?:unit|apt|apartment|suite)\s+([a-z0-9-]{1,8})\b/.exec(q);
+  const unit = places ? re(`\\b(?:${unitWords})\\s+([a-z0-9-]{1,8})\\b`).exec(q) : null;
   if (unit) {
     out.units.push(unit[1]!.toUpperCase());
     take(unit[1]!);
   }
-  if (has(/\b(resident|tenant|customer|client|people at|who live|living)s?\b/) || out.properties.length || out.managers.length || out.units.length || out.noProperty)
+  // One or many: "parent with no phone" asks about parents.
+  const customerWords = alt(words.customers, words.customer, "residents", "resident", "tenants", "tenant", "customers", "customer", "clients", "client", "people at", "who live", "living");
+  const workerWords = alt(words.workers, words.worker, "technicians", "technician", "techs", "tech", "field staff", "vendors", "vendor");
+  if (has(re(`\\b(${customerWords})\\b`)) || out.properties.length || out.managers.length || out.units.length || out.noProperty)
     out.kind = "customer";
-  else if (has(/\b(technicians?|techs?|field staff|vendors?)\b/)) out.kind = "field";
+  else if (has(re(`\\b(${workerWords})\\b`))) out.kind = "field";
   else if (has(/\b(office|dispatchers?)\b/)) out.kind = "office";
-  if (has(/\bby unit\b/)) out.sort = "unit";
-  else if (has(/\bby property\b|\bby building\b/)) out.sort = "property";
-  else if (has(/\bby manager\b/)) out.sort = "manager";
+  if (places && has(re(`\\bby (${unitWords})\\b`))) out.sort = "unit";
+  else if (places && has(re(`\\bby (${placeWords})\\b`))) out.sort = "property";
+  else if (places && has(re(`\\bby (${managerWords})\\b`))) out.sort = "manager";
   else if (has(/\bmost open\b/)) [out.sort, out.dir] = ["openJobs", "desc"];
   else if (has(/\b(recent|latest) visit|\brecently visited\b/)) [out.sort, out.dir] = ["lastVisit", "desc"];
   else if (has(/\bnewest\b|\brecently (added|joined)\b/)) [out.sort, out.dir] = ["joined", "desc"];
-  if (has(/\bgroup(ed)? by property\b|\bgroup(ed)? by building\b/)) out.groupBy = "property";
-  else if (has(/\bgroup(ed)? by manager\b/)) out.groupBy = "manager";
+  if (places && has(re(`\\bgroup(ed)? by (${placeWords})\\b`))) out.groupBy = "property";
+  else if (places && has(re(`\\bgroup(ed)? by (${managerWords})\\b`))) out.groupBy = "manager";
+  const ownStop = new Set(own);
   out.keywords = text
     .split(" ")
-    .filter((w) => w.length >= 2 && !STOP.has(w))
+    .filter((w) => w.length >= 2 && !STOP.has(w) && !ownStop.has(w))
     .join(" ")
     .slice(0, 100);
   return out;

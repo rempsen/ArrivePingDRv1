@@ -4,7 +4,10 @@ import {
   Upload, ChevronDown, FileText, FileSpreadsheet, Download,
   CheckCircle2, XCircle, Loader2, RefreshCw, AlertTriangle,
 } from "lucide-react";
-import { apiHeaders } from "../lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { api, apiHeaders } from "../lib/api";
+import { ok } from "../lib/api-ok";
+import type { ImportProfile } from "../../shared/import-profile";
 import { Modal, BtnPrimary, BtnGhost } from "./modal";
 
 export type ImportType = "customer" | "admin" | "rider" | "property";
@@ -64,12 +67,24 @@ export function ImportMenu({
   workerLabel?: string;
   onDone?: () => void;
 }) {
+  // This tenant's imports, named and shaped its way (shared/import-profile.ts):
+  // a property manager imports Residents with Property and Unit columns; an
+  // HVAC company imports Customers with Company and Address, and has no
+  // places import at all.
+  const profileQ = useQuery({
+    queryKey: ["import-profile"],
+    staleTime: 60_000,
+    queryFn: async () => (await ok(await api.import.profile.$get())).profile as ImportProfile,
+  });
+  const profile = profileQ.data;
+  const offered = types.filter((t) => (profile ? profile.types.includes(t) : t !== "property"));
   const label = (t: ImportType) =>
-    t === "customer" ? customerLabel || TYPE_LABEL.customer : t === "rider" ? workerLabel || TYPE_LABEL.rider : TYPE_LABEL[t];
+    profile?.label[t] ??
+    (t === "customer" ? customerLabel || TYPE_LABEL.customer : t === "rider" ? workerLabel || TYPE_LABEL.rider : TYPE_LABEL[t]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickType, setPickType] = useState(false);
-  const [type, setType] = useState<ImportType | null>(activeType ?? (types.length === 1 ? types[0]! : null));
+  const [type, setType] = useState<ImportType | null>(activeType ?? (offered.length === 1 ? offered[0]! : null));
   const [busy, setBusy] = useState<"csv" | "xlsx" | "template" | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
@@ -87,8 +102,8 @@ export function ImportMenu({
   }, [menuOpen]);
 
   function openMenu() {
-    if (activeType) { setType(activeType); setMenuOpen(true); return; }
-    if (types.length === 1) { setType(types[0]!); setMenuOpen(true); return; }
+    if (activeType && offered.includes(activeType)) { setType(activeType); setMenuOpen(true); return; }
+    if (offered.length === 1) { setType(offered[0]!); setMenuOpen(true); return; }
     setPickType(true);
   }
 
@@ -160,12 +175,18 @@ export function ImportMenu({
         </button>
         {menuOpen && type && (
           <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-xl border border-white/10 bg-ink-2 shadow-2xl">
-            <div className="border-b border-white/5 px-3.5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Importing {label(type)}
+            <div className="border-b border-white/5 px-3.5 py-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Importing {label(type)}</p>
+              {profile && (
+                <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                  Template columns: {profile.columns[type].map((c) => c.label).join(", ")}
+                </p>
+              )}
             </div>
             <MenuItem icon={FileText} label="Import CSV" onClick={() => startUpload("csv")} />
             <MenuItem icon={FileSpreadsheet} label="Import Excel" onClick={() => startUpload("xlsx")} />
-            <MenuItem icon={Download} label="Download template" onClick={() => downloadTemplate("csv")} />
+            <MenuItem icon={Download} label="Download CSV template" onClick={() => downloadTemplate("csv")} />
+            <MenuItem icon={Download} label="Download Excel template" onClick={() => downloadTemplate("xlsx")} />
           </div>
         )}
         <input ref={fileRef} type="file" className="hidden" aria-label="Choose a file to import" onChange={onFileSelected} />
@@ -174,7 +195,7 @@ export function ImportMenu({
       {/* which entity type — only shown when the tab is "All" (or the page offers more than one type) */}
       <Modal open={pickType} onClose={() => setPickType(false)} title="What are you importing?" subtitle="Templates and required fields differ by type." size="sm">
         <div className="flex flex-col gap-2">
-          {types.map((t) => (
+          {offered.map((t) => (
             <button
               key={t}
               onClick={() => choose(t)}
@@ -273,7 +294,7 @@ export function ImportMenu({
               </div>
             )}
             <p className="text-xs text-slate-500">
-              {importNote(result)}
+              {importNote(result, profile)}
             </p>
           </div>
         )}
@@ -283,18 +304,27 @@ export function ImportMenu({
 }
 
 /** What happened by email after an import (services/welcome.ts, lib/join-invite.ts). */
-function importNote(r: ImportResult): string {
+function importNote(r: ImportResult, profile?: ImportProfile): string {
   const parts: string[] = [];
+  // The tenant's words for its places and the people in them.
+  const place = profile?.columns.customer.find((c) => c.key === "property")?.label ?? "Property";
+  const unit = profile?.columns.customer.find((c) => c.key === "unit")?.label;
+  const places = profile?.label.property ?? "Properties";
+  const people = profile?.label.customer ?? "Customers";
+  const workers = profile?.label.rider ?? "Technicians";
+  const aPlace = `${/^[aeiou]/i.test(place) ? "an" : "a"} ${place.toLowerCase()}`;
   if (r.type === "property") {
     return r.created || r.updated
-      ? "Properties don't sign in and nobody was emailed. Residents join a property from their own import (its Property and Unit columns) or with “Assign to property” in the Directory."
+      ? `${places} don't sign in and nobody was emailed. ${people} join ${aPlace} from their own import (its ${place}${unit ? ` and ${unit}` : ""} column${unit ? "s" : ""}) or with “Assign to ${place.toLowerCase()}” in the Directory.`
       : "Nothing was added or changed.";
   }
   if (r.type === "customer" && r.updated) {
-    parts.push(`${r.updated === 1 ? "One person was" : `${r.updated} people were`} already here, so only their property and unit were updated.`);
+    parts.push(
+      `${r.updated === 1 ? "One person was" : `${r.updated} people were`} already here, so only their ${place.toLowerCase()}${unit ? ` and ${unit.toLowerCase()}` : ""} ${unit ? "were" : "was"} updated.`,
+    );
   }
   if (r.type === "customer") {
-    if (r.created) parts.push("New customers aren't emailed: they first hear from you when a job is booked.");
+    if (r.created) parts.push(`New ${people.toLowerCase()} aren't emailed: they first hear from you when work is booked.`);
   } else if (r.welcoming) {
     parts.push(
       `We're emailing ${r.welcoming === 1 ? "the new person" : `the ${r.welcoming} new people`} a link to set a password, one after another over the next few minutes. Rows imported without an email address can't sign in until you add one on their profile.`,
@@ -312,7 +342,7 @@ function importNote(r: ImportResult): string {
     if (missed)
       parts.push(
         `${missed === 1 ? "One invitation" : `${missed} invitations`} couldn't be emailed${
-          r.type === "customer" ? "." : ", so use “Resend invite” next to their name under People → Technicians & Managers."
+          r.type === "customer" ? "." : `, so use “Resend invite” next to their name on the ${workers} page.`
         }`,
       );
   }

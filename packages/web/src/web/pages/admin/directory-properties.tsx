@@ -11,6 +11,9 @@ import { api } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
 import { Modal, Field, inputCls, BtnPrimary, BtnGhost, ConfirmModal } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
+import { useJobNoun } from "../../lib/use-brand";
+import { lc, type DirectoryVocab } from "../../../shared/directory-vocab";
+import { placeExample } from "../../../shared/import-profile";
 
 export type PropertyItem = {
   id: string;
@@ -31,7 +34,7 @@ export function useDirectoryProperties() {
     queryKey: ["directory-properties"],
     queryFn: async () => {
       const r = await ok(await api.directory.properties.$get());
-      return { properties: r.properties as PropertyItem[], staff: r.staff as StaffOption[] };
+      return { properties: r.properties as PropertyItem[], staff: r.staff as StaffOption[], vocab: r.vocab as DirectoryVocab };
     },
   });
 }
@@ -41,6 +44,7 @@ export function invalidateDirectory(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["directory"] });
   qc.invalidateQueries({ queryKey: ["directory-properties"] });
   qc.invalidateQueries({ queryKey: ["admin-users"] });
+  qc.invalidateQueries({ queryKey: ["import-profile"] });
 }
 
 type PropSort = "name" | "address" | "manager" | "residents" | "openJobs";
@@ -51,6 +55,7 @@ export function DirectoryProperties({
   onViewResidents,
   customerNoun,
   customerNounPlural,
+  vocab: v,
 }: {
   /** The property being edited, "new" while adding one, or null. */
   edit: PropertyItem | "new" | null;
@@ -58,8 +63,11 @@ export function DirectoryProperties({
   onViewResidents: (propertyId: string) => void;
   customerNoun: string;
   customerNounPlural: string;
+  /** The tenant's place words (Properties, Communities, Buildings, Teams). */
+  vocab: DirectoryVocab;
 }) {
   const data = useDirectoryProperties();
+  const { nounPlural: jobNounPlural } = useJobNoun();
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<PropSort>("name");
   const [dir, setDir] = useState<"asc" | "desc">("asc");
@@ -116,14 +124,16 @@ export function DirectoryProperties({
   return (
     <>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-400">Each {customerNoun.toLowerCase()} belongs to one property. Open one to change its manager.</p>
+        <p className="text-sm text-slate-400">
+          Each {lc(customerNoun)} belongs to one {lc(v.place)}. Open one to change its {lc(v.manager)}.
+        </p>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden />
           <input
-            aria-label="Search properties"
+            aria-label={`Search ${lc(v.places)}`}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search properties…"
+            placeholder={`Search ${lc(v.places)}…`}
             className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand sm:w-64"
           />
         </div>
@@ -131,17 +141,18 @@ export function DirectoryProperties({
 
       <div className="nvc-card overflow-hidden">
         {data.isLoading ? (
-          <p className="py-12 text-center text-sm text-slate-500">Loading properties…</p>
+          <p className="py-12 text-center text-sm text-slate-500">Loading {lc(v.places)}…</p>
         ) : total === 0 ? (
           <div className="px-6 py-14 text-center">
             <Building2 className="mx-auto h-8 w-8 text-slate-600" aria-hidden />
-            <p className="mt-3 text-sm font-semibold text-slate-200">No properties yet</p>
+            <p className="mt-3 text-sm font-semibold text-slate-200">No {lc(v.places)} yet</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-              Add your buildings, communities or sites and pick who manages each. Then put {customerNounPlural.toLowerCase()} in them with
-              “Assign to property”, or with the Property and Unit columns of a {customerNounPlural.toLowerCase()} import.
+              Add your {lc(v.places)} and pick the {lc(v.manager)} for each. Then put {lc(customerNounPlural)} in them with “Assign to{" "}
+              {lc(v.place)}”, or with the {v.place}
+              {v.unit ? ` and ${v.unit}` : ""} column{v.unit ? "s" : ""} of the {lc(customerNounPlural)} import.
             </p>
             <div className="mt-4 flex justify-center">
-              <BtnPrimary onClick={() => setEdit("new")}>Add property</BtnPrimary>
+              <BtnPrimary onClick={() => setEdit("new")}>Add {lc(v.place)}</BtnPrimary>
             </div>
           </div>
         ) : (
@@ -149,17 +160,19 @@ export function DirectoryProperties({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/5 text-left text-xs text-slate-500">
-                  {head("name", "Property")}
+                  {head("name", v.place)}
                   {head("address", "Address", "hidden md:table-cell")}
-                  {head("manager", "Manager", "hidden sm:table-cell")}
+                  {head("manager", v.manager, "hidden sm:table-cell")}
                   {head("residents", customerNounPlural, "text-right")}
-                  {head("openJobs", "Open requests", "hidden text-right lg:table-cell")}
+                  {head("openJobs", `Open ${lc(jobNounPlural)}`, "hidden text-right lg:table-cell")}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500">No properties match “{q}”</td>
+                    <td colSpan={5} className="py-12 text-center text-slate-500">
+                      No {lc(v.places)} match “{q}”
+                    </td>
                   </tr>
                 ) : (
                   rows.map((p) => (
@@ -172,12 +185,12 @@ export function DirectoryProperties({
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-slate-100">{p.name}</p>
                             <p className="truncate text-xs text-slate-500 md:hidden">{p.address || "No address"}</p>
-                            <p className="truncate text-xs text-slate-500 sm:hidden">{p.managerName ? `Manager: ${p.managerName}` : "No manager"}</p>
+                            <p className="truncate text-xs text-slate-500 sm:hidden">{p.managerName ? `${v.manager}: ${p.managerName}` : `No ${lc(v.manager)}`}</p>
                           </div>
                         </div>
                       </td>
                       <td className="hidden max-w-[280px] truncate px-4 py-3 text-slate-400 md:table-cell">{p.address || "—"}</td>
-                      <td className="hidden px-4 py-3 text-slate-300 sm:table-cell">{p.managerName || <span className="text-slate-600">No manager</span>}</td>
+                      <td className="hidden px-4 py-3 text-slate-300 sm:table-cell">{p.managerName || <span className="text-slate-600">No {lc(v.manager)}</span>}</td>
                       <td className="px-4 py-3 text-right">
                         <button
                           onClick={(e) => {
@@ -206,6 +219,8 @@ export function DirectoryProperties({
         onClose={() => setEdit(null)}
         onViewResidents={onViewResidents}
         customerNounPlural={customerNounPlural}
+        jobNounPlural={jobNounPlural}
+        vocab={v}
       />
     </>
   );
@@ -219,13 +234,18 @@ function PropertyEditor({
   onClose,
   onViewResidents,
   customerNounPlural,
+  jobNounPlural,
+  vocab: v,
 }: {
   edit: PropertyItem | "new" | null;
   staff: StaffOption[];
   onClose: () => void;
   onViewResidents: (propertyId: string) => void;
   customerNounPlural: string;
+  jobNounPlural: string;
+  vocab: DirectoryVocab;
 }) {
+  const ex = placeExample(v.place);
   const qc = useQueryClient();
   const [form, setForm] = useState({ ...EMPTY });
   const [err, setErr] = useState("");
@@ -245,7 +265,7 @@ function PropertyEditor({
         ? await api.directory.properties[":id"].$patch({ param: { id: existing.id }, json })
         : await api.directory.properties.$post({ json });
       const data = await res.json();
-      if (!res.ok) throw new Error((data as { message?: string }).message || "Couldn't save the property");
+      if (!res.ok) throw new Error((data as { message?: string }).message || `Couldn't save the ${lc(v.place)}`);
       return data;
     },
     onSuccess: () => {
@@ -259,7 +279,7 @@ function PropertyEditor({
     mutationFn: async (id: string) => {
       const res = await api.directory.properties[":id"].$delete({ param: { id } });
       const data = await res.json();
-      if (!res.ok) throw new Error((data as { message?: string }).message || "Couldn't remove the property");
+      if (!res.ok) throw new Error((data as { message?: string }).message || `Couldn't remove the ${lc(v.place)}`);
       return data;
     },
     onSuccess: () => {
@@ -283,8 +303,12 @@ function PropertyEditor({
       <Modal
         open={!!edit}
         onClose={onClose}
-        title={existing ? existing.name : "Add property"}
-        subtitle={existing ? `${existing.residents} ${customerNounPlural.toLowerCase()} · ${existing.openJobs} open requests` : "A building, community or site you serve"}
+        title={existing ? existing.name : `Add ${lc(v.place)}`}
+        subtitle={
+          existing
+            ? `${existing.residents} ${lc(customerNounPlural)} · ${existing.openJobs} open ${lc(jobNounPlural)}`
+            : `Name it, and pick the ${lc(v.manager)} responsible for it`
+        }
         footer={
           <div className="flex w-full items-center justify-between gap-2">
             {existing ? (
@@ -300,7 +324,7 @@ function PropertyEditor({
             <div className="flex gap-2">
               <BtnGhost onClick={onClose}>Cancel</BtnGhost>
               <BtnPrimary disabled={!form.name.trim() || save.isPending} onClick={() => save.mutate()}>
-                {save.isPending ? "Saving…" : existing ? "Save property" : "Add property"}
+                {save.isPending ? "Saving…" : existing ? `Save ${lc(v.place)}` : `Add ${lc(v.place)}`}
               </BtnPrimary>
             </div>
           </div>
@@ -308,31 +332,31 @@ function PropertyEditor({
       >
         <div className="space-y-3">
           {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
-          <Field label="Property name">
+          <Field label={`${v.place} name`}>
             <input
-              aria-label="Property name"
+              aria-label={`${v.place} name`}
               className={inputCls}
               value={form.name}
               maxLength={120}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Maple Court"
+              placeholder={ex.name}
             />
           </Field>
           <Field label="Address">
             <AddressAutocomplete
               value={form.address}
-              placeholder="123 Main St, Winnipeg, MB"
+              placeholder={ex.address}
               onResolve={({ address }) => setForm((f) => ({ ...f, address }))}
             />
           </Field>
-          <Field label="Manager">
+          <Field label={v.manager}>
             <select
-              aria-label="Manager"
+              aria-label={v.manager}
               className={inputCls}
               value={form.managerId}
               onChange={(e) => setForm({ ...form, managerId: e.target.value })}
             >
-              <option value="">No manager</option>
+              <option value="">No {lc(v.manager)}</option>
               {missingManager && <option value={missingManager.managerId!}>{missingManager.managerName || "Former team member"}</option>}
               {field.length > 0 && (
                 <optgroup label="Field team">
@@ -362,7 +386,7 @@ function PropertyEditor({
               maxLength={2000}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder="Lockbox codes, parking, the superintendent's hours…"
+              placeholder="Access codes, parking, who to call on site…"
             />
           </Field>
           {existing && existing.residents > 0 && (
@@ -383,9 +407,9 @@ function PropertyEditor({
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         onConfirm={() => existing && remove.mutate(existing.id)}
-        title="Remove property"
+        title={`Remove ${lc(v.place)}`}
         confirmLabel="Remove"
-        message={`Remove ${existing?.name ?? "this property"}? Its ${existing?.residents ?? 0} ${customerNounPlural.toLowerCase()} stay in your Directory with no property, and its job history is kept.`}
+        message={`Remove ${existing?.name ?? `this ${lc(v.place)}`}? Its ${existing?.residents ?? 0} ${lc(customerNounPlural)} stay in your Directory with no ${lc(v.place)}, and its job history is kept.`}
         pending={remove.isPending}
       />
     </>

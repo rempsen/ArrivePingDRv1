@@ -84,7 +84,7 @@ const BIRCH = "da-p-birch";
 beforeAll(async () => {
   for (const v of Object.values(schema)) if (v instanceof PgTable) await ensureTable(v);
   await db.insert(schema.companies).values([{ id: CO, name: "Towers Realty" } as any, { id: OTHER, name: "Other Co" } as any]);
-  await db.insert(schema.companySettings).values({ id: CO, companyId: CO, name: "Towers Realty", customerNoun: "Resident", customerNounPlural: "Residents", workerNoun: "Property Manager", workerNounPlural: "Property Managers" } as any);
+  await db.insert(schema.companySettings).values({ id: CO, companyId: CO, name: "Towers Realty", customerNoun: "Resident", customerNounPlural: "Residents", workerNoun: "Property Manager", workerNounPlural: "Property Managers", jobNoun: "Request", jobNounPlural: "Requests" } as any);
   await db.insert(schema.user).values([
     { id: "da-boss", name: "Dana Boss", email: "boss@da.test", role: "admin", companyId: CO } as any,
     { id: "da-jordan", name: "Jordan Patel", email: "jordan@da.test", role: "rider", companyId: CO } as any,

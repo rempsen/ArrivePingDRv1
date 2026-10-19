@@ -28,6 +28,9 @@
 // notification behavior, generated intake forms) adapts to THEM instead of
 // making them adapt to a one-size-fits-all tool.
 
+import type { PlaceVocab } from "../shared/directory-vocab";
+import type { StaffField } from "../shared/import-profile";
+
 export type IndustryPreset = {
   id: string; // slug stored on companies.industry — matches icps.slug in Supabase
   label: string; // human label in dropdowns — matches icps.signup_dropdown_label
@@ -52,6 +55,20 @@ export type IndustryPreset = {
   customerNounPlural: string;
   jobNoun: string; // e.g. "Job", "Project", "Visit"
   jobNounPlural: string;
+  /**
+   * How this industry names the places its customers belong to, when it works
+   * by place (a property manager's properties and units, a builder's
+   * communities and lots). Unset for trades like HVAC or plumbing: their
+   * Directory has no place layer unless the tenant turns it on
+   * (shared/directory-vocab.ts).
+   */
+  places?: PlaceVocab;
+  /**
+   * Which optional columns the field-staff import template offers, beyond name,
+   * email and phone. Unset = the trades' full set (skill class, vehicle,
+   * plates, licence, address, pay rate, skills). Coaches don't have a van.
+   */
+  staffFields?: StaffField[];
   // Short guidance string fed into AI generation prompts (template-scout,
   // form-scout, notification copy) so tone matches how this industry
   // actually talks to its customers.
@@ -84,6 +101,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     customerNounPlural: "Buyers",
     jobNoun: "Project",
     jobNounPlural: "Projects",
+    places: { place: "Community", places: "Communities", unit: "Lot", units: "Lots", manager: "Superintendent" },
     aiTone:
       "Confident and milestone-driven. Buyers are making the biggest purchase of their life — be precise about dates, options pricing, and what happens next. Never bury a cutoff deadline in fine print.",
     notificationGuidance:
@@ -508,6 +526,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     customerNounPlural: "Site Contacts",
     jobNoun: "Work Order",
     jobNounPlural: "Work Orders",
+    places: { place: "Building", places: "Buildings", unit: "Suite", units: "Suites", manager: "Account Manager" },
     aiTone:
       "Professional and SLA-aware. Property managers care about response time against contract terms and proof the work happened — lead with SLA status, not small talk.",
     notificationGuidance:
@@ -543,6 +562,8 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     customerNounPlural: "Tenants",
     jobNoun: "Work Order",
     jobNounPlural: "Work Orders",
+    places: { place: "Property", places: "Properties", unit: "Unit", units: "Units", manager: "Property Manager" },
+    staffFields: ["skills", "address"],
     aiTone:
       "Calm and process-driven. Tenants are often frustrated when they submit a maintenance request — acknowledge fast, set a realistic timeline, and confirm completion clearly.",
     notificationGuidance:
@@ -579,6 +600,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     customerNounPlural: "Customers",
     jobNoun: "Reservation",
     jobNounPlural: "Reservations",
+    staffFields: ["skillClass", "licenseNumber", "payRatePerHour"],
     aiTone:
       "Efficient and availability-focused. Customers need to know exactly what's available, when, and what it costs including add-ons — confirm delivery/pickup windows clearly.",
     notificationGuidance:
@@ -644,6 +666,8 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     customerNounPlural: "Members",
     jobNoun: "Session",
     jobNounPlural: "Sessions",
+    places: { place: "Team", places: "Teams", unit: null, units: null, manager: "Coach" },
+    staffFields: ["skills", "payRatePerHour"],
     aiTone:
       "Upbeat and schedule-focused. Parents/members care about session times, space assignments, and coach communication — keep it simple and fast.",
     notificationGuidance:
@@ -676,6 +700,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     customerNounPlural: "Parents",
     jobNoun: "Booking",
     jobNounPlural: "Bookings",
+    staffFields: ["skills", "address", "payRatePerHour"],
     aiTone:
       "Warm, calm and trust-first. Parents are handing over their children — always name the sitter, state the exact arrival window, and say what happens next. Plain language, no jargon, never casual about safety or lateness. Payment is by card on file through Stripe; never ask for or mention cash.",
     notificationGuidance:

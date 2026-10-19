@@ -34,11 +34,13 @@ import {
   hasStructure,
   heuristicInterpretation,
   needsJobs,
+  placeFreeFilter,
   resolveInterpretation,
   suggestNames,
+  type AskWords,
   type DirectoryFilter,
 } from "../shared/directory-ask";
-import { loadDirectory, type PropertyItem } from "./directory";
+import { directoryVocabFor, loadDirectory, type PropertyItem } from "./directory";
 
 let modelOverride: LanguageModel | null = null;
 /** Tests swap in a mock model; production always uses the gateway. */
@@ -59,46 +61,48 @@ const MAX_STAFF_IN_PROMPT = 300;
 /** A name as one plain line: nothing a company typed can look like an instruction block. */
 const promptLine = (s: string) => s.replace(/[\r\n\t]+/g, " ").replace(/[<>`]/g, "").slice(0, 80).trim();
 
-export interface AskNouns {
-  customer: string;
-  customers: string;
-  worker: string;
-  workers: string;
-}
+/** The company's words, as the prompt, chips and keyword reading use them. */
+export type { AskWords };
 
-function systemPrompt(n: AskNouns) {
+function systemPrompt(w: AskWords) {
+  const lc = (x: string) => x.toLowerCase();
+  const LIST = w.places.toUpperCase();
+  // Only a company whose Directory groups people by place hears about places.
+  const placeLine = w.placesEnabled
+    ? `- ${w.customers} (kind "customer"): each may belong to one ${lc(w.place)} (listed in ${LIST})${w.unit ? ` with a ${lc(w.unit)}` : ""}. A ${lc(w.place)} may have a ${lc(w.manager)} from the TEAM; "properties" and "managers" in the filter mean these.`
+    : `- ${w.customers} (kind "customer"). This company doesn't group them by place: always leave properties, managers and units empty, and noProperty and noManager false.`;
+  const placeRules = w.placesEnabled
+    ? `- Copy ${lc(w.place)} and team names exactly as written in ${LIST} and TEAM. Only use a name the question refers to; never guess one it doesn't mention. If the question names a ${lc(w.place)} or person not in the lists, still put the name it used, so the app can say it wasn't found.
+- "Jordan's ${lc(w.places)}", "managed by Jordan", "Jordan's ${lc(w.customers)}" → managers. A team member asked about directly ("Jordan's phone") → keywords.`
+    : `- A team member asked about directly ("Jordan's phone") → keywords.`;
   return `You turn a question about a company's people directory into a filter. You never answer the question yourself.
 
 The directory has:
-- ${n.customers} (kind "customer"): each may belong to one PROPERTY (a building, community or site) with a unit. A property may have a manager from the TEAM.
-- ${n.workers} (kind "field") and office staff (kind "office"): the TEAM.
-- For each ${n.customer.toLowerCase()}: open work orders (requests) and the date of their last completed visit.
-- Work orders have a title (e.g. "Leaky faucet") and a scheduled date.
+${placeLine}
+- ${w.workers} (kind "field") and office staff (kind "office"): the TEAM.
+- For each ${lc(w.customers)}: open ${lc(w.jobs)} and the date of their last completed ${lc(w.job)}.
+- ${w.jobs} have a title (e.g. "Leaky faucet") and a scheduled date.
 
 Rules:
-- Copy property and team names exactly as written in PROPERTIES and TEAM. Only use a name the question refers to; never guess one it doesn't mention. If the question names a property or person not in the lists, still put the name it used, so the app can say it wasn't found.
-- "Jordan's buildings", "managed by Jordan", "Jordan's residents" → managers. A team member asked about directly ("Jordan's phone") → keywords.
-- Put a resident's name, email, phone or street in keywords. Leave keywords empty when the question has none.
-- Dates are YYYY-MM-DD. "last winter", "since March", "over a year ago" → compute from TODAY. lastVisitBefore is exclusive.
-- "has open requests" → openRequests "some". "a leak", "furnace work" → jobText (one short word or phrase).
+${placeRules}
+- Put a person's name, email, phone or street in keywords. Leave keywords empty when the question has none.
+- Dates are YYYY-MM-DD. "last winter", "since March", "over a year ago" → compute from TODAY. lastVisitBefore (their last completed ${lc(w.job)}) is exclusive.
+- "has open ${lc(w.jobs)}" → openRequests "some". "a leak", "furnace work" → jobText (one short word or phrase).
 - Default sort is name ascending; change it only if the question asks for an order. groupBy only if asked.
-- summary: one short plain sentence saying who is shown, using the company's words.`;
+- summary: one short plain sentence saying who is shown, using the company's words (${w.customers}, ${w.workers}, ${w.jobs}${w.placesEnabled ? `, ${w.places}` : ""}).`;
 }
 
-function userPrompt(question: string, today: string, properties: PropertyItem[], staff: DirectoryRow[]) {
+function userPrompt(question: string, today: string, properties: PropertyItem[], staff: DirectoryRow[], w: AskWords) {
   const props = properties
     .slice(0, MAX_PROPERTIES_IN_PROMPT)
-    .map((p) => `- ${promptLine(p.name)}${p.managerName ? ` (manager: ${promptLine(p.managerName)})` : ""}`)
+    .map((p) => `- ${promptLine(p.name)}${p.managerName ? ` (${w.manager.toLowerCase()}: ${promptLine(p.managerName)})` : ""}`)
     .join("\n");
   const team = staff
     .slice(0, MAX_STAFF_IN_PROMPT)
     .map((s) => `- ${promptLine(s.name || "(no name)")} (${s.kind})`)
     .join("\n");
   return `TODAY: ${today}
-
-PROPERTIES:
-${props || "(none)"}
-
+${w.placesEnabled ? `\n${w.places.toUpperCase()}:\n${props || "(none)"}\n` : ""}
 TEAM:
 ${team || "(none)"}
 
@@ -139,16 +143,20 @@ export async function customersWithJobs(
 /** Run a resolved filter over a company's Directory. */
 export async function runDirectoryFilter(
   companyId: string,
-  filter: DirectoryFilter,
+  input: DirectoryFilter,
   page: { page?: number; pageSize?: number; withIds?: boolean },
-  tz: string,
+  ctx: { tz: string; words: AskWords },
   loaded?: { rows: DirectoryRow[] },
 ): Promise<DirectoryResult> {
+  const { tz, words } = ctx;
+  // No places: the page's re-sent sort or grouping can't bring them back either.
+  const filter = words.placesEnabled ? input : placeFreeFilter(input);
   const { rows } = loaded ?? (await loadDirectory(companyId));
   const jobs = needsJobs(filter) ? await customersWithJobs(companyId, filter, tz) : null;
   const test = filterPredicate(filter, jobs, tz);
   const ids = rows.filter(test).map((r) => r.id);
   return applyDirectoryQuery(rows, {
+    labels: { place: words.place, places: words.places, manager: words.manager },
     kind: filter.kind,
     q: filter.keywords,
     ids,
@@ -162,14 +170,23 @@ export async function runDirectoryFilter(
 }
 
 /**
- * The company's own words for its people (prompt and chips) and its time
- * zone: "today" and every day boundary are its calendar, not the server's UTC.
+ * The company's own words for its people, work and places (prompt, chips and
+ * keyword reading) and its time zone: "today" and every day boundary are its
+ * calendar, not the server's UTC.
  */
-export async function companyAskContext(companyId: string): Promise<{ nouns: AskNouns; tz: string }> {
+export async function companyAskContext(companyId: string): Promise<{ words: AskWords; tz: string }> {
   const s = await tdb(companyId).selectOne(schema.companySettings);
+  const { vocab } = await directoryVocabFor(companyId);
   const clean = (v: string | null | undefined, d: string) => (v && /^[A-Za-z][A-Za-z '-]{0,29}$/.test(v.trim()) ? v.trim() : d);
   return {
-    nouns: {
+    words: {
+      placesEnabled: vocab.enabled,
+      place: vocab.place,
+      places: vocab.places,
+      unit: vocab.unit,
+      manager: vocab.manager,
+      job: clean(s?.jobNoun, "Job"),
+      jobs: clean(s?.jobNounPlural, "Jobs"),
       customer: clean(s?.customerNoun, "Customer"),
       customers: clean(s?.customerNounPlural, "Customers"),
       worker: clean(s?.workerNoun, "Technician"),
@@ -180,13 +197,12 @@ export async function companyAskContext(companyId: string): Promise<{ nouns: Ask
 }
 
 /** Chips for a filter re-sent by the page (sorting or paging an answer). */
-export async function chipsForFilter(companyId: string, filter: DirectoryFilter, nouns: AskNouns): Promise<string[]> {
+export async function chipsForFilter(companyId: string, filter: DirectoryFilter, words: AskWords): Promise<string[]> {
   const { rows, properties } = await loadDirectory(companyId);
   return filterChips(filter, {
     properties: properties.map((p) => ({ id: p.id, name: p.name })),
     staff: rows.filter((r) => r.kind !== "customer").map((r) => ({ id: r.id, name: r.name })),
-    customerNounPlural: nouns.customers,
-    workerNounPlural: nouns.workers,
+    words,
   });
 }
 
@@ -196,13 +212,13 @@ export async function chipsForFilter(companyId: string, filter: DirectoryFilter,
  */
 export async function modelInterpretation(
   question: string,
-  ctx: { nouns: AskNouns; properties: PropertyItem[]; staff: DirectoryRow[]; today?: string; abortSignal?: AbortSignal },
+  ctx: { words: AskWords; properties: PropertyItem[]; staff: DirectoryRow[]; today?: string; abortSignal?: AbortSignal },
 ): Promise<AskInterpretation> {
   const { object } = await generateObject({
     model: modelOverride ?? gateway(MODELS.small),
     schema: AskInterpretation,
-    system: systemPrompt(ctx.nouns),
-    prompt: userPrompt(question, ctx.today ?? new Date().toISOString().slice(0, 10), ctx.properties, ctx.staff),
+    system: systemPrompt(ctx.words),
+    prompt: userPrompt(question, ctx.today ?? new Date().toISOString().slice(0, 10), ctx.words.placesEnabled ? ctx.properties : [], ctx.staff, ctx.words),
     temperature: 0,
     maxOutputTokens: 700,
     maxRetries: 1,
@@ -213,11 +229,11 @@ export async function modelInterpretation(
 
 async function interpret(
   question: string,
-  ctx: { companyId: string; userId: string; nouns: AskNouns; today: string; properties: PropertyItem[]; staff: DirectoryRow[]; abortSignal?: AbortSignal },
+  ctx: { companyId: string; userId: string; words: AskWords; today: string; properties: PropertyItem[]; staff: DirectoryRow[]; abortSignal?: AbortSignal },
 ): Promise<{ interpretation: AskInterpretation; usedAI: boolean; note?: string }> {
   const named = ctx.properties.map((p) => ({ id: p.id, name: p.name }));
   const team = ctx.staff.map((s) => ({ id: s.id, name: s.name }));
-  const fallback = (note?: string) => ({ interpretation: heuristicInterpretation(question, named, team), usedAI: false, note });
+  const fallback = (note?: string) => ({ interpretation: heuristicInterpretation(question, named, team, ctx.words), usedAI: false, note });
   if (!directoryAskAvailable()) return fallback();
   const within =
     (await consumeBudget("directory-ask-user", ctx.userId, ASK_BUDGET.perUser, ASK_BUDGET.windowMs)) &&
@@ -235,34 +251,34 @@ async function interpret(
 export async function askDirectory(
   companyId: string,
   question: string,
-  opts: { userId: string; nouns: AskNouns; tz: string; page?: number; pageSize?: number; abortSignal?: AbortSignal },
+  opts: { userId: string; words: AskWords; tz: string; page?: number; pageSize?: number; abortSignal?: AbortSignal },
 ): Promise<AskOutcome> {
   const loaded = await loadDirectory(companyId);
   const staff = loaded.rows.filter((r) => r.kind !== "customer");
   const today = zonedDayKey(new Date(), opts.tz);
-  const { interpretation, usedAI, note } = await interpret(question, { companyId, userId: opts.userId, nouns: opts.nouns, today, properties: loaded.properties, staff, abortSignal: opts.abortSignal });
+  const { interpretation, usedAI, note } = await interpret(question, { companyId, userId: opts.userId, words: opts.words, today, properties: loaded.properties, staff, abortSignal: opts.abortSignal });
   const named = loaded.properties.map((p) => ({ id: p.id, name: p.name }));
   const team = staff.map((s) => ({ id: s.id, name: s.name }));
-  const { filter, notes } = resolveInterpretation(interpretation, named, team);
+  const { filter, notes } = resolveInterpretation(interpretation, named, team, opts.words);
   if (note) notes.unshift(note);
   const page = { page: opts.page, pageSize: opts.pageSize };
-  let result = await runDirectoryFilter(companyId, filter, page, opts.tz, loaded);
+  let result = await runDirectoryFilter(companyId, filter, page, opts, loaded);
   let used = filter;
   // Words that matched nobody, alongside filters that did: try without the words.
   if (result.total === 0 && filter.keywords && hasStructure(filter)) {
     const looser = { ...filter, keywords: "" };
-    const retry = await runDirectoryFilter(companyId, looser, page, opts.tz, loaded);
+    const retry = await runDirectoryFilter(companyId, looser, page, opts, loaded);
     if (retry.total > 0) {
       notes.push(`Nobody matched “${filter.keywords}” as well, so those words were left out.`);
       result = retry;
       used = looser;
     }
   }
-  if (result.total === 0 && used.keywords) {
+  if (result.total === 0 && used.keywords && opts.words.placesEnabled) {
     const close = suggestNames(used.keywords, named);
     if (close.length) notes.push(`No one matched “${used.keywords}”. Did you mean ${close.join(" or ")}?`);
   }
-  const chips = filterChips(used, { properties: named, staff: team, customerNounPlural: opts.nouns.customers, workerNounPlural: opts.nouns.workers });
+  const chips = filterChips(used, { properties: named, staff: team, words: opts.words });
   // The model's one-line summary; the keyword reading has none (the page shows the question).
   const summary = usedAI ? interpretation.summary.trim() : "";
   return { filter: used, result, chips, summary, notes, usedAI };

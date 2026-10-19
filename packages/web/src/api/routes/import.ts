@@ -32,72 +32,20 @@ import {
   assignToProperty,
   createProperty,
   DirectoryError,
+  directoryVocabFor,
   propertyIdForName,
   staffIdForLabel,
   updateProperty,
+  type PlaceWords,
 } from "../../services/directory";
+import { IMPORT_FIELDS, type ImportColumn, type ImportType } from "../../shared/import-profile";
 import { toCsv, toXlsx, fileResponse } from "./export";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string };
 
-export type ImportType = "customer" | "admin" | "rider" | "property";
+export type { ImportType };
 const IMPORT_TYPES: ImportType[] = ["customer", "admin", "rider", "property"];
-
-const IMPORT_LABEL: Record<ImportType, string> = {
-  customer: "Customers",
-  admin: "Dispatchers",
-  rider: "Technicians",
-  property: "Properties",
-};
-
-/** Template columns per entity type — writable fields only, nothing the
- *  server derives itself (no id, status, rating, completedJobs, etc). */
-const TEMPLATE_COLUMNS: Record<ImportType, { key: string; label: string; example: string }[]> = {
-  customer: [
-    { key: "firstName", label: "First Name", example: "Jane" },
-    { key: "lastName", label: "Last Name", example: "Doe" },
-    { key: "email", label: "Email", example: "jane.doe@example.com" },
-    { key: "phone", label: "Phone", example: "+1 555 123 4567" },
-    { key: "company", label: "Company", example: "Acme Co." },
-    { key: "website", label: "Website", example: "https://acme.com" },
-    { key: "address", label: "Address", example: "123 Main St" },
-    { key: "city", label: "City", example: "Toronto" },
-    { key: "region", label: "Province / State", example: "ON" },
-    { key: "postalCode", label: "Postal / ZIP", example: "M5V 2T6" },
-    { key: "country", label: "Country", example: "Canada" },
-    { key: "customerType", label: "Account Type (one_time or repeat)", example: "repeat" },
-    // The Directory (services/directory.ts): the named property they belong to,
-    // created if it's new, and their unit there.
-    { key: "property", label: "Property", example: "Maple Court" },
-    { key: "unit", label: "Unit", example: "4B" },
-  ],
-  // Named properties, each with the team member who manages it (their email or name).
-  property: [
-    { key: "name", label: "Property Name", example: "Maple Court" },
-    { key: "address", label: "Address", example: "123 Main St, Winnipeg, MB" },
-    { key: "manager", label: "Manager (email or name)", example: "jordan.patel@example.com" },
-    { key: "notes", label: "Notes", example: "Lockbox at the side door" },
-  ],
-  admin: [
-    { key: "firstName", label: "First Name", example: "Sam" },
-    { key: "lastName", label: "Last Name", example: "Lee" },
-    { key: "email", label: "Email", example: "sam.lee@example.com" },
-    { key: "phone", label: "Phone", example: "+1 555 987 6543" },
-  ],
-  rider: [
-    { key: "name", label: "Full Name", example: "Alex Chen" },
-    { key: "email", label: "Email", example: "alex.chen@example.com" },
-    { key: "phone", label: "Phone", example: "+1 555 222 3333" },
-    { key: "skillClass", label: "Skill Class", example: "General" },
-    { key: "vehicle", label: "Vehicle", example: "Van" },
-    { key: "licensePlate", label: "License Plate", example: "ABC123" },
-    { key: "licenseNumber", label: "License Number", example: "D1234-56789" },
-    { key: "address", label: "Address", example: "456 Elm St" },
-    { key: "payRatePerHour", label: "Pay Rate / Hour", example: "28" },
-    { key: "skills", label: "Skills (comma separated)", example: "HVAC, Plumbing" },
-  ],
-};
 
 /**
  * Other names a column goes by in the spreadsheets people already have (an
@@ -135,9 +83,12 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   licenseNumber: ["license number", "licence number", "drivers license", "drivers licence", "driver license", "driver licence"],
   payRatePerHour: ["pay rate per hour", "pay rate", "hourly rate", "wage", "rate per hour"],
   skills: ["skills", "skill"],
-  property: ["property", "property name", "building", "building name", "community", "complex", "site name", "development"],
-  unit: ["unit", "unit number", "unit no", "apt", "apt number", "apartment", "apartment number", "suite", "suite number", "door"],
-  manager: ["manager", "property manager", "manager email", "manager name", "assigned to", "pm", "superintendent"],
+  property: [
+    "property", "property name", "building", "building name", "community", "community name", "complex", "site", "site name",
+    "development", "team", "team name",
+  ],
+  unit: ["unit", "unit number", "unit no", "apt", "apt number", "apartment", "apartment number", "suite", "suite number", "door", "lot", "lot number", "lot no"],
+  manager: ["manager", "property manager", "manager email", "manager name", "assigned to", "pm", "superintendent", "account manager", "coach", "head coach"],
   notes: ["notes", "note", "comments", "comment"],
 };
 
@@ -150,15 +101,30 @@ const squash = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, "");
  * first and last name but no full name gets one, so a technician list split
  * into two name columns imports with names too.
  */
-export function normalizeImportRow(type: ImportType, raw: Record<string, string>): Record<string, string> {
+export function normalizeImportRow(
+  type: ImportType,
+  raw: Record<string, string>,
+  /**
+   * The tenant's template (import-profile.ts): its labels ("Community", "Lot")
+   * match too; with places off, a customer file's Property / Unit columns are
+   * left alone rather than making places nobody set up.
+   */
+  opts: { columns?: ImportColumn[]; placesEnabled?: boolean } = {},
+): Record<string, string> {
+  const placesOff = opts.placesEnabled === false && type === "customer";
   const lookup = new Map<string, string>();
-  for (const col of TEMPLATE_COLUMNS[type]) {
-    lookup.set(squash(col.key), col.key);
-    lookup.set(squash(col.label), col.key);
+  for (const col of [...(opts.columns ?? []), ...IMPORT_FIELDS[type]]) {
+    if (placesOff && (col.key === "property" || col.key === "unit")) continue;
+    if (!lookup.has(squash(col.key))) lookup.set(squash(col.key), col.key);
+    if (!lookup.has(squash(col.label))) lookup.set(squash(col.label), col.key);
   }
   // Only the fields this import has (plus the name parts a full name is built
   // from), so a column meant for another kind of import doesn't make a row.
-  const allowed = new Set([...TEMPLATE_COLUMNS[type].map((c) => c.key), "name", "firstName", "lastName", ...(type === "property" ? ["property"] : [])]);
+  const allowed = new Set([...IMPORT_FIELDS[type].map((c) => c.key), "name", "firstName", "lastName", ...(type === "property" ? ["property"] : [])]);
+  if (placesOff) {
+    allowed.delete("property");
+    allowed.delete("unit");
+  }
   for (const [key, names] of Object.entries(COLUMN_ALIASES)) {
     if (!allowed.has(key)) continue;
     for (const n of names) if (!lookup.has(squash(n))) lookup.set(squash(n), key);
@@ -181,7 +147,7 @@ export function normalizeImportRow(type: ImportType, raw: Record<string, string>
 
 /** The template's own example row, filled in for each type: never imported if left in. */
 export function isTemplateExample(type: ImportType, row: Record<string, string>): boolean {
-  const cols = TEMPLATE_COLUMNS[type];
+  const cols = IMPORT_FIELDS[type];
   const key = type === "property" ? "manager" : "email";
   const example = cols.find((c) => c.key === key)?.example;
   return !!example && (row[key] || "").toLowerCase() === example.toLowerCase();
@@ -210,13 +176,35 @@ function placeholderEmail(companyId: string, kind: "customer" | "dispatcher" | "
 
 /* -------------------------------- parsing -------------------------------- */
 
+/** One data row and its line in the file (1-based), for the failure list. */
+export type ParsedRow = { line: number; row: Record<string, string> };
+
+/**
+ * Turn a sheet's lines into rows keyed by its header row. The header is the
+ * first line with two or more different values, so a title line above it
+ * (the Excel templates have "Residents import template" merged across row 1,
+ * which reads back as one value repeated) is skipped instead of becoming the
+ * column names. A one-column file falls back to its first line.
+ */
+export function rowsFromGrid(grid: { line: number; cells: string[] }[]): ParsedRow[] {
+  const lines = grid.filter((g) => g.cells.some((c) => c.trim()));
+  if (!lines.length) return [];
+  const distinct = (cells: string[]) => new Set(cells.map((c) => c.trim()).filter(Boolean)).size;
+  const h = Math.max(0, lines.slice(0, 10).findIndex((g) => distinct(g.cells) >= 2));
+  const headers = lines[h]!.cells.map((c) => c.trim());
+  return lines.slice(h + 1).map((g) => {
+    const row: Record<string, string> = {};
+    headers.forEach((name, i) => { if (name) row[name] = (g.cells[i] ?? "").trim(); });
+    return { line: g.line, row };
+  });
+}
+
 /** Minimal CSV reader matching what toCsv() in export.ts writes: comma-
  *  separated, double-quote wrapped when a value has a comma/quote/newline,
  *  `""` for a literal quote inside a quoted field. */
-function parseCsv(text: string): Record<string, string>[] {
+export function parseCsv(text: string): ParsedRow[] {
   const clean = text.replace(/^﻿/, "");
-  const lines = clean.split(/\r\n|\n|\r/).filter((l) => l.length > 0);
-  if (!lines.length) return [];
+  const lines = clean.split(/\r\n|\n|\r/);
   const parseLine = (line: string): string[] => {
     const out: string[] = [];
     let cur = "";
@@ -234,16 +222,7 @@ function parseCsv(text: string): Record<string, string>[] {
     out.push(cur);
     return out;
   };
-  const headers = parseLine(lines[0]!).map((h) => h.trim());
-  const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cells = parseLine(lines[i]!);
-    if (cells.every((c) => !c.trim())) continue;
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => { row[h] = (cells[idx] ?? "").trim(); });
-    rows.push(row);
-  }
-  return rows;
+  return rowsFromGrid(lines.map((l, i) => ({ line: i + 1, cells: parseLine(l) })));
 }
 
 /**
@@ -279,7 +258,7 @@ async function stripSpreadsheetNamespacePrefix(buf: Buffer): Promise<Buffer> {
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
-async function parseXlsx(buf: Buffer): Promise<Record<string, string>[]> {
+export async function parseXlsx(buf: Buffer): Promise<ParsedRow[]> {
   let wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buf as any);
@@ -295,26 +274,22 @@ async function parseXlsx(buf: Buffer): Promise<Record<string, string>[]> {
   }
   const ws = wb.worksheets[0];
   if (!ws) return [];
-  let headers: string[] = [];
-  const rows: Record<string, string>[] = [];
+  const grid: { line: number; cells: string[] }[] = [];
   ws.eachRow((row, rowNumber) => {
-    const raw = (row.values as any[]).slice(1);
+    // row.values is 1-based with holes for empty cells; Array.from fills them.
+    const raw = Array.from((row.values as any[]).slice(1));
     const cells = raw.map((v) => {
       if (v == null) return "";
       if (typeof v === "object" && "text" in v) return String((v as any).text ?? "");
       if (typeof v === "object" && "result" in v) return String((v as any).result ?? "");
       return String(v);
     });
-    if (rowNumber === 1) { headers = cells.map((h) => h.trim()); return; }
-    if (cells.every((c) => !c.trim())) return;
-    const obj: Record<string, string> = {};
-    headers.forEach((h, i) => { obj[h] = (cells[i] ?? "").trim(); });
-    rows.push(obj);
+    grid.push({ line: rowNumber, cells });
   });
-  return rows;
+  return rowsFromGrid(grid);
 }
 
-async function parseUpload(file: File): Promise<Record<string, string>[]> {
+async function parseUpload(file: File): Promise<ParsedRow[]> {
   const name = (file.name || "").toLowerCase();
   const buf = Buffer.from(await file.arrayBuffer());
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) return parseXlsx(buf);
@@ -336,16 +311,16 @@ type RowResult =
  * property (created if it's new). Never fails the row: the account is
  * already made, so a problem comes back as a warning on an imported row.
  */
-async function placeAtProperty(companyId: string, userId: string, row: Record<string, string>): Promise<string | undefined> {
+async function placeAtProperty(companyId: string, userId: string, row: Record<string, string>, w: PlaceWords): Promise<string | undefined> {
   if (!row.property) return undefined;
   try {
-    const propertyId = await propertyIdForName(companyId, row.property, true);
+    const propertyId = await propertyIdForName(companyId, row.property, true, w);
     if (!propertyId) return undefined;
-    // No Unit cell keeps the unit they have (a re-import that only adds properties).
-    await assignToProperty(companyId, { userIds: [userId], propertyId, unit: row.unit });
+    // No Unit cell keeps the unit they have (a re-import that only adds places).
+    await assignToProperty(companyId, { userIds: [userId], propertyId, unit: row.unit }, w);
     return undefined;
   } catch (e) {
-    return e instanceof DirectoryError ? e.message : "Couldn't set their property";
+    return e instanceof DirectoryError ? e.message : `Couldn't set their ${w.place}`;
   }
 }
 
@@ -356,7 +331,7 @@ const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)];
 async function importPersonRow(
   row: Record<string, string>,
   /** canEdit: may change existing client records (clients:edit), not just add them. */
-  opts: { role: "customer" | "admin"; companyId: string; invitedBy: string | null; canEdit?: boolean },
+  opts: { role: "customer" | "admin"; companyId: string; invitedBy: string | null; canEdit?: boolean; words: PlaceWords },
 ): Promise<RowResult> {
   const rawEmail = (row.email || "").trim();
   let email: string;
@@ -384,8 +359,8 @@ async function importPersonRow(
       // Re-importing a resident list is how 2,500 existing residents get
       // their property and unit: update those, never anything else.
       if (role === "customer" && row.property) {
-        if (!opts.canEdit) return { ok: false, reason: "Already in your account. Changing their property needs permission to edit clients." };
-        const warning = await placeAtProperty(cid, existing.id, row);
+        if (!opts.canEdit) return { ok: false, reason: `Already in your account. Changing their ${opts.words.place} needs permission to edit clients.` };
+        const warning = await placeAtProperty(cid, existing.id, row, opts.words);
         return warning ? { ok: false, reason: warning } : { ok: true, status: "updated" };
       }
       return { ok: false, reason: "Already in your account" };
@@ -403,7 +378,7 @@ async function importPersonRow(
       companyId: cid,
       membershipId: membership!.id,
     });
-    const warning = role === "customer" ? await placeAtProperty(cid, existing.id, row) : undefined;
+    const warning = role === "customer" ? await placeAtProperty(cid, existing.id, row, opts.words) : undefined;
     return { ok: true, status: "invited", emailed, warning };
   }
 
@@ -436,36 +411,37 @@ async function importPersonRow(
     })
     .where(eq(schema.user.id, u.id));
   await attachMembership({ userId: u.id, companyId: cid, role, status: "active", invitedBy: opts.invitedBy });
-  const warning = role === "customer" ? await placeAtProperty(cid, u.id, row) : undefined;
+  const warning = role === "customer" ? await placeAtProperty(cid, u.id, row, opts.words) : undefined;
   return { ok: true, status: "created", userId: u.id, warning };
 }
 
 /** property row: create it, or update the one with that name. */
-async function importPropertyRow(row: Record<string, string>, opts: { companyId: string; canEdit: boolean }): Promise<RowResult> {
+async function importPropertyRow(row: Record<string, string>, opts: { companyId: string; canEdit: boolean; words: PlaceWords }): Promise<RowResult> {
+  const w = opts.words;
   const name = (row.name || "").trim();
-  if (!name) return { ok: false, reason: "Property name is required" };
+  if (!name) return { ok: false, reason: `A ${w.place} name is required` };
   const cid = opts.companyId;
   let warning: string | undefined;
   let managerId: string | null | undefined;
   if (row.manager) {
     managerId = await staffIdForLabel(cid, row.manager);
-    if (!managerId) warning = `No team member matches "${row.manager}", so it has no manager yet`;
+    if (!managerId) warning = `No team member matches "${row.manager}", so it has no ${w.manager} yet`;
   }
   try {
-    const existingId = await propertyIdForName(cid, name, false);
+    const existingId = await propertyIdForName(cid, name, false, w);
     if (existingId) {
-      if (!opts.canEdit) return { ok: false, reason: `There's already a property called "${name}". Changing it needs permission to edit clients.` };
+      if (!opts.canEdit) return { ok: false, reason: `There's already a ${w.place} called "${name}". Changing it needs permission to edit clients.` };
       const patch: { address?: string; notes?: string; managerId?: string | null } = {};
       if (row.address) patch.address = row.address;
       if (row.notes) patch.notes = row.notes;
       if (managerId) patch.managerId = managerId;
-      if (Object.keys(patch).length) await updateProperty(cid, existingId, patch);
+      if (Object.keys(patch).length) await updateProperty(cid, existingId, patch, w);
       return { ok: true, status: "updated", warning };
     }
-    const r = await createProperty(cid, { name, address: row.address, notes: row.notes, managerId: managerId ?? null });
+    const r = await createProperty(cid, { name, address: row.address, notes: row.notes, managerId: managerId ?? null }, w);
     return { ok: true, status: "created", userId: r.id, warning };
   } catch (e) {
-    return { ok: false, reason: e instanceof DirectoryError ? e.message : "Could not save that property" };
+    return { ok: false, reason: e instanceof DirectoryError ? e.message : `Could not save that ${w.place}` };
   }
 }
 
@@ -545,19 +521,31 @@ async function importRiderRow(
 
 export const importRoutes = new Hono<AppEnv>()
   // GET /api/import/template/:type?format=csv|xlsx
+  // GET /api/import/profile: which imports this tenant has, named in its words,
+  // and the columns each template carries (shared/import-profile.ts).
+  .get("/profile", requireAdmin, async (c) => {
+    const { profile } = await directoryVocabFor(tenantId(c));
+    return c.json({ profile }, 200);
+  })
   .get("/template/:type", requireAdmin, async (c) => {
     const type = c.req.param("type");
     if (!isImportType(type)) return c.json({ message: "Unknown import type" }, 400);
+    const { profile, vocab } = await directoryVocabFor(tenantId(c));
+    if (!profile.types.includes(type)) return c.json({ message: `Turn on ${vocab.places} in Settings → Directory to import them.` }, 400);
     const format = (c.req.query("format") || "csv").toLowerCase();
-    const cols = TEMPLATE_COLUMNS[type];
+    // The tenant's own template: its columns, its words (residents get Property
+    // and Unit; an HVAC company's customers get Company and Address).
+    const cols = profile.columns[type];
     const exampleRow = Object.fromEntries(cols.map((col) => [col.key, col.example]));
     const stamp = Date.now();
-    const slug = type === "rider" ? "technicians" : type === "admin" ? "dispatchers" : type === "property" ? "properties" : "customers";
+    const slug = profile.slug[type];
+    const label = profile.label[type];
     if (format === "xlsx") {
-      const buf = await toXlsx([exampleRow], cols, `${IMPORT_LABEL[type]} template`, `${IMPORT_LABEL[type]} import template`);
+      const buf = await toXlsx([exampleRow], cols, `${label} template`, `${label} import template`);
       return fileResponse(buf, `${slug}-import-template-${stamp}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
-    const csv = toCsv([exampleRow], cols.map((c) => c.key));
+    // Readable headers ("First Name", "Unit"); the import reads labels and keys alike.
+    const csv = toCsv([exampleRow], cols.map((col) => col.key), cols.map((col) => col.label));
     return fileResponse(csv, `${slug}-import-template-${stamp}.csv`, "text/csv; charset=utf-8");
   })
   // POST /api/import/:type  multipart form-data { file }
@@ -573,20 +561,23 @@ export const importRoutes = new Hono<AppEnv>()
     if (!(file instanceof File)) return c.json({ message: "No file uploaded" }, 400);
     if (file.size > 5 * 1024 * 1024) return c.json({ message: "File is too large (max 5MB)" }, 400);
 
-    let rows: Record<string, string>[];
+    let rows: ParsedRow[];
     try {
       rows = await parseUpload(file);
     } catch {
       return c.json({ message: "Could not read that file — check it's a valid CSV or Excel export" }, 400);
     }
-    // Keep each row's line in the file (the header is line 1) for the failure list.
+    const cid = tenantId(c);
+    const setup = await directoryVocabFor(cid);
+    if (!setup.profile.types.includes(type)) return c.json({ message: `Turn on ${setup.vocab.places} in Settings → Directory to import them.` }, 400);
+    const columns = setup.profile.columns[type];
+    // Keep each row's line in the file (after any title line and the header) for the failure list.
     const lines = rows
-      .map((r, i) => ({ line: i + 2, row: normalizeImportRow(type, r) }))
+      .map((r) => ({ line: r.line, row: normalizeImportRow(type, r.row, { columns, placesEnabled: setup.profile.placesEnabled }) }))
       .filter((x) => Object.keys(x.row).length && !isTemplateExample(type, x.row));
-    if (!lines.length) return c.json({ message: "No rows found in that file. Check that the first row holds the column names, such as Name, Email and Phone." }, 400);
+    if (!lines.length) return c.json({ message: "No rows found in that file. Check that it has a row of column names, such as Name, Email and Phone, with people listed below it." }, 400);
     if (lines.length > 500) return c.json({ message: "Import is limited to 500 rows at a time" }, 400);
 
-    const cid = tenantId(c);
     // Creating needs clients:create (office-access.ts); a row that changes an
     // existing resident's property, or an existing property, also needs edit.
     const canEdit = type === "rider" || type === "admin" ? true : await officeCan(c.get("user") as { role?: string; permissions?: string | null }, "clients:edit");
@@ -597,8 +588,8 @@ export const importRoutes = new Hono<AppEnv>()
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })
           : type === "property"
-            ? await importPropertyRow(row, { companyId: cid, canEdit })
-            : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id, canEdit });
+            ? await importPropertyRow(row, { companyId: cid, canEdit, words: setup.words })
+            : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id, canEdit, words: setup.words });
       // A row without an email gets a placeholder address nobody can receive.
       if (type !== "property" && result.ok && result.status === "created" && row.email && !isUndeliverableEmail(row.email)) newPeople.push(result.userId);
       results.push({
