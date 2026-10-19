@@ -9,7 +9,10 @@ import { PageHead } from "./shell";
 import { Field, inputCls, BtnPrimary, ConfirmModal } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
 import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Upload, AlertTriangle, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard, UserCheck, Receipt } from "lucide-react";
-import { useWorkerNoun, useJobNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
+import { getIndustryPreset, industryLabel } from "../../../services/industry-presets";
+import { parsePlacesMode, resolveDirectoryVocab, type DirectoryPlacesMode } from "../../../shared/directory-vocab";
+import { useDirectoryProperties } from "./directory-properties";
 import { cn } from "../../lib/utils";
 import AutomationPage from "./automation";
 import IntegrationsPage from "./integrations";
@@ -206,6 +209,74 @@ function WhoCanBeAssignedCard({
         Right now: {on
           ? `admins and managers show up alongside your ${noun.toLowerCase()}s in "Assign", on the board and on the map.`
           : `only ${noun.toLowerCase()}s can be assigned. Office staff stay off the board.`}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Whether the Directory groups people by place, and what it calls them.
+ *
+ * Automatic follows the company: a property manager's residents belong to
+ * properties and units, a builder's buyers to communities and lots, a club's
+ * members to teams; an HVAC or plumbing company has customers and no place
+ * layer (shared/directory-vocab.ts). On / Off overrule it.
+ */
+function DirectoryPlacesCard({ form, set }: { form: any; set: (k: string, v: any) => void }) {
+  const brand = useBrand();
+  const props = useDirectoryProperties();
+  const mode = parsePlacesMode(form.directoryPlaces);
+  const base = {
+    industryPlaces: getIndustryPreset(brand.industry)?.places,
+    customerNoun: brand.customerNoun,
+    workerNoun: brand.noun,
+    hasPlaces: (props.data?.properties.length ?? 0) > 0,
+  };
+  const auto = resolveDirectoryVocab({ ...base, mode: "auto" });
+  const now = resolveDirectoryVocab({ ...base, mode });
+  const customers = brand.customerNounPlural.toLowerCase();
+  const why =
+    auto.reason === "industry"
+      ? `${industryLabel(brand.industry) || "Your industry"} groups ${customers} by ${auto.place.toLowerCase()}`
+      : auto.reason === "nouns"
+        ? `your ${customers} live in ${auto.units?.toLowerCase() ?? "units"} at ${auto.places.toLowerCase()}`
+        : auto.reason === "data"
+          ? `you already have ${auto.places.toLowerCase()} in your Directory`
+          : `${industryLabel(brand.industry) || "your kind of business"} usually doesn't group ${customers} by place`;
+  const options: [DirectoryPlacesMode, string][] = [
+    ["auto", `Automatic (${auto.enabled ? "on" : "off"})`],
+    ["on", "On"],
+    ["off", "Off"],
+  ];
+  return (
+    <div className="nvc-card space-y-4 p-5">
+      <h3 className="flex items-center gap-2 font-bold text-white">
+        <Building2 className="h-4 w-4 text-brand" /> {now.places} in the Directory
+      </h3>
+      <p className="text-xs text-white/50">
+        Group {customers} by {now.place.toLowerCase()}: a {now.places} tab, {now.place}
+        {now.unit ? `, ${now.unit}` : ""} and {now.manager} columns, “Assign to {now.place.toLowerCase()}”, and {now.place}
+        {now.unit ? ` / ${now.unit}` : ""} columns in the {customers} import template.
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(([m, label]) => (
+          <button
+            key={m}
+            aria-pressed={mode === m}
+            onClick={() => set("directoryPlaces", m)}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+              mode === m ? "bg-brand text-white" : "bg-white/5 text-white/70 hover:bg-white/10",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="rounded-lg bg-white/5 p-3 text-[11px] leading-relaxed text-white/60">
+        Right now: {now.enabled ? `on, as ${now.places}` : "off"}.{" "}
+        {mode === "auto" ? `Automatic is ${auto.enabled ? "on" : "off"} because ${why}.` : `Automatic would be ${auto.enabled ? "on" : "off"}: ${why}.`}
+        {!now.enabled && (props.data?.properties.length ?? 0) > 0 ? ` Your ${auto.places.toLowerCase()} are kept, just hidden.` : ""}
       </p>
     </div>
   );
@@ -521,6 +592,10 @@ function CompanySettingsTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["tenant-brand"] });
+      // The Directory's places setting changes its tabs, columns and import templates.
+      qc.invalidateQueries({ queryKey: ["directory"] });
+      qc.invalidateQueries({ queryKey: ["directory-properties"] });
+      qc.invalidateQueries({ queryKey: ["import-profile"] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     },
@@ -646,6 +721,8 @@ function CompanySettingsTab() {
           </div>
 
           <WhoCanBeAssignedCard form={form} set={set} noun={noun} jobNounPlural={jobNounPlural} />
+
+          <DirectoryPlacesCard form={form} set={set} />
 
           <CustomerChangesCard form={form} set={set} noun={noun} />
 

@@ -25,7 +25,57 @@ import * as schema from "../api/database/schema";
 import { tdb } from "../api/database/tenant";
 import { normalizeAddress } from "./properties";
 import { OPEN_STATUSES } from "../shared/job-status";
-import { kindOfRole, type DirectoryRow } from "../shared/directory-query";
+import { kindOfRole, type DirectoryLabels, type DirectoryRow } from "../shared/directory-query";
+import { db } from "../api/database";
+import { resolveDirectoryVocab, type DirectoryVocab } from "../shared/directory-vocab";
+import { importProfile, type ImportNouns, type ImportProfile } from "../shared/import-profile";
+import { getIndustryPreset } from "./industry-presets";
+
+/** The tenant's words used in this file's messages (lower-case, mid-sentence). */
+export interface PlaceWords {
+  place: string;
+  manager: string;
+  customers: string;
+}
+const WORDS: PlaceWords = { place: "property", manager: "manager", customers: "customers" };
+
+/**
+ * The Directory's place vocabulary for a company: its industry, its own words
+ * for the people it serves, its Settings choice, and whether it has places.
+ */
+export async function directoryVocabFor(
+  companyId: string,
+  hasPlaces?: boolean,
+): Promise<{ vocab: DirectoryVocab; words: PlaceWords; labels: DirectoryLabels; nouns: ImportNouns; profile: ImportProfile }> {
+  const [co] = await db.select({ industry: schema.companies.industry }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  const t = tdb(companyId);
+  const s = await t.selectOne(schema.companySettings);
+  const has = hasPlaces ?? !!(await t.selectOne(schema.properties, ne(schema.properties.name, "")));
+  const preset = getIndustryPreset(co?.industry);
+  const vocab = resolveDirectoryVocab({
+    industryPlaces: preset?.places,
+    customerNoun: s?.customerNoun,
+    workerNoun: s?.workerNoun,
+    mode: s?.directoryPlaces,
+    hasPlaces: has,
+  });
+  const word = (v: string | null | undefined, d: string) => (v && v.trim() ? v.trim() : d);
+  const nouns: ImportNouns = {
+    customer: word(s?.customerNoun, "Customer"),
+    customers: word(s?.customerNounPlural, "Customers"),
+    worker: word(s?.workerNoun, "Technician"),
+    workers: word(s?.workerNounPlural, "Technicians"),
+  };
+  // The industry's own service categories make a better Skills example than "General".
+  const categories = [...new Set((preset?.services ?? []).map((x) => x.category))].slice(0, 2);
+  return {
+    vocab,
+    words: { place: vocab.place.toLowerCase(), manager: vocab.manager.toLowerCase(), customers: nouns.customers.toLowerCase() },
+    labels: { place: vocab.place, places: vocab.places, manager: vocab.manager },
+    nouns,
+    profile: importProfile({ vocab, nouns, staffFields: preset?.staffFields, skillsExample: categories.join(", ") || undefined }),
+  };
+}
 
 export class DirectoryError extends Error {
   constructor(
@@ -165,10 +215,10 @@ export async function loadDirectory(companyId: string): Promise<{ rows: Director
 }
 
 /** The manager must be staff at this company (any role but customer), or null. */
-async function checkManager(companyId: string, managerId: string | null | undefined): Promise<string | null> {
+async function checkManager(companyId: string, managerId: string | null | undefined, w: PlaceWords = WORDS): Promise<string | null> {
   if (!managerId) return null;
   const m = await tdb(companyId).selectOne(schema.memberships, eq(schema.memberships.userId, managerId));
-  if (!m || !isStaffRole(m.role)) throw new DirectoryError(400, "The manager has to be a member of your team.");
+  if (!m || !isStaffRole(m.role)) throw new DirectoryError(400, `The ${w.manager} has to be a member of your team.`);
   return managerId;
 }
 
@@ -180,11 +230,12 @@ async function namedPropertyByName(companyId: string, name: string, exceptId?: s
 export async function createProperty(
   companyId: string,
   input: { name: string; address?: string; notes?: string; managerId?: string | null },
+  w: PlaceWords = WORDS,
 ): Promise<{ id: string; adopted: boolean }> {
   const name = input.name.trim();
-  if (!name) throw new DirectoryError(400, "A property needs a name.");
-  if (await namedPropertyByName(companyId, name)) throw new DirectoryError(409, `There's already a property called "${name}".`);
-  const managerId = await checkManager(companyId, input.managerId);
+  if (!name) throw new DirectoryError(400, `A ${w.place} needs a name.`);
+  if (await namedPropertyByName(companyId, name)) throw new DirectoryError(409, `There's already a ${w.place} called "${name}".`);
+  const managerId = await checkManager(companyId, input.managerId, w);
   const t = tdb(companyId);
   const address = (input.address ?? "").trim();
   const addressNormalized = normalizeAddress(address);
@@ -216,15 +267,16 @@ export async function updateProperty(
   companyId: string,
   id: string,
   patch: { name?: string; address?: string; notes?: string; managerId?: string | null },
+  w: PlaceWords = WORDS,
 ): Promise<void> {
   const t = tdb(companyId);
   const prop = await t.selectOne(schema.properties, eq(schema.properties.id, id));
-  if (!prop || !prop.name) throw new DirectoryError(404, "Property not found.");
+  if (!prop || !prop.name) throw new DirectoryError(404, `That ${w.place} wasn't found.`);
   const set: Partial<typeof schema.properties.$inferInsert> = { updatedAt: new Date() };
   if (patch.name !== undefined) {
     const name = patch.name.trim();
-    if (!name) throw new DirectoryError(400, "A property needs a name.");
-    if (await namedPropertyByName(companyId, name, id)) throw new DirectoryError(409, `There's already a property called "${name}".`);
+    if (!name) throw new DirectoryError(400, `A ${w.place} needs a name.`);
+    if (await namedPropertyByName(companyId, name, id)) throw new DirectoryError(409, `There's already a ${w.place} called "${name}".`);
     set.name = name;
   }
   if (patch.address !== undefined) {
@@ -238,7 +290,7 @@ export async function updateProperty(
     set.addressNormalized = normalized;
   }
   if (patch.notes !== undefined) set.notes = patch.notes.trim();
-  if (patch.managerId !== undefined) set.managerId = await checkManager(companyId, patch.managerId);
+  if (patch.managerId !== undefined) set.managerId = await checkManager(companyId, patch.managerId, w);
   await t.update(schema.properties, set, eq(schema.properties.id, id));
 }
 
@@ -247,10 +299,10 @@ export async function updateProperty(
  * row itself stays (without a name) when jobs point at it, so the address's
  * service history isn't lost.
  */
-export async function deleteProperty(companyId: string, id: string): Promise<{ unassigned: number }> {
+export async function deleteProperty(companyId: string, id: string, w: PlaceWords = WORDS): Promise<{ unassigned: number }> {
   const t = tdb(companyId);
   const prop = await t.selectOne(schema.properties, eq(schema.properties.id, id));
-  if (!prop || !prop.name) throw new DirectoryError(404, "Property not found.");
+  if (!prop || !prop.name) throw new DirectoryError(404, `That ${w.place} wasn't found.`);
   const unlinked = await t.update(schema.memberships, { propertyId: null, unit: "", updatedAt: new Date() }, eq(schema.memberships.propertyId, id));
   const [jobs] = await t.transaction((tx) =>
     tx.select({ n: count() }).from(schema.bookings).where(t.scope(schema.bookings, eq(schema.bookings.propertyId, id))),
@@ -268,18 +320,20 @@ export async function deleteProperty(companyId: string, id: string): Promise<{ u
 export async function assignToProperty(
   companyId: string,
   input: { userIds: string[]; propertyId: string | null; unit?: string },
+  w: PlaceWords = WORDS,
 ): Promise<{ updated: number }> {
   const ids = [...new Set(input.userIds)];
   if (!ids.length) throw new DirectoryError(400, "Choose at least one person.");
   const t = tdb(companyId);
   if (input.propertyId) {
     const prop = await t.selectOne(schema.properties, eq(schema.properties.id, input.propertyId));
-    if (!prop || !prop.name) throw new DirectoryError(404, "Property not found.");
+    if (!prop || !prop.name) throw new DirectoryError(404, `That ${w.place} wasn't found.`);
   }
   const members = await t.select(schema.memberships, inArray(schema.memberships.userId, ids));
   if (members.length !== ids.length) throw new DirectoryError(404, "Some of those people aren't in your directory.");
   const staff = members.filter((m) => kindOfRole(m.role) !== "customer");
-  if (staff.length) throw new DirectoryError(400, "Only customers can belong to a property. Assign a team member as the property's manager instead.");
+  if (staff.length)
+    throw new DirectoryError(400, `Only ${w.customers} can belong to a ${w.place}. Make a team member the ${w.place}'s ${w.manager} instead.`);
   const set: Partial<typeof schema.memberships.$inferInsert> = { propertyId: input.propertyId, updatedAt: new Date() };
   // A unit only makes sense for one person; a bulk move keeps each person's unit.
   if (input.unit !== undefined) set.unit = input.propertyId ? input.unit.trim() : "";
@@ -289,14 +343,14 @@ export async function assignToProperty(
 }
 
 /** Find a named property by name (case-insensitive), creating it when asked. Used by import. */
-export async function propertyIdForName(companyId: string, name: string, create: boolean): Promise<string | null> {
+export async function propertyIdForName(companyId: string, name: string, create: boolean, w: PlaceWords = WORDS): Promise<string | null> {
   const clean = name.trim();
   if (!clean) return null;
   const found = await namedPropertyByName(companyId, clean);
   if (found) return found.id;
   if (!create) return null;
   try {
-    return (await createProperty(companyId, { name: clean })).id;
+    return (await createProperty(companyId, { name: clean }, w)).id;
   } catch (e) {
     // Lost a race with another row of the same import creating it.
     if (e instanceof DirectoryError && e.status === 409) return (await namedPropertyByName(companyId, clean))?.id ?? null;

@@ -33,6 +33,7 @@ import {
   createProperty,
   deleteProperty,
   DirectoryError,
+  directoryVocabFor,
   loadDirectory,
   updateProperty,
 } from "../../services/directory";
@@ -87,17 +88,22 @@ function fail(c: Context<AppEnv>, e: unknown) {
 }
 
 export const directoryRoutes = new Hono<AppEnv>()
+  // Every response carries the tenant's place vocabulary (shared/directory-vocab.ts):
+  // the page shows the place layer, and names it, only as it says.
   .get("/", requireAdmin, async (c) => {
-    const { rows, properties } = await loadDirectory(tenantId(c));
-    const result = applyDirectoryQuery(rows, parseDirectoryQuery(c.req.query()));
-    return c.json({ ...result, propertyCount: properties.length }, 200);
+    const cid = tenantId(c);
+    const { rows, properties } = await loadDirectory(cid);
+    const { vocab, labels } = await directoryVocabFor(cid, properties.length > 0);
+    const result = applyDirectoryQuery(rows, { ...parseDirectoryQuery(c.req.query()), labels });
+    return c.json({ ...result, propertyCount: properties.length, vocab }, 200);
   })
   .post("/assign", requireAdmin, jsonBody(AssignBody), async (c) => {
     const cid = tenantId(c);
     const me = c.get("user") as SessionUser;
     const body = c.req.valid("json");
     try {
-      const r = await assignToProperty(cid, body);
+      const { words } = await directoryVocabFor(cid);
+      const r = await assignToProperty(cid, body, words);
       await audit({
         companyId: cid,
         actorId: me.id,
@@ -105,7 +111,7 @@ export const directoryRoutes = new Hono<AppEnv>()
         action: body.propertyId ? "directory.assign_property" : "directory.unassign_property",
         entityType: "property",
         entityId: body.propertyId ?? "",
-        summary: body.propertyId ? `Moved ${r.updated} to a property` : `Took ${r.updated} off their property`,
+        summary: body.propertyId ? `Moved ${r.updated} to a ${words.place}` : `Took ${r.updated} off their ${words.place}`,
         meta: { userIds: body.userIds.slice(0, 50), count: r.updated },
       });
       return c.json({ ok: true, ...r }, 200);
@@ -114,21 +120,24 @@ export const directoryRoutes = new Hono<AppEnv>()
     }
   })
   .get("/properties", requireAdmin, async (c) => {
-    const { rows, properties } = await loadDirectory(tenantId(c));
+    const cid = tenantId(c);
+    const { rows, properties } = await loadDirectory(cid);
+    const { vocab } = await directoryVocabFor(cid, properties.length > 0);
     // Who can manage a property: anyone on the team, field or office.
     const staff = rows
       .filter((r) => r.kind !== "customer" && r.status !== "disabled")
       .map((r) => ({ id: r.id, name: r.name || r.email, role: r.role, kind: r.kind }))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-    return c.json({ properties, staff }, 200);
+    return c.json({ properties, staff, vocab }, 200);
   })
   .post("/properties", requireAdmin, jsonBody(PropertyCreate), async (c) => {
     const cid = tenantId(c);
     const me = c.get("user") as SessionUser;
     const body = c.req.valid("json");
     try {
-      const r = await createProperty(cid, body);
-      await audit({ companyId: cid, actorId: me.id, actorName: me.name, action: "property.create", entityType: "property", entityId: r.id, summary: `Added property ${body.name}` });
+      const { words } = await directoryVocabFor(cid);
+      const r = await createProperty(cid, body, words);
+      await audit({ companyId: cid, actorId: me.id, actorName: me.name, action: "property.create", entityType: "property", entityId: r.id, summary: `Added ${words.place} ${body.name}` });
       return c.json({ ok: true, ...r }, 201);
     } catch (e) {
       return fail(c, e);
@@ -140,7 +149,8 @@ export const directoryRoutes = new Hono<AppEnv>()
     const pid = c.req.param("id");
     const body = c.req.valid("json");
     try {
-      await updateProperty(cid, pid, body);
+      const { words } = await directoryVocabFor(cid);
+      await updateProperty(cid, pid, body, words);
       await audit({ companyId: cid, actorId: me.id, actorName: me.name, action: "property.update", entityType: "property", entityId: pid, summary: "Updated property", meta: { fields: Object.keys(body) } });
       return c.json({ ok: true }, 200);
     } catch (e) {
@@ -152,9 +162,9 @@ export const directoryRoutes = new Hono<AppEnv>()
     const cid = tenantId(c);
     const me = c.get("user") as SessionUser;
     const body = c.req.valid("json");
-    const { nouns, tz } = await companyAskContext(cid);
+    const { words, tz } = await companyAskContext(cid);
     if (body.question) {
-      const out = await askDirectory(cid, body.question, { userId: me.id, nouns, tz, page: body.page, pageSize: body.pageSize, abortSignal: c.req.raw.signal });
+      const out = await askDirectory(cid, body.question, { userId: me.id, words, tz, page: body.page, pageSize: body.pageSize, abortSignal: c.req.raw.signal });
       return c.json(
         { ...out.result, ask: { question: body.question, filter: out.filter, chips: out.chips, summary: out.summary, notes: out.notes, usedAI: out.usedAI } },
         200,
@@ -162,7 +172,7 @@ export const directoryRoutes = new Hono<AppEnv>()
     }
     const filter = body.filter!;
     const result = await runDirectoryFilter(cid, filter, { page: body.page, pageSize: body.pageSize, withIds: body.withIds }, tz);
-    const chips = await chipsForFilter(cid, filter, nouns);
+    const chips = await chipsForFilter(cid, filter, words);
     return c.json({ ...result, ask: { question: "", filter, chips, summary: "", notes: [] as string[], usedAI: false } }, 200);
   })
   .delete("/properties/:id", requireAdmin, async (c) => {
@@ -170,7 +180,8 @@ export const directoryRoutes = new Hono<AppEnv>()
     const me = c.get("user") as SessionUser;
     const pid = c.req.param("id");
     try {
-      const r = await deleteProperty(cid, pid);
+      const { words } = await directoryVocabFor(cid);
+      const r = await deleteProperty(cid, pid, words);
       await audit({ companyId: cid, actorId: me.id, actorName: me.name, action: "property.delete", entityType: "property", entityId: pid, summary: "Removed property", meta: r });
       return c.json({ ok: true, ...r }, 200);
     } catch (e) {

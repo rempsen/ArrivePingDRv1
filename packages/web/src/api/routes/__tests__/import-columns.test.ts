@@ -8,7 +8,7 @@ import { describe, it, expect } from "bun:test";
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
 
-const { normalizeImportRow, isTemplateExample } = await import("../import");
+const { normalizeImportRow, isTemplateExample, parseCsv, rowsFromGrid } = await import("../import");
 
 describe("normalizeImportRow", () => {
   it("keeps the template's own column keys as they are", () => {
@@ -84,5 +84,29 @@ describe("isTemplateExample", () => {
     expect(isTemplateExample("customer", {})).toBe(false);
     expect(isTemplateExample("property", { name: "Maple Court", manager: "Jordan.Patel@example.com" })).toBe(true);
     expect(isTemplateExample("property", { name: "Maple Court", manager: "jordan@realco.ca" })).toBe(false);
+  });
+});
+
+describe("finding the header row", () => {
+  it("a plain CSV: header on line 1, rows keep their own line numbers past blank lines", () => {
+    expect(parseCsv("First Name,Email\nAva,ava@x.ca\n\nBen,ben@x.ca\n")).toEqual([
+      { line: 2, row: { "First Name": "Ava", Email: "ava@x.ca" } },
+      { line: 4, row: { "First Name": "Ben", Email: "ben@x.ca" } },
+    ]);
+  });
+
+  it("skips a title line above the headers (our Excel templates have one)", () => {
+    expect(parseCsv("Residents import template,,,\nFirst Name,Last Name,Property,Unit\nAva,Adams,Maple Court,4B")).toEqual([
+      { line: 3, row: { "First Name": "Ava", "Last Name": "Adams", Property: "Maple Court", Unit: "4B" } },
+    ]);
+    // A merged title cell reads back as the same value in every column.
+    const t = "Customers import template";
+    expect(rowsFromGrid([{ line: 1, cells: [t, t, t] }, { line: 2, cells: ["Name", "Email", "Phone"] }, { line: 3, cells: ["Ava", "ava@x.ca", ""] }])).toEqual([
+      { line: 3, row: { Name: "Ava", Email: "ava@x.ca", Phone: "" } },
+    ]);
+  });
+
+  it("a one-column file still uses its first line as the header", () => {
+    expect(parseCsv("Email\nava@x.ca")).toEqual([{ line: 2, row: { Email: "ava@x.ca" } }]);
   });
 });

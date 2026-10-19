@@ -33,7 +33,17 @@ const properties = [
 const person = (id: string, name: string, kind: "field" | "office"): DirectoryRow =>
   ({ id, name, kind, role: kind === "field" ? "rider" : "dispatcher" }) as DirectoryRow;
 const staff = [person("jordan", "Jordan Patel", "field"), person("avery", "Avery Chen", "field"), person("riley", "Riley Martin", "field"), person("lee", "Lee Wong", "office")];
-const nouns = { customer: "Resident", customers: "Residents", worker: "Property Manager", workers: "Property Managers" };
+const words = {
+  placesEnabled: true,
+  place: "Property",
+  places: "Properties",
+  unit: "Unit",
+  manager: "Property Manager",
+  job: "Request",
+  jobs: "Requests",
+  customers: "Residents",
+  workers: "Property Managers",
+};
 
 type Check = (i: AskInterpretation, f: ReturnType<typeof resolveInterpretation>["filter"]) => boolean;
 const cases: { q: string; checks: Record<string, Check> }[] = [
@@ -59,8 +69,8 @@ let passed = 0;
 for (const c of cases) {
   const t0 = Date.now();
   try {
-    const i = await modelInterpretation(c.q, { nouns, properties, staff, today: TODAY });
-    const { filter } = resolveInterpretation(i, properties, staff);
+    const i = await modelInterpretation(c.q, { words, properties, staff, today: TODAY });
+    const { filter } = resolveInterpretation(i, properties, staff, words);
     const failed = Object.entries(c.checks).filter(([, check]) => !check(i, filter)).map(([k]) => k);
     if (!failed.length) passed++;
     console.log(`${failed.length ? "FAIL" : "PASS"} ${c.q} · ${Date.now() - t0} ms${failed.length ? `\n     missed: ${failed.join(", ")}` : ""}\n     ${JSON.stringify({ ...i, summary: undefined })}`);

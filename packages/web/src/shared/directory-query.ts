@@ -87,7 +87,17 @@ export interface DirectoryQuery {
   pageSize?: number;
   /** Also return every matching id, in order (for "select all 2,500"). */
   withIds?: boolean;
+  /** The tenant's words for places in group headers and pickers (shared/directory-vocab.ts). */
+  labels?: DirectoryLabels;
 }
+
+/** Group-header and picker words, in the tenant's vocabulary. */
+export interface DirectoryLabels {
+  place: string;
+  places: string;
+  manager: string;
+}
+const DEFAULT_LABELS: DirectoryLabels = { place: "Property", places: "Properties", manager: "Manager" };
 
 /** The most ids one query returns for a select-all. */
 export const MAX_IDS = 5000;
@@ -122,8 +132,8 @@ export interface DirectoryResult {
 }
 
 export const NONE = "none";
-const NO_PROPERTY = "No property";
-const NO_MANAGER = "No manager";
+const noPlace = (l: DirectoryLabels) => `No ${l.place.toLowerCase()}`;
+const noManager = (l: DirectoryLabels) => `No ${l.manager.toLowerCase()}`;
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
 const digits = (s: string) => s.replace(/\D/g, "");
@@ -191,12 +201,12 @@ export function rowComparator(sort: DirectorySort, dir: SortDir): (a: DirectoryR
   };
 }
 
-function groupKey(r: DirectoryRow, g: DirectoryGroup): { key: string; label: string } {
+function groupKey(r: DirectoryRow, g: DirectoryGroup, l: DirectoryLabels = DEFAULT_LABELS): { key: string; label: string } {
   switch (g) {
     case "property":
-      return r.propertyId ? { key: r.propertyId, label: r.propertyName } : { key: NONE, label: NO_PROPERTY };
+      return r.propertyId ? { key: r.propertyId, label: r.propertyName } : { key: NONE, label: noPlace(l) };
     case "manager":
-      return r.managerId ? { key: r.managerId, label: r.managerName } : { key: NONE, label: NO_MANAGER };
+      return r.managerId ? { key: r.managerId, label: r.managerName } : { key: NONE, label: noManager(l) };
     case "role":
       return { key: r.role || NONE, label: r.role || "No role" };
     default:
@@ -224,6 +234,7 @@ export function applyDirectoryQuery(all: DirectoryRow[], query: DirectoryQuery =
   const pageSize = clampInt(query.pageSize, 1, 500, 25);
   const q = (query.q ?? "").trim();
   const idSet = query.ids ? new Set(query.ids) : null;
+  const labels = query.labels ?? DEFAULT_LABELS;
 
   // Search (and the AI's id list) first: the kind tabs show counts within it.
   const searched = all.filter((r) => (!idSet || idSet.has(r.id)) && (!q || matchesSearch(r, q)));
@@ -238,11 +249,11 @@ export function applyDirectoryQuery(all: DirectoryRow[], query: DirectoryQuery =
   for (const r of ofKind) {
     if (r.kind !== "customer") continue;
     const pk = r.propertyId ?? NONE;
-    const p = propCounts.get(pk) ?? { id: pk, name: r.propertyId ? r.propertyName : NO_PROPERTY, count: 0 };
+    const p = propCounts.get(pk) ?? { id: pk, name: r.propertyId ? r.propertyName : noPlace(labels), count: 0 };
     p.count++;
     propCounts.set(pk, p);
     const mk = r.managerId ?? NONE;
-    const m = mgrCounts.get(mk) ?? { id: mk, name: r.managerId ? r.managerName : NO_MANAGER, count: 0 };
+    const m = mgrCounts.get(mk) ?? { id: mk, name: r.managerId ? r.managerName : noManager(labels), count: 0 };
     m.count++;
     mgrCounts.set(mk, m);
   }
@@ -267,11 +278,11 @@ export function applyDirectoryQuery(all: DirectoryRow[], query: DirectoryQuery =
     sorted = [...rows].sort(cmp);
   } else {
     for (const r of rows) {
-      const { key, label } = groupKey(r, groupBy);
+      const { key, label } = groupKey(r, groupBy, labels);
       const g = groupMap.get(key) ?? { key, label, sublabel: "", count: 0 };
       g.count++;
       if (!g.sublabel) {
-        if (groupBy === "property" && r.propertyId) g.sublabel = [r.propertyAddress, r.managerName && `Manager: ${r.managerName}`].filter(Boolean).join(" · ");
+        if (groupBy === "property" && r.propertyId) g.sublabel = [r.propertyAddress, r.managerName && `${labels.manager}: ${r.managerName}`].filter(Boolean).join(" · ");
       }
       groupMap.set(key, g);
     }
@@ -288,7 +299,7 @@ export function applyDirectoryQuery(all: DirectoryRow[], query: DirectoryQuery =
     for (const r of rows) if (r.managerId && r.propertyId) (props.get(r.managerId) ?? props.set(r.managerId, new Set()).get(r.managerId)!).add(r.propertyId);
     for (const [k, set] of props) {
       const g = groupMap.get(k);
-      if (g) g.sublabel = `${set.size} ${set.size === 1 ? "property" : "properties"}`;
+      if (g) g.sublabel = `${set.size} ${(set.size === 1 ? labels.place : labels.places).toLowerCase()}`;
     }
   }
 

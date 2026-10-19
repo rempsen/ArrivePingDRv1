@@ -40,7 +40,8 @@ import {
   Sparkles,
   Info,
 } from "lucide-react";
-import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
+import { useWorkerNoun, useCustomerNoun, useJobNoun } from "../../lib/use-brand";
+import { aWord, lc, pluralOf, type DirectoryVocab } from "../../../shared/directory-vocab";
 import {
   rowGroupKey,
   NONE,
@@ -106,6 +107,9 @@ const EMPTY_ADD_FORM: NewUserForm = {
 
 type Tab = DirectoryKind | "properties";
 
+/** Until the Directory says otherwise: no place layer (the HVAC default). */
+const NO_PLACES: DirectoryVocab = { enabled: false, reason: "not-used", place: "Site", places: "Sites", unit: "Unit", units: "Units", manager: "Account Manager" };
+
 /** An AI search answer being shown: the question, and the filter it became. */
 type AskState = { question: string; filter: DirectoryFilter; summary: string; notes: string[]; usedAI: boolean };
 
@@ -157,6 +161,7 @@ export default function AdminClients() {
   const qc = useQueryClient();
   const { noun, nounPlural } = useWorkerNoun();
   const { noun: customerNoun, nounPlural: customerNounPlural } = useCustomerNoun();
+  const { noun: jobNoun, nounPlural: jobNounPlural } = useJobNoun();
   const roleLabel = (r: string) =>
     r === "rider" ? noun : r === "customer" ? customerNoun : ROLE_LABEL_BASE[r] ?? r;
   const [, go] = useLocation();
@@ -220,6 +225,13 @@ export default function AdminClients() {
     queryFn: async () => ok(await api.directory.$get({ query: params })),
   });
   const props = useDirectoryProperties();
+  // The tenant's place words, and whether its Directory has places at all
+  // (shared/directory-vocab.ts): an HVAC company's has none.
+  const v: DirectoryVocab = directory.data?.vocab ?? props.data?.vocab ?? NO_PLACES;
+  const placesOn = v.enabled;
+  useEffect(() => {
+    if (!placesOn && tab === "properties") setTab("all");
+  }, [placesOn, tab]);
 
   // An AI answer re-runs its filter (never the model) to sort, group or page.
   const askFilter: DirectoryFilter | null = ask
@@ -324,7 +336,7 @@ export default function AdminClients() {
    */
   const addAction =
     tab === "properties"
-      ? { label: "Add property", icon: Building2, onClick: () => setPropEdit("new") }
+      ? { label: `Add ${lc(v.place)}`, icon: Building2, onClick: () => setPropEdit("new") }
       : tab === "field"
         ? { label: `Add ${noun}`, icon: UserPlus, onClick: () => go("/admin/techs") }
         : tab === "office"
@@ -353,8 +365,10 @@ export default function AdminClients() {
   const propertyCount = props.data?.properties.length ?? directory.data?.propertyCount ?? 0;
   const effectiveGroup = (result?.groupBy ?? "none") as DirectoryGroup;
   const groupInfo = new Map((result?.groups ?? []).map((g) => [g.key, g]));
-  const showPlacement = tab === "all" || tab === "customer";
-  const selectable = (r: DirectoryRow) => r.kind === "customer";
+  const customerish = tab === "all" || tab === "customer";
+  const showPlacement = customerish && placesOn;
+  // Selecting is for "Assign to …", which only exists with places.
+  const selectable = (r: DirectoryRow) => placesOn && r.kind === "customer";
   const pageSelectable = rows.filter(selectable);
   const allOnPage = pageSelectable.length > 0 && pageSelectable.every((r) => selected.has(r.id));
   const filtersOn = !!(propertyId || managerId || q || ask);
@@ -413,22 +427,29 @@ export default function AdminClients() {
     ["customer", customerNounPlural, kinds.customer],
     ["field", nounPlural, kinds.field],
     ["office", "Office staff", kinds.office],
-    ["properties", "Properties", propertyCount],
+    ...(placesOn ? ([["properties", v.places, propertyCount]] as [Tab, string, number][]) : []),
   ];
 
   type Col = { key: string; label: string; sort?: DirectorySort; cls?: string };
-  const cols: Col[] = showPlacement
+  // Columns in the tenant's words: a property manager's residents show Property,
+  // Unit and Property Manager; an HVAC company's customers show contact and work.
+  const placeCols: Col[] = showPlacement
+    ? [
+        { key: "property", label: v.place, sort: "property", cls: "hidden md:table-cell" },
+        ...(v.unit ? [{ key: "unit", label: v.unit, sort: "unit" as const, cls: "hidden md:table-cell" }] : []),
+        { key: "manager", label: v.manager, sort: "manager", cls: "hidden lg:table-cell" },
+      ]
+    : [];
+  const cols: Col[] = customerish
     ? [
         { key: "name", label: "Name", sort: "name" },
         ...(tab === "all" ? [{ key: "role", label: "Type", sort: "role" as const, cls: "hidden lg:table-cell" }] : []),
-        { key: "property", label: "Property", sort: "property", cls: "hidden md:table-cell" },
-        { key: "unit", label: "Unit", sort: "unit", cls: "hidden md:table-cell" },
-        { key: "manager", label: "Manager", sort: "manager", cls: "hidden lg:table-cell" },
+        ...placeCols,
         { key: "contact", label: "Contact", sort: "email", cls: "hidden sm:table-cell" },
         ...(tab === "customer"
           ? [
               { key: "openJobs", label: "Open", sort: "openJobs" as const, cls: "hidden text-right xl:table-cell" },
-              { key: "lastVisit", label: "Last visit", sort: "lastVisit" as const, cls: "hidden text-right xl:table-cell" },
+              { key: "lastVisit", label: `Last ${lc(jobNoun)}`, sort: "lastVisit" as const, cls: "hidden text-right xl:table-cell" },
             ]
           : [{ key: "joined", label: "Joined", sort: "joined" as const, cls: "hidden text-right xl:table-cell" }]),
       ]
@@ -436,7 +457,7 @@ export default function AdminClients() {
         { key: "name", label: "Name", sort: "name" },
         { key: "role", label: "Role", sort: "role" },
         { key: "contact", label: "Contact", sort: "email", cls: "hidden sm:table-cell" },
-        { key: "manages", label: "Manages", cls: "hidden text-right md:table-cell" },
+        ...(placesOn ? [{ key: "manages", label: "Manages", cls: "hidden text-right md:table-cell" }] : []),
         { key: "joined", label: "Joined", sort: "joined", cls: "hidden text-right lg:table-cell" },
       ];
   const colSpan = cols.length + 2;
@@ -460,8 +481,8 @@ export default function AdminClients() {
                 <p className="truncate text-xs text-slate-500 md:hidden">
                   {/* Under a property header, the property and its manager are already said. */}
                   {(effectiveGroup === "property"
-                    ? [r.unit && `Unit ${r.unit}`]
-                    : [r.propertyName, r.unit && `Unit ${r.unit}`, effectiveGroup === "manager" ? "" : r.managerName]
+                    ? [r.unit && `${v.unit ?? "Unit"} ${r.unit}`]
+                    : [r.propertyName, r.unit && `${v.unit ?? "Unit"} ${r.unit}`, effectiveGroup === "manager" ? "" : r.managerName]
                   )
                     .filter(Boolean)
                     .join(" · ")}
@@ -516,7 +537,7 @@ export default function AdminClients() {
       case "manages":
         return r.managedCount ? (
           <span className="text-slate-300">
-            {r.managedCount} {r.managedCount === 1 ? "property" : "properties"}
+            {r.managedCount} {lc(r.managedCount === 1 ? v.place : v.places)}
           </span>
         ) : (
           <span className="text-slate-600">—</span>
@@ -534,11 +555,12 @@ export default function AdminClients() {
         title="Directory"
         subtitle={
           tab === "properties"
-            ? `${propertyCount.toLocaleString()} ${propertyCount === 1 ? "property" : "properties"}`
+            ? `${propertyCount.toLocaleString()} ${lc(propertyCount === 1 ? v.place : v.places)}`
             : `${(result?.total ?? 0).toLocaleString()} ${(result?.total ?? 0) === 1 ? "person" : "people"}${filtersOn ? " match" : ""}`
         }
         actions={
           <div className="flex items-center gap-2" data-tour="people.add">
+            {/* The menu lists this tenant's imports, named and shaped its way (/api/import/profile). */}
             <ImportMenu
               types={["customer", "rider", "admin", "property"]}
               activeType={IMPORT_FOR_TAB[tab]}
@@ -579,6 +601,7 @@ export default function AdminClients() {
           onViewResidents={viewResidents}
           customerNoun={customerNoun}
           customerNounPlural={customerNounPlural}
+          vocab={v}
         />
       ) : (
         <>
@@ -604,7 +627,11 @@ export default function AdminClients() {
                 onKeyDown={(e) => {
                   if (e.key === "Escape" && (ask || qInput)) clearAsk();
                 }}
-                placeholder={showPlacement ? "Search, or ask: “Maple Court residents with open requests”" : "Search, or ask a question…"}
+                placeholder={
+                  customerish
+                    ? `Search, or ask: “${lc(customerNounPlural)} with open ${lc(jobNounPlural)}${showPlacement ? ` by ${lc(v.place)}` : ""}”`
+                    : "Search, or ask a question…"
+                }
                 className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-24 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
               />
               <button
@@ -621,7 +648,7 @@ export default function AdminClients() {
               {showPlacement && !ask && (
                 <>
                   <select aria-label="Filter by property" className={selectCls} value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
-                    <option value="">All properties</option>
+                    <option value="">All {lc(v.places)}</option>
                     {propertyOptions.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.label}
@@ -629,7 +656,7 @@ export default function AdminClients() {
                     ))}
                   </select>
                   <select aria-label="Filter by manager" className={selectCls} value={managerId} onChange={(e) => setManagerId(e.target.value)}>
-                    <option value="">All managers</option>
+                    <option value="">All {lc(pluralOf(v.manager))}</option>
                     {managerOptions.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.label}
@@ -651,11 +678,11 @@ export default function AdminClients() {
               >
                 <option value="name:asc">Name A–Z</option>
                 <option value="name:desc">Name Z–A</option>
-                {showPlacement && <option value="property:asc">Property A–Z</option>}
-                {showPlacement && <option value="unit:asc">Unit</option>}
-                {showPlacement && <option value="manager:asc">Manager A–Z</option>}
-                {tab === "customer" && <option value="openJobs:desc">Most open requests</option>}
-                {tab === "customer" && <option value="lastVisit:desc">Last visit, newest</option>}
+                {showPlacement && <option value="property:asc">{v.place} A–Z</option>}
+                {showPlacement && v.unit && <option value="unit:asc">{v.unit}</option>}
+                {showPlacement && <option value="manager:asc">{v.manager} A–Z</option>}
+                {tab === "customer" && <option value="openJobs:desc">Most open {lc(jobNounPlural)}</option>}
+                {tab === "customer" && <option value="lastVisit:desc">Last {lc(jobNoun)}, newest</option>}
                 <option value="joined:desc">Newest first</option>
                 {![
                   "name:asc", "name:desc", "property:asc", "unit:asc", "manager:asc", "openJobs:desc", "lastVisit:desc", "joined:desc",
@@ -663,8 +690,8 @@ export default function AdminClients() {
               </select>
               <select aria-label="Group by" className={selectCls} value={staffTab && groupBy !== "role" ? "none" : groupBy} onChange={(e) => setGroupBy(e.target.value as DirectoryGroup)}>
                 <option value="none">No grouping</option>
-                {showPlacement && <option value="property">Group by property</option>}
-                {showPlacement && <option value="manager">Group by manager</option>}
+                {showPlacement && <option value="property">Group by {lc(v.place)}</option>}
+                {showPlacement && <option value="manager">Group by {lc(v.manager)}</option>}
                 <option value="role">Group by type</option>
               </select>
               {filtersOn && !ask && (
@@ -703,7 +730,7 @@ export default function AdminClients() {
                     ))}
                     {!ask.usedAI && (
                       <span
-                        title="AI search is off or busy right now, so the question was read by its keywords and property and team names."
+                        title={`AI search is off or busy right now, so the question was read by its keywords${placesOn ? ` and ${lc(v.place)}` : ""} and team names.`}
                         className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
                       >
                         Keyword reading
@@ -737,7 +764,7 @@ export default function AdminClients() {
               )}
               <div className="ml-auto flex flex-wrap gap-2">
                 <BtnPrimary onClick={() => setAssignOpen(true)}>
-                  <Building2 className="h-4 w-4" /> Assign to property
+                  <Building2 className="h-4 w-4" /> Assign to {lc(v.place)}
                 </BtnPrimary>
                 <BtnGhost onClick={() => setSelected(new Set())}>Clear</BtnGhost>
               </div>
@@ -977,13 +1004,14 @@ export default function AdminClients() {
         ids={[...selected]}
         properties={props.data?.properties ?? []}
         customerNounPlural={customerNounPlural}
+        vocab={v}
         onDone={() => {
           setAssignOpen(false);
           setSelected(new Set());
         }}
       />
 
-      <ClientDrawer person={detail} properties={props.data?.properties ?? []} onClose={() => setDetail(null)} />
+      <ClientDrawer person={detail} properties={props.data?.properties ?? []} vocab={v} onClose={() => setDetail(null)} />
     </PageWrap>
   );
 }
@@ -999,6 +1027,7 @@ function AssignModal({
   ids,
   properties,
   customerNounPlural,
+  vocab: v,
   onDone,
 }: {
   open: boolean;
@@ -1006,6 +1035,7 @@ function AssignModal({
   ids: string[];
   properties: PropertyItem[];
   customerNounPlural: string;
+  vocab: DirectoryVocab;
   onDone: () => void;
 }) {
   const qc = useQueryClient();
@@ -1028,7 +1058,7 @@ function AssignModal({
       if (choice === "new") {
         const res = await api.directory.properties.$post({ json: { name: newName.trim() } });
         const data = await res.json();
-        if (!res.ok) throw new Error((data as { message?: string }).message || "Couldn't add the property");
+        if (!res.ok) throw new Error((data as { message?: string }).message || `Couldn't add the ${lc(v.place)}`);
         propertyId = (data as { id: string }).id;
       }
       const res = await api.directory.assign.$post({
@@ -1052,24 +1082,24 @@ function AssignModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Assign to property"
-      subtitle={`Where ${who} live${ids.length === 1 ? "s" : ""}`}
+      title={`Assign to ${lc(v.place)}`}
+      subtitle={`Move ${who} to ${aWord(v.place)}`}
       size="sm"
       footer={
         <>
           <BtnGhost onClick={onClose}>Cancel</BtnGhost>
           <BtnPrimary disabled={!ready || assign.isPending} onClick={() => assign.mutate()}>
-            {assign.isPending ? "Saving…" : choice === NONE ? "Remove from property" : "Assign"}
+            {assign.isPending ? "Saving…" : choice === NONE ? `Remove from ${lc(v.place)}` : "Assign"}
           </BtnPrimary>
         </>
       }
     >
       <div className="space-y-3">
         {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
-        <Field label="Property">
-          <select aria-label="Property" className={inputCls} value={choice} onChange={(e) => setChoice(e.target.value)}>
+        <Field label={v.place}>
+          <select aria-label={v.place} className={inputCls} value={choice} onChange={(e) => setChoice(e.target.value)}>
             <option value="" disabled>
-              Pick a property…
+              Pick {aWord(v.place)}…
             </option>
             {properties.map((p) => (
               <option key={p.id} value={p.id}>
@@ -1077,24 +1107,30 @@ function AssignModal({
                 {p.managerName ? ` · ${p.managerName}` : ""}
               </option>
             ))}
-            <option value="new">+ New property…</option>
-            <option value={NONE}>No property (take them off theirs)</option>
+            <option value="new">+ New {lc(v.place)}…</option>
+            <option value={NONE}>No {lc(v.place)} (take them off theirs)</option>
           </select>
         </Field>
         {choice === "new" && (
-          <Field label="New property name">
-            <input aria-label="New property name" className={inputCls} value={newName} maxLength={120} onChange={(e) => setNewName(e.target.value)} placeholder="Maple Court" />
+          <Field label={`New ${lc(v.place)} name`}>
+            <input aria-label={`New ${lc(v.place)} name`} className={inputCls} value={newName} maxLength={120} onChange={(e) => setNewName(e.target.value)} />
           </Field>
         )}
-        {ids.length === 1 && choice !== NONE && choice !== "" && (
-          <Field label="Unit (optional)">
-            <input aria-label="Unit" className={inputCls} value={unit} maxLength={40} onChange={(e) => setUnit(e.target.value)} placeholder="4B" />
+        {v.unit && ids.length === 1 && choice !== NONE && choice !== "" && (
+          <Field label={`${v.unit} (optional)`}>
+            <input aria-label={v.unit} className={inputCls} value={unit} maxLength={40} onChange={(e) => setUnit(e.target.value)} />
           </Field>
         )}
-        {ids.length > 1 && choice !== NONE && choice !== "" && (
-          <p className="text-xs text-slate-500">Everyone keeps their own unit. Set a unit on each person's record.</p>
+        {v.unit && ids.length > 1 && choice !== NONE && choice !== "" && (
+          <p className="text-xs text-slate-500">
+            Everyone keeps their own {lc(v.unit)}. Set {aWord(v.unit)} on each person's record.
+          </p>
         )}
-        {choice === "new" && <p className="text-xs text-slate-500">Add its address and manager afterwards on the Properties tab.</p>}
+        {choice === "new" && (
+          <p className="text-xs text-slate-500">
+            Add its address and {lc(v.manager)} afterwards on the {v.places} tab.
+          </p>
+        )}
       </div>
     </Modal>
   );
@@ -1257,11 +1293,14 @@ function applyAddressParts(prev: any, formatted: string) {
 function ClientDrawer({
   person,
   properties,
+  vocab: v,
   onClose,
 }: {
   /** The Directory row that was clicked; the full record loads from it. */
   person: DirectoryRow | null;
   properties: PropertyItem[];
+  /** The tenant's place words; no place section when its Directory has none. */
+  vocab: DirectoryVocab;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -1337,7 +1376,7 @@ function ClientDrawer({
   }, [full]);
 
   const placementChanged =
-    !!person && person.kind === "customer" && (placement.propertyId !== (person.propertyId ?? "") || placement.unit.trim() !== person.unit);
+    v.enabled && !!person && person.kind === "customer" && (placement.propertyId !== (person.propertyId ?? "") || placement.unit.trim() !== person.unit);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -1349,7 +1388,7 @@ function ClientDrawer({
           json: { userIds: [person!.id], propertyId: placement.propertyId || null, unit: placement.unit.trim() },
         });
         const d = await r.json();
-        if (!r.ok) throw new Error((d as { message?: string }).message || "Saved, but their property didn't change");
+        if (!r.ok) throw new Error((d as { message?: string }).message || `Saved, but their ${lc(v.place)} didn't change`);
       }
       return data;
     },
@@ -1465,20 +1504,20 @@ function ClientDrawer({
                 </div>
               </div>
 
-              {/* --- Property: where they live, and who manages it --- */}
-              {isClient && (
+              {/* --- Their place (property, community, building, team) and who manages it --- */}
+              {isClient && v.enabled && (
                 <div className="space-y-3 border-t border-white/10 pt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Property</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{v.place}</p>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <Field label="Property">
+                    <div className={v.unit ? "col-span-2" : "col-span-3"}>
+                      <Field label={v.place}>
                         <select
-                          aria-label="Property"
+                          aria-label={v.place}
                           className={inputCls}
                           value={placement.propertyId}
                           onChange={(e) => setPlacement({ ...placement, propertyId: e.target.value })}
                         >
-                          <option value="">No property</option>
+                          <option value="">No {lc(v.place)}</option>
                           {properties.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.name}
@@ -1487,26 +1526,27 @@ function ClientDrawer({
                         </select>
                       </Field>
                     </div>
-                    <Field label="Unit">
-                      <input
-                        aria-label="Unit"
-                        className={inputCls}
-                        value={placement.unit}
-                        maxLength={40}
-                        disabled={!placement.propertyId}
-                        onChange={(e) => setPlacement({ ...placement, unit: e.target.value })}
-                        placeholder="4B"
-                      />
-                    </Field>
+                    {v.unit && (
+                      <Field label={v.unit}>
+                        <input
+                          aria-label={v.unit}
+                          className={inputCls}
+                          value={placement.unit}
+                          maxLength={40}
+                          disabled={!placement.propertyId}
+                          onChange={(e) => setPlacement({ ...placement, unit: e.target.value })}
+                        />
+                      </Field>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500">
                     {placedAt
                       ? placedAt.managerName
-                        ? `Manager: ${placedAt.managerName}${placedAt.address ? ` · ${placedAt.address}` : ""}`
-                        : `No manager yet${placedAt.address ? ` · ${placedAt.address}` : ""}. Pick one on the Properties tab.`
+                        ? `${v.manager}: ${placedAt.managerName}${placedAt.address ? ` · ${placedAt.address}` : ""}`
+                        : `No ${lc(v.manager)} yet${placedAt.address ? ` · ${placedAt.address}` : ""}. Pick one on the ${v.places} tab.`
                       : properties.length
-                        ? "Not at a property yet."
-                        : "No properties yet. Add them on the Properties tab."}
+                        ? `Not at ${aWord(v.place)} yet.`
+                        : `No ${lc(v.places)} yet. Add them on the ${v.places} tab.`}
                   </p>
                 </div>
               )}

@@ -100,6 +100,8 @@ const RULES: Rule[] = [
   { re: /^\/api\/messages(\/|$)/, need: readOr("work_orders:view", "work_orders:edit") },
   { re: /^\/api\/(custom-fields|tags)(\/|$)/, need: mod("tags") },
   { re: /^\/api\/(forms|templates)(\/|$)/, need: mod("forms") },
+  // Which imports this tenant has and their columns: anyone who can see the people.
+  { re: /^\/api\/import\/profile$/, need: () => "clients:view" },
   {
     re: /^\/api\/import\/(template\/)?(rider|customer|admin|property)$/,
     need: (method, m) => {

@@ -59,6 +59,7 @@ describe("permissionFor", () => {
     ["POST", "/api/import/customer", "clients:create"],
     ["POST", "/api/import/admin", null],
     ["POST", "/api/import/property", "clients:create"],
+    ["GET", "/api/import/profile", "clients:view"],
     ["GET", "/api/import/template/property", "clients:view"],
     ["GET", "/api/directory", "clients:view"],
     ["GET", "/api/directory/properties", "clients:view"],
