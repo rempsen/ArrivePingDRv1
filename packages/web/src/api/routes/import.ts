@@ -20,7 +20,7 @@ import { eq } from "drizzle-orm";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
 import { tdb } from "../database/tenant";
-import { requireAdmin, tenantId } from "../middleware/auth";
+import { officeCan, requireAdmin, tenantId } from "../middleware/auth";
 import { auth } from "../auth";
 import { isSuperadmin } from "../lib/permissions";
 import { attachMembership, isMember, findUserByEmail } from "../lib/memberships";
@@ -355,7 +355,8 @@ const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)];
 /** customer or dispatcher row */
 async function importPersonRow(
   row: Record<string, string>,
-  opts: { role: "customer" | "admin"; companyId: string; invitedBy: string | null },
+  /** canEdit: may change existing client records (clients:edit), not just add them. */
+  opts: { role: "customer" | "admin"; companyId: string; invitedBy: string | null; canEdit?: boolean },
 ): Promise<RowResult> {
   const rawEmail = (row.email || "").trim();
   let email: string;
@@ -383,6 +384,7 @@ async function importPersonRow(
       // Re-importing a resident list is how 2,500 existing residents get
       // their property and unit: update those, never anything else.
       if (role === "customer" && row.property) {
+        if (!opts.canEdit) return { ok: false, reason: "Already in your account. Changing their property needs permission to edit clients." };
         const warning = await placeAtProperty(cid, existing.id, row);
         return warning ? { ok: false, reason: warning } : { ok: true, status: "updated" };
       }
@@ -439,7 +441,7 @@ async function importPersonRow(
 }
 
 /** property row: create it, or update the one with that name. */
-async function importPropertyRow(row: Record<string, string>, opts: { companyId: string }): Promise<RowResult> {
+async function importPropertyRow(row: Record<string, string>, opts: { companyId: string; canEdit: boolean }): Promise<RowResult> {
   const name = (row.name || "").trim();
   if (!name) return { ok: false, reason: "Property name is required" };
   const cid = opts.companyId;
@@ -452,6 +454,7 @@ async function importPropertyRow(row: Record<string, string>, opts: { companyId:
   try {
     const existingId = await propertyIdForName(cid, name, false);
     if (existingId) {
+      if (!opts.canEdit) return { ok: false, reason: `There's already a property called "${name}". Changing it needs permission to edit clients.` };
       const patch: { address?: string; notes?: string; managerId?: string | null } = {};
       if (row.address) patch.address = row.address;
       if (row.notes) patch.notes = row.notes;
@@ -584,6 +587,9 @@ export const importRoutes = new Hono<AppEnv>()
     if (lines.length > 500) return c.json({ message: "Import is limited to 500 rows at a time" }, 400);
 
     const cid = tenantId(c);
+    // Creating needs clients:create (office-access.ts); a row that changes an
+    // existing resident's property, or an existing property, also needs edit.
+    const canEdit = type === "rider" || type === "admin" ? true : await officeCan(c.get("user") as { role?: string; permissions?: string | null }, "clients:edit");
     const results: { row: number; email: string; ok: boolean; status?: string; reason?: string; emailed?: boolean; warning?: string }[] = [];
     const newPeople: string[] = [];
     for (const { line, row } of lines) {
@@ -591,8 +597,8 @@ export const importRoutes = new Hono<AppEnv>()
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })
           : type === "property"
-            ? await importPropertyRow(row, { companyId: cid })
-            : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id });
+            ? await importPropertyRow(row, { companyId: cid, canEdit })
+            : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id, canEdit });
       // A row without an email gets a placeholder address nobody can receive.
       if (type !== "property" && result.ok && result.status === "created" && row.email && !isUndeliverableEmail(row.email)) newPeople.push(result.userId);
       results.push({
