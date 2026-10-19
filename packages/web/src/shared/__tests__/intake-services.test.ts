@@ -84,6 +84,12 @@ describe("resolveIntakeService", () => {
     expect(resolveIntakeService({ picked: "", defaultId: "", allowedIds, services: LIBRARY })?.id).toBe("view");
     expect(resolveIntakeService({ picked: "", defaultId: "old", allowedIds: ["lease"], services: LIBRARY })?.id).toBe("lease");
   });
+  it("ignores a default the form no longer offers", () => {
+    // Set before the form was narrowed down; a forged or skipped pick must not
+    // land on it.
+    expect(resolveIntakeService({ picked: "", defaultId: "nte", allowedIds, services: LIBRARY })?.id).toBe("view");
+    expect(resolveIntakeService({ picked: "fin", defaultId: "nte", allowedIds, services: LIBRARY })?.id).toBe("view");
+  });
   it("still lands somewhere when the form's whole list was retired", () => {
     expect(resolveIntakeService({ picked: "", defaultId: "", allowedIds: ["old"], services: LIBRARY })?.id).toBe("wo");
   });

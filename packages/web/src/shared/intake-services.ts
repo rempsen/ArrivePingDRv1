@@ -58,7 +58,9 @@ export function servicesOfferedOnForm<S extends ServiceLike>(services: readonly 
 /**
  * The service a submission is booked under:
  *   1. what the visitor picked, if this form offers it and it is still active;
- *   2. the form's default service, if still active;
+ *   2. the form's default service, if this form offers it and it is still
+ *      active (a default left over from before the form was narrowed down
+ *      doesn't count);
  *   3. the first still-active service on the form's list;
  *   4. any active service (a form whose whole list was retired still lands).
  * A pick from outside the form's list is ignored rather than trusted: the
@@ -76,7 +78,7 @@ export function resolveIntakeService<S extends ServiceLike>(opts: {
   const picked = opts.picked ? byId.get(opts.picked) : undefined;
   if (picked && (!allowed || allowed.has(picked.id))) return picked;
   const dflt = opts.defaultId ? byId.get(opts.defaultId) : undefined;
-  if (dflt) return dflt;
+  if (dflt && (!allowed || allowed.has(dflt.id))) return dflt;
   for (const id of opts.allowedIds) {
     const s = byId.get(id);
     if (s) return s;

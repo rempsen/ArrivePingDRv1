@@ -371,7 +371,13 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
     return m;
   }, new Map<string, Svc[]>())];
   const [svcIds, setSvcIds] = useState<string[]>(() => formServiceIds(form?.fields));
-  const [defaultServiceId, setDefaultServiceId] = useState(form?.defaultServiceId ?? "");
+  // A default left over from before the form was narrowed down shows (and
+  // saves) as "First ticked service": the server ignores it either way.
+  const [defaultServiceId, setDefaultServiceId] = useState(() => {
+    const ids = formServiceIds(form?.fields);
+    const d = form?.defaultServiceId ?? "";
+    return !ids.length || ids.includes(d) ? d : "";
+  });
   // Ticked services that still exist (a retired service drops off the count).
   const ticked = svcQ.isSuccess ? svcIds.filter((id) => allServices.some((s) => s.id === id)) : svcIds;
   const toggleService = (id: string) => {
@@ -455,7 +461,8 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
         title, intro, slug: slug || undefined, brandColor, logoUrl, successMessage, publicKeyId, active,
         recipientName, recipientEmail, sections, fields: cleanFields,
         formType,
-        ...(isWorkOrder ? { allowTechAssign, accessCode } : { defaultServiceId }),
+        // A default the form doesn't offer would never be used; don't keep one.
+        ...(isWorkOrder ? { allowTechAssign, accessCode } : { defaultServiceId: !ticked.length || ticked.includes(defaultServiceId) ? defaultServiceId : "" }),
       };
       return editing ? jsend(`/api/forms/${form!.id}`, "PATCH", body) : jsend("/api/forms", "POST", body);
     },
