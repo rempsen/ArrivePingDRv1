@@ -99,7 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/admin/services", label: "Services", icon: Briefcase },
       { to: "/admin/catalog", label: "Catalog", icon: Package },
       { to: "/admin/options", label: "Options & Tiers", icon: Layers },
-      { to: "/admin/builder", label: "Form Builder Templates", icon: LayoutTemplate },
+      { to: "/admin/builder", label: "Job Templates", icon: LayoutTemplate },
       { to: "/admin/intake-forms", label: "Intake Forms", icon: FileText },
     ],
   },

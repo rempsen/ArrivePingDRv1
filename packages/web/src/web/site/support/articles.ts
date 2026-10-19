@@ -529,7 +529,7 @@ export const articles: Article[] = [
           "**Restore.** Open the archive and choose **Restore**; the job comes back with its history.",
         ],
       },
-      { type: "p", text: "Two things the dashboard doesn't do yet: duplicate a job, and import jobs from a spreadsheet (customers and technicians import; jobs don't). For work you book over and over, build it as a template under **Catalog & Forms → Form Builder Templates** so a new job is two clicks, and give customers an [intake form](/support/online-booking-forms) so they book it themselves." },
+      { type: "p", text: "Two things the dashboard doesn't do yet: duplicate a job, and import jobs from a spreadsheet (customers and technicians import; jobs don't). For work you book over and over, build it as a template under **Catalog & Forms → Job Templates** so a new job is two clicks, and give customers an [intake form](/support/online-booking-forms) so they book it themselves." },
     ],
   },
   {
@@ -958,7 +958,7 @@ export const articles: Article[] = [
       { type: "h3", text: "Each technician's own rates" },
       { type: "p", text: "Open **People → Technicians & Managers**, open the technician and set **Pay rate per hour** (\"Used to compute tech pay from on-site time\") and **Mileage pay rate** (leave 0 to not pay mileage). The hourly rate can also come in from your spreadsheet when you import." },
       { type: "h3", text: "Per job or per template" },
-      { type: "p", text: "The job form and each template under **Catalog & Forms → Form Builder Templates → Pricing, pay & payment** have a **Technician pay** block, marked internal and never shown to the customer. Set **Hourly (time on site)**, **Mileage** and **Flat per job**; a blank field means the technician's own rate. **Unpaid distance per job** lets you leave the first few kilometres unpaid. **Reset to each technician's own rates** clears the overrides." },
+      { type: "p", text: "The job form and each template under **Catalog & Forms → Job Templates** (its **Pricing & pay** tab) have a **Technician pay** block, marked internal and never shown to the customer. Set **Hourly (time on site)**, **Mileage** and **Flat per job**; a blank field means the technician's own rate. **Unpaid distance per job** lets you leave the first few kilometres unpaid. **Reset to each technician's own rates** clears the overrides." },
       { type: "p", text: "Technicians see their running total in the app's **Earnings** tab, with \"How your pay is calculated\" and a breakdown by company if they work for more than one. The office turns the numbers into a pay run with [Generate technician payouts](/support/payouts)." },
     ],
   },
