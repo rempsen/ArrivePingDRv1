@@ -12,6 +12,7 @@ process.env.DATABASE_AUTH_TOKEN = "";
 const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
 const { loadBoard, freeAtFor, BOARD_JOB_LIMIT } = await import("../dispatch-board");
+const { invalidateFeatures } = await import("../features");
 
 const CO = "board-co";
 const OTHER = "board-other";
@@ -230,9 +231,12 @@ describe("loadBoard", () => {
       return origTx(...a);
     };
     try {
+      // Start both cold: the feature-switch lookup is cached per company.
+      invalidateFeatures();
       reads = 0;
       const small = await loadBoard(SMALL, { now: NOW });
       const smallReads = reads;
+      invalidateFeatures();
       reads = 0;
       const big = await loadBoard(BIG, { now: NOW });
       const bigReads = reads;
@@ -240,8 +244,9 @@ describe("loadBoard", () => {
       expect(big.techs).toHaveLength(50);
       expect(big.jobs).toHaveLength(200);
       expect(bigReads).toBe(smallReads);
-      // the spy really saw the reads: settings, technicians, jobs, company, time off
-      expect(smallReads).toBe(5);
+      // the spy really saw the reads: settings, technicians, jobs, company, time
+      // off, plus the Map v2 feature switch (company plan/kind, overrides)
+      expect(smallReads).toBe(7);
     } finally {
       client.query = origQuery;
       client.transaction = origTx;

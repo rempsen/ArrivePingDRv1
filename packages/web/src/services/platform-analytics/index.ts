@@ -12,6 +12,7 @@
  * itself every minute, and several superadmins looking at the same range
  * shouldn't each re-run the aggregates.
  */
+import { kindForInternalFlag, setTenantKind } from "../tenant-kind";
 import { eq, ne } from "drizzle-orm";
 import { sdb } from "../../api/database";
 import * as schema from "../../api/database/schema";
@@ -345,15 +346,17 @@ export async function catalog() {
   });
 }
 
-/** Mark a company as a test / internal tenant (left out of analytics by default), or back. */
+/**
+ * Mark a company as a test / internal tenant (left out of analytics by
+ * default), or back. Its Control Hub kind follows: a customer becomes a test
+ * tenant, and back to customer when unflagged (services/tenant-kind.ts).
+ */
 export async function setInternal(companyId: string, internal: boolean): Promise<{ id: string; name: string; internal: boolean } | null> {
-  const [row] = await sdb
-    .update(schema.companies)
-    .set({ isInternal: internal, updatedAt: new Date() })
-    .where(eq(schema.companies.id, companyId))
-    .returning({ id: schema.companies.id, name: schema.companies.name, internal: schema.companies.isInternal });
+  const [cur] = await sdb.select({ kind: schema.companies.kind }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!cur) return null;
+  const row = await setTenantKind(companyId, kindForInternalFlag(cur.kind, internal));
   _clearAnalyticsCache();
-  return row ?? null;
+  return row ? { id: row.id, name: row.name, internal: row.internal } : null;
 }
 
 function industryName(id: string | null | undefined): string {

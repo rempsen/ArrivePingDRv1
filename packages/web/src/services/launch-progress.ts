@@ -19,6 +19,7 @@
  * (services/launch-checklist.ts); this only remembers *when* things happened
  * and what was already sent, in `companies.launch_progress`.
  */
+import { companiesWithFeature } from "./features";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { sdb } from "../api/database";
@@ -259,17 +260,20 @@ export async function sweepLaunch(now = new Date(), deps: SweepDeps = {}) {
   const slack = deps.slack ?? postStallAlert;
   const nudgesOn = process.env.LAUNCH_NUDGES === "on";
   const since = new Date(now.getTime() - WATCH_DAYS * DAY);
-  const companies = await sdb
+  const recent = await sdb
     .select()
     .from(schema.companies)
     .where(
       and(
         gte(schema.companies.createdAt, since),
         eq(schema.companies.status, "active"),
-        eq(schema.companies.isInternal, false),
         deps.companyIds ? inArray(schema.companies.id, deps.companyIds) : undefined,
       ),
     );
+  // Demo, test and our own tenants are left alone (their "Launch nudges"
+  // switch is off by default; the Control Hub can turn it on per tenant).
+  const watched = await companiesWithFeature("ops.launch_nudges", recent.map((c) => c.id));
+  const companies = recent.filter((c) => watched.has(c.id));
   const out = { companies: companies.length, items: 0, emails: 0, alerts: 0 };
 
   for (const co of companies) {

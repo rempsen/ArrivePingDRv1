@@ -34,18 +34,30 @@ function toOverride(r: Row): FeatureOverride {
   return { enabled: r.enabled, reason: r.reason, expiresAt: r.expiresAt, setByName: r.setByName, setAt: r.setAt };
 }
 
+/**
+ * Plan and kind per company. A company still flagged "test" by the older
+ * switch but recorded as a customer is read as a test tenant, so the two can
+ * never disagree about what it gets.
+ */
 async function loadCompanies(ids: string[]) {
   if (ids.length === 0) return [];
-  return sdb
-    .select({ id: schema.companies.id, plan: schema.companies.plan, kind: schema.companies.kind })
+  const rows = await sdb
+    .select({ id: schema.companies.id, plan: schema.companies.plan, kind: schema.companies.kind, isInternal: schema.companies.isInternal })
     .from(schema.companies)
     .where(inArray(schema.companies.id, ids));
+  return rows.map((r) => ({ id: r.id, plan: r.plan, kind: r.id === "default" ? "internal" : r.kind === "customer" && r.isInternal ? "test" : r.kind }));
 }
 
 async function loadOverrides(ids: string[]): Promise<Map<string, Record<string, FeatureOverride>>> {
   const out = new Map<string, Record<string, FeatureOverride>>();
   if (ids.length === 0) return out;
-  const rows = await sdb.select().from(schema.tenantFeatureOverrides).where(inArray(schema.tenantFeatureOverrides.companyId, ids));
+  let rows: Row[];
+  try {
+    rows = await sdb.select().from(schema.tenantFeatureOverrides).where(inArray(schema.tenantFeatureOverrides.companyId, ids));
+  } catch {
+    // Override table missing (pre-migration boot): plan and kind defaults only.
+    return out;
+  }
   for (const r of rows) {
     const m = out.get(r.companyId) ?? {};
     m[r.featureKey] = toOverride(r);

@@ -14,6 +14,7 @@
  *  - every job in the field right now, whatever its date.
  * Archived jobs never. Capped at BOARD_JOB_LIMIT, live work and the day first.
  */
+import { isFeatureOn } from "./features";
 import { and, asc, eq, gte, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../api/database";
@@ -256,9 +257,9 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         .orderBy(sql`case when ${live} then 0 when ${inDay} then 1 else 2 end`, asc(B.scheduledAt))
         .limit(BOARD_JOB_LIMIT + 1),
     ),
-    // 4. The company: office pin and the Map v2 default.
+    // 4. The company: office pin (the Map v2 default is its feature switch).
     db
-      .select({ officeLat: schema.companies.officeLat, officeLng: schema.companies.officeLng, isInternal: schema.companies.isInternal })
+      .select({ officeLat: schema.companies.officeLat, officeLng: schema.companies.officeLng })
       .from(schema.companies)
       .where(eq(schema.companies.id, companyId))
       .then((r) => r[0] ?? null),
@@ -384,7 +385,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
     workerNoun: settings?.workerNoun || "Technician",
     jobNoun: settings?.jobNoun || "Job",
     office,
-    mapV2Default: company?.isInternal ?? false,
+    mapV2Default: await isFeatureOn(companyId, "dispatch.map_v2"),
     truncated,
     generatedAt: now.toISOString(),
     techs,

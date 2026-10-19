@@ -15,6 +15,8 @@ import { tdb } from "../database/tenant";
 import { STAFF_OFFICE_ROLES, permissionFor } from "../lib/office-access";
 import { platformRoleOf, atLeast, type PlatformRole } from "../../services/platform-staff";
 import { noteTenantVisit } from "../../services/platform-audit";
+import { isFeatureOn } from "../../services/features";
+import { featureDef, featureForApiPath } from "../../shared/features";
 
 /** Load all role defaults from DB (falling back to seed). Cached briefly. */
 let _roleCache: { at: number; map: Record<string, string[]> } | null = null;
@@ -601,4 +603,25 @@ export const requireSessionOrApiKey = createMiddleware(async (c, next) => {
     return next();
   }
   return c.json({ message: "Unauthorized" }, 401);
+});
+
+/**
+ * Control Hub feature switches on the API (shared/features.ts FEATURE_ROUTES).
+ * A tenant whose switch is off gets a plain 403 instead of the module. Requests
+ * authenticated by an API key are checked against the key's company.
+ */
+export const featureGate = createMiddleware(async (c, next) => {
+  const key = featureForApiPath(c.req.path);
+  if (!key) return next();
+  let companyId = c.get("companyId") ?? "default";
+  if (!c.get("user")) {
+    const apiKey = await resolveApiKey(c).catch(() => null);
+    if (!apiKey) return next(); // the route's own auth answers 401
+    companyId = apiKey.companyId;
+  }
+  if (await isFeatureOn(companyId, key)) return next();
+  return c.json(
+    { error: { code: "feature_off", feature: key, message: `${featureDef(key)?.label ?? "This feature"} isn't switched on for this account. Contact ArrivePing to turn it on.` } },
+    403,
+  );
 });

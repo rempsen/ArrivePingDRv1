@@ -31,6 +31,7 @@
  * include hand-provisioned tenants too. Tenants flagged internal (demo/test)
  * never sync automatically. Missing token = feature off, silently.
  */
+import { companiesWithFeature, isFeatureOn } from "./features";
 import { parseProgress } from "./launch-progress";
 import { and, avg, count, eq, gte, inArray, isNotNull, isNull, max, min, or } from "drizzle-orm";
 import { createHash } from "node:crypto";
@@ -687,13 +688,14 @@ const lastRun = new Map<string, number>();
 /** Is this tenant one we mirror automatically? */
 export async function isSyncedCompany(companyId: string): Promise<boolean> {
   const [co] = await db
-    .select({ a: schema.companies.hubspotCompanyId, b: schema.companies.billingCustomerId, internal: schema.companies.isInternal })
+    .select({ a: schema.companies.hubspotCompanyId, b: schema.companies.billingCustomerId })
     .from(schema.companies)
     .where(eq(schema.companies.id, companyId));
-  // A tenant a superadmin flagged internal (demo, test, our own sandboxes) is
-  // never synced automatically, even if it was linked before; a superadmin
-  // "Sync to HubSpot" (force) still can.
-  if (!co || co.internal) return false;
+  // Demo, test and our own tenants are never synced automatically, even if
+  // they were linked before (their "Sync to HubSpot" switch is off by
+  // default; the Control Hub can turn it on). A superadmin "Sync to HubSpot"
+  // (force) still can.
+  if (!co || !(await isFeatureOn(companyId, "ops.hubspot_sync"))) return false;
   // HUBSPOT_SYNC_ALL=1 adds hand-provisioned customers.
   if (process.env.HUBSPOT_SYNC_ALL === "1") return true;
   return Boolean(co.a || co.b);
@@ -723,14 +725,17 @@ export function queueCompanySync(companyId: string): void {
 export async function sweepHubspotSync(): Promise<{ checked: number; pushed: number; failed: number }> {
   const out = { checked: 0, pushed: 0, failed: 0 };
   if (!hubspotEnabled()) return out;
-  const rows = await db
+  const candidates = await db
     .select({ id: schema.companies.id })
     .from(schema.companies)
     .where(
       process.env.HUBSPOT_SYNC_ALL === "1"
-        ? eq(schema.companies.isInternal, false)
-        : and(eq(schema.companies.isInternal, false), or(isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId))),
+        ? undefined
+        : or(isNotNull(schema.companies.hubspotCompanyId), isNotNull(schema.companies.billingCustomerId)),
     );
+  // Only tenants whose "Sync to HubSpot" switch is on (customers by default).
+  const on = await companiesWithFeature("ops.hubspot_sync", candidates.map((r) => r.id));
+  const rows = candidates.filter((r) => on.has(r.id));
   for (const r of rows) {
     if (r.id === "default") continue;
     out.checked++;

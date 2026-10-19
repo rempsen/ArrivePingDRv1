@@ -3,7 +3,7 @@ import { launchTipsRoutes } from "./routes/launch-tips";
 import { queueCompanySync } from "../services/hubspot-sync";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
-import { authMiddleware, requireOffice } from "./middleware/auth";
+import { authMiddleware, featureGate, requireOffice } from "./middleware/auth";
 import { AppError } from "./lib/errors";
 import { captureException, requestLogger } from "./lib/logger";
 import type { Variables } from "./env";
@@ -273,6 +273,8 @@ const app = new Hono<{ Variables: Variables }>()
   .get("/api/metrics.json", (c) => c.json(renderJson(), 200))
   .basePath("api")
   .use("*", authMiddleware)
+  // Control Hub feature switches: a module switched off for this tenant answers 403.
+  .use("*", featureGate)
   // general API limiter (per-user / per-IP). Public track + ping have their own.
   .use("*", apiLimiter)
   .get("/health", (c) => c.json({ status: "ok" }, 200))

@@ -19,12 +19,10 @@
  * keeps proxies from closing it. The channel is the caller's company, taken
  * from the session — never from the URL.
  */
+import { isFeatureOn } from "../../services/features";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../database";
-import * as schema from "../database/schema";
 import { officeCan, requireAdmin, tenantId } from "../middleware/auth";
 import { jsonBody, id as idField, ValidationError } from "../lib/validate";
 import type { AppEnv } from "../env";
@@ -71,12 +69,8 @@ const MAX_PENDING_IDS = 500;
 
 export const dispatchRoutes = new Hono<AppEnv>()
   .get("/settings", requireAdmin, async (c) => {
-    const [co] = await db
-      .select({ isInternal: schema.companies.isInternal })
-      .from(schema.companies)
-      .where(eq(schema.companies.id, tenantId(c)))
-      .limit(1);
-    return c.json({ mapV2Default: co?.isInternal ?? false }, 200);
+    // On for our own, demo and test tenants; the Control Hub switches it per tenant.
+    return c.json({ mapV2Default: await isFeatureOn(tenantId(c), "dispatch.map_v2") }, 200);
   })
 
   .get("/board", requireAdmin, async (c) => {
