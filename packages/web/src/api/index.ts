@@ -20,6 +20,7 @@ import { billingRoutes } from "./routes/billing";
 import { paymentsWebhookRoutes } from "./routes/payments-webhook";
 import { notificationsRoutes } from "./routes/notifications";
 import { adminRoutes } from "./routes/admin";
+import { directoryRoutes } from "./routes/directory";
 import { trackRoutes } from "./routes/track";
 import { payPublicRoutes } from "./routes/pay-public";
 import { propertyPublicRoutes } from "./routes/property-public";
@@ -381,6 +382,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/billing", billingRoutes)
   .route("/notifications", notificationsRoutes)
   .route("/admin", adminRoutes)
+  // People by property, resident and property manager; named properties.
+  .route("/directory", directoryRoutes)
   .route("/track", trackRoutes)
   // Public on-site payment page API (no auth) — /pay/:token.
   .route("/pay", payPublicRoutes)

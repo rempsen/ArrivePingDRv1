@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Upload, ChevronDown, FileText, FileSpreadsheet, Download,
-  CheckCircle2, XCircle, Loader2,
+  CheckCircle2, XCircle, Loader2, RefreshCw, AlertTriangle,
 } from "lucide-react";
 import { apiHeaders } from "../lib/api";
 import { Modal, BtnPrimary, BtnGhost } from "./modal";
 
-export type ImportType = "customer" | "admin" | "rider";
+export type ImportType = "customer" | "admin" | "rider" | "property";
 
 const TYPE_LABEL: Record<ImportType, string> = {
   customer: "Customers",
   admin: "Dispatchers",
   rider: "Technicians",
+  property: "Properties",
 };
 
 function filenameFrom(res: Response): string {
@@ -23,6 +24,10 @@ function filenameFrom(res: Response): string {
 type ImportResult = {
   total: number;
   created: number;
+  /** Already here: a customer moved to the row's property and unit, or a property updated. */
+  updated?: number;
+  /** Imported, but with something to look at (a manager nobody matched, say). */
+  warnings?: { row: number; email: string; message: string }[];
   invited: number;
   /** Of `invited`, how many invitation emails didn't go out (they need a resend). */
   invitesNotEmailed?: number;
@@ -60,7 +65,7 @@ export function ImportMenu({
   onDone?: () => void;
 }) {
   const label = (t: ImportType) =>
-    t === "customer" ? customerLabel || TYPE_LABEL.customer : t === "rider" ? workerLabel || TYPE_LABEL.rider : TYPE_LABEL.admin;
+    t === "customer" ? customerLabel || TYPE_LABEL.customer : t === "rider" ? workerLabel || TYPE_LABEL.rider : TYPE_LABEL[t];
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickType, setPickType] = useState(false);
@@ -209,18 +214,24 @@ export function ImportMenu({
       >
         {result && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-2">
-              <StatCard icon={CheckCircle2} tint="text-emerald-live" label="Created" value={result.created} />
-              <StatCard icon={CheckCircle2} tint="text-cyan-glow" label="Invited" value={result.invited} />
-              <StatCard icon={XCircle} tint="text-red-400" label="Failed" value={result.failedCount} />
-            </div>
+            {(() => {
+              const isProperty = result.type === "property";
+              const showUpdated = isProperty || (result.updated ?? 0) > 0;
+              const cards = [
+                <StatCard key="c" icon={CheckCircle2} tint="text-emerald-live" label="Created" value={result.created} />,
+                showUpdated && <StatCard key="u" icon={RefreshCw} tint="text-brand" label="Updated" value={result.updated ?? 0} />,
+                !isProperty && <StatCard key="i" icon={CheckCircle2} tint="text-cyan-glow" label="Invited" value={result.invited} />,
+                <StatCard key="f" icon={XCircle} tint="text-red-400" label="Failed" value={result.failedCount} />,
+              ].filter(Boolean);
+              return <div className={`grid gap-2 ${cards.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>{cards}</div>;
+            })()}
             {result.failed.length > 0 && (
               <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-white/5 text-left text-slate-500">
                       <th className="px-3 py-2 font-semibold">Row</th>
-                      <th className="px-3 py-2 font-semibold">Email</th>
+                      <th className="px-3 py-2 font-semibold">{result.type === "property" ? "Property" : "Email"}</th>
                       <th className="px-3 py-2 font-semibold">Reason</th>
                     </tr>
                   </thead>
@@ -230,6 +241,31 @@ export function ImportMenu({
                         <td className="px-3 py-2 text-slate-400">{f.row}</td>
                         <td className="px-3 py-2 text-slate-300">{f.email || "—"}</td>
                         <td className="px-3 py-2 text-red-400">{f.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {(result.warnings?.length ?? 0) > 0 && (
+              <div className="max-h-40 overflow-y-auto rounded-xl border border-amber-400/20">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/5 text-left text-slate-500">
+                      <th className="px-3 py-2 font-semibold">Row</th>
+                      <th className="px-3 py-2 font-semibold">{result.type === "property" ? "Property" : "Email"}</th>
+                      <th className="px-3 py-2 font-semibold">Imported, but check</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {result.warnings!.map((w, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-2 text-slate-400">{w.row}</td>
+                        <td className="px-3 py-2 text-slate-300">{w.email || "—"}</td>
+                        <td className="px-3 py-2 text-amber-300">
+                          <AlertTriangle className="mr-1 inline h-3 w-3" aria-hidden />
+                          {w.message}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -249,6 +285,14 @@ export function ImportMenu({
 /** What happened by email after an import (services/welcome.ts, lib/join-invite.ts). */
 function importNote(r: ImportResult): string {
   const parts: string[] = [];
+  if (r.type === "property") {
+    return r.created || r.updated
+      ? "Properties don't sign in and nobody was emailed. Residents join a property from their own import (its Property and Unit columns) or with “Assign to property” in the Directory."
+      : "Nothing was added or changed.";
+  }
+  if (r.type === "customer" && r.updated) {
+    parts.push(`${r.updated === 1 ? "One person was" : `${r.updated} people were`} already here, so only their property and unit were updated.`);
+  }
   if (r.type === "customer") {
     if (r.created) parts.push("New customers aren't emailed: they first hear from you when a job is booked.");
   } else if (r.welcoming) {

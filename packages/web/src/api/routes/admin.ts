@@ -11,8 +11,35 @@ import { z } from "zod";
 import { jsonBody, shortText, longText, email as emailField, phone as phoneField } from "../lib/validate";
 import type { AppEnv } from "../env";
 import { sendWelcome } from "../../services/welcome";
+import { tdb } from "../database/tenant";
 
 type SessionUser = { id: string; role?: string };
+
+/** What the Directory shows and edits for one person. */
+function clientRecord(u: typeof schema.user.$inferSelect & { role?: string | null }) {
+  return {
+    id: u.id,
+    name: u.name,
+    firstName: u.firstName ?? "",
+    lastName: u.lastName ?? "",
+    email: u.email,
+    role: u.role ?? "customer",
+    phone: u.phone,
+    altPhone: u.altPhone ?? "",
+    company: u.company ?? "",
+    website: u.website ?? "",
+    customerType: u.customerType ?? "",
+    address: u.address ?? "",
+    city: u.city ?? "",
+    region: u.region ?? "",
+    postalCode: u.postalCode ?? "",
+    country: u.country ?? "",
+    notes: u.notes ?? "",
+    addresses: safeParse(u.addresses, []),
+    contacts: safeParse(u.contacts, []),
+    createdAt: u.createdAt,
+  };
+}
 
 function safeParse<T>(v: unknown, fallback: T): T {
   if (typeof v !== "string" || !v) return fallback;
@@ -227,33 +254,17 @@ export const adminRoutes = new Hono<AppEnv>()
   .get("/users", requireAdmin, async (c) => {
     const cid = tenantId(c);
     const users = await usersForCompany(cid);
-    return c.json(
-      {
-        users: users.map((u) => ({
-          id: u.id,
-          name: u.name,
-          firstName: u.firstName ?? "",
-          lastName: u.lastName ?? "",
-          email: u.email,
-          role: u.role ?? "customer",
-          phone: u.phone,
-          altPhone: u.altPhone ?? "",
-          company: u.company ?? "",
-          website: u.website ?? "",
-          customerType: u.customerType ?? "",
-          address: u.address ?? "",
-          city: u.city ?? "",
-          region: u.region ?? "",
-          postalCode: u.postalCode ?? "",
-          country: u.country ?? "",
-          notes: u.notes ?? "",
-          addresses: safeParse(u.addresses, []),
-          contacts: safeParse(u.contacts, []),
-          createdAt: u.createdAt,
-        })),
-      },
-      200,
-    );
+    return c.json({ users: users.map(clientRecord) }, 200);
+  })
+  // One person's full record, for the Directory's drawer: the list itself
+  // (GET /directory) carries only what the table shows.
+  .get("/users/:id", requireAdmin, async (c) => {
+    const t = tdb(tenantId(c));
+    const id = c.req.param("id");
+    const m = await t.selectOne(schema.memberships, eq(schema.memberships.userId, id));
+    const u = m ? await t.selectOne(schema.user, eq(schema.user.id, id)) : undefined;
+    if (!m || !u) return c.json({ message: "Not found" }, 404);
+    return c.json({ user: clientRecord({ ...u, role: m.role ?? u.role }) }, 200);
   })
   // create a user account (admin) — clients or dispatchers
   .post("/users", requireAdmin, jsonBody(UserCreate), async (c) => {
