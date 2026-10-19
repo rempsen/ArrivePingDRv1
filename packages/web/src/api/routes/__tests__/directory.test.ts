@@ -55,7 +55,7 @@ const SAM = "dr-sam"; // office: a dispatcher
 const app = new Hono<AppEnv>().use("*", async (c, next) => {
   const role = c.req.header("X-Test-Role") || "admin";
   c.set("companyId", c.req.header("X-Test-Company") || CO);
-  c.set("user", { id: c.req.header("X-Test-User") || BOSS, role, email: "boss@dr.test", name: "Dana Boss" } as any);
+  c.set("user", { id: c.req.header("X-Test-User") || BOSS, role, email: "boss@dr.test", name: "Dana Boss", permissions: c.req.header("X-Test-Perms") || null } as any);
   return next();
 });
 app.route("/api/directory", directoryRoutes);
@@ -63,12 +63,13 @@ app.route("/api/import", importRoutes);
 app.route("/api/admin", adminRoutes);
 app.onError((e, c) => c.json({ message: e.message }, ((e as { status?: number }).status ?? 500) as 400));
 
-type Opts = { company?: string; role?: string; user?: string };
+type Opts = { company?: string; role?: string; user?: string; perms?: string[] };
 const headers = (o: Opts = {}) => ({
   "content-type": "application/json",
   "X-Test-Company": o.company ?? CO,
   "X-Test-Role": o.role ?? "admin",
   ...(o.user ? { "X-Test-User": o.user } : {}),
+  ...(o.perms ? { "X-Test-Perms": JSON.stringify(o.perms) } : {}),
 });
 const get = (path: string, o?: Opts) => app.request(path, { headers: headers(o) });
 const send = (method: string, path: string, body: unknown, o?: Opts) =>
@@ -284,6 +285,24 @@ describe("changing and removing a property", () => {
   });
 });
 
+describe("a property's open requests follow the job", () => {
+  it("a job linked to another named property counts there; a job at a unit's own address counts at the resident's property", async () => {
+    const oak = (await json(await send("POST", "/api/directory/properties", { name: "Spruce House" }))).id;
+    const before = Object.fromEntries((await json(await get("/api/directory/properties"))).properties.map((p: any) => [p.name, p.openJobs]));
+    // Zoe lives at Maple Court; this open job is at Spruce House.
+    await db.insert(schema.bookings).values({ id: "dr-j5", companyId: CO, customerId: "dr-zoe", serviceId: "dr-svc", title: "Visit", status: "pending", address: "9 Oak St", scheduledAt: new Date(), propertyId: oak } as any);
+    // A unit-level address row (no name): counts at Zoe's own property.
+    await db.insert(schema.properties).values({ id: "dr-unit-10", companyId: CO, addressNormalized: "12 maple st unit 10", addressDisplay: "12 Maple St Unit 10" } as any);
+    await db.insert(schema.bookings).values({ id: "dr-j6", companyId: CO, customerId: "dr-zoe", serviceId: "dr-svc", title: "Visit", status: "pending", address: "12 Maple St Unit 10", scheduledAt: new Date(), propertyId: "dr-unit-10" } as any);
+    const after = Object.fromEntries((await json(await get("/api/directory/properties"))).properties.map((p: any) => [p.name, p.openJobs]));
+    expect(after["Spruce House"]).toBe(before["Spruce House"] + 1);
+    expect(after["Maple Court"]).toBe(before["Maple Court"] + 1);
+    // The resident's own count has both.
+    const zoe = (await json(await get("/api/directory?q=zoe"))).rows[0];
+    expect(zoe.openJobs).toBe(3);
+  });
+});
+
 describe("who can do what", () => {
   it("field staff and customers can't open the Directory", async () => {
     expect((await get("/api/directory", { role: "rider", user: JORDAN })).status).toBe(403);
@@ -347,6 +366,18 @@ describe("import", () => {
     expect(body).toMatchObject({ created: 1, failedCount: 0 });
     const list = await json(await get("/api/directory?kind=customer&q=nia"));
     expect(list.rows[0]).toMatchObject({ name: "Nia Okafor", propertyName: "Cedar Lofts", unit: "8", managerName: "Jordan Patel" });
+  });
+
+  it("someone who can add clients but not edit them can't change existing ones through an import (Codex on #113)", async () => {
+    const createOnly = { role: "dispatcher", user: SAM, perms: ["clients:view", "clients:create"] };
+    const before = await membershipOf("dr-carl");
+    const people = await json(await upload("customer", ["Name,Email,Property,Unit", "Carl Diaz,carl@dr.test,Maple Court,99"].join("\n"), createOnly));
+    expect(people).toMatchObject({ updated: 0, failedCount: 1 });
+    expect(people.failed[0].reason).toContain("needs permission to edit clients");
+    expect(await membershipOf("dr-carl")).toMatchObject({ propertyId: before!.propertyId, unit: before!.unit });
+    const props = await json(await upload("property", ["Property Name,Notes", "Maple Court,Changed", "Larch House,New one"].join("\n"), createOnly));
+    expect(props).toMatchObject({ created: 1, updated: 0, failedCount: 1 });
+    expect(props.failed[0].reason).toContain("already a property called");
   });
 
   it("the property template downloads", async () => {

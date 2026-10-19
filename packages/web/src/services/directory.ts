@@ -64,23 +64,33 @@ export async function loadDirectory(companyId: string): Promise<{ rows: Director
     // Scoped `user` reads return home-company OR member rows (tenant.ts).
     t.select(schema.user),
     t.select(schema.properties, ne(schema.properties.name, "")),
+    // Per customer AND the property each job is linked to, so a property's
+    // open requests can follow the job (see openByProperty below).
     t.transaction((tx) =>
       tx
         .select({
           customerId: schema.bookings.customerId,
+          propertyId: schema.bookings.propertyId,
           open: sql<number>`count(*) filter (where ${inArray(schema.bookings.status, [...OPEN_STATUSES])})`.mapWith(Number),
           lastVisit: max(sql`case when ${schema.bookings.status} = 'completed' then coalesce(${schema.bookings.finishedAt}, ${schema.bookings.scheduledAt}) end`),
         })
         .from(schema.bookings)
         .where(t.scope(schema.bookings, isNull(schema.bookings.deletedAt)))
-        .groupBy(schema.bookings.customerId),
+        .groupBy(schema.bookings.customerId, schema.bookings.propertyId),
     ),
   ]);
 
   const userById = new Map(users.map((u) => [u.id, u]));
   const memberByUser = new Map(members.map((m) => [m.userId, m]));
   const propById = new Map(props.map((p) => [p.id, p]));
-  const statsByCustomer = new Map(jobStats.map((s) => [s.customerId, s]));
+  const statsByCustomer = new Map<string, { open: number; lastVisit: number | null }>();
+  for (const s of jobStats) {
+    const cur = statsByCustomer.get(s.customerId) ?? { open: 0, lastVisit: null };
+    cur.open += s.open;
+    const lv = s.lastVisit ? new Date(s.lastVisit as unknown as string | Date).getTime() : null;
+    if (lv !== null && (cur.lastVisit === null || lv > cur.lastVisit)) cur.lastVisit = lv;
+    statsByCustomer.set(s.customerId, cur);
+  }
 
   const managerName = (id: string | null | undefined) => {
     if (!id || !memberByUser.has(id)) return "";
@@ -89,7 +99,17 @@ export async function loadDirectory(companyId: string): Promise<{ rows: Director
 
   const managedCount = new Map<string, number>();
   const residentCount = new Map<string, number>();
+  // A property's open requests: jobs linked to it, plus its residents' jobs
+  // linked to no named property (a job at "120 Maple St #4B" is a unit-level
+  // address row). A job at another named property counts there instead.
   const openByProperty = new Map<string, number>();
+  for (const s of jobStats) {
+    if (!s.open) continue;
+    const linked = s.propertyId && propById.has(s.propertyId) ? s.propertyId : null;
+    const home = memberByUser.get(s.customerId);
+    const target = linked ?? (home && kindOfRole(home.role) === "customer" && home.propertyId && propById.has(home.propertyId) ? home.propertyId : null);
+    if (target) openByProperty.set(target, (openByProperty.get(target) ?? 0) + s.open);
+  }
 
   const rows: DirectoryRow[] = [];
   for (const m of members) {
@@ -99,11 +119,7 @@ export async function loadDirectory(companyId: string): Promise<{ rows: Director
     const prop = kind === "customer" && m.propertyId ? propById.get(m.propertyId) : undefined;
     const stats = statsByCustomer.get(u.id);
     const mgrId = prop?.managerId && memberByUser.has(prop.managerId) ? prop.managerId : null;
-    if (prop) {
-      residentCount.set(prop.id, (residentCount.get(prop.id) ?? 0) + 1);
-      openByProperty.set(prop.id, (openByProperty.get(prop.id) ?? 0) + (stats?.open ?? 0));
-    }
-    const last = stats?.lastVisit as unknown;
+    if (prop) residentCount.set(prop.id, (residentCount.get(prop.id) ?? 0) + 1);
     rows.push({
       id: u.id,
       name: u.name ?? "",
@@ -125,7 +141,7 @@ export async function loadDirectory(companyId: string): Promise<{ rows: Director
       company: u.company ?? "",
       createdAt: iso(u.createdAt),
       openJobs: kind === "customer" ? (stats?.open ?? 0) : 0,
-      lastVisitAt: kind === "customer" && last ? new Date(last as string | Date).toISOString() : null,
+      lastVisitAt: kind === "customer" && stats?.lastVisit != null ? new Date(stats.lastVisit).toISOString() : null,
     });
   }
   for (const p of props) if (p.managerId) managedCount.set(p.managerId, (managedCount.get(p.managerId) ?? 0) + 1);

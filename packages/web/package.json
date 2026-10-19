@@ -13,6 +13,7 @@
     "seo:check:live": "bun run tools/seo-check.ts --live",
     "analytics:dashboard": "bun run tools/analytics-dashboard.ts",
     "ask:eval": "bun run tools/guide-ask-eval.ts",
+    "directory-ask:eval": "bun run tools/directory-ask-eval.ts",
     "dev": "vite --host",
     "start": "bun src/server.ts",
     "lint": "cd ../.. && oxlint packages/web --deny-warnings --no-error-on-unmatched-pattern",
