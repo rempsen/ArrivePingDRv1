@@ -68,8 +68,9 @@ export function NotificationTestDialog({
   });
 
   const phoneMissing = wantsSms && !phone.trim();
-  const emailMissing = wantsEmail && !email.trim();
-  const canSend = !nothing && !(phoneMissing && emailMissing) && !send.isPending;
+  // At least one place the event's messages can go: a phone for its texts or an email for its emails.
+  const hasDestination = (wantsSms && !!phone.trim()) || (wantsEmail && !!email.trim());
+  const canSend = !nothing && hasDestination && !send.isPending;
   const results = send.data?.results;
 
   return (
