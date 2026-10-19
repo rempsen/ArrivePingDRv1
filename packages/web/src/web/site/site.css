@@ -2851,7 +2851,9 @@
   .site .help-cats {
     grid-template-columns: minmax(0, 1fr);
   }
-  .site .help-cats > li:last-child {
+  /* :nth-child(n) only matches the span rules' specificity so this later
+     rule wins; it changes nothing else. */
+  .site .help-cats > li:last-child:nth-child(n) {
     grid-column: auto;
   }
   .site .help-search input {
