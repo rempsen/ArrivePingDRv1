@@ -71,7 +71,7 @@ const TeamCreate = z.object({
   password: z.string({ message: "Password is required" }).min(8, "Password must be at least 8 characters").max(200, "Password is too long"),
   phone: phoneField.optional(),
   role: roleField,
-  staffType: staffTypeField.optional(),
+  staffType: staffTypeField.nullish(),
   managerId: idField("Manager").nullish(),
   // rider-profile fields, only read when role === "rider"
   vehicle: optText(120),
@@ -90,7 +90,8 @@ const TeamPatch = z
     email: emailField().optional(),
     phone: phoneField.optional(),
     role: roleField.optional(),
-    staffType: staffTypeField.optional(),
+    // null = non-field-staff roles carry no staff type (the edit form sends it back as-is)
+    staffType: staffTypeField.nullish(),
     // "" and null both mean "clear the manager"
     managerId: z.union([idField("Manager"), z.literal(""), z.null()]).optional(),
   })
