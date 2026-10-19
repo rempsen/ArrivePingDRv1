@@ -2318,12 +2318,21 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
   border-radius: 16px;
   overflow: hidden;
+}
+/* The hairline grid shows through any empty cell, so a last row that isn't
+   full would end in a bare band. Stretch the final tile over the leftover
+   cells instead, whatever the count. */
+.site .help-cats > li:last-child:nth-child(3n + 1) {
+  grid-column: span 3;
+}
+.site .help-cats > li:last-child:nth-child(3n + 2) {
+  grid-column: span 2;
 }
 .site .help-cat {
   display: flex;
@@ -2814,6 +2823,13 @@
   .site .help-cats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .site .help-cats > li:last-child:nth-child(3n + 1),
+  .site .help-cats > li:last-child:nth-child(3n + 2) {
+    grid-column: auto;
+  }
+  .site .help-cats > li:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
   .site .help__split,
   .site .help-group,
   .site .help-article__grid {
@@ -2834,6 +2850,11 @@
 @media (max-width: 639px) {
   .site .help-cats {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* :nth-child(n) only matches the span rules' specificity so this later
+     rule wins; it changes nothing else. */
+  .site .help-cats > li:last-child:nth-child(n) {
+    grid-column: auto;
   }
   .site .help-search input {
     height: 52px;
