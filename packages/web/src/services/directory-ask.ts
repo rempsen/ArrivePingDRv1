@@ -25,6 +25,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { consumeBudget } from "../api/lib/rate-limit";
 import { log } from "../api/lib/logger";
 import { OPEN_STATUSES } from "../shared/job-status";
+import { namedDayBounds, safeTimeZone, zonedDayKey } from "../shared/tz";
 import { applyDirectoryQuery, type DirectoryResult, type DirectoryRow } from "../shared/directory-query";
 import {
   AskInterpretation,
@@ -119,14 +120,16 @@ export interface AskOutcome {
 export async function customersWithJobs(
   companyId: string,
   f: Pick<DirectoryFilter, "jobText" | "jobOpenOnly" | "jobAfter" | "jobBefore">,
+  tz: string,
 ): Promise<Set<string>> {
   const t = tdb(companyId);
   const b = schema.bookings;
   const where = [isNull(b.deletedAt)];
   if (f.jobText) where.push(ilike(b.title, `%${f.jobText.replace(/[\\%_]/g, (m) => `\\${m}`)}%`));
   if (f.jobOpenOnly) where.push(inArray(b.status, [...OPEN_STATUSES]));
-  if (f.jobAfter) where.push(gte(b.scheduledAt, new Date(`${f.jobAfter}T00:00:00.000Z`)));
-  if (f.jobBefore) where.push(lt(b.scheduledAt, new Date(`${f.jobBefore}T00:00:00.000Z`)));
+  // Days start at midnight in the company's zone.
+  if (f.jobAfter) where.push(gte(b.scheduledAt, namedDayBounds(f.jobAfter, tz).start));
+  if (f.jobBefore) where.push(lt(b.scheduledAt, namedDayBounds(f.jobBefore, tz).start));
   const rows = await t.transaction((tx) =>
     tx.selectDistinct({ customerId: b.customerId }).from(b).where(t.scope(b, and(...where))),
   );
@@ -138,11 +141,12 @@ export async function runDirectoryFilter(
   companyId: string,
   filter: DirectoryFilter,
   page: { page?: number; pageSize?: number; withIds?: boolean },
+  tz: string,
   loaded?: { rows: DirectoryRow[] },
 ): Promise<DirectoryResult> {
   const { rows } = loaded ?? (await loadDirectory(companyId));
-  const jobs = needsJobs(filter) ? await customersWithJobs(companyId, filter) : null;
-  const test = filterPredicate(filter, jobs);
+  const jobs = needsJobs(filter) ? await customersWithJobs(companyId, filter, tz) : null;
+  const test = filterPredicate(filter, jobs, tz);
   const ids = rows.filter(test).map((r) => r.id);
   return applyDirectoryQuery(rows, {
     kind: filter.kind,
@@ -157,17 +161,21 @@ export async function runDirectoryFilter(
   });
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
-/** The company's own words for its people, for the prompt and the chips. */
-export async function companyNouns(companyId: string): Promise<AskNouns> {
+/**
+ * The company's own words for its people (prompt and chips) and its time
+ * zone: "today" and every day boundary are its calendar, not the server's UTC.
+ */
+export async function companyAskContext(companyId: string): Promise<{ nouns: AskNouns; tz: string }> {
   const s = await tdb(companyId).selectOne(schema.companySettings);
   const clean = (v: string | null | undefined, d: string) => (v && /^[A-Za-z][A-Za-z '-]{0,29}$/.test(v.trim()) ? v.trim() : d);
   return {
-    customer: clean(s?.customerNoun, "Customer"),
-    customers: clean(s?.customerNounPlural, "Customers"),
-    worker: clean(s?.workerNoun, "Technician"),
-    workers: clean(s?.workerNounPlural, "Technicians"),
+    nouns: {
+      customer: clean(s?.customerNoun, "Customer"),
+      customers: clean(s?.customerNounPlural, "Customers"),
+      worker: clean(s?.workerNoun, "Technician"),
+      workers: clean(s?.workerNounPlural, "Technicians"),
+    },
+    tz: safeTimeZone(s?.timezone),
   };
 }
 
@@ -194,7 +202,7 @@ export async function modelInterpretation(
     model: modelOverride ?? gateway(MODELS.small),
     schema: AskInterpretation,
     system: systemPrompt(ctx.nouns),
-    prompt: userPrompt(question, ctx.today ?? todayIso(), ctx.properties, ctx.staff),
+    prompt: userPrompt(question, ctx.today ?? new Date().toISOString().slice(0, 10), ctx.properties, ctx.staff),
     temperature: 0,
     maxOutputTokens: 700,
     maxRetries: 1,
@@ -205,7 +213,7 @@ export async function modelInterpretation(
 
 async function interpret(
   question: string,
-  ctx: { companyId: string; userId: string; nouns: AskNouns; properties: PropertyItem[]; staff: DirectoryRow[]; abortSignal?: AbortSignal },
+  ctx: { companyId: string; userId: string; nouns: AskNouns; today: string; properties: PropertyItem[]; staff: DirectoryRow[]; abortSignal?: AbortSignal },
 ): Promise<{ interpretation: AskInterpretation; usedAI: boolean; note?: string }> {
   const named = ctx.properties.map((p) => ({ id: p.id, name: p.name }));
   const team = ctx.staff.map((s) => ({ id: s.id, name: s.name }));
@@ -227,22 +235,23 @@ async function interpret(
 export async function askDirectory(
   companyId: string,
   question: string,
-  opts: { userId: string; nouns: AskNouns; page?: number; pageSize?: number; abortSignal?: AbortSignal },
+  opts: { userId: string; nouns: AskNouns; tz: string; page?: number; pageSize?: number; abortSignal?: AbortSignal },
 ): Promise<AskOutcome> {
   const loaded = await loadDirectory(companyId);
   const staff = loaded.rows.filter((r) => r.kind !== "customer");
-  const { interpretation, usedAI, note } = await interpret(question, { companyId, userId: opts.userId, nouns: opts.nouns, properties: loaded.properties, staff, abortSignal: opts.abortSignal });
+  const today = zonedDayKey(new Date(), opts.tz);
+  const { interpretation, usedAI, note } = await interpret(question, { companyId, userId: opts.userId, nouns: opts.nouns, today, properties: loaded.properties, staff, abortSignal: opts.abortSignal });
   const named = loaded.properties.map((p) => ({ id: p.id, name: p.name }));
   const team = staff.map((s) => ({ id: s.id, name: s.name }));
   const { filter, notes } = resolveInterpretation(interpretation, named, team);
   if (note) notes.unshift(note);
   const page = { page: opts.page, pageSize: opts.pageSize };
-  let result = await runDirectoryFilter(companyId, filter, page, loaded);
+  let result = await runDirectoryFilter(companyId, filter, page, opts.tz, loaded);
   let used = filter;
   // Words that matched nobody, alongside filters that did: try without the words.
   if (result.total === 0 && filter.keywords && hasStructure(filter)) {
     const looser = { ...filter, keywords: "" };
-    const retry = await runDirectoryFilter(companyId, looser, page, loaded);
+    const retry = await runDirectoryFilter(companyId, looser, page, opts.tz, loaded);
     if (retry.total > 0) {
       notes.push(`Nobody matched “${filter.keywords}” as well, so those words were left out.`);
       result = retry;

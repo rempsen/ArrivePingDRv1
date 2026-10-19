@@ -15,6 +15,7 @@
 import { z } from "zod";
 import { NONE, type DirectoryRow } from "./directory-query";
 import { isUndeliverableEmail } from "./sample-contact";
+import { namedDayBounds } from "./tz";
 
 const KINDS = ["all", "customer", "field", "office"] as const;
 const SORTS = ["name", "property", "unit", "manager", "email", "phone", "role", "joined", "openJobs", "lastVisit"] as const;
@@ -263,13 +264,14 @@ export function needsJobs(f: DirectoryFilter): boolean {
   return !!(f.jobText || f.jobAfter || f.jobBefore);
 }
 
-const dayStart = (d: string) => Date.parse(`${d}T00:00:00.000Z`);
-
 /**
  * The filter as a row test (keywords and kind are left to applyDirectoryQuery).
  * `jobCustomers`: who has a matching work order, when the filter asks about jobs.
+ * `tz`: the company's time zone, so "before March 1" starts at midnight
+ * there, not in UTC (a Winnipeg evening visit is the same local day).
  */
-export function filterPredicate(f: DirectoryFilter, jobCustomers: Set<string> | null): (r: DirectoryRow) => boolean {
+export function filterPredicate(f: DirectoryFilter, jobCustomers: Set<string> | null, tz = "UTC"): (r: DirectoryRow) => boolean {
+  const dayStart = (d: string) => namedDayBounds(d, tz).start.getTime();
   const props = new Set(f.propertyIds);
   const mgrs = new Set(f.managerIds);
   const units = new Set(f.units.map((u) => norm(u)));

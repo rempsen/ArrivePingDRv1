@@ -38,7 +38,7 @@ import {
 } from "../../services/directory";
 import type { AppEnv } from "../env";
 import { ASK_LIMITS, DirectoryFilter } from "../../shared/directory-ask";
-import { askDirectory, chipsForFilter, companyNouns, directoryAskAvailable, runDirectoryFilter } from "../../services/directory-ask";
+import { askDirectory, chipsForFilter, companyAskContext, directoryAskAvailable, runDirectoryFilter } from "../../services/directory-ask";
 
 type SessionUser = { id: string; name?: string };
 
@@ -152,16 +152,16 @@ export const directoryRoutes = new Hono<AppEnv>()
     const cid = tenantId(c);
     const me = c.get("user") as SessionUser;
     const body = c.req.valid("json");
-    const nouns = await companyNouns(cid);
+    const { nouns, tz } = await companyAskContext(cid);
     if (body.question) {
-      const out = await askDirectory(cid, body.question, { userId: me.id, nouns, page: body.page, pageSize: body.pageSize, abortSignal: c.req.raw.signal });
+      const out = await askDirectory(cid, body.question, { userId: me.id, nouns, tz, page: body.page, pageSize: body.pageSize, abortSignal: c.req.raw.signal });
       return c.json(
         { ...out.result, ask: { question: body.question, filter: out.filter, chips: out.chips, summary: out.summary, notes: out.notes, usedAI: out.usedAI } },
         200,
       );
     }
     const filter = body.filter!;
-    const result = await runDirectoryFilter(cid, filter, { page: body.page, pageSize: body.pageSize, withIds: body.withIds });
+    const result = await runDirectoryFilter(cid, filter, { page: body.page, pageSize: body.pageSize, withIds: body.withIds }, tz);
     const chips = await chipsForFilter(cid, filter, nouns);
     return c.json({ ...result, ask: { question: "", filter, chips, summary: "", notes: [] as string[], usedAI: false } }, 200);
   })

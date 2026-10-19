@@ -145,6 +145,14 @@ describe("the filter on rows", () => {
     expect(pick(filter({ lastVisitAfter: "2026-01-01" }))).toEqual(["zoe"]);
   });
 
+  it("days start at midnight in the company's zone (Codex on #116)", () => {
+    // 9 pm Dec 31 in Winnipeg is already Jan 1 in UTC.
+    const late = row({ id: "late", lastVisitAt: "2026-01-01T03:00:00.000Z" });
+    const before = filter({ lastVisitBefore: "2026-01-01" });
+    expect(filterPredicate(before, null, "America/Winnipeg")(late)).toBe(true);
+    expect(filterPredicate(before, null, "UTC")(late)).toBe(false);
+  });
+
   it("joined, status, and who had a matching work order", () => {
     expect(pick(filter({ joinedAfter: "2026-01-01" }))).toEqual(["ben"]);
     expect(pick(filter({ status: "invited" }))).toEqual(["ben"]);

@@ -27,6 +27,7 @@ const schema = await import("../../database/schema");
 const { directoryRoutes } = await import("../directory");
 const { setDirectoryAskModelForTests } = await import("../../../services/directory-ask");
 const { emptyInterpretation } = await import("../../../shared/directory-ask");
+const { zonedDayKey } = await import("../../../shared/tz");
 
 function colDdl(col: PgColumn, withPk: boolean): string {
   const parts = [`"${col.name}"`, col.getSQLType()];
@@ -111,6 +112,8 @@ beforeAll(async () => {
   await db.insert(schema.bookings).values([
     { id: "da-j1", companyId: CO, customerId: "da-zoe", serviceId: "da-svc", title: "Leaky faucet", status: "confirmed", address: "12 Maple St", scheduledAt: new Date("2026-10-20T15:00:00Z") } as any,
     { id: "da-j2", companyId: CO, customerId: "da-amy", serviceId: "da-svc", title: "Furnace not igniting", status: "completed", address: "400 Birch Ave", scheduledAt: new Date("2026-01-15T15:00:00Z"), finishedAt: new Date("2026-01-15T17:00:00Z") } as any,
+    // 9 pm Feb 28 in Winnipeg (the company's zone), Mar 1 in UTC.
+    { id: "da-j4", companyId: CO, customerId: "da-amy", serviceId: "da-svc", title: "Late call", status: "completed", address: "400 Birch Ave", scheduledAt: new Date("2026-03-01T03:00:00Z") } as any,
     { id: "da-j3", companyId: CO, customerId: "da-ben", serviceId: "da-svc", title: "Leak under sink", status: "completed", address: "12 Maple St", scheduledAt: new Date("2025-12-01T15:00:00Z"), finishedAt: new Date("2025-12-01T16:00:00Z") } as any,
   ]);
 });
@@ -140,6 +143,14 @@ describe("asking with the AI", () => {
     expect((await json(await ask({ question: "who had a leak?" }))).rows.map((r: any) => r.id).sort()).toEqual(["da-ben", "da-zoe"]);
     setDirectoryAskModelForTests(answering({ kind: "customer", lastVisitBefore: "2026-01-01" }));
     expect((await json(await ask({ question: "residents not visited this year" }))).rows.map((r: any) => r.id)).toEqual(["da-ben"]);
+  });
+
+  it("“today” and day boundaries are the company's calendar, not UTC (Codex on #116)", async () => {
+    const model = answering({ kind: "customer", jobAfter: "2026-02-28", jobBefore: "2026-03-01" });
+    setDirectoryAskModelForTests(model);
+    const body = await json(await ask({ question: "who had a job on February 28?" }));
+    expect(body.rows.map((r: any) => r.id)).toEqual(["da-amy"]);
+    expect(JSON.stringify(model.doGenerateCalls[0]!.prompt)).toContain(`TODAY: ${zonedDayKey(new Date(), "America/Winnipeg")}`);
   });
 
   it("a manager's residents, sorted by unit, with no email on file", async () => {

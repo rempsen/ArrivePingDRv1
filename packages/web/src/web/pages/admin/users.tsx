@@ -262,15 +262,20 @@ export default function AdminClients() {
     const question = qInput.trim();
     if (question.length >= 2 && !runAsk.isPending) runAsk.mutate(question);
   };
-  const clearAsk = () => {
+  // Leaving an answer puts back the viewer's own order and grouping, so the
+  // answer's never becomes their saved view (the save effect runs on exit).
+  const exitAsk = () => {
     setAsk(null);
     setAskErr("");
-    setQInput("");
-    setQ("");
     const v = loadView();
     setSort(v.sort ?? "name");
     setDir(v.dir ?? "asc");
     setGroupBy(v.groupBy ?? "none");
+  };
+  const clearAsk = () => {
+    exitAsk();
+    setQInput("");
+    setQ("");
   };
 
   const create = useMutation({
@@ -594,7 +599,7 @@ export default function AdminClients() {
                 onChange={(e) => {
                   setQInput(e.target.value);
                   // Editing the question goes back to searching as you type.
-                  if (ask) setAsk(null);
+                  if (ask) exitAsk();
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Escape" && (ask || qInput)) clearAsk();
