@@ -11,6 +11,7 @@ import { asTenantKind, FEATURES, type FeatureKey, type TenantKind } from "../sha
 import { asPlanId, PLANS } from "../shared/plans";
 import { HUB_SETTINGS } from "../shared/hub-settings";
 import { getIndustryPreset } from "./industry-presets";
+import { resolveLogoPlate } from "./logo-contrast";
 import { getTenantFeatures, allOverrides } from "./features";
 import { tenants as analyticsTenants, headline, type Health, type TenantRow } from "./platform-analytics";
 
@@ -252,7 +253,17 @@ export async function hubTenantDetail(companyId: string) {
     listHubTenants(),
   ]);
   const summary = list.find((t) => t.id === companyId) ?? null;
+  // Setup check: does the logo read on the plate it will be shown on? Staff
+  // see the file on the chosen backing and can re-run or override the call.
+  const logoRow = settingsRow as { logo?: string; logoPlate?: string; logoPlateAuto?: string; logoPlateFor?: string; brandColor?: string } | undefined;
+  const logoCheck = {
+    ...resolveLogoPlate({ logo: logoRow?.logo ?? "", logoPlate: logoRow?.logoPlate ?? "auto", logoPlateAuto: logoRow?.logoPlateAuto ?? "", logoPlateFor: logoRow?.logoPlateFor ?? "" }),
+    logo: logoRow?.logo ?? "",
+    brandColor: logoRow?.brandColor ?? "",
+    name: co.name,
+  };
   return {
+    logoCheck,
     company: {
       id: co.id,
       name: co.name,

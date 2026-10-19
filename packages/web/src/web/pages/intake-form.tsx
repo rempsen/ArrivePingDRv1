@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PublicLogo } from "../components/brand";
 import { useRoute } from "wouter";
 import { AddressAutocomplete } from "../components/address-autocomplete";
 import WorkOrderForm from "./work-order-form";
@@ -327,7 +328,7 @@ export default function IntakeForm() {
         {/* header */}
         <div className="mb-6 text-center">
           {cfg.logoUrl && !logoErr
-            ? <img src={cfg.logoUrl} alt="" className="mx-auto mb-3 max-h-12" onError={() => setLogoErr(true)} />
+            ? <div className="mb-3 flex justify-center"><PublicLogo src={cfg.logoUrl} className="max-h-12" onBroken={() => setLogoErr(true)} /></div>
             : <div className="mx-auto mb-2 text-lg font-extrabold tracking-tight" style={{ color: brand }}>{cfg.companyName}</div>}
           <h1 className="text-2xl font-bold text-slate-800">{cfg.title}</h1>
           {cfg.intro && <p className="mt-2 text-sm text-slate-500">{cfg.intro}</p>}

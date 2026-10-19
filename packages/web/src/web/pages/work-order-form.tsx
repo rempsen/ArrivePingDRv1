@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PublicLogo } from "../components/brand";
 import { AddressAutocomplete } from "../components/address-autocomplete";
 import {
   buildLineItem, buildUnitLineItem, sumLineItems, normalizeCatalogItem,
@@ -95,7 +96,7 @@ export default function WorkOrderForm({ companyId, slug, cfg, services }: { comp
       <div className="min-h-screen bg-slate-50 px-4 py-12 grid place-items-center">
         <div className="w-full max-w-sm rounded-2xl bg-white p-7 shadow-sm ring-1 ring-slate-200">
           <div className="mb-5 text-center">
-            {cfg.logoUrl ? <img src={cfg.logoUrl} alt="" className="mx-auto mb-3 max-h-12" /> : (
+            {cfg.logoUrl ? <div className="mb-3 flex justify-center"><PublicLogo src={cfg.logoUrl} className="max-h-12" /></div> : (
               <div className="mx-auto mb-2 text-lg font-extrabold tracking-tight" style={{ color: brand }}>{cfg.companyName}</div>
             )}
             <h1 className="text-xl font-bold text-slate-800">{cfg.title}</h1>
@@ -391,7 +392,7 @@ function WorkOrderBuilder({ companyId, slug, cfg, services, brand, publicKey }: 
     <div className="min-h-screen bg-slate-50 px-4 py-8 sm:py-12">
       <div className="mx-auto w-full max-w-2xl">
         <div className="mb-6 text-center">
-          {cfg.logoUrl ? <img src={cfg.logoUrl} alt="" className="mx-auto mb-3 max-h-12" /> : (
+          {cfg.logoUrl ? <div className="mb-3 flex justify-center"><PublicLogo src={cfg.logoUrl} className="max-h-12" /></div> : (
             <div className="mx-auto mb-2 text-lg font-extrabold tracking-tight" style={{ color: brand }}>{cfg.companyName}</div>
           )}
           <h1 className="text-2xl font-bold text-slate-800">{cfg.title}</h1>

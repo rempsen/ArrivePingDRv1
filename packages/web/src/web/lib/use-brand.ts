@@ -24,6 +24,8 @@ export interface TenantBrand {
   brandColor: string;
   accentColor: string;
   logo: string;
+  /** Backing the logo needs: light, dark, or auto (browser decides). */
+  logoPlate: "light" | "dark" | "auto";
   name: string;
   tagline: string;
   industry: string; // Primary Industry (ICP) preset id, e.g. "hvac", or "other"
@@ -49,6 +51,7 @@ const DEFAULTS: TenantBrand = {
   brandColor: "#06B6D4",
   accentColor: "#0e7490",
   logo: "",
+  logoPlate: "auto",
   name: "ArrivePing",
   tagline: "",
   industry: "",
@@ -81,6 +84,7 @@ export function useBrand(): TenantBrand {
     brandColor: str(s.brandColor, DEFAULTS.brandColor),
     accentColor: str(s.accentColor, DEFAULTS.accentColor),
     logo: str(s.logo, DEFAULTS.logo),
+    logoPlate: s.logoPlateEffective === "light" || s.logoPlateEffective === "dark" ? s.logoPlateEffective : "auto",
     name: str(s.name, DEFAULTS.name),
     tagline: str(s.tagline, DEFAULTS.tagline),
     industry: str(s.industry, DEFAULTS.industry),
