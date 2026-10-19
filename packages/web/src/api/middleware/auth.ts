@@ -13,6 +13,8 @@ import {
 } from "../lib/permissions";
 import { tdb } from "../database/tenant";
 import { STAFF_OFFICE_ROLES, permissionFor } from "../lib/office-access";
+import { platformRoleOf, atLeast, type PlatformRole } from "../../services/platform-staff";
+import { noteTenantVisit } from "../../services/platform-audit";
 
 /** Load all role defaults from DB (falling back to seed). Cached briefly. */
 let _roleCache: { at: number; map: Record<string, string[]> } | null = null;
@@ -63,19 +65,39 @@ export function requirePermission(required: string) {
  * company that actually exists — bogus / probing X-Company-Id values are
  * ignored (we fall back to the user's home company).
  */
-let _companyCache: { at: number; ids: Set<string> } | null = null;
-export async function loadCompanyIds(): Promise<Set<string>> {
-  if (_companyCache && Date.now() - _companyCache.at < 10_000)
-    return _companyCache.ids;
+let _companyCache: { at: number; ids: Set<string>; dir: Map<string, { name: string; kind: string }> } | null = null;
+async function loadCompanyDirectory() {
+  if (_companyCache && Date.now() - _companyCache.at < 10_000) return _companyCache;
   const ids = new Set<string>(["default"]);
+  const dir = new Map<string, { name: string; kind: string }>([["default", { name: "ArrivePing", kind: "internal" }]]);
   try {
-    const rows = await db.select().from(schema.companies);
-    for (const r of rows) ids.add(r.id);
+    const rows = await db.select({ id: schema.companies.id, name: schema.companies.name, kind: schema.companies.kind }).from(schema.companies);
+    for (const r of rows) {
+      ids.add(r.id);
+      dir.set(r.id, { name: r.name, kind: r.id === "default" ? "internal" : (r.kind ?? "customer") });
+    }
   } catch {
     /* table may not exist yet */
   }
-  _companyCache = { at: Date.now(), ids };
-  return ids;
+  _companyCache = { at: Date.now(), ids, dir };
+  return _companyCache;
+}
+export async function loadCompanyIds(): Promise<Set<string>> {
+  return (await loadCompanyDirectory()).ids;
+}
+/** Name and kind (customer, demo, test, internal) of a tenant, from the cached registry. */
+export async function companyInfo(id: string): Promise<{ name: string; kind: string } | undefined> {
+  return (await loadCompanyDirectory()).dir.get(id);
+}
+/**
+ * May someone with this Control Hub role open this tenant? Sales stay in demo,
+ * test and the platform's own tenants; staff and owners may open any.
+ */
+export async function platformMayOpen(role: PlatformRole | null | undefined, companyId: string): Promise<boolean> {
+  if (!role) return false;
+  if (atLeast(role, "staff")) return true;
+  const info = await companyInfo(companyId);
+  return Boolean(info) && info!.kind !== "customer";
 }
 export function invalidateCompanyCache() {
   _companyCache = null;
@@ -136,7 +158,9 @@ export async function loadMemberships(userId: string): Promise<
 
 export const authMiddleware = createMiddleware(async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  const u = session?.user ?? null;
+  let u = session?.user ?? null;
+  c.set("platformRole", null);
+  c.set("actAs", null);
   c.set("session", session?.session ?? null);
 
   if (!u) {
@@ -180,7 +204,22 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   const requested = (
     c.req.header("X-Company-Id") || c.req.header("x-company-id") || ""
   ).trim();
-  const baseRole = (u as { role?: string }).role;
+  let baseRole = (u as { role?: string }).role;
+
+  // ---- Control Hub staff ---------------------------------------------------
+  // Super admin needs an NVC360 email AND a place on the Control Hub staff
+  // list (services/platform-staff.ts). Someone taken off the list keeps an
+  // admin role at their own company and loses every cross-tenant power,
+  // because every check below and in the routes reads this overlaid role.
+  let platformRole: PlatformRole | null = null;
+  if (isSuperadmin(baseRole)) {
+    platformRole = await platformRoleOf(u as { id: string; email?: string; role?: string });
+    if (!platformRole) {
+      u = { ...(u as Record<string, unknown>), role: "admin" } as unknown as typeof u;
+      baseRole = "admin";
+    }
+  }
+  c.set("platformRole", platformRole);
 
   let companyId = homeCompany;
   if (requested) {
@@ -190,7 +229,9 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     // header. Unauthorised values are ignored, never honoured.
     if (isSuperadmin(baseRole)) {
       const allowed = await loadCompanyIds();
-      if (allowed.has(requested)) companyId = requested;
+      // Sales staff only open demo, test and our own tenants; a customer's
+      // id in the header is ignored for them, like any unauthorised value.
+      if (allowed.has(requested) && (await platformMayOpen(platformRole, requested))) companyId = requested;
     } else if (memberships.some((m) => m.companyId === requested)) {
       companyId = requested;
     }
@@ -253,6 +294,13 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   c.set("companyId", companyId);
+
+  // Platform staff opening another tenant is part of the Control Hub's
+  // audit trail (once per person and tenant every 30 minutes).
+  if (platformRole && companyId !== homeCompany) {
+    const info = await companyInfo(companyId);
+    noteTenantVisit({ id: userId, name: (u as { name?: string }).name ?? "" }, companyId, info?.name);
+  }
 
   // A closed (or suspended) company is sealed for everyone but a superadmin:
   // the tenant closed its own account from Settings → Billing, or we
@@ -364,14 +412,34 @@ export const requireOffice = createMiddleware(async (c, next) => {
 /** The office guard under its historic name; see requireOffice. */
 export const requireAdmin = requireOffice;
 
-/** Top-tier guard: only `superadmin` passes. Used for admin-management routes. */
+/**
+ * Top-tier guard: only `superadmin` passes, and not Control Hub sales staff
+ * (they get demo and leads tools only, through requirePlatform("sales")).
+ */
 export const requireSuperadmin = createMiddleware(async (c, next) => {
   const user = c.get("user");
   if (!user) return c.json({ message: "Unauthorized" }, 401);
   if (!isSuperadmin((user as { role?: string }).role))
     return c.json({ message: "Forbidden" }, 403);
+  if (c.get("platformRole") === "sales") return c.json({ message: "Forbidden" }, 403);
   return next();
 });
+
+/**
+ * Control Hub guard: platform staff with at least this role (sales < staff <
+ * owner). Act-as never reaches the hub: while acting as someone, the request
+ * is that person.
+ */
+export function requirePlatform(min: PlatformRole) {
+  return createMiddleware(async (c, next) => {
+    const user = c.get("user");
+    if (!user) return c.json({ message: "Unauthorized" }, 401);
+    if (c.get("actAs")) return c.json({ message: "Leave act-as to use the Control Hub." }, 403);
+    if (!isSuperadmin((user as { role?: string }).role) || !atLeast(c.get("platformRole") ?? null, min))
+      return c.json({ message: "Forbidden" }, 403);
+    return next();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // API-key auth (for external agents / MCP / scripts)

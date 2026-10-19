@@ -31,6 +31,14 @@ export type Variables = {
     managerId: string | null;
   }[];
   apiKey?: { id: string; label: string; scopes: string[] };
+  /** Control Hub role of the signed-in person (services/platform-staff.ts); null = not platform staff. */
+  platformRole?: "owner" | "staff" | "sales" | null;
+  /**
+   * Set while a platform staff member is signed in as one of a tenant's
+   * people (Control Hub act-as). `user` is then the person being acted as;
+   * this is the staff member behind it.
+   */
+  actAs?: { sessionId: string; actorId: string; actorName: string; targetUserId: string; targetName: string; companyId: string; reason: string; expiresAt: string } | null;
   requestId: string;
   log: ReturnType<typeof requestLogger>;
 };

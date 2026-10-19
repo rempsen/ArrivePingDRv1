@@ -232,7 +232,9 @@ export const meRoutes = new Hono<AppEnv>()
     // A superadmin is a platform-level operator: they can act as ANY tenant,
     // not just the ones they're a member of.
     if (isSuperadmin(me.role)) {
-      const all = await db.select().from(schema.companies);
+      // Control Hub sales staff only see demo, test and our own tenants.
+      const sales = c.get("platformRole") === "sales";
+      const all = (await db.select().from(schema.companies)).filter((co) => !sales || co.id === "default" || co.kind !== "customer");
       return c.json({
         activeCompanyId: active,
         superadmin: true,
