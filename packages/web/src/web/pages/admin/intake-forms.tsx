@@ -665,17 +665,19 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
                   <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Main fields</div>
                 )}
 
-                <div className="space-y-2">
+                {/* Two-column grid so half-width fields sit side by side, as on the live form. */}
+                <div className="grid gap-2 sm:grid-cols-2">
                   {items.map((f) => (
                     <FieldRow
                       key={f.id} f={f} sections={sections}
+                      noEntries={(form?.submitCount ?? 0) === 0}
                       onPatch={(p) => patchField(f.id, p)}
                       onRemove={() => removeField(f.id)}
                       onMoveUp={() => moveField(f.id, -1)}
                       onMoveDown={() => moveField(f.id, 1)}
                     />
                   ))}
-                  {items.length === 0 && <div className="px-1 py-2 text-xs text-slate-500">No fields here yet.</div>}
+                  {items.length === 0 && <div className="px-1 py-2 sm:col-span-2 text-xs text-slate-500">No fields here yet.</div>}
                 </div>
 
                 <button type="button" onClick={() => addField(sec?.id ?? "")} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5">
@@ -698,25 +700,33 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
 }
 
 // ---------------------------------------------------------------- single field row
-function FieldRow({ f, sections, onPatch, onRemove, onMoveUp, onMoveDown }: {
+// Core fields the server/renderer treats specially by key — their type can't change.
+const TYPE_LOCKED_KEYS = ["name", "serviceType", "photo", "preferredAt"];
+
+function FieldRow({ f, sections, noEntries, onPatch, onRemove, onMoveUp, onMoveDown }: {
   f: FieldCfg; sections: SectionCfg[];
+  /** The form has no submissions yet, so changing a field's type can't orphan any answers. */
+  noEntries: boolean;
   onPatch: (p: Partial<FieldCfg>) => void; onRemove: () => void; onMoveUp: () => void; onMoveDown: () => void;
 }) {
   const [open, setOpen] = useState(false);
   // The Service type dropdown's choices are the form's services, set above.
   const showOptions = hasOptions(f.type) && f.key !== "serviceType";
   return (
-    <div className="rounded-lg border border-white/10 bg-ink-2/60">
-      <div className="flex items-center gap-2 px-2.5 py-2">
+    <div className={`rounded-lg border border-white/10 bg-ink-2/60 ${f.width === "half" ? "" : "sm:col-span-2"}`}>
+      <div className="flex flex-wrap items-center gap-2 px-2.5 py-2">
         <GripVertical className="h-4 w-4 shrink-0 text-slate-600" />
         <div className="flex shrink-0 flex-col">
           <button type="button" onClick={onMoveUp} className="text-slate-500 hover:text-white" aria-label="Move up"><ChevronUp className="h-3 w-3" /></button>
           <button type="button" onClick={onMoveDown} className="text-slate-500 hover:text-white" aria-label="Move down"><ChevronDown className="h-3 w-3" /></button>
         </div>
-        <input aria-label="Field label" className="min-w-0 flex-1 rounded-md border border-white/10 bg-ink-3 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan-500/50"
+        <input aria-label="Field label" className="min-w-[8rem] flex-1 rounded-md border border-white/10 bg-ink-3 px-2.5 py-1.5 text-sm text-slate-200 outline-none focus:border-cyan-500/50"
           value={f.label} onChange={(e) => onPatch({ label: e.target.value })} disabled={f.fixed && f.core ? false : false} />
-        {f.core ? (
-          <span className="shrink-0 rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-400">{FIELD_TYPES.find((t) => t.value === f.type)?.label ?? f.type}</span>
+        {!noEntries || f.fixed || TYPE_LOCKED_KEYS.includes(f.key) ? (
+          <span
+            className="shrink-0 rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-400"
+            title={!noEntries && !f.fixed && !TYPE_LOCKED_KEYS.includes(f.key) ? "Field types are locked once the form has entries" : undefined}
+          >{FIELD_TYPES.find((t) => t.value === f.type)?.label ?? f.type}</span>
         ) : (
           <select aria-label="Field type" className="shrink-0 rounded-md border border-white/10 bg-ink-3 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-500/50"
             value={f.type} onChange={(e) => onPatch({ type: e.target.value as FieldType })}>
@@ -728,6 +738,9 @@ function FieldRow({ f, sections, onPatch, onRemove, onMoveUp, onMoveDown }: {
         </label>
         <label className="flex shrink-0 items-center gap-1 text-[11px] text-slate-400" title="Required">
           <input type="checkbox" aria-label="Required field" disabled={!f.enabled} checked={f.required} onChange={() => onPatch({ required: !f.required })} className="h-3.5 w-3.5 accent-cyan-500 disabled:opacity-30" /> Req
+        </label>
+        <label className="flex shrink-0 items-center gap-1 text-[11px] text-slate-400" title="Wide = full width; unchecked = half width, sharing a row with the next half-width field">
+          <input type="checkbox" aria-label="Wide" checked={(f.width || "full") === "full"} onChange={(e) => onPatch({ width: e.target.checked ? "full" : "half" })} className="h-3.5 w-3.5 accent-cyan-500" /> Wide
         </label>
         <button type="button" onClick={() => setOpen((o) => !o)} className="shrink-0 rounded-md p-1 text-slate-500 hover:text-white" aria-label="More options">
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -741,12 +754,6 @@ function FieldRow({ f, sections, onPatch, onRemove, onMoveUp, onMoveDown }: {
             {!showOptions && f.type !== "file" && (
               <Field label="Placeholder"><input aria-label="Placeholder" className={inputCls} value={f.placeholder || ""} onChange={(e) => onPatch({ placeholder: e.target.value })} /></Field>
             )}
-            <Field label="Width">
-              <select aria-label="Width" className={inputCls} value={f.width || "full"} onChange={(e) => onPatch({ width: e.target.value as "full" | "half" })}>
-                <option value="full">Full width</option>
-                <option value="half">Half width</option>
-              </select>
-            </Field>
             <Field label="Section">
               <select aria-label="Section" className={inputCls} value={f.sectionId || ""} onChange={(e) => onPatch({ sectionId: e.target.value })}>
                 <option value="">Main (no section)</option>
