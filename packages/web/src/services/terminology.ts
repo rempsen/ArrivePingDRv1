@@ -97,7 +97,7 @@ export function retermDesign(json: string, pairs: [string, string][]): string {
       const o: Record<string, unknown> = {};
       for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
         // never touch URLs, variable names or ids
-        o[k] = k === "url" || k === "id" || k === "type" || k === "key" ? val : walk(val);
+        o[k] = k === "url" || k === "href" || k === "photo" || k === "id" || k === "type" || k === "key" ? val : walk(val);
       }
       return o;
     }

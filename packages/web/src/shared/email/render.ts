@@ -54,8 +54,16 @@ export function logoDims(height?: number): { height: number; maxWidth: number } 
 /* ---------------------------------------------------------------- colour -- */
 
 const HEX6 = /^#?([0-9a-f]{6})$/i;
+/** "#abc" or "#aabbcc" as "#aabbcc"; "" when it isn't a hex colour. */
+export function hex6(c: string | null | undefined): string {
+  const s = String(c ?? "").trim();
+  const m3 = /^#?([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s);
+  if (m3) return `#${m3[1]}${m3[1]}${m3[2]}${m3[2]}${m3[3]}${m3[3]}`.toLowerCase();
+  const m6 = HEX6.exec(s);
+  return m6 ? `#${m6[1]!.toLowerCase()}` : "";
+}
 function rgb(hex: string): [number, number, number] | null {
-  const m = HEX6.exec(String(hex ?? "").trim());
+  const m = HEX6.exec(hex6(hex));
   if (!m) return null;
   const n = parseInt(m[1]!, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -143,15 +151,19 @@ export function tokensBlank(tpl: string | undefined, vars: Vars): boolean {
 }
 
 function inline(html: string, link: string, origin?: string): string {
-  return html
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label: string, url: string) => {
-      const href = safeFinalUrl(unesc(url));
-      if (!href) return label;
-      const abs = href.startsWith("/") && origin ? origin.replace(/\/$/, "") + href : href;
-      return `<a href="${esc(abs)}" style="color:${link};text-decoration:underline">${label}</a>`;
-    })
+  // Links become placeholders first, so bold/italic can't reach inside an href.
+  const links: string[] = [];
+  const withLinks = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label: string, url: string) => {
+    const href = safeFinalUrl(unesc(url));
+    if (!href) return label;
+    const abs = href.startsWith("/") && origin ? origin.replace(/\/$/, "") + href : href;
+    links.push(esc(abs));
+    return `\uE000${links.length - 1}\uE001${label}\uE002`;
+  });
+  return withLinks
     .replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700">$1</strong>')
-    .replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>");
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>")
+    .replace(/\uE000(\d+)\uE001([^\uE002]*)\uE002/g, (_m, i: string, label: string) => `<a href="${links[Number(i)]}" style="color:${link};text-decoration:underline">${label}</a>`);
 }
 
 /** Template -> paragraphs and bullet lists with **bold**, *italic* and [links](url). */
@@ -202,7 +214,7 @@ export interface Ctx {
 
 export function makeCtx(brand: EmailBrand, vars: Vars, opts: { editor?: boolean } = {}): Ctx {
   const theme = brand.theme ?? defaultTheme();
-  const accent = rgb(brand.brandColor || "") ? `#${HEX6.exec(brand.brandColor!.trim())![1]!.toLowerCase()}` : DEFAULT_BRAND.toLowerCase();
+  const accent = hex6(brand.brandColor) || DEFAULT_BRAND.toLowerCase();
   const paleAccent = contrastRatio(accent, "#ffffff") < 1.6;
   const font = FONT_OPTIONS.find((f) => f.key === theme.font) ?? FONT_OPTIONS[0]!;
   const corner = { sharp: { card: 0, box: 0 }, soft: { card: 12, box: 8 }, round: { card: 20, box: 14 } }[theme.corners];
@@ -226,7 +238,7 @@ export function makeCtx(brand: EmailBrand, vars: Vars, opts: { editor?: boolean 
     heading: "#111827",
     muted: "#6b7280",
     border: "#e5e7eb",
-    pageBg: flat ? "#ffffff" : rgb(brand.bgColor || "") ? brand.bgColor! : "#f3f4f6",
+    pageBg: flat ? "#ffffff" : hex6(brand.bgColor) || "#f3f4f6",
     cardBg: "#ffffff",
     radius: { card: flat ? 0 : corner.card, box: corner.box, btn },
     weight: { medium: 600, bold: 700, heavy: 800 }[theme.headingWeight],
@@ -501,9 +513,7 @@ export function renderBlock(ctx: Ctx, b: Block, width = ctx.contentWidth): strin
 
 /* ----------------------------------------------------------------- frame -- */
 
-function logoImg(ctx: Ctx): string {
-  const src = fillUrl(ctx.brand.logoUrl, {}, ctx.brand.origin);
-  if (!src) return "";
+function logoSize(ctx: Ctx): { w: number; h: number; maxWidth: number } {
   const { height, maxWidth } = logoDims(ctx.brand.logoHeight);
   const ratio = ctx.theme.logoRatio;
   let h = height;
@@ -512,12 +522,21 @@ function logoImg(ctx: Ctx): string {
     w = maxWidth;
     h = Math.round(w / ratio);
   }
+  return { w, h, maxWidth };
+}
+
+function logoImg(ctx: Ctx): string {
+  const src = fillUrl(ctx.brand.logoUrl, {}, ctx.brand.origin);
+  if (!src) return "";
+  const { w, h } = logoSize(ctx);
+  // width/height attributes size it in Outlook; the styles let it shrink on phones.
   const size = w ? `width="${w}" height="${h}" ` : `height="${h}" `;
-  return `<img src="${src}" ${size}alt="${esc(ctx.brand.company)}" style="display:block;height:${h}px;width:${w ? `${w}px` : "auto"};max-width:${maxWidth}px;border:0;outline:none;text-decoration:none;${ctx.theme.logoAlign === "center" ? "margin:0 auto" : "margin:0"}">`;
+  const style = w ? `width:100%;max-width:${w}px;height:auto` : `height:${h}px;width:auto;max-width:100%`;
+  return `<img src="${src}" ${size}alt="${esc(ctx.brand.company)}" style="display:block;${style};border:0;outline:none;text-decoration:none;${ctx.theme.logoAlign === "center" ? "margin:0 auto" : "margin:0"}">`;
 }
 
 function wordmark(ctx: Ctx, color: string): string {
-  return `<span style="font-family:${ctx.font};font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${color}">${esc(ctx.brand.company)}</span>`;
+  return `<span class="${color === ctx.heading ? "ap-h" : ""}" style="font-family:${ctx.font};font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${color}">${esc(ctx.brand.company)}</span>`;
 }
 
 /** The header at the top of the card (empty for "Logo only", which sits above the card). */
@@ -539,7 +558,7 @@ export function renderHeader(ctx: Ctx): string {
   const bgImage = ctx.header === "gradient" ? `background-image:linear-gradient(135deg,${ctx.accent} 0%,${shade(ctx.accent, 0.28)} 100%);` : "";
   const mark = logo
     ? ctx.theme.logoBacking
-      ? `<table ${T} ${align === "center" ? 'align="center"' : ""} style="border-collapse:separate;${align === "center" ? "margin:0 auto" : ""}"><tr><td class="ap-plate" bgcolor="#ffffff" style="background:#ffffff;padding:10px 16px;border-radius:${Math.max(6, ctx.radius.box)}px">${logo}</td></tr></table>`
+      ? `<table ${T} ${align === "center" ? 'align="center"' : ""} ${logoSize(ctx).w ? `width="${logoSize(ctx).w + 32}"` : ""} style="border-collapse:separate;${logoSize(ctx).w ? `width:100%;max-width:${logoSize(ctx).w + 32}px;` : ""}${align === "center" ? "margin:0 auto" : ""}"><tr><td class="ap-plate" bgcolor="#ffffff" style="background:#ffffff;padding:10px 16px;border-radius:${Math.max(6, ctx.radius.box)}px">${logo}</td></tr></table>`
       : logo
     : wordmark(ctx, ctx.accentText);
   return table(
@@ -554,12 +573,33 @@ export function renderAboveCard(ctx: Ctx): string {
   return table(`<tr><td align="${align}" style="padding:0 ${ctx.theme.layout === "flat" ? ctx.padX : 4}px 20px;text-align:${align}">${logoImg(ctx) || wordmark(ctx, ctx.heading)}</td></tr>`);
 }
 
+/**
+ * The company footer is stored as a little HTML (buildEmailFooter) but can be
+ * edited by hand, so only bold, italics, line breaks and safe links survive;
+ * every other tag and attribute is dropped and stray "<" is escaped.
+ */
+export function sanitizeFooter(html: string, link = "inherit"): string {
+  return String(html ?? "")
+    .replace(/<[^>]*>?/g, (tag) => {
+      const t = tag.toLowerCase();
+      const simple = /^<\s*(\/?)\s*(strong|b|em|i)\s*>$/.exec(t) || /^<\s*(\/?)\s*(strong|b|em|i)\s[^>]*>$/.exec(t);
+      if (simple) return `<${simple[1]}${simple[2] === "b" ? "strong" : simple[2] === "i" ? "em" : simple[2]}>`;
+      if (/^<\s*br\s*\/?\s*>$/.test(t)) return "<br>";
+      if (/^<\s*\/\s*a\s*>$/.test(t)) return "</a>";
+      const a = /^<\s*a\s[^>]*?href\s*=\s*("([^"]*)"|'([^']*)')[^>]*>$/i.exec(tag);
+      if (a) {
+        const href = safeFinalUrl(unesc(a[2] ?? a[3] ?? ""));
+        return href ? `<a href="${esc(href)}" style="color:${link};text-decoration:underline">` : "<a>";
+      }
+      return tag.endsWith(">") ? "" : esc(tag);
+    });
+}
+
 /** Company footer at the bottom of the card. */
 export function renderCardFooter(ctx: Ctx): string {
   const footer = ctx.theme.showFooter ? String(ctx.brand.footer || "").trim() : "";
   if (!footer) return "";
-  // The footer is system-built HTML (buildEmailFooter); only its tokens are filled, escaped.
-  const filled = footer.replace(TOKEN, (_m, k: string) => esc(val(ctx.vars, k)));
+  const filled = sanitizeFooter(footer).replace(TOKEN, (_m, k: string) => esc(val(ctx.vars, k)));
   return table(
     `<tr><td align="center" class="ap-pad ap-m ap-line" style="padding:22px ${ctx.padX}px 26px;border-top:1px solid ${ctx.border};text-align:center;font-family:${ctx.font};font-size:13px;line-height:1.6;color:${ctx.muted}">${filled}</td></tr>`,
   );
@@ -577,7 +617,7 @@ export function renderBelowCard(ctx: Ctx): string {
 export function preheaderText(design: EmailDesign, vars: Vars): string {
   if (design.preheader.trim()) return fillText(design.preheader, vars);
   for (const b of design.blocks) {
-    const t = b.type === "text" || b.type === "callout" ? b.text : b.type === "eta" ? `${b.label} ${b.value}` : "";
+    const t = b.type === "text" || b.type === "callout" ? b.text : b.type === "eta" ? (tokensBlank(b.value, vars) ? b.fallback || "" : `${b.label} ${b.value}`) : "";
     if (t.trim()) {
       const plain = unesc(fillText(t, vars)).replace(/\*\*|\*|\[|\]\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
       return esc(plain.length > 140 ? `${plain.slice(0, 137)}…` : plain);

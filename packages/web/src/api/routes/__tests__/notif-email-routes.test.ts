@@ -112,6 +112,20 @@ describe("designs", () => {
     expect(after.emailDesign).toBe("");
   });
 
+  it("a blank subject is allowed (the default subject is used)", async () => {
+    const rules = (await (await call("GET", "/rules")).json()).rules as any[];
+    const rule = rules.find((x) => x.event === "arrived" && x.recipient === "client");
+    expect((await call("PATCH", `/rules/${rule.id}`, { emailSubject: "", emailDesign: [{ type: "text", text: "Hi" }] })).status).toBe(200);
+  });
+
+  it("escapes every value in the company footer", async () => {
+    const { buildEmailFooter } = await import("../../../services/dispatch");
+    const f = buildEmailFooter({ name: "<img src=x onerror=alert(1)>", address: "1 <b>Main</b>", email: 'a"@x.test', website: 'evil.test" onmouseover="x' });
+    expect(f).not.toContain("<img");
+    expect(f).not.toContain("<b>");
+    expect(f).not.toContain('onmouseover="');
+  });
+
   it("previews with unsaved brand changes", async () => {
     const r = await call("POST", "/email/render", {
       design: { v: 2, preheader: "Peek", blocks: [{ type: "text", text: "Hello {{firstName}}" }] },

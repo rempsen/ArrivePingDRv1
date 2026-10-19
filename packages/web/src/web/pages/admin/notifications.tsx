@@ -356,8 +356,12 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
   });
 
   const patch = useMutation({
-    mutationFn: async (p: { id: string; body: any }) =>
-      (await api["notif-config"].rules[":id"].$patch({ param: { id: p.id }, json: p.body })).json(),
+    mutationFn: async (p: { id: string; body: any }) => {
+      const r = await api["notif-config"].rules[":id"].$patch({ param: { id: p.id }, json: p.body });
+      const j: any = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.message || "That didn't save. Try again.");
+      return j;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notif-event", event] });
       qc.invalidateQueries({ queryKey: ["notif-rules"] });
@@ -403,6 +407,14 @@ function EventDrawer({ event, label, onClose }: { event: string; label: string; 
                   custom={!!custom}
                   vars={vars}
                   onSave={(body) => patch.mutate({ id: rule.id, body })}
+                  saveAsync={async (body) => {
+                    try {
+                      await patch.mutateAsync({ id: rule.id, body });
+                      return true;
+                    } catch (e) {
+                      return (e as Error).message || "That didn't save. Try again.";
+                    }
+                  }}
                   saving={patch.isPending}
                 />
               );
@@ -635,12 +647,14 @@ function MessageComposer({
 }
 
 function RecipientCard({
-  rule, recipientLabel, fallback, vars, onSave, saving, eventLabel, custom = false,
+  rule, recipientLabel, fallback, vars, onSave, saveAsync, saving, eventLabel, custom = false,
 }: {
   rule: any; recipientLabel: string; fallback: string;
   custom?: boolean;
   vars: { key: string; label: string }[];
   onSave: (body: any) => void; saving: boolean; eventLabel: string;
+  /** Resolves true when saved, or the reason it wasn't. */
+  saveAsync: (body: any) => Promise<true | string>;
 }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
@@ -767,9 +781,7 @@ function RecipientCard({
           initialDesign={design}
           initialSubject={rule.emailSubject || ""}
           draftKey={`email-draft:${rule.id}`}
-          onSave={(subject, d) => {
-            onSave({ emailSubject: subject, emailDesign: JSON.stringify(d) });
-          }}
+          onSave={(subject, d) => saveAsync({ emailSubject: subject, emailDesign: JSON.stringify(d) })}
           onClose={() => setEmailOpen(false)}
         />
       )}

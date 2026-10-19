@@ -182,6 +182,15 @@ export const STARTERS: Starter[] = [
   },
 ];
 
+// Fixed block ids per starter, so the built-in templates compare equal across
+// servers and deploys (the library only rewrites a built-in when it changed).
+for (const s of STARTERS) {
+  s.design.blocks = s.design.blocks.map((b, i) => {
+    const id = `${s.key}-${i}`;
+    return b.type === "columns" ? { ...b, id, cols: [b.cols[0].map((x, j) => ({ ...x, id: `${id}-l${j}` })), b.cols[1].map((x, j) => ({ ...x, id: `${id}-r${j}` }))] } : { ...b, id };
+  });
+}
+
 /** Fresh ids, so two uses of the same starter never share block ids. */
 function withFreshIds(design: EmailDesign): EmailDesign {
   const re = (b: Block): Block => (b.type === "columns" ? { ...b, id: newBlockId(), cols: [b.cols[0].map(re), b.cols[1].map(re)] } : { ...b, id: newBlockId() });

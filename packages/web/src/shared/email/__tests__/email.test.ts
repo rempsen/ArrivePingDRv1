@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { EMAIL_SAMPLE_VARS, designToText, hasDesign, legacyHeader, normalizeDesign, normalizeTheme, parseDesign, safeUrl, type EmailDesign } from "../design";
-import { contrastRatio, contrastText, fillRich, fillText, fillUrl, makeCtx, renderBlock, renderEmail, renderPlainMessage, type EmailBrand } from "../render";
+import { contrastRatio, contrastText, fillRich, fillText, fillUrl, hex6, makeCtx, renderBlock, renderCardFooter, renderEmail, renderPlainMessage, sanitizeFooter, type EmailBrand } from "../render";
 import { STARTERS, starterDesignFor, startersFor } from "../starters";
 
 const brand = (over: Partial<EmailBrand> = {}): EmailBrand => ({
@@ -195,5 +195,47 @@ describe("starters", () => {
     const a = starterDesignFor("enroute", "client");
     const b = starterDesignFor("enroute", "client");
     expect(a.design.blocks[0]!.id).not.toBe(b.design.blocks[0]!.id);
+  });
+});
+
+describe("review fixes", () => {
+  it("the footer keeps bold, breaks and safe links only", () => {
+    const f = sanitizeFooter('<strong style="x">BMD</strong><br/>1 Main<img src=x onerror=alert(1)> <a href="https://bmd.test" onclick="x">site</a> <a href="javascript:alert(1)">bad</a> <script>alert(1)</script> a < b');
+    expect(f).toContain("<strong>BMD</strong><br>1 Main");
+    expect(f).not.toContain("<img");
+    expect(f).not.toContain("onclick");
+    expect(f).not.toContain("<script");
+    expect(f).toContain('<a href="https://bmd.test"');
+    expect(f).not.toContain("javascript:");
+    expect(f).toContain("a &lt; b");
+    const html = renderCardFooter(makeCtx(brand({ footer: '<b>Hi</b><svg onload=alert(1)>' }), vars));
+    expect(html).toContain("<strong>Hi</strong>");
+    expect(html).not.toContain("svg");
+  });
+  it("reads 3-digit colours", () => {
+    expect(hex6("#f60")).toBe("#ff6600");
+    expect(makeCtx(brand({ brandColor: "#f60", bgColor: "#eee" }), vars)).toMatchObject({ accent: "#ff6600", pageBg: "#eeeeee" });
+  });
+  it("bold inside a link address doesn't break the link", () => {
+    const h = fillRich("[a](https://e.com/**) [b](https://f.com/**)", {}, { link: "#000", color: "#000", size: 16 });
+    expect(h).toContain('href="https://e.com/**"');
+    expect(h).not.toContain("<strong");
+  });
+  it("the ETA fallback reaches the plain text and the inbox preview", () => {
+    const d = normalizeDesign([{ type: "eta", label: "Arriving in", value: "{{eta}} min", fallback: "On the way" }]);
+    expect(designToText(d, { ...vars, eta: null })).toBe("On the way");
+    expect(renderEmail(d, brand(), { ...vars, eta: null })).toContain(">On the way&#847;");
+  });
+  it("built-in starters have fixed ids", () => {
+    expect(STARTERS[0]!.design.blocks[0]!.id).toBe(`${STARTERS[0]!.key}-0`);
+  });
+  it("keeps old www. links", () => {
+    expect(safeUrl("www.bmd.test")).toBe("https://www.bmd.test");
+  });
+  it("wide logos shrink on phones but keep Outlook sizes", () => {
+    const html = renderEmail(normalizeDesign([{ type: "text", text: "x" }]), brand({ theme: normalizeTheme({ logoRatio: 5, header: "brand" }) }), vars);
+    expect(html).toContain('width="400" height="80"');
+    expect(html).toContain("width:100%;max-width:400px;height:auto");
+    expect(html).toContain('width="432"');
   });
 });

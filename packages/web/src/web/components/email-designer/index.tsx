@@ -49,7 +49,8 @@ export interface EmailDesignerProps {
   initialSubject?: string;
   /** Where an unsaved draft is kept in this browser. */
   draftKey?: string;
-  onSave?: (subject: string, design: EmailDesign) => Promise<boolean> | boolean | void;
+  /** true = saved; false or a message = not saved (the designer stays open). */
+  onSave?: (subject: string, design: EmailDesign) => Promise<boolean | string> | boolean | string | void;
   onClose: () => void;
   onEditFooter?: () => void;
 }
@@ -210,7 +211,7 @@ export function EmailDesigner(p: EmailDesignerProps) {
       if (mod && e.key.toLowerCase() === "d" && selected) {
         e.preventDefault();
         duplicate(selected);
-      } else if ((e.key === "Delete" || e.key === "Backspace") && selected) {
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selected && !e.repeat && (el === document.body || el.closest(".email-canvas"))) {
         e.preventDefault();
         remove(selected);
       } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown") && selected) {
@@ -239,8 +240,8 @@ export function EmailDesigner(p: EmailDesignerProps) {
       }
       if (!themeOnly && p.onSave) {
         const r = await p.onSave(doc.subject, normalizeDesign(design));
-        if (r === false) {
-          setSaveErr("The email didn't save. Try again.");
+        if (r === false || typeof r === "string") {
+          setSaveErr(typeof r === "string" ? `The email didn't save: ${r}` : "The email didn't save. Try again.");
           return;
         }
       }
@@ -412,6 +413,10 @@ export function EmailDesigner(p: EmailDesignerProps) {
                 device={device}
                 selectedId={selected}
                 dropBefore={activeId ? overId : null}
+                dropSide={
+                  // Moving a block down lands it after the one it's over (palette drops go before).
+                  activeBlock && overId && design.blocks.findIndex((b) => b.id === overId) > design.blocks.findIndex((b) => b.id === activeId) ? "after" : "before"
+                }
                 dropAtEnd={!!activeId && overId === "canvas-end"}
                 onSelect={select}
                 onNudge={(id, d) => setBlocks((bs) => nudgeBlock(bs, id, d))}

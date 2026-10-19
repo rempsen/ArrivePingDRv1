@@ -137,6 +137,8 @@ export function safeUrl(raw: unknown): string {
   if (TOKEN_ONLY.test(s)) return s.replace(/\s+/g, "");
   if (/^(https?:\/\/|mailto:|tel:)/i.test(s)) return /[\s<>"']/.test(s) ? "" : s;
   if (/^\/(?!\/)[^\s<>"']*$/.test(s)) return s;
+  // Older designs sometimes have "www.example.com" with no scheme.
+  if (/^www\.[^\s<>"']+$/i.test(s)) return `https://${s}`;
   // A token followed by a path or query, e.g. {{trackUrl}}?ref=email.
   if (/^\{\{\w+\}\}[^\s<>"']*$/.test(s)) return s;
   return "";
@@ -459,8 +461,11 @@ export function designToText(design: EmailDesign, vars: Vars): string {
       }
       case "details":
         return [b.title ? f(b.title) : "", ...b.rows.map((r) => `${f(r.label)}: ${f(r.value)}`)].filter(Boolean).join("\n");
-      case "eta":
-        return [f(b.label), f(b.value), f(b.note)].filter(Boolean).join(" ");
+      case "eta": {
+        const keys = [...b.value.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]!);
+        const blank = keys.length > 0 && keys.every((k) => !fillPlain(`{{${k}}}`, vars).trim());
+        return blank ? f(b.fallback) : [f(b.label), f(b.value), f(b.note)].filter(Boolean).join(" ");
+      }
       case "tech":
         return [f(b.name), f(b.role)].filter(Boolean).join(", ");
       case "columns":

@@ -180,7 +180,7 @@ interface Vars {
 }
 
 function interpolate(tpl: string, v: Vars): string {
-  return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => String((v as any)[k] ?? ""));
+  return tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => String((v as any)[k] ?? ""));
 }
 
 /** Variables available to template authors, with descriptions (for the editor UI). */
@@ -899,22 +899,22 @@ export function buildEmailFooter(input: {
   email?: string;
   website?: string;
 }): string {
+  // Every value is escaped: they can come from a scraped website.
+  const e = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const who = (input.legalName || input.name || "").trim();
   const lines: string[] = [];
-  if (who) lines.push(`<strong style="color:#475569">${who}</strong>`);
+  if (who) lines.push(`<strong>${e(who)}</strong>`);
   const contact: string[] = [];
-  if (input.address?.trim()) contact.push(input.address.trim());
-  if (input.phone?.trim()) contact.push(input.phone.trim());
-  if (input.email?.trim())
-    contact.push(
-      `<a href="mailto:${input.email.trim()}" style="color:inherit">${input.email.trim()}</a>`,
-    );
+  if (input.address?.trim()) contact.push(e(input.address.trim()));
+  if (input.phone?.trim()) contact.push(e(input.phone.trim()));
+  const mail = input.email?.trim() || "";
+  if (mail) contact.push(/^[^\s@<>"]+@[^\s@<>"]+$/.test(mail) ? `<a href="mailto:${e(mail)}">${e(mail)}</a>` : e(mail));
   if (contact.length) lines.push(contact.join(" &nbsp;·&nbsp; "));
   if (input.website?.trim()) {
     const w = input.website.trim();
     const href = /^https?:\/\//i.test(w) ? w : `https://${w}`;
     const label = w.replace(/^https?:\/\//i, "").replace(/\/$/, "");
-    lines.push(`<a href="${href}" style="color:inherit">${label}</a>`);
+    lines.push(/^https?:\/\/[^\s<>"']+$/i.test(href) ? `<a href="${e(href)}">${e(label)}</a>` : e(label));
   }
   return lines.join("<br/>");
 }

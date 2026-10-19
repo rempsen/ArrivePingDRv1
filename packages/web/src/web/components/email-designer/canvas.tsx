@@ -21,8 +21,9 @@ export interface CanvasProps {
   vars: object;
   device: "desktop" | "phone";
   selectedId: string | null;
-  /** id of the block being dragged over, to draw the drop line. */
+  /** id of the block being dragged over, and which side the dragged block will land. */
   dropBefore: string | null;
+  dropSide: "before" | "after";
   dropAtEnd: boolean;
   onSelect: (id: string | null) => void;
   onNudge: (id: string, dir: -1 | 1) => void;
@@ -57,7 +58,13 @@ export function EmailCanvas(p: CanvasProps) {
     <div className="min-h-full" style={{ background: s.pageBg }}>
       <style>{CANVAS_CSS + nestedCss}</style>
       {fontHref && <link rel="stylesheet" href={fontHref} />}
-      <div className="email-canvas mx-auto transition-[max-width] duration-200" style={{ maxWidth: phone ? 375 : 600, padding: s.flat ? "24px 0 40px" : phone ? "20px 8px 40px" : "32px 12px 48px", fontFamily: s.font }}>
+      <div
+        className="email-canvas mx-auto transition-[max-width] duration-200"
+        // Links in the email (footer, social links, text) never navigate while editing.
+        onClickCapture={(e) => {
+          if ((e.target as HTMLElement).closest("a")) e.preventDefault();
+        }}
+        style={{ maxWidth: phone ? 375 : 600, padding: s.flat ? "24px 0 40px" : phone ? "20px 8px 40px" : "32px 12px 48px", fontFamily: s.font }}>
         <div dangerouslySetInnerHTML={{ __html: renderAboveCard(ctx) }} />
         <div style={{ background: s.cardBg, border: s.cardBorder, borderRadius: s.cardRadius, overflow: "hidden", boxShadow: s.flat ? "none" : "0 1px 2px rgba(15,23,42,.04)" }}>
           {ctx.header !== "none" && (
@@ -89,7 +96,7 @@ export function EmailCanvas(p: CanvasProps) {
                   first={i === 0}
                   last={i === p.design.blocks.length - 1}
                   selected={p.selectedId === b.id}
-                  dropLine={p.dropBefore === b.id}
+                  dropLine={p.dropBefore === b.id ? p.dropSide : null}
                   onSelect={p.onSelect}
                   onNudge={(d) => p.onNudge(b.id, d)}
                   onDuplicate={() => p.onDuplicate(b.id)}
@@ -128,7 +135,7 @@ function SortableBlock(p: {
   first: boolean;
   last: boolean;
   selected: boolean;
-  dropLine: boolean;
+  dropLine: "before" | "after" | null;
   onSelect: (id: string) => void;
   onNudge: (dir: -1 | 1) => void;
   onDuplicate: () => void;
@@ -142,7 +149,7 @@ function SortableBlock(p: {
   };
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`group relative ${isDragging ? "z-10 opacity-50" : ""}`}>
-      {p.dropLine && <div className="absolute -top-1 left-0 right-0 z-10 h-[3px] rounded bg-cyan-500 shadow-[0_0_8px] shadow-cyan-400" aria-hidden="true" />}
+      {p.dropLine && <div className={`absolute left-0 right-0 z-10 h-[3px] rounded bg-cyan-500 shadow-[0_0_8px] shadow-cyan-400 ${p.dropLine === "after" ? "-bottom-1" : "-top-1"}`} aria-hidden="true" />}
       <div
         // A block is a selectable surface whose content is the email's own HTML.
         // eslint-disable-next-line jsx-a11y/prefer-tag-over-role

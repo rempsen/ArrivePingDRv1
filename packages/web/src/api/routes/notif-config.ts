@@ -95,7 +95,8 @@ const RulePatch = z
     webhook: bool("Webhook"),
     enabled: bool("Enabled"),
     template: longText(10_000),
-    emailSubject: shortText("Subject", 200),
+    // Blank = the default "Company: Event" subject.
+    emailSubject: z.union([shortText("Subject", 200), z.literal("")]),
     emailDesign: z.union([z.string().max(200_000), jsonBlob()]),
   })
   .partial()

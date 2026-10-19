@@ -214,7 +214,12 @@ function SaveTemplate({ design, subject, onClose }: { design: EmailDesign; subje
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const save = useMutation({
-    mutationFn: async () => (await api["notif-config"].email.templates.$post({ json: { name: name.trim() || "Untitled template", description, subject, design } as any })).json(),
+    mutationFn: async () => {
+      const r = await api["notif-config"].email.templates.$post({ json: { name: name.trim() || "Untitled template", description, subject, design } as any });
+      const j: any = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.message || "The template didn't save.");
+      return j;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email-templates"] });
       onClose();
@@ -227,12 +232,12 @@ function SaveTemplate({ design, subject, onClose }: { design: EmailDesign; subje
         <h2 className="mb-1 text-lg font-bold text-white">Save as a template</h2>
         <p className="mb-4 text-xs text-slate-400">Reuse this layout on any other notification email.</p>
         <Field label="Name" htmlFor="st-name">
-          <input id="st-name" aria-label="Template name" className={inputBase} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter tune-up reminder" />
+          <input id="st-name" aria-label="Template name" maxLength={120} className={inputBase} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Winter tune-up reminder" />
         </Field>
         <Field label="Description (optional)" htmlFor="st-desc">
-          <input id="st-desc" aria-label="Template description" className={inputBase} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input id="st-desc" aria-label="Template description" maxLength={500} className={inputBase} value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        {save.isError && <p className="mb-2 text-xs text-amber-300">The template didn't save. Try again.</p>}
+        {save.isError && <p className="mb-2 text-xs text-amber-300">{(save.error as Error).message} Try again.</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white">
             Cancel
