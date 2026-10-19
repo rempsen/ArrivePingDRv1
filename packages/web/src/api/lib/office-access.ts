@@ -77,6 +77,11 @@ const RULES: Rule[] = [
   { re: /^\/api\/ai\/delay-risk$/, need: () => "dashboard:view" },
   { re: /^\/api\/ai\//, need: () => "work_orders:view" },
   { re: /^\/api\/admin\/users(\/|$)/, need: mod("clients") },
+  // The Directory: asking it a question or reading it is viewing clients;
+  // moving people between properties is editing them.
+  { re: /^\/api\/directory\/ask$/, need: () => "clients:view" },
+  { re: /^\/api\/directory\/assign$/, need: () => "clients:edit" },
+  { re: /^\/api\/directory(\/|$)/, need: mod("clients") },
   { re: /^\/api\/audit(\/|$)/, need: mod("audit") },
   { re: /^\/api\/(catalog|option-catalog|services)(\/|$)/, need: mod("catalog") },
   { re: /^\/api\/(change-requests|delays)(\/|$)/, need: readOr("work_orders:view", "work_orders:edit") },
@@ -96,7 +101,7 @@ const RULES: Rule[] = [
   { re: /^\/api\/(custom-fields|tags)(\/|$)/, need: mod("tags") },
   { re: /^\/api\/(forms|templates)(\/|$)/, need: mod("forms") },
   {
-    re: /^\/api\/import\/(template\/)?(rider|customer|admin)$/,
+    re: /^\/api\/import\/(template\/)?(rider|customer|admin|property)$/,
     need: (method, m) => {
       const type = m[2];
       if (type === "admin") return null;

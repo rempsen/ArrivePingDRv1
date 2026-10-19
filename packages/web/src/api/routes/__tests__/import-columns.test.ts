@@ -55,6 +55,22 @@ describe("normalizeImportRow", () => {
     expect(normalizeImportRow("rider", { Company: "Acme", City: "Winnipeg", Name: "Alex" })).toEqual({ name: "Alex" });
   });
 
+  it("reads a resident list's building and unit columns, whatever they're called", () => {
+    expect(normalizeImportRow("customer", { "Resident Name": "Zoe Adams", Building: "Maple Court", "Apt #": "4B" })).toEqual({
+      name: "Zoe Adams", property: "Maple Court", unit: "4B",
+    });
+    expect(normalizeImportRow("customer", { Tenant: "Ben", Community: "Birch Towers", Suite: "210" })).toEqual({ name: "Ben", property: "Birch Towers", unit: "210" });
+  });
+
+  it("a property list: its Property or Building column is the name; manager and notes come through", () => {
+    expect(normalizeImportRow("property", { Property: "Maple Court", "Property Address": "12 Maple St", "Property Manager": "jordan@x.ca", Notes: "Lockbox" })).toEqual({
+      name: "Maple Court", address: "12 Maple St", manager: "jordan@x.ca", notes: "Lockbox",
+    });
+    expect(normalizeImportRow("property", { "Building Name": "Birch Towers", PM: "Sam Ortiz" })).toEqual({ name: "Birch Towers", manager: "Sam Ortiz" });
+    // People's columns don't make a property row.
+    expect(normalizeImportRow("property", { Email: "a@b.ca", Phone: "204" })).toEqual({});
+  });
+
   it("drops columns it doesn't know and blank cells", () => {
     expect(normalizeImportRow("customer", { "Balance Owing": "120.00", "Name": "  " })).toEqual({});
   });
@@ -66,5 +82,7 @@ describe("isTemplateExample", () => {
     expect(isTemplateExample("rider", { email: "alex.chen@example.com" })).toBe(true);
     expect(isTemplateExample("customer", { email: "jane@realcustomer.ca" })).toBe(false);
     expect(isTemplateExample("customer", {})).toBe(false);
+    expect(isTemplateExample("property", { name: "Maple Court", manager: "Jordan.Patel@example.com" })).toBe(true);
+    expect(isTemplateExample("property", { name: "Maple Court", manager: "jordan@realco.ca" })).toBe(false);
   });
 });

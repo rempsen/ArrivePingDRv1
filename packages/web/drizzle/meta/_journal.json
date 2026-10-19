@@ -183,6 +183,13 @@
       "when": 1792369387762,
       "tag": "0025_control_hub",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792377516714,
+      "tag": "0026_directory_properties",
+      "breakpoints": true
     }
   ]
 }

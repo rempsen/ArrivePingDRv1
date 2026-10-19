@@ -1487,6 +1487,12 @@ export const memberships = pgTable(
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
     // Set while status === "disabled" by an admin's Deactivate; cleared on Reactivate.
     deactivatedAt: timestamp("deactivated_at", { mode: "date", withTimezone: true }),
+    // Directory: the named property this person (a customer — a resident,
+    // tenant or site contact) belongs to at THIS company, and their unit there.
+    // Per company on purpose: the same person can be a resident at one
+    // property manager's building and an ordinary customer of another firm.
+    propertyId: text("property_id").references(() => properties.id, { onDelete: "set null" }),
+    unit: text("unit").notNull().default(""),
     createdAt: now(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }),
   },
@@ -1496,6 +1502,7 @@ export const memberships = pgTable(
     uniqueIndex("memberships_user_company_uidx").on(table.userId, table.companyId),
     index("memberships_company_idx").on(table.companyId),
     index("memberships_user_idx").on(table.userId),
+    index("memberships_company_property_idx").on(table.companyId, table.propertyId),
   ],
 );
 
@@ -1552,6 +1559,14 @@ export const properties = pgTable(
     lng: real("lng"),
     // most recent customer associated with this address (properties outlive customers)
     customerId: text("customer_id").references(() => user.id, { onDelete: "set null" }),
+    // Directory (services/directory.ts): a NAMED property is one the office
+    // manages as a place — "Maple Court" — with residents linked to it through
+    // memberships.propertyId and a staff member who manages it. Address-only
+    // rows that jobs create on their own keep an empty name and stay out of
+    // the Directory's Properties list.
+    name: text("name").notNull().default(""),
+    // The staff member (any role but customer) who manages this property.
+    managerId: text("manager_id").references(() => user.id, { onDelete: "set null" }),
     // persistent public token for /p/:token — rotatable from admin for PII safety
     publicToken: text("public_token")
       .notNull()
@@ -1564,6 +1579,7 @@ export const properties = pgTable(
     companyIdx: index("prop_company_idx").on(t.companyId),
     addrIdx: index("prop_addr_idx").on(t.companyId, t.addressNormalized),
     tokenIdx: index("prop_token_idx").on(t.publicToken),
+    managerIdx: index("prop_manager_idx").on(t.companyId, t.managerId),
   }),
 );
 

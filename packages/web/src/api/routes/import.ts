@@ -28,18 +28,27 @@ import { trySendJoinCompanyInvite } from "../lib/join-invite";
 import { queueWelcomes } from "../../services/welcome";
 import { isUndeliverableEmail } from "../../shared/sample-contact";
 import { email as emailField } from "../lib/validate";
+import {
+  assignToProperty,
+  createProperty,
+  DirectoryError,
+  propertyIdForName,
+  staffIdForLabel,
+  updateProperty,
+} from "../../services/directory";
 import { toCsv, toXlsx, fileResponse } from "./export";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string };
 
-export type ImportType = "customer" | "admin" | "rider";
-const IMPORT_TYPES: ImportType[] = ["customer", "admin", "rider"];
+export type ImportType = "customer" | "admin" | "rider" | "property";
+const IMPORT_TYPES: ImportType[] = ["customer", "admin", "rider", "property"];
 
 const IMPORT_LABEL: Record<ImportType, string> = {
   customer: "Customers",
   admin: "Dispatchers",
   rider: "Technicians",
+  property: "Properties",
 };
 
 /** Template columns per entity type — writable fields only, nothing the
@@ -58,6 +67,17 @@ const TEMPLATE_COLUMNS: Record<ImportType, { key: string; label: string; example
     { key: "postalCode", label: "Postal / ZIP", example: "M5V 2T6" },
     { key: "country", label: "Country", example: "Canada" },
     { key: "customerType", label: "Account Type (one_time or repeat)", example: "repeat" },
+    // The Directory (services/directory.ts): the named property they belong to,
+    // created if it's new, and their unit there.
+    { key: "property", label: "Property", example: "Maple Court" },
+    { key: "unit", label: "Unit", example: "4B" },
+  ],
+  // Named properties, each with the team member who manages it (their email or name).
+  property: [
+    { key: "name", label: "Property Name", example: "Maple Court" },
+    { key: "address", label: "Address", example: "123 Main St, Winnipeg, MB" },
+    { key: "manager", label: "Manager (email or name)", example: "jordan.patel@example.com" },
+    { key: "notes", label: "Notes", example: "Lockbox at the side door" },
   ],
   admin: [
     { key: "firstName", label: "First Name", example: "Sam" },
@@ -92,6 +112,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   name: [
     "name", "full name", "customer name", "client name", "contact name", "contact", "display name",
     "customer", "client", "technician", "technician name", "employee", "employee name", "staff name",
+    "resident", "resident name", "tenant", "tenant name", "owner", "owner name",
   ],
   email: ["email", "email address", "e mail", "mail", "primary email", "customer email", "contact email", "work email"],
   phone: [
@@ -114,6 +135,10 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   licenseNumber: ["license number", "licence number", "drivers license", "drivers licence", "driver license", "driver licence"],
   payRatePerHour: ["pay rate per hour", "pay rate", "hourly rate", "wage", "rate per hour"],
   skills: ["skills", "skill"],
+  property: ["property", "property name", "building", "building name", "community", "complex", "site name", "development"],
+  unit: ["unit", "unit number", "unit no", "apt", "apt number", "apartment", "apartment number", "suite", "suite number", "door"],
+  manager: ["manager", "property manager", "manager email", "manager name", "assigned to", "pm", "superintendent"],
+  notes: ["notes", "note", "comments", "comment"],
 };
 
 const squash = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -133,7 +158,7 @@ export function normalizeImportRow(type: ImportType, raw: Record<string, string>
   }
   // Only the fields this import has (plus the name parts a full name is built
   // from), so a column meant for another kind of import doesn't make a row.
-  const allowed = new Set([...TEMPLATE_COLUMNS[type].map((c) => c.key), "name", "firstName", "lastName"]);
+  const allowed = new Set([...TEMPLATE_COLUMNS[type].map((c) => c.key), "name", "firstName", "lastName", ...(type === "property" ? ["property"] : [])]);
   for (const [key, names] of Object.entries(COLUMN_ALIASES)) {
     if (!allowed.has(key)) continue;
     for (const n of names) if (!lookup.has(squash(n))) lookup.set(squash(n), key);
@@ -145,6 +170,11 @@ export function normalizeImportRow(type: ImportType, raw: Record<string, string>
     if (key && v && !out[key]) out[key] = v;
   }
   if (!out.name && (out.firstName || out.lastName)) out.name = [out.firstName, out.lastName].filter(Boolean).join(" ");
+  // In a property import, a "Property" or "Building" column is the name.
+  if (type === "property") {
+    if (!out.name && out.property) out.name = out.property;
+    delete out.property;
+  }
   if (out.customerType) out.customerType = /repeat|recurring|regular|member/i.test(out.customerType) ? "repeat" : "one_time";
   return out;
 }
@@ -152,8 +182,9 @@ export function normalizeImportRow(type: ImportType, raw: Record<string, string>
 /** The template's own example row, filled in for each type: never imported if left in. */
 export function isTemplateExample(type: ImportType, row: Record<string, string>): boolean {
   const cols = TEMPLATE_COLUMNS[type];
-  const email = cols.find((c) => c.key === "email")?.example;
-  return !!email && (row.email || "").toLowerCase() === email.toLowerCase();
+  const key = type === "property" ? "manager" : "email";
+  const example = cols.find((c) => c.key === key)?.example;
+  return !!example && (row[key] || "").toLowerCase() === example.toLowerCase();
 }
 
 function isImportType(v: string): v is ImportType {
@@ -293,10 +324,30 @@ async function parseUpload(file: File): Promise<Record<string, string>[]> {
 /* -------------------------------- rows -> accounts ------------------------ */
 
 type RowResult =
-  | { ok: true; status: "created"; userId: string }
+  | { ok: true; status: "created"; userId: string; warning?: string }
   /** Already had a login elsewhere; `emailed` = the invitation email actually went out. */
-  | { ok: true; status: "invited"; emailed: boolean }
+  | { ok: true; status: "invited"; emailed: boolean; warning?: string }
+  /** Already here: a customer row moved them to its property and unit; a property row updated it. */
+  | { ok: true; status: "updated"; warning?: string }
   | { ok: false; reason: string };
+
+/**
+ * A customer row's Property and Unit columns: put the person at that named
+ * property (created if it's new). Never fails the row: the account is
+ * already made, so a problem comes back as a warning on an imported row.
+ */
+async function placeAtProperty(companyId: string, userId: string, row: Record<string, string>): Promise<string | undefined> {
+  if (!row.property) return undefined;
+  try {
+    const propertyId = await propertyIdForName(companyId, row.property, true);
+    if (!propertyId) return undefined;
+    // No Unit cell keeps the unit they have (a re-import that only adds properties).
+    await assignToProperty(companyId, { userIds: [userId], propertyId, unit: row.unit });
+    return undefined;
+  } catch (e) {
+    return e instanceof DirectoryError ? e.message : "Couldn't set their property";
+  }
+}
 
 const PALETTE = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
 const randomColor = () => PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -328,7 +379,15 @@ async function importPersonRow(
   const existing = await findUserByEmail(email);
 
   if (existing) {
-    if (await isMember(existing.id, cid)) return { ok: false, reason: "Already in your account" };
+    if (await isMember(existing.id, cid)) {
+      // Re-importing a resident list is how 2,500 existing residents get
+      // their property and unit: update those, never anything else.
+      if (role === "customer" && row.property) {
+        const warning = await placeAtProperty(cid, existing.id, row);
+        return warning ? { ok: false, reason: warning } : { ok: true, status: "updated" };
+      }
+      return { ok: false, reason: "Already in your account" };
+    }
     const { membership } = await attachMembership({
       userId: existing.id,
       companyId: cid,
@@ -342,7 +401,8 @@ async function importPersonRow(
       companyId: cid,
       membershipId: membership!.id,
     });
-    return { ok: true, status: "invited", emailed };
+    const warning = role === "customer" ? await placeAtProperty(cid, existing.id, row) : undefined;
+    return { ok: true, status: "invited", emailed, warning };
   }
 
   try {
@@ -374,7 +434,36 @@ async function importPersonRow(
     })
     .where(eq(schema.user.id, u.id));
   await attachMembership({ userId: u.id, companyId: cid, role, status: "active", invitedBy: opts.invitedBy });
-  return { ok: true, status: "created", userId: u.id };
+  const warning = role === "customer" ? await placeAtProperty(cid, u.id, row) : undefined;
+  return { ok: true, status: "created", userId: u.id, warning };
+}
+
+/** property row: create it, or update the one with that name. */
+async function importPropertyRow(row: Record<string, string>, opts: { companyId: string }): Promise<RowResult> {
+  const name = (row.name || "").trim();
+  if (!name) return { ok: false, reason: "Property name is required" };
+  const cid = opts.companyId;
+  let warning: string | undefined;
+  let managerId: string | null | undefined;
+  if (row.manager) {
+    managerId = await staffIdForLabel(cid, row.manager);
+    if (!managerId) warning = `No team member matches "${row.manager}", so it has no manager yet`;
+  }
+  try {
+    const existingId = await propertyIdForName(cid, name, false);
+    if (existingId) {
+      const patch: { address?: string; notes?: string; managerId?: string | null } = {};
+      if (row.address) patch.address = row.address;
+      if (row.notes) patch.notes = row.notes;
+      if (managerId) patch.managerId = managerId;
+      if (Object.keys(patch).length) await updateProperty(cid, existingId, patch);
+      return { ok: true, status: "updated", warning };
+    }
+    const r = await createProperty(cid, { name, address: row.address, notes: row.notes, managerId: managerId ?? null });
+    return { ok: true, status: "created", userId: r.id, warning };
+  } catch (e) {
+    return { ok: false, reason: e instanceof DirectoryError ? e.message : "Could not save that property" };
+  }
 }
 
 /** technician row */
@@ -460,7 +549,7 @@ export const importRoutes = new Hono<AppEnv>()
     const cols = TEMPLATE_COLUMNS[type];
     const exampleRow = Object.fromEntries(cols.map((col) => [col.key, col.example]));
     const stamp = Date.now();
-    const slug = type === "rider" ? "technicians" : type === "admin" ? "dispatchers" : "customers";
+    const slug = type === "rider" ? "technicians" : type === "admin" ? "dispatchers" : type === "property" ? "properties" : "customers";
     if (format === "xlsx") {
       const buf = await toXlsx([exampleRow], cols, `${IMPORT_LABEL[type]} template`, `${IMPORT_LABEL[type]} import template`);
       return fileResponse(buf, `${slug}-import-template-${stamp}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -495,25 +584,30 @@ export const importRoutes = new Hono<AppEnv>()
     if (lines.length > 500) return c.json({ message: "Import is limited to 500 rows at a time" }, 400);
 
     const cid = tenantId(c);
-    const results: { row: number; email: string; ok: boolean; status?: string; reason?: string; emailed?: boolean }[] = [];
+    const results: { row: number; email: string; ok: boolean; status?: string; reason?: string; emailed?: boolean; warning?: string }[] = [];
     const newPeople: string[] = [];
     for (const { line, row } of lines) {
       const result =
         type === "rider"
           ? await importRiderRow(row, { companyId: cid, invitedBy: me.id })
-          : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id });
+          : type === "property"
+            ? await importPropertyRow(row, { companyId: cid })
+            : await importPersonRow(row, { role: type, companyId: cid, invitedBy: me.id });
       // A row without an email gets a placeholder address nobody can receive.
-      if (result.ok && result.status === "created" && row.email && !isUndeliverableEmail(row.email)) newPeople.push(result.userId);
+      if (type !== "property" && result.ok && result.status === "created" && row.email && !isUndeliverableEmail(row.email)) newPeople.push(result.userId);
       results.push({
         row: line,
-        email: row.email || "",
+        // Properties have no email: the row is named by the property instead.
+        email: type === "property" ? row.name || "" : row.email || "",
         ok: result.ok,
-        ...(result.ok ? { status: result.status } : { reason: result.reason }),
+        ...(result.ok ? { status: result.status, warning: result.warning } : { reason: result.reason }),
         ...(result.ok && result.status === "invited" ? { emailed: result.emailed } : {}),
       });
     }
 
     const created = results.filter((r) => r.ok && r.status === "created").length;
+    const updated = results.filter((r) => r.ok && r.status === "updated").length;
+    const warnings = results.filter((r) => r.ok && r.warning).map((r) => ({ row: r.row, email: r.email, message: r.warning! }));
     const invited = results.filter((r) => r.ok && r.status === "invited").length;
     // Added as invited, but the invitation email didn't go out (no email
     // provider, or it failed): the admin needs to resend those.
@@ -521,12 +615,14 @@ export const importRoutes = new Hono<AppEnv>()
     const failed = results.filter((r) => !r.ok);
     // New technicians and office staff get their welcome email (set-password
     // link) one by one in the background; customers get nothing until a job.
-    const welcoming = type === "customer" ? 0 : newPeople.length;
+    const welcoming = type === "customer" || type === "property" ? 0 : newPeople.length;
     if (welcoming) queueWelcomes(cid, newPeople, me.id);
     return c.json(
       {
         total: lines.length,
         created,
+        updated,
+        warnings,
         invited,
         invitesNotEmailed,
         welcoming,

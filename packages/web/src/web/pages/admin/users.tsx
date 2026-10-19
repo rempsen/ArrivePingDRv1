@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { DialogPanel } from "../../components/dialog-panel";
 import { useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import type { InferRequestType } from "hono/client";
 import { ok } from "../../lib/api-ok";
@@ -32,21 +32,43 @@ import {
   Mail,
   Phone,
   ClipboardList,
-  ArrowDownAZ,
-  ArrowUpAZ,
   ChevronLeft,
   ChevronRight,
+  ArrowUp,
+  ArrowDown,
+  Building2,
 } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
+import {
+  rowGroupKey,
+  NONE,
+  type DirectoryGroup,
+  type DirectoryKind,
+  type DirectoryRow,
+  type DirectorySort,
+  type SortDir,
+} from "../../../shared/directory-query";
+import {
+  DirectoryProperties,
+  invalidateDirectory,
+  useDirectoryProperties,
+  type PropertyItem,
+} from "./directory-properties";
 
 const ROLE_LABEL_BASE: Record<string, string> = {
   superadmin: "Super Admin",
   admin: "Dispatcher",
   rider: "Technician",
+  manager: "Manager",
+  dispatcher: "Dispatcher",
+  project_manager: "Project Manager",
 };
 const ROLE_TINT: Record<string, string> = {
   superadmin: "bg-amber-500/15 text-amber-300",
   admin: "bg-violet-500/15 text-violet-300",
+  manager: "bg-violet-500/15 text-violet-300",
+  dispatcher: "bg-violet-500/15 text-violet-300",
+  project_manager: "bg-violet-500/15 text-violet-300",
   rider: "bg-brand/15 text-cyan-glow",
   customer: "bg-emerald-live/15 text-emerald-live",
 };
@@ -79,6 +101,52 @@ const EMPTY_ADD_FORM: NewUserForm = {
   customerType: "one_time",
 };
 
+type Tab = DirectoryKind | "properties";
+
+/** The import each tab offers. */
+const IMPORT_FOR_TAB: Record<Tab, ImportType | undefined> = {
+  all: undefined,
+  customer: "customer",
+  field: "rider",
+  office: "admin",
+  properties: "property",
+};
+
+/** How a viewer last arranged the Directory: theirs only, and only a convenience. */
+const VIEW_KEY = "arriveping.directory.view";
+type SavedView = { groupBy?: DirectoryGroup; sort?: DirectorySort; dir?: SortDir; pageSize?: number };
+function loadView(): SavedView {
+  try {
+    return JSON.parse(localStorage.getItem(VIEW_KEY) || "{}") as SavedView;
+  } catch {
+    return {};
+  }
+}
+function saveView(v: SavedView) {
+  try {
+    localStorage.setItem(VIEW_KEY, JSON.stringify(v));
+  } catch {
+    /* private window: the view just isn't remembered */
+  }
+}
+
+/** "Sep 2", or "Sep 2, 2024" when it isn't this year: joined and last-visit dates span years. */
+function fmtDay(iso: string): string {
+  const d = new Date(iso);
+  const thisYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }) });
+}
+
+/** Numbers and dates read best biggest/newest first; names A–Z. */
+const DESC_FIRST = new Set<DirectorySort>(["openJobs", "lastVisit", "joined"]);
+
+/**
+ * The Directory: everyone a company deals with, by kind, property and manager.
+ *
+ * The server runs the query (GET /directory, shared/directory-query.ts), so a
+ * property manager with 2,500 residents sorts, groups and pages them without
+ * the browser holding the whole list.
+ */
 export default function AdminClients() {
   const qc = useQueryClient();
   const { noun, nounPlural } = useWorkerNoun();
@@ -86,28 +154,62 @@ export default function AdminClients() {
   const roleLabel = (r: string) =>
     r === "rider" ? noun : r === "customer" ? customerNoun : ROLE_LABEL_BASE[r] ?? r;
   const [, go] = useLocation();
+  const [saved] = useState(loadView);
+  const [tab, setTab] = useState<Tab>("all");
+  const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
-  const [role, setRole] = useState("all");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [pageSize, setPageSize] = useState(25);
+  const [sort, setSort] = useState<DirectorySort>(saved.sort ?? "name");
+  const [dir, setDir] = useState<SortDir>(saved.dir ?? "asc");
+  const [groupBy, setGroupBy] = useState<DirectoryGroup>(saved.groupBy ?? "none");
+  const [propertyId, setPropertyId] = useState("");
+  const [managerId, setManagerId] = useState("");
+  const [pageSize, setPageSize] = useState(saved.pageSize ?? 25);
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [propEdit, setPropEdit] = useState<PropertyItem | "new" | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [delUser, setDelUser] = useState<any>(null);
-  const [detail, setDetail] = useState<any>(null);
+  const [delUser, setDelUser] = useState<DirectoryRow | null>(null);
+  const [detail, setDetail] = useState<DirectoryRow | null>(null);
   const [err, setErr] = useState("");
   const [form, setForm] = useState({ ...EMPTY_ADD_FORM });
 
-  // A filter/sort/page-size change can leave the current page number
-  // pointing past the end (or just stale) — snap back to page 1 whenever
-  // any of them change rather than the clamp-on-render doing it silently.
+  // Type, then wait a moment: one query per pause, not per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setQ(qInput.trim()), 250);
+    return () => clearTimeout(t);
+  }, [qInput]);
+
+  useEffect(() => {
+    saveView({ groupBy, sort, dir, pageSize });
+  }, [groupBy, sort, dir, pageSize]);
+
+  // A new filter is a new list: back to page 1, and nothing hidden stays selected.
   useEffect(() => {
     setPage(1);
-  }, [role, q, pageSize, sortDir]);
+    setSelected(new Set());
+  }, [tab, q, propertyId, managerId, groupBy, pageSize]);
 
-  const users = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: async () => ok(await api.admin.users.$get()),
+  const peopleTab = tab === "properties" ? "all" : tab;
+  const staffTab = tab === "field" || tab === "office";
+  const params: Record<string, string> = {
+    kind: peopleTab,
+    q,
+    sort,
+    dir,
+    groupBy: staffTab && (groupBy === "property" || groupBy === "manager") ? "none" : groupBy,
+    page: String(page),
+    pageSize: String(pageSize),
+    ...(propertyId && !staffTab ? { propertyId } : {}),
+    ...(managerId && !staffTab ? { managerId } : {}),
+  };
+
+  const directory = useQuery({
+    queryKey: ["directory", params],
+    placeholderData: keepPreviousData,
+    queryFn: async () => ok(await api.directory.$get({ query: params })),
   });
+  const props = useDirectoryProperties();
 
   const create = useMutation({
     mutationFn: async () => {
@@ -117,7 +219,7 @@ export default function AdminClients() {
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      invalidateDirectory(qc);
       setShowAdd(false);
       setForm({ ...EMPTY_ADD_FORM });
       setErr("");
@@ -133,200 +235,501 @@ export default function AdminClients() {
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      invalidateDirectory(qc);
       setDelUser(null);
     },
     onError: () => setDelUser(null),
   });
 
-  /**
-   * The action button follows the person-type tab you are looking at, so it
-   * never offers to add a customer while you are staring at a technician list.
-   * Technicians are not creatable from this directory (their create flow needs
-   * skills, vehicle and payout fields), so that tab sends you to the
-   * technicians page instead of opening the wrong modal. Every other tab opens
-   * the add modal with the matching account type already selected.
-   */
-  const addAction =
-    role === "rider"
-      ? { label: `Add ${noun}`, onClick: () => go("/admin/techs") }
-      : role === "admin"
-        ? {
-            label: "Add Dispatcher",
-            onClick: () => {
-              setForm((f) => ({ ...f, role: "admin" }));
-              setShowAdd(true);
-            },
-          }
-        : {
-            label: `Add ${customerNoun}`,
-            onClick: () => {
-              setForm((f) => ({ ...f, role: "customer" }));
-              setShowAdd(true);
-            },
-          };
-
-  if (users.isLoading) return <FullLoader label="Loading directory…" />;
-  let list = users.data?.users ?? [];
-  if (role !== "all") list = list.filter((u) => u.role === role);
-  if (q.trim()) {
-    const t = q.toLowerCase();
-    list = list.filter(
-      (u) =>
-        u.name?.toLowerCase().includes(t) || u.email?.toLowerCase().includes(t),
-    );
-  }
-  list = [...list].sort((a, b) => {
-    const cmp = (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" });
-    return sortDir === "asc" ? cmp : -cmp;
+  const selectAllMatching = useMutation({
+    mutationFn: async () => ok(await api.directory.$get({ query: { ...params, page: "1", withIds: "1" } })),
+    onSuccess: (r) => setSelected(new Set(r.ids ?? [])),
   });
 
-  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
-  const pageSafe = Math.min(page, totalPages);
-  const pageStart = (pageSafe - 1) * pageSize;
-  const pageList = list.slice(pageStart, pageStart + pageSize);
+  /**
+   * The action button follows the tab you are looking at, so it never offers
+   * to add a customer while you are staring at a technician list. Technicians
+   * are not creatable from this directory (their create flow needs skills,
+   * vehicle and payout fields), so that tab sends you to the technicians page.
+   */
+  const addAction =
+    tab === "properties"
+      ? { label: "Add property", icon: Building2, onClick: () => setPropEdit("new") }
+      : tab === "field"
+        ? { label: `Add ${noun}`, icon: UserPlus, onClick: () => go("/admin/techs") }
+        : tab === "office"
+          ? {
+              label: "Add Dispatcher",
+              icon: UserPlus,
+              onClick: () => {
+                setForm((f) => ({ ...f, role: "admin" }));
+                setShowAdd(true);
+              },
+            }
+          : {
+              label: `Add ${customerNoun}`,
+              icon: UserPlus,
+              onClick: () => {
+                setForm((f) => ({ ...f, role: "customer" }));
+                setShowAdd(true);
+              },
+            };
+
+  if (directory.isLoading && !directory.data) return <FullLoader label="Loading directory…" />;
+  const result = directory.data;
+  const rows = result?.rows ?? [];
+  const kinds = result?.facets.kinds ?? { all: 0, customer: 0, field: 0, office: 0 };
+  const propertyCount = props.data?.properties.length ?? result?.propertyCount ?? 0;
+  const effectiveGroup = (result?.groupBy ?? "none") as DirectoryGroup;
+  const groupInfo = new Map((result?.groups ?? []).map((g) => [g.key, g]));
+  const showPlacement = tab === "all" || tab === "customer";
+  const selectable = (r: DirectoryRow) => r.kind === "customer";
+  const pageSelectable = rows.filter(selectable);
+  const allOnPage = pageSelectable.length > 0 && pageSelectable.every((r) => selected.has(r.id));
+  const filtersOn = !!(propertyId || managerId || q);
+
+  // Property and manager pickers: what's in this tab and search, plus whatever
+  // is picked (a property with nobody in it yet still shows its name).
+  const propertyOptions = (() => {
+    const list = (result?.facets.properties ?? []).map((p) => ({ id: p.id, label: `${p.name} (${p.count})` }));
+    if (propertyId && !list.some((p) => p.id === propertyId)) {
+      const p = props.data?.properties.find((x) => x.id === propertyId);
+      list.unshift({ id: propertyId, label: `${p?.name ?? "Property"} (0)` });
+    }
+    return list;
+  })();
+  const managerOptions = (() => {
+    const list = (result?.facets.managers ?? []).map((m) => ({ id: m.id, label: `${m.name} (${m.count})` }));
+    if (managerId && !list.some((m) => m.id === managerId)) {
+      const s = props.data?.staff.find((x) => x.id === managerId);
+      list.unshift({ id: managerId, label: `${s?.name ?? "Manager"} (0)` });
+    }
+    return list;
+  })();
+
+  const sortBy = (k: DirectorySort) => {
+    if (k === sort) setDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSort(k);
+      setDir(DESC_FIRST.has(k) ? "desc" : "asc");
+    }
+  };
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const togglePage = () =>
+    setSelected((s) => {
+      const n = new Set(s);
+      for (const r of pageSelectable) {
+        if (allOnPage) n.delete(r.id);
+        else n.add(r.id);
+      }
+      return n;
+    });
+
+  const viewResidents = (pid: string) => {
+    setTab("customer");
+    setManagerId("");
+    setPropertyId(pid);
+  };
+
+  const tabs: [Tab, string, number][] = [
+    ["all", "All", kinds.all],
+    ["customer", customerNounPlural, kinds.customer],
+    ["field", nounPlural, kinds.field],
+    ["office", "Office staff", kinds.office],
+    ["properties", "Properties", propertyCount],
+  ];
+
+  type Col = { key: string; label: string; sort?: DirectorySort; cls?: string };
+  const cols: Col[] = showPlacement
+    ? [
+        { key: "name", label: "Name", sort: "name" },
+        ...(tab === "all" ? [{ key: "role", label: "Type", sort: "role" as const, cls: "hidden lg:table-cell" }] : []),
+        { key: "property", label: "Property", sort: "property", cls: "hidden md:table-cell" },
+        { key: "unit", label: "Unit", sort: "unit", cls: "hidden md:table-cell" },
+        { key: "manager", label: "Manager", sort: "manager", cls: "hidden lg:table-cell" },
+        { key: "contact", label: "Contact", sort: "email", cls: "hidden sm:table-cell" },
+        ...(tab === "customer"
+          ? [
+              { key: "openJobs", label: "Open", sort: "openJobs" as const, cls: "hidden text-right xl:table-cell" },
+              { key: "lastVisit", label: "Last visit", sort: "lastVisit" as const, cls: "hidden text-right xl:table-cell" },
+            ]
+          : [{ key: "joined", label: "Joined", sort: "joined" as const, cls: "hidden text-right xl:table-cell" }]),
+      ]
+    : [
+        { key: "name", label: "Name", sort: "name" },
+        { key: "role", label: "Role", sort: "role" },
+        { key: "contact", label: "Contact", sort: "email", cls: "hidden sm:table-cell" },
+        { key: "manages", label: "Manages", cls: "hidden text-right md:table-cell" },
+        { key: "joined", label: "Joined", sort: "joined", cls: "hidden text-right lg:table-cell" },
+      ];
+  const colSpan = cols.length + 2;
+
+  const cell = (r: DirectoryRow, c: Col) => {
+    switch (c.key) {
+      case "name":
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand/15 text-xs font-bold text-cyan-glow">
+              {r.name?.[0]?.toUpperCase() ?? "U"}
+            </div>
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 truncate font-semibold text-slate-100">
+                <span className="truncate">{r.name || r.email}</span>
+                {r.status === "invited" && <span className="rounded-full bg-cyan-glow/10 px-1.5 py-px text-[10px] font-semibold text-cyan-glow">Invited</span>}
+                {r.status === "disabled" && <span className="rounded-full bg-white/5 px-1.5 py-px text-[10px] font-semibold text-slate-500">Deactivated</span>}
+              </p>
+              {/* Small screens: the columns that are hidden, folded under the name. */}
+              {r.kind === "customer" && (r.propertyName || r.managerName) && (
+                <p className="truncate text-xs text-slate-500 md:hidden">
+                  {/* Under a property header, the property and its manager are already said. */}
+                  {(effectiveGroup === "property"
+                    ? [r.unit && `Unit ${r.unit}`]
+                    : [r.propertyName, r.unit && `Unit ${r.unit}`, effectiveGroup === "manager" ? "" : r.managerName]
+                  )
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+              <p className="truncate text-xs text-slate-500 sm:hidden">{r.phone || r.email}</p>
+            </div>
+          </div>
+        );
+      case "role":
+        return (
+          <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${ROLE_TINT[r.role] ?? "bg-white/5 text-slate-400"}`}>
+            {roleLabel(r.role)}
+          </span>
+        );
+      case "property":
+        return r.propertyName ? (
+          <span className="block max-w-[200px] truncate text-slate-200" title={r.propertyAddress || undefined}>{r.propertyName}</span>
+        ) : r.kind === "customer" ? (
+          <span className="text-slate-600">—</span>
+        ) : null;
+      case "unit":
+        return r.unit ? <span className="text-slate-300">{r.unit}</span> : null;
+      case "manager":
+        return r.managerName ? <span className="block max-w-[180px] truncate text-slate-300">{r.managerName}</span> : null;
+      case "contact":
+        return (
+          <div className="min-w-0 max-w-[240px] text-xs">
+            {r.email && (
+              <a href={`mailto:${r.email}`} onClick={(e) => e.stopPropagation()} className="block truncate text-slate-300 hover:text-white">
+                {r.email}
+              </a>
+            )}
+            {r.phone && (
+              <a href={`tel:${r.phone}`} onClick={(e) => e.stopPropagation()} className="block truncate text-slate-500 hover:text-white">
+                {r.phone}
+              </a>
+            )}
+            {!r.email && !r.phone && <span className="text-slate-600">—</span>}
+          </div>
+        );
+      case "openJobs":
+        return r.openJobs ? (
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300">{r.openJobs}</span>
+        ) : (
+          <span className="text-slate-600">0</span>
+        );
+      case "lastVisit":
+        return <span className="whitespace-nowrap text-slate-400">{r.lastVisitAt ? fmtDay(r.lastVisitAt) : "—"}</span>;
+      case "joined":
+        return <span className="whitespace-nowrap text-slate-500">{r.createdAt ? fmtDay(r.createdAt) : "—"}</span>;
+      case "manages":
+        return r.managedCount ? (
+          <span className="text-slate-300">
+            {r.managedCount} {r.managedCount === 1 ? "property" : "properties"}
+          </span>
+        ) : (
+          <span className="text-slate-600">—</span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const selectCls = "rounded-full border border-white/10 bg-ink-2 px-3 py-2 text-xs font-semibold text-slate-200 outline-none focus:border-brand";
 
   return (
     <PageWrap>
       <PageHead
         title="Directory"
-        subtitle={`${list.length} account${list.length === 1 ? "" : "s"}`}
+        subtitle={
+          tab === "properties"
+            ? `${propertyCount.toLocaleString()} ${propertyCount === 1 ? "property" : "properties"}`
+            : `${(result?.total ?? 0).toLocaleString()} ${(result?.total ?? 0) === 1 ? "person" : "people"}${filtersOn ? " match" : ""}`
+        }
         actions={
           <div className="flex items-center gap-2" data-tour="people.add">
             <ImportMenu
-              types={["customer", "rider", "admin"]}
-              activeType={role !== "all" ? (role as ImportType) : undefined}
+              types={["customer", "rider", "admin", "property"]}
+              activeType={IMPORT_FOR_TAB[tab]}
               customerLabel={customerNounPlural}
               workerLabel={nounPlural}
-              onDone={() => qc.invalidateQueries({ queryKey: ["admin-users"] })}
+              onDone={() => invalidateDirectory(qc)}
             />
             <BtnPrimary onClick={addAction.onClick}>
-              <UserPlus className="h-4 w-4" /> {addAction.label}
+              <addAction.icon className="h-4 w-4" /> {addAction.label}
             </BtnPrimary>
           </div>
         }
       />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="people.filters">
-        <div className="flex gap-1.5">
-          {([
-            ["all", "All"],
-            ["customer", customerNounPlural],
-            ["rider", nounPlural],
-            ["admin", "Dispatchers"],
-          ] as const).map(([r, label]) => (
+      <div className="-mx-1 mb-3 overflow-x-auto px-1" data-tour="people.filters">
+        <div className="flex w-max gap-1.5" role="tablist" aria-label="Directory sections">
+          {tabs.map(([t, label, count]) => (
             <button
-              key={r}
-              onClick={() => setRole(r)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                role === r
-                  ? "bg-brand text-white"
-                  : "bg-ink-2 text-slate-400 hover:bg-white/5"
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                tab === t ? "bg-brand text-white" : "bg-ink-2 text-slate-400 hover:bg-white/5"
               }`}
             >
               {label}
+              <span className={`rounded-full px-1.5 text-[10px] ${tab === t ? "bg-white/20" : "bg-white/5 text-slate-500"}`}>{count.toLocaleString()}</span>
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-            aria-label={sortDir === "asc" ? "Sorted A to Z, click for Z to A" : "Sorted Z to A, click for A to Z"}
-            title={sortDir === "asc" ? "Name: A → Z" : "Name: Z → A"}
-            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-ink-2 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-brand/50 hover:text-white"
-          >
-            {sortDir === "asc" ? <ArrowDownAZ className="h-4 w-4" /> : <ArrowUpAZ className="h-4 w-4" />}
-            <span className="hidden sm:inline">{sortDir === "asc" ? "A–Z" : "Z–A"}</span>
-          </button>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <input aria-label="Search…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search…"
-              className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand sm:w-56"
-            />
+      </div>
+
+      {tab === "properties" ? (
+        <DirectoryProperties
+          edit={propEdit}
+          setEdit={setPropEdit}
+          onViewResidents={viewResidents}
+          customerNoun={customerNoun}
+          customerNounPlural={customerNounPlural}
+        />
+      ) : (
+        <>
+          <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative lg:w-80">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden />
+              <input
+                aria-label="Search the directory"
+                value={qInput}
+                onChange={(e) => setQInput(e.target.value)}
+                placeholder={showPlacement ? "Search name, phone, unit, property…" : "Search name, email or phone…"}
+                className="w-full rounded-full border border-white/10 bg-ink-2 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {showPlacement && (
+                <>
+                  <select aria-label="Filter by property" className={selectCls} value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
+                    <option value="">All properties</option>
+                    {propertyOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <select aria-label="Filter by manager" className={selectCls} value={managerId} onChange={(e) => setManagerId(e.target.value)}>
+                    <option value="">All managers</option>
+                    {managerOptions.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {/* Small screens hide most column headers, so sorting gets its own control. */}
+              <select
+                aria-label="Sort by"
+                className={`${selectCls} md:hidden`}
+                value={`${sort}:${dir}`}
+                onChange={(e) => {
+                  const [k, d] = e.target.value.split(":") as [DirectorySort, SortDir];
+                  setSort(k);
+                  setDir(d);
+                }}
+              >
+                <option value="name:asc">Name A–Z</option>
+                <option value="name:desc">Name Z–A</option>
+                {showPlacement && <option value="property:asc">Property A–Z</option>}
+                {showPlacement && <option value="unit:asc">Unit</option>}
+                {showPlacement && <option value="manager:asc">Manager A–Z</option>}
+                {tab === "customer" && <option value="openJobs:desc">Most open requests</option>}
+                {tab === "customer" && <option value="lastVisit:desc">Last visit, newest</option>}
+                <option value="joined:desc">Newest first</option>
+                {![
+                  "name:asc", "name:desc", "property:asc", "unit:asc", "manager:asc", "openJobs:desc", "lastVisit:desc", "joined:desc",
+                ].includes(`${sort}:${dir}`) && <option value={`${sort}:${dir}`}>Custom sort</option>}
+              </select>
+              <select aria-label="Group by" className={selectCls} value={staffTab && groupBy !== "role" ? "none" : groupBy} onChange={(e) => setGroupBy(e.target.value as DirectoryGroup)}>
+                <option value="none">No grouping</option>
+                {showPlacement && <option value="property">Group by property</option>}
+                {showPlacement && <option value="manager">Group by manager</option>}
+                <option value="role">Group by type</option>
+              </select>
+              {filtersOn && (
+                <button
+                  onClick={() => {
+                    setQInput("");
+                    setQ("");
+                    setPropertyId("");
+                    setManagerId("");
+                  }}
+                  className="flex items-center gap-1 rounded-full px-2.5 py-2 text-xs font-semibold text-slate-400 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden /> Clear
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div className="nvc-card overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm lg:min-w-[720px]">
-          <thead>
-            <tr className="border-b border-white/5 text-left text-xs uppercase tracking-wide text-slate-500">
-              <th className="px-4 py-3 font-semibold">Name</th>
-              <th className="hidden px-4 py-3 font-semibold sm:table-cell">Email</th>
-              <th className="hidden px-4 py-3 font-semibold md:table-cell">Phone</th>
-              <th className="px-4 py-3 font-semibold">Role</th>
-              <th className="hidden px-4 py-3 text-right font-semibold sm:table-cell">Joined</th>
-              <th className="relative px-4 py-3 text-right font-semibold"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-12 text-center text-slate-500">
-                  No accounts found
-                </td>
-              </tr>
-            ) : (
-              pageList.map((u) => (
-                <tr key={u.id} onClick={() => setDetail(u)} className="cursor-pointer hover:bg-white/[0.03]">
-                  <td className="px-4 py-3" aria-label={u.name}>
-                    <div className="flex items-center gap-2.5">
-                      <div className="grid h-8 w-8 place-items-center rounded-full bg-brand/15 text-xs font-bold text-cyan-glow">
-                        {u.name?.[0]?.toUpperCase() ?? "U"}
-                      </div>
-                      <span className="font-semibold text-slate-100">
-                        {u.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">
-                    {u.email}
-                  </td>
-                  <td className="hidden px-4 py-3 text-slate-400 md:table-cell">
-                    {u.phone ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${ROLE_TINT[u.role] ?? "bg-white/5 text-slate-400"}`}
-                    >
-                      {roleLabel(u.role)}
-                    </span>
-                  </td>
-                  <td className="hidden px-4 py-3 text-right text-slate-500 sm:table-cell">
-                    {u.createdAt ? fmtDateShort(u.createdAt) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDelUser(u); }}
-                      aria-label={`Delete account ${u.name}`}
-                      title="Delete account"
-                      className="grid h-8 w-8 place-items-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-400"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))
+          {selected.size > 0 && (
+            <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand/40 bg-ink-2/95 px-4 py-2.5 text-sm shadow-xl backdrop-blur">
+              <span className="font-semibold text-white">{selected.size.toLocaleString()} selected</span>
+              {tab === "customer" && allOnPage && result && selected.size < result.total && (
+                <button
+                  onClick={() => selectAllMatching.mutate()}
+                  disabled={selectAllMatching.isPending}
+                  className="text-xs font-semibold text-cyan-glow hover:underline disabled:opacity-50"
+                >
+                  {selectAllMatching.isPending ? "Selecting…" : `Select all ${result.total.toLocaleString()} matching`}
+                </button>
+              )}
+              <div className="ml-auto flex flex-wrap gap-2">
+                <BtnPrimary onClick={() => setAssignOpen(true)}>
+                  <Building2 className="h-4 w-4" /> Assign to property
+                </BtnPrimary>
+                <BtnGhost onClick={() => setSelected(new Set())}>Clear</BtnGhost>
+              </div>
+            </div>
+          )}
+
+          <div className={`nvc-card overflow-hidden transition-opacity ${directory.isFetching && directory.isPlaceholderData ? "opacity-70" : ""}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5 text-left text-xs text-slate-500">
+                    <th className="w-10 py-3 pl-4">
+                      {pageSelectable.length > 0 && (
+                        <input
+                          type="checkbox"
+                          aria-label={allOnPage ? "Unselect everyone on this page" : "Select everyone on this page"}
+                          checked={allOnPage}
+                          onChange={togglePage}
+                          className="h-4 w-4 accent-cyan-500"
+                        />
+                      )}
+                    </th>
+                    {cols.map((c) => (
+                      <th
+                        key={c.key}
+                        className={`px-3 py-3 font-semibold ${c.cls ?? ""}`}
+                        aria-sort={c.sort && sort === c.sort ? (dir === "asc" ? "ascending" : "descending") : undefined}
+                      >
+                        {c.sort ? (
+                          <button
+                            onClick={() => sortBy(c.sort!)}
+                            className={`inline-flex items-center gap-1 uppercase tracking-wide hover:text-white ${sort === c.sort ? "text-slate-200" : ""}`}
+                          >
+                            {c.label}
+                            {sort === c.sort && (dir === "asc" ? <ArrowUp className="h-3 w-3" aria-hidden /> : <ArrowDown className="h-3 w-3" aria-hidden />)}
+                          </button>
+                        ) : (
+                          <span className="uppercase tracking-wide">{c.label}</span>
+                        )}
+                      </th>
+                    ))}
+                    <th className="relative px-4 py-3 text-right font-semibold">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={colSpan} className="py-12 text-center text-slate-500">
+                        {filtersOn ? "Nobody matches. Try fewer words, or clear the filters." : "Nobody here yet"}
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((r, i) => {
+                      const gk = effectiveGroup !== "none" ? rowGroupKey(r, effectiveGroup) : "";
+                      const prevKey = i > 0 && effectiveGroup !== "none" ? rowGroupKey(rows[i - 1]!, effectiveGroup) : null;
+                      const g = gk && gk !== prevKey ? groupInfo.get(gk) : undefined;
+                      const gLabel = g ? (effectiveGroup === "role" && g.key !== NONE ? roleLabel(g.key) : g.label) : "";
+                      return (
+                        <Fragment key={r.id}>
+                          {g && (
+                            <tr className="bg-white/[0.035]">
+                              <td colSpan={colSpan} className="px-4 py-2" aria-label={`${gLabel}: ${g.count}`}>
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                  <span className="text-xs font-bold uppercase tracking-wide text-slate-200">
+                                    {gLabel}
+                                  </span>
+                                  <span className="text-xs text-slate-500">{g.count.toLocaleString()}</span>
+                                  {g.sublabel && <span className="text-xs text-slate-500">{g.sublabel}</span>}
+                                  {i === 0 && page > 1 && <span className="text-[11px] text-slate-600">(continued)</span>}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          <tr onClick={() => setDetail(r)} className={`cursor-pointer hover:bg-white/[0.03] ${selected.has(r.id) ? "bg-brand/[0.06]" : ""}`}>
+                            <td className="w-10 py-3 pl-4" onClick={(e) => e.stopPropagation()}>
+                              {selectable(r) && (
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select ${r.name || r.email}`}
+                                  checked={selected.has(r.id)}
+                                  onChange={() => toggle(r.id)}
+                                  className="h-4 w-4 accent-cyan-500"
+                                />
+                              )}
+                            </td>
+                            {cols.map((c) => (
+                              <td key={c.key} className={`px-3 py-3 ${c.cls ?? ""}`}>
+                                {cell(r, c)}
+                              </td>
+                            ))}
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDelUser(r);
+                                }}
+                                aria-label={`Delete account ${r.name}`}
+                                title="Delete account"
+                                className="grid h-8 w-8 place-items-center rounded-lg text-slate-600 transition hover:bg-red-500/10 hover:text-red-400"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        </Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {result && result.total > 0 && (
+              <PaginationBar
+                page={result.page}
+                totalPages={result.totalPages}
+                pageSize={pageSize}
+                total={result.total}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             )}
-          </tbody>
-        </table>
-        </div>
-
-        {list.length > 0 && (
-          <PaginationBar
-            page={pageSafe}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            total={list.length}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
-        )}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* add client modal */}
       <Modal
@@ -433,8 +836,132 @@ export default function AdminClients() {
         pending={del.isPending}
       />
 
-      <ClientDrawer user={detail} onClose={() => setDetail(null)} />
+      <AssignModal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        ids={[...selected]}
+        properties={props.data?.properties ?? []}
+        customerNounPlural={customerNounPlural}
+        onDone={() => {
+          setAssignOpen(false);
+          setSelected(new Set());
+        }}
+      />
+
+      <ClientDrawer person={detail} properties={props.data?.properties ?? []} onClose={() => setDetail(null)} />
     </PageWrap>
+  );
+}
+
+/**
+ * Put the selected people at a property (made here if it's new), or take them
+ * off theirs. Moving several keeps each person's unit; one person can be given
+ * a unit as they move.
+ */
+function AssignModal({
+  open,
+  onClose,
+  ids,
+  properties,
+  customerNounPlural,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  ids: string[];
+  properties: PropertyItem[];
+  customerNounPlural: string;
+  onDone: () => void;
+}) {
+  const qc = useQueryClient();
+  const [choice, setChoice] = useState("");
+  const [newName, setNewName] = useState("");
+  const [unit, setUnit] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setChoice("");
+    setNewName("");
+    setUnit("");
+    setErr("");
+  }, [open]);
+
+  const assign = useMutation({
+    mutationFn: async () => {
+      let propertyId: string | null = choice === NONE ? null : choice;
+      if (choice === "new") {
+        const res = await api.directory.properties.$post({ json: { name: newName.trim() } });
+        const data = await res.json();
+        if (!res.ok) throw new Error((data as { message?: string }).message || "Couldn't add the property");
+        propertyId = (data as { id: string }).id;
+      }
+      const res = await api.directory.assign.$post({
+        json: { userIds: ids, propertyId, ...(ids.length === 1 && propertyId && unit.trim() ? { unit: unit.trim() } : {}) },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { message?: string }).message || "Couldn't move them");
+      return data;
+    },
+    onSuccess: () => {
+      invalidateDirectory(qc);
+      onDone();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  const who = ids.length === 1 ? "this person" : `these ${ids.length.toLocaleString()} ${customerNounPlural.toLowerCase()}`;
+  const ready = choice === "new" ? !!newName.trim() : !!choice;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Assign to property"
+      subtitle={`Where ${who} live${ids.length === 1 ? "s" : ""}`}
+      size="sm"
+      footer={
+        <>
+          <BtnGhost onClick={onClose}>Cancel</BtnGhost>
+          <BtnPrimary disabled={!ready || assign.isPending} onClick={() => assign.mutate()}>
+            {assign.isPending ? "Saving…" : choice === NONE ? "Remove from property" : "Assign"}
+          </BtnPrimary>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {err && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
+        <Field label="Property">
+          <select aria-label="Property" className={inputCls} value={choice} onChange={(e) => setChoice(e.target.value)}>
+            <option value="" disabled>
+              Pick a property…
+            </option>
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.managerName ? ` · ${p.managerName}` : ""}
+              </option>
+            ))}
+            <option value="new">+ New property…</option>
+            <option value={NONE}>No property (take them off theirs)</option>
+          </select>
+        </Field>
+        {choice === "new" && (
+          <Field label="New property name">
+            <input aria-label="New property name" className={inputCls} value={newName} maxLength={120} onChange={(e) => setNewName(e.target.value)} placeholder="Maple Court" />
+          </Field>
+        )}
+        {ids.length === 1 && choice !== NONE && choice !== "" && (
+          <Field label="Unit (optional)">
+            <input aria-label="Unit" className={inputCls} value={unit} maxLength={40} onChange={(e) => setUnit(e.target.value)} placeholder="4B" />
+          </Field>
+        )}
+        {ids.length > 1 && choice !== NONE && choice !== "" && (
+          <p className="text-xs text-slate-500">Everyone keeps their own unit. Set a unit on each person's record.</p>
+        )}
+        {choice === "new" && <p className="text-xs text-slate-500">Add its address and manager afterwards on the Properties tab.</p>}
+      </div>
+    </Modal>
   );
 }
 
@@ -592,8 +1119,25 @@ function applyAddressParts(prev: any, formatted: string) {
   };
 }
 
-function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
+function ClientDrawer({
+  person,
+  properties,
+  onClose,
+}: {
+  /** The Directory row that was clicked; the full record loads from it. */
+  person: DirectoryRow | null;
+  properties: PropertyItem[];
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
+  const record = useQuery({
+    queryKey: ["admin-user", person?.id],
+    enabled: !!person,
+    queryFn: async () => (await ok(await api.admin.users[":id"].$get({ param: { id: person!.id } }))).user,
+  });
+  const full = record.data && record.data.id === person?.id ? record.data : null;
+  // Where they live: saved with the profile, through POST /directory/assign.
+  const [placement, setPlacement] = useState({ propertyId: "", unit: "" });
   const [tab, setTab] = useState<"profile" | "jobs" | "files">("profile");
   const [viewJob, setViewJob] = useState<any>(null);
   const [, navigate] = useLocation();
@@ -625,6 +1169,11 @@ function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
   const [saveErr, setSaveErr] = useState("");
 
   useEffect(() => {
+    setPlacement({ propertyId: person?.propertyId ?? "", unit: person?.unit ?? "" });
+  }, [person]);
+
+  useEffect(() => {
+    const user = full;
     if (user) {
       // Records created before the name split only have a single `name`; fall
       // back to splitting it so the fields are never blank for old clients.
@@ -650,37 +1199,28 @@ function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
       });
       setSaveErr("");
     }
-  }, [
-	user?.id,
-	user?.company,
-	user?.website,
-	user?.customerType,
-	user?.firstName,
-	user?.lastName,
-	user?.notes,
-	user?.city,
-	user?.region,
-	user?.phone,
-	user?.altPhone,
-	user?.postalCode,
-	user?.contacts,
-	user?.address,
-	user?.email,
-	user?.name,
-	user?.addresses,
-	user?.country,
-	user
-]);
+  }, [full]);
+
+  const placementChanged =
+    !!person && person.kind === "customer" && (placement.propertyId !== (person.propertyId ?? "") || placement.unit.trim() !== person.unit);
 
   const save = useMutation({
     mutationFn: async () => {
-      const res = await api.admin.users[":id"].$patch({ param: { id: user.id }, json: form });
+      const res = await api.admin.users[":id"].$patch({ param: { id: person!.id }, json: form });
       const data = await res.json();
       if (!res.ok) throw new Error((data as any).message || "Save failed");
+      if (placementChanged) {
+        const r = await api.directory.assign.$post({
+          json: { userIds: [person!.id], propertyId: placement.propertyId || null, unit: placement.unit.trim() },
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error((d as { message?: string }).message || "Saved, but their property didn't change");
+      }
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      invalidateDirectory(qc);
+      qc.invalidateQueries({ queryKey: ["admin-user", person?.id] });
       setSaveErr("");
     },
     onError: (e: any) => setSaveErr(e.message),
@@ -688,12 +1228,14 @@ function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
 
   const bookings = useQuery({
     queryKey: ["admin-bookings"],
-    enabled: !!user,
+    enabled: !!person,
     queryFn: async () => ok(await api.bookings.$get()),
   });
 
-  if (!user) return null;
-  const isClient = user.role === "customer";
+  if (!person) return null;
+  const user = full ?? person;
+  const isClient = person.kind === "customer";
+  const placedAt = properties.find((p) => p.id === placement.propertyId);
   const allBookings = (() => {
     const d: any = bookings.data;
     if (Array.isArray(d)) return d;
@@ -732,7 +1274,10 @@ function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
         </div>
 
         <div className="space-y-5 p-5">
-          {tab === "profile" && (
+          {tab === "profile" && !full && (
+            <p className="py-8 text-center text-sm text-slate-500">{record.isError ? "Couldn't load this record. Please try again." : "Loading…"}</p>
+          )}
+          {tab === "profile" && full && (
             <>
               {saveErr && (
                 <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{saveErr}</p>
@@ -784,6 +1329,52 @@ function ClientDrawer({ user, onClose }: { user: any; onClose: () => void }) {
                   </Field>
                 </div>
               </div>
+
+              {/* --- Property: where they live, and who manages it --- */}
+              {isClient && (
+                <div className="space-y-3 border-t border-white/10 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Property</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <Field label="Property">
+                        <select
+                          aria-label="Property"
+                          className={inputCls}
+                          value={placement.propertyId}
+                          onChange={(e) => setPlacement({ ...placement, propertyId: e.target.value })}
+                        >
+                          <option value="">No property</option>
+                          {properties.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                    <Field label="Unit">
+                      <input
+                        aria-label="Unit"
+                        className={inputCls}
+                        value={placement.unit}
+                        maxLength={40}
+                        disabled={!placement.propertyId}
+                        onChange={(e) => setPlacement({ ...placement, unit: e.target.value })}
+                        placeholder="4B"
+                      />
+                    </Field>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {placedAt
+                      ? placedAt.managerName
+                        ? `Manager: ${placedAt.managerName}${placedAt.address ? ` · ${placedAt.address}` : ""}`
+                        : `No manager yet${placedAt.address ? ` · ${placedAt.address}` : ""}. Pick one on the Properties tab.`
+                      : properties.length
+                        ? "Not at a property yet."
+                        : "No properties yet. Add them on the Properties tab."}
+                  </p>
+                </div>
+              )}
 
               {/* --- Primary address --- */}
               <div className="space-y-3 border-t border-white/10 pt-4">
