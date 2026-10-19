@@ -226,7 +226,7 @@ export const articles: Article[] = [
         type: "ol",
         items: [
           "Open **People → Technicians & Managers** and choose the **Internal Team** tab.",
-          "Choose **New Employee**. Enter their name, email and phone, and pick a role: Dispatcher, Manager or Project Manager. An admin can also make another Admin. What each role can do is in [User roles and what each can do](/support/roles-and-permissions).",
+          "Choose **New Employee**. Enter their name, email and phone, and pick a role: Dispatcher, Manager or Project Manager. To make someone an Admin, email [support@nvc360.com](mailto:support@nvc360.com); admin accounts are created by our team. What each role can do is in [User roles and what each can do](/support/roles-and-permissions).",
           "They get a welcome email, in your company's name, with a link to set their password and sign in on the web. If it didn't arrive, open their profile and choose **Email a sign-in link**.",
         ],
       },
@@ -548,7 +548,7 @@ export const articles: Article[] = [
           "Save, and repeat for each area you serve.",
         ],
       },
-      { type: "p", text: "Once any zone is active, a job whose address falls outside every active zone is refused with \"Address is outside all active service zones\", in the dashboard and on intake forms alike. If you'd rather take any address, don't activate zones." },
+      { type: "p", text: "Once any zone is active, a job whose address falls outside every active zone is refused with \"Address is outside all active service zones\", in the dashboard and on intake forms alike. The check needs a located address: if an address can't be found on the map, the job saves without a zone check, so look at the pin on any job you didn't expect to get through (see [The address won't autocomplete](/support/address-not-found)). If you'd rather take any address, don't activate zones." },
       {
         type: "ul",
         items: [
@@ -974,7 +974,7 @@ export const articles: Article[] = [
         type: "ol",
         items: [
           "Open **Money → Payouts** and choose **Generate payouts**.",
-          "Pick the **Period start** and **Period end**. Every job completed in the period is included, whether or not the customer has paid its invoice.",
+          "Pick the **Period start** and **Period end**. Every completed job whose **scheduled date** falls in the period is included, whether or not the customer has paid its invoice. A job finished a day or two after its scheduled date still belongs to the period it was scheduled in, so run periods back to back with no gaps.",
           "Review each technician's row: **Jobs**, **On site**, **Hourly**, **Mileage**, **Flat**, **Per-unit** and **Total pay**. A job that paid $0 because no rate was set is flagged so you can fix the rate first.",
           "When you've paid them through your payroll or bank, choose **Mark paid**.",
         ],
