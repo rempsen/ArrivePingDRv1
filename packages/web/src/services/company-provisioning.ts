@@ -52,6 +52,7 @@ import { scoutStarterCatalog, scoutStarterOptionCatalog } from "./catalog-scout"
 import { saveSiteCrawl } from "./site-crawl";
 import { buildExcerpts } from "./brand-scout";
 import { seedSampleDay } from "./sample-day";
+import { syncOfficeFromBusinessAddress } from "./company-office";
 
 void _jsonBody; // (import kept intentionally unused-safe; see note above)
 
@@ -622,6 +623,16 @@ export async function provisionCompany(
     googleReviewUrl: /^https:\/\/search\.google\.com\/local\/writereview\?placeid=[A-Za-z0-9_%-]+$/.test(str(brand.googleReviewUrl)) ? str(brand.googleReviewUrl) : "",
     qualifyingProfile: JSON.stringify(scoutedTeamProfile(brand)),
   });
+
+  // 2-0) the scraped business address is also the office location (fleet map
+  //      centre, sample day, practice jobs, address suggestions) until an
+  //      admin sets a different one. Best-effort: a geocode miss or error
+  //      never blocks signup.
+  if (str(brand.address)) {
+    await syncOfficeFromBusinessAddress(slug, str(brand.address)).catch((e) =>
+      console.error("[provisioning] office-from-business-address failed", e),
+    );
+  }
 
   // 2a) persist the raw crawl (item E) so the pages the scout read survive
   //     signup — the concierge, the AI writers below and "Re-scan website"

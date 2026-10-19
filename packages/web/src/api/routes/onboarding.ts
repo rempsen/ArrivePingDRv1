@@ -59,6 +59,7 @@ import { syncCompanyToHubspot } from "../../services/hubspot-sync";
 import { email as emailField, shortText } from "../lib/validate";
 import { loadSiteExcerpts } from "../../services/site-crawl";
 import { rescanWebsite } from "../../services/rescan";
+import { syncOfficeFromBusinessAddress } from "../../services/company-office";
 import {
   extractRosterFromImage,
   rosterToPasteText,
@@ -864,6 +865,13 @@ correction like that — it reads like you weren't listening.`;
             if (Object.keys(patch).length === 0) return { updated: [] };
             const before = await t.selectOne(schema.companySettings);
             await t.update(schema.companySettings, patch);
+            // The business address given during setup is also the office
+            // location until the admin sets a different one (fill-empty only).
+            if (typeof patch.address === "string") {
+              await syncOfficeFromBusinessAddress(cid, patch.address).catch((e) =>
+                console.error("[onboarding] office-from-business-address failed", e),
+              );
+            }
             // Terminology changed? Re-term every seeded notification so the
             // customer and the team read the tenant's own words, not ours.
             let retermed = 0;

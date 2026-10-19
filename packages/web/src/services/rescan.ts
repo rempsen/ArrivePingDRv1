@@ -23,6 +23,7 @@ import { tdb } from "../api/database/tenant";
 import { scoutBrand, type BrandProposal } from "./brand-scout";
 import { scoutedTeamProfile } from "./company-provisioning";
 import { saveSiteCrawl, type CrawlSource } from "./site-crawl";
+import { syncOfficeFromBusinessAddress } from "./company-office";
 
 export interface RescanOptions {
   /** Explicit URL; defaults to company_settings.website. */
@@ -209,6 +210,17 @@ export async function rescanWebsite(companyId: string, opts: RescanOptions = {})
 
   set.updatedAt = new Date();
   await t.update(schema.companySettings, set as any);
+  // A newly found business address also becomes the office location when the
+  // office is still blank (fill-empty only, like the fields above).
+  const businessAddress = typeof set.address === "string" ? set.address : isEmpty("address", row.address) ? "" : String(row.address ?? "");
+  if (businessAddress) {
+    try {
+      const r = await syncOfficeFromBusinessAddress(companyId, businessAddress);
+      if (r.office) base.filled.push("officeAddress");
+    } catch (e) {
+      console.error("[rescan] office-from-business-address failed", e);
+    }
+  }
   base.ok = true;
   return base;
 }
