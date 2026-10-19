@@ -2,6 +2,7 @@ import { Component, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { reportError } from "../lib/sentry";
+import { reloadIfStale } from "../lib/build-version";
 
 /**
  * Scoped error boundaries.
@@ -57,7 +58,12 @@ class Boundary extends Component<Props, State> {
       boundary: this.props.name,
       componentStack: info.componentStack ?? undefined,
       path: typeof window !== "undefined" ? window.location.pathname : undefined,
+      stack: error.stack?.split("\n").slice(0, 8).join("\n"),
     });
+    // A tab left open across a deploy can crash on code that no longer matches
+    // the server. If a newer build is live, reload into it instead of showing
+    // an error the user can only clear by reloading anyway.
+    void reloadIfStale();
   }
 
   override render() {
@@ -80,6 +86,14 @@ class Boundary extends Component<Props, State> {
           <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-slate-400">
             {error.message || "An unexpected error occurred."}
           </p>
+          {error.stack ? (
+            <details className="mx-auto mt-3 max-w-sm text-left text-[11px] text-slate-500">
+              <summary className="cursor-pointer text-center">Technical details</summary>
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/30 p-2">
+                {error.stack.split("\n").slice(0, 8).join("\n")}
+              </pre>
+            </details>
+          ) : null}
           <p className="mt-2 text-xs text-slate-600">
             The rest of the app is still working — you can switch pages or try again.
           </p>
