@@ -15,6 +15,7 @@ import {
   hasStructure,
   heuristicInterpretation,
   matchNames,
+  placeFreeFilter,
   resolveInterpretation,
   UNMATCHED,
 } from "../directory-ask";
@@ -165,20 +166,64 @@ describe("the filter on rows", () => {
   });
 });
 
+const PM = { placesEnabled: true, place: "Property", places: "Properties", unit: "Unit", manager: "Property Manager", job: "Request", jobs: "Requests", customer: "Resident", customers: "Residents", worker: "Property Manager", workers: "Property Managers" };
+const BUILDER = { placesEnabled: true, place: "Community", places: "Communities", unit: "Lot", manager: "Superintendent", job: "Project", jobs: "Projects", customer: "Buyer", customers: "Buyers", worker: "Superintendent", workers: "Superintendents" };
+const HVAC = { placesEnabled: false, place: "Site", places: "Sites", unit: "Unit", manager: "Account Manager", job: "Job", jobs: "Jobs", customer: "Customer", customers: "Customers", worker: "Technician", workers: "Technicians" };
+
 describe("chips", () => {
-  it("say how the question was read, in the company's words", () => {
+  it("say how the question was read, in a property manager's words", () => {
     const f = filter({ kind: "customer", propertyIds: ["p-maple"], managerIds: ["s-jordan"], openRequests: "some", missing: ["email"], lastVisitBefore: "2026-03-01", jobText: "leak", sort: "unit", groupBy: "property" });
-    expect(filterChips(f, { properties, staff, customerNounPlural: "Residents", workerNounPlural: "Property Managers" })).toEqual([
+    expect(filterChips(f, { properties, staff, words: PM })).toEqual([
       "Residents",
       "Maple Court",
-      "Manager: Jordan Patel",
+      "Property Manager: Jordan Patel",
       "No email",
       "Open requests",
-      "Last visit before Mar 1, 2026",
-      "Work orders mentioning “leak”",
+      "Last request before Mar 1, 2026",
+      "Requests mentioning “leak”",
       "Grouped by property",
       "Sorted by unit",
     ]);
+  });
+
+  it("…and in a home builder's (Dan, 2026-10-19: wording follows the tenant's industry)", () => {
+    const f = filter({ kind: "customer", propertyIds: ["none"], units: ["27"], managerIds: ["none"], openRequests: "some", sort: "manager" });
+    expect(filterChips(f, { properties, staff, words: BUILDER })).toEqual(["Buyers", "No community", "No superintendent", "Lot 27", "Open projects", "Sorted by superintendent"]);
+  });
+});
+
+describe("a tenant without places (an HVAC company)", () => {
+  it("an answer can't filter by place, whatever the model said", () => {
+    const { filter: f } = resolveInterpretation(
+      { ...emptyInterpretation(), kind: "customer", properties: ["Maple Court"], noProperty: true, managers: ["Jordan Patel"], units: ["4B"], missing: ["unit", "email"], sort: "unit", groupBy: "property" },
+      properties,
+      staff,
+      HVAC,
+    );
+    expect(f).toMatchObject({ propertyIds: [], managerIds: [], units: [], missing: ["email"], sort: "name", groupBy: "none" });
+  });
+
+  it("the keyword reading treats a place name as words, and reads jobs in its words", () => {
+    const r = heuristicInterpretation("Maple Court customers with open jobs", properties, staff, HVAC);
+    expect(r).toMatchObject({ properties: [], openRequests: "some", kind: "customer", keywords: "maple court" });
+  });
+
+  it("a builder's words work in the keyword reading", () => {
+    const r = heuristicInterpretation("buyers with no community, by lot", properties, staff, BUILDER);
+    expect(r).toMatchObject({ kind: "customer", noProperty: true, sort: "unit" });
+  });
+
+  it("the keyword reading knows one or many: “parent with no phone”, “resident”, “technician”", () => {
+    const CHILDCARE = { ...HVAC, customer: "Parent", customers: "Parents", worker: "Caregiver", workers: "Caregivers" };
+    expect(heuristicInterpretation("parent with no phone", properties, staff, CHILDCARE)).toMatchObject({ kind: "customer", missing: ["phone"], keywords: "" });
+    expect(heuristicInterpretation("caregiver without an email", properties, staff, CHILDCARE)).toMatchObject({ kind: "field", keywords: "" });
+    expect(heuristicInterpretation("resident with no email", properties, staff, PM)).toMatchObject({ kind: "customer", keywords: "" });
+    expect(heuristicInterpretation("technician with no phone", properties, staff, HVAC).kind).toBe("field");
+  });
+
+  it("a re-sent answer can't bring places back through its sort or grouping", () => {
+    const f = placeFreeFilter(filter({ kind: "customer", propertyIds: ["p-maple"], managerIds: ["s-jordan"], units: ["4B"], missing: ["unit", "email"], sort: "property", groupBy: "manager" }));
+    expect(f).toMatchObject({ propertyIds: [], managerIds: [], units: [], missing: ["email"], sort: "name", groupBy: "none" });
   });
 });
 

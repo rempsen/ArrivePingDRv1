@@ -94,7 +94,11 @@ let birch = "";
 
 beforeAll(async () => {
   for (const v of Object.values(schema)) if (v instanceof PgTable) await ensureTable(v);
-  await db.insert(schema.companies).values([{ id: CO, name: "Towers Realty" } as any, { id: OTHER, name: "Other Co" } as any]);
+  // A property manager (its industry works by property); the other company is unset.
+  await db.insert(schema.companies).values([
+    { id: CO, name: "Towers Realty", industry: "property-management-maintenance" } as any,
+    { id: OTHER, name: "Other Co" } as any,
+  ]);
   await db.insert(schema.companySettings).values({ id: CO, companyId: CO, name: "Towers Realty" } as any);
   await db.insert(schema.user).values([
     { id: BOSS, name: "Dana Boss", email: "boss@dr.test", role: "admin", companyId: CO } as any,
@@ -233,7 +237,7 @@ describe("GET /directory", () => {
       ["Birch Towers", 1],
       ["Maple Court", 3],
     ]);
-    expect(grouped.groups[1].sublabel).toBe("12 Maple St. · Manager: Jordan Patel");
+    expect(grouped.groups[1].sublabel).toBe("12 Maple St. · Property Manager: Jordan Patel");
   });
 
   it("staff show how many properties they manage", async () => {
@@ -329,7 +333,7 @@ describe("import", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body).toMatchObject({ total: 4, created: 3, updated: 1, failedCount: 0, welcoming: 0 });
-    expect(body.warnings).toEqual([{ row: 4, email: "Pine Row", message: 'No team member matches "Nobody Here", so it has no manager yet' }]);
+    expect(body.warnings).toEqual([{ row: 4, email: "Pine Row", message: 'No team member matches "Nobody Here", so it has no property manager yet' }]);
     const props = (await json(await get("/api/directory/properties"))).properties;
     const by = Object.fromEntries(props.map((p: any) => [p.name, p]));
     expect(by["Cedar Lofts"]).toMatchObject({ managerId: JORDAN, address: "5 Cedar Way", notes: "Side door" });
@@ -384,7 +388,7 @@ describe("import", () => {
     const res = await app.request("/api/import/template/property?format=csv", { headers: headers() });
     expect(res.status).toBe(200);
     expect(res.headers.get("content-disposition")).toContain("properties");
-    expect((await res.text()).split("\n")[0]).toContain("name,address,manager,notes");
+    expect((await res.text()).split("\n")[0]).toBe("Property Name,Address,Property Manager (email or name),Notes");
   });
 });
 

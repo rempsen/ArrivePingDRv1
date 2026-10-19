@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "directory_places" text DEFAULT 'auto' NOT NULL;
