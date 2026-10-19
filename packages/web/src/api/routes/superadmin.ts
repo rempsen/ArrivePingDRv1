@@ -196,7 +196,7 @@ export const superadminRoutes = new Hono<AppEnv>()
 
     const { confirmName: rawConfirmName } = c.req.valid("json");
     const confirmName = String(rawConfirmName ?? "").trim();
-    if (confirmName !== co.name)
+    if (confirmName.toLowerCase() !== co.name.trim().toLowerCase())
       return c.json(
         { message: `Type "${co.name}" to confirm — this cannot be undone` },
         400,

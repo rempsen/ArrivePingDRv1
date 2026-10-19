@@ -7,6 +7,7 @@ import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../../services/industry-pre
 import { AddressAutocomplete } from "../../components/address-autocomplete";
 import { FullLoader } from "../../components/loader";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../../components/provisioning-progress";
+import { SignupReveal } from "../../components/signup-reveal";
 import { PageHead } from "./shell";
 import { CompanyFinder, useCompanyFinder } from "../../components/company-finder";
 import {
@@ -29,7 +30,9 @@ import {
   Globe,
   Wand2,
   Hammer,
-  Loader2,
+  RefreshCw,
+  ArrowRight,
+  ArrowLeft,
   Trash2,
 } from "lucide-react";
 
@@ -68,7 +71,9 @@ const EMPTY = {
   industry: "",
   industryOther: "",
   website: "",
-  adminName: "",
+  adminFirstName: "",
+  adminLastName: "",
+  adminPhone: "",
   adminEmail: "",
   adminPassword: "",
   managerName: "",
@@ -76,8 +81,11 @@ const EMPTY = {
   managerPassword: "",
 };
 
+type Step = "site" | "reveal" | "details" | "person";
+
 type BrandProposal = {
   website: string;
+  companyName?: string | null;
   primaryColor: string | null;
   accentColor: string | null;
   logoUrl: string | null;
@@ -108,6 +116,12 @@ export default function CompaniesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [err, setErr] = useState("");
+  // New-company wizard, same shape as the public /signup flow minus the card:
+  // website → what we read → details → admin login.
+  const [step, setStep] = useState<Step>("site");
+  const [noWebsite, setNoWebsite] = useState(false);
+  const [detailsErr, setDetailsErr] = useState("");
+  const [revealRun, setRevealRun] = useState(0);
   // AI brand-scout state — null until the site has been scraped (auto, or
   // via the manual "Grab Brand Assets" fallback below).
   const [brand, setBrand] = useState<BrandProposal | null>(null);
@@ -165,8 +179,16 @@ export default function CompaniesPage() {
 
   const create = useMutation({
     mutationFn: async () => {
+      const { adminFirstName, adminLastName, ...rest } = form;
       const res = await api.superadmin.companies.$post({
-        json: { ...form, brand: brand ?? undefined } as any,
+        json: {
+          ...rest,
+          website: noWebsite ? "" : form.website,
+          adminName: `${adminFirstName.trim()} ${adminLastName.trim()}`.trim(),
+          adminFirstName: adminFirstName.trim(),
+          adminLastName: adminLastName.trim(),
+          brand: brand ?? undefined,
+        } as any,
       });
       const d = await res.json();
       if (!res.ok) throw new Error((d as any).message || "Failed");
@@ -183,6 +205,8 @@ export default function CompaniesPage() {
         setBrand(null);
         setScoutedFor("");
         setErr("");
+        setStep("site");
+        setNoWebsite(false);
         setProvisioning(false);
         setProvisionResult(null);
       }, 1800);
@@ -232,6 +256,7 @@ export default function CompaniesPage() {
       const knownIndustry = p.suggestedIndustry && INDUSTRY_LABELS.some((i) => i.id === p.suggestedIndustry);
       setForm((f) => ({
         ...f,
+        name: f.name || p.companyName || "",
         contactEmail: f.contactEmail || p.email || "",
         phone: f.phone || p.phone || "",
         industry: f.industry || (knownIndustry ? p.suggestedIndustry! : p.suggestedIndustry === "other" ? "other" : f.industry),
@@ -241,25 +266,60 @@ export default function CompaniesPage() {
     onError: (e: any) => setErr(e.message),
   });
 
+  const startScout = () => {
+    setErr("");
+    setBrand(null);
+    setRevealRun((n) => n + 1);
+    setStep("reveal");
+    scout.mutate();
+  };
+  const skipWebsite = () => {
+    if (scoutTimerRef.current) clearTimeout(scoutTimerRef.current);
+    setNoWebsite(true);
+    setDetailsErr("");
+    setStep("details");
+  };
+  const detailsProblem = () =>
+    !form.name.trim()
+      ? "We need the company name."
+      : !form.industry
+        ? "Pick what kind of business this is."
+        : form.industry === "other" && !form.industryOther.trim()
+          ? "Describe the business in a few words."
+          : "";
+  const confirmReveal = () => {
+    const problem = detailsProblem();
+    setDetailsErr(problem);
+    setStep(problem ? "details" : "person");
+  };
+  const continueToPerson = (e: React.FormEvent) => {
+    e.preventDefault();
+    const problem = detailsProblem();
+    setDetailsErr(problem);
+    if (!problem) setStep("person");
+  };
+  const createCompany = () => {
+    setProvisioning(true);
+    setProvisionResult(null);
+    create.mutate();
+  };
+
   // Auto-fire the moment the website field settles into something that
   // looks like a real domain — same behavior as the public self-serve
   // signup flow, so internal provisioning "almost ready to use" feels
   // identical whether Dan's team does it or a customer does it themselves.
   // The "Grab Brand Assets" button stays as the manual re-scrape fallback.
   useEffect(() => {
-    if (!open) return;
+    if (!open || step !== "site") return;
     if (scoutTimerRef.current) clearTimeout(scoutTimerRef.current);
     const site = form.website.trim();
     if (!looksLikeDomain(site) || site === scoutedFor || scout.isPending) return;
-    scoutTimerRef.current = setTimeout(() => {
-      setErr("");
-      scout.mutate();
-    }, AUTO_SCOUT_DEBOUNCE_MS);
+    scoutTimerRef.current = setTimeout(startScout, AUTO_SCOUT_DEBOUNCE_MS);
     return () => {
       if (scoutTimerRef.current) clearTimeout(scoutTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.website, open]);
+  }, [form.website, open, step]);
 
   if (role !== "superadmin")
     return (
@@ -358,7 +418,7 @@ export default function CompaniesPage() {
         title="Companies"
         subtitle="Provision and switch between B2B tenants. Each company is fully isolated."
         actions={
-          <BtnPrimary onClick={() => { setForm({ ...EMPTY }); setBrand(null); setScoutedFor(""); setErr(""); setOpen(true); }}>
+          <BtnPrimary onClick={() => { setForm({ ...EMPTY }); setBrand(null); setScoutedFor(""); setErr(""); setStep("site"); setNoWebsite(false); setDetailsErr(""); setOpen(true); }}>
             <Plus className="h-4 w-4" /> New Company
           </BtnPrimary>
         }
@@ -462,7 +522,8 @@ export default function CompaniesPage() {
             <button
               onClick={() => deleteCompany.mutate()}
               disabled={
-                deleteCompany.isPending || deleteConfirmName !== (deleteTarget?.name ?? "")
+                deleteCompany.isPending ||
+                deleteConfirmName.trim().toLowerCase() !== (deleteTarget?.name ?? "").trim().toLowerCase()
               }
               className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-40"
             >
@@ -500,25 +561,24 @@ export default function CompaniesPage() {
         onClose={() => {
           if (!provisioning) setOpen(false);
         }}
-        title={provisioning ? "Setting up the new tenant" : "Provision a new company"}
+        size="lg"
+        title={
+          provisioning
+            ? "Setting up the new tenant"
+            : step === "site" || step === "reveal"
+              ? "New company — start with their website"
+              : step === "details"
+                ? "New company — details"
+                : "New company — admin login"
+        }
         subtitle={provisioning ? "Please don't close this window — this takes about a minute." : undefined}
         footer={
-          provisioning ? undefined : (
+          provisioning || step !== "person" ? undefined : (
             <>
-              <BtnGhost onClick={() => setOpen(false)}>Cancel</BtnGhost>
+              <BtnGhost onClick={() => setStep(brand ? "reveal" : "details")}>Back</BtnGhost>
               <BtnPrimary
-                onClick={() => {
-                  setProvisioning(true);
-                  setProvisionResult(null);
-                  create.mutate();
-                }}
-                disabled={
-                  !form.name ||
-                  !form.industry ||
-                  (form.industry === "other" && !form.industryOther.trim()) ||
-                  !form.adminEmail ||
-                  !form.adminPassword
-                }
+                onClick={createCompany}
+                disabled={!form.adminFirstName.trim() || !form.adminEmail || form.adminPassword.length < 8}
               >
                 Create company
               </BtnPrimary>
@@ -528,187 +588,242 @@ export default function CompaniesPage() {
       >
         {provisioning ? (
           <ProvisioningProgress
-            website={form.website}
+            website={noWebsite ? "" : form.website}
             industryId={form.industry}
             done={!create.isPending && !!provisionResult}
             result={provisionResult}
             error={create.isError ? err || "Something went wrong." : null}
           />
         ) : (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Company name">
-              <input aria-label="Acme HVAC"
-                className={inputCls}
-                value={form.name}
-                onChange={(e) => set("name", e.target.value)}
-                placeholder="Acme HVAC"
-              />
-            </Field>
-            <Field label="Slug (optional)">
-              <input aria-label="auto from name"
-                className={inputCls}
-                value={form.slug}
-                onChange={(e) => set("slug", e.target.value)}
-                placeholder="auto from name"
-              />
-            </Field>
-            <Field label="Contact email">
-              <input aria-label="Contact Email"
-                className={inputCls}
-                value={form.contactEmail}
-                onChange={(e) => set("contactEmail", e.target.value)}
-              />
-            </Field>
-            <Field label="Phone">
-              <input aria-label="Phone"
-                className={inputCls}
-                value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
-              />
-            </Field>
-            <Field label="Plan">
-              <select
-                className={inputCls}
-                value={form.plan}
-                onChange={(e) => set("plan", e.target.value)}
+          <div className="space-y-4">
+            {/* ── Step 1: website ── */}
+            {step === "site" && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (looksLikeDomain(form.website) && !scout.isPending) startScout();
+                }}
+                className="space-y-4"
               >
-                <option value="starter">Starter</option>
-                <option value="pro">Pro</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
-            </Field>
-          </div>
-
-          <Field label="Primary Industry (ICP)">
-            <select
-              className={inputCls}
-              value={form.industry}
-              onChange={(e) => set("industry", e.target.value)}
-            >
-              <option value="">Select industry…</option>
-              {INDUSTRY_GROUPS.map((g) => (
-                <optgroup key={g} label={g}>
-                  {INDUSTRY_LABELS.filter((i) => i.group === g).map((i) => (
-                    <option key={i.id} value={i.id}>{i.label}</option>
-                  ))}
-                </optgroup>
-              ))}
-              <option value="other">Other — describe their business…</option>
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              Drives starter templates, the service library, work-order intelligence, AI tone,
-              and terminology (customer/job naming) for this tenant.
-            </p>
-            {brand?.suggestedIndustry && form.industry === brand.suggestedIndustry && (
-              <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] text-cyan-300">
-                <Sparkles className="mt-0.5 h-3 w-3 shrink-0" />
-                <span>
-                  AI suggested this from their website
-                  {brand.suggestedIndustryRationale ? `: ${brand.suggestedIndustryRationale}` : "."}
-                  {" "}Change it above if it's not quite right.
-                </span>
-              </p>
-            )}
-            {form.industry === "other" && (
-              <div className="mt-2">
-                <Field label="What kind of business is this?">
-                  <input
-                    aria-label="Describe their business"
-                    className={inputCls}
-                    value={form.industryOther}
-                    onChange={(e) => set("industryOther", e.target.value)}
-                    placeholder="e.g. Wedding Photography, Pest Control, Mobile Notary…"
-                  />
+                <p className="text-sm text-slate-400">We'll read their site and fill in the company details.</p>
+                <Field label="Company website">
+                  <div className="relative">
+                    <Globe className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input
+                      aria-label="Company website"
+                      className={inputCls + " pl-11"}
+                      value={form.website}
+                      onChange={(e) => set("website", e.target.value)}
+                      placeholder="acmehvac.com"
+                      inputMode="url"
+                    />
+                  </div>
                 </Field>
-                <p className="mt-1 text-xs text-slate-500">
-                  No preset fits yet — this description drives AI-generated templates &
-                  intake forms instead. We can add it as a full preset later.
+                <button
+                  type="submit"
+                  disabled={!looksLikeDomain(form.website)}
+                  className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+                >
+                  Scan the site <ArrowRight className="h-4 w-4" />
+                </button>
+                <p className="text-center text-sm text-slate-500">
+                  No website?{" "}
+                  <button type="button" onClick={skipWebsite} className="font-semibold text-cyan-glow hover:underline">
+                    Skip this step
+                  </button>
                 </p>
-              </div>
+              </form>
             )}
-          </Field>
 
-          {/* Website + AI brand scout ---------------------------------- */}
-          <div className="rounded-xl border border-brand/20 bg-gradient-to-br from-brand/[0.07] to-transparent p-4">
-            <Field label="Company website">
-              <div className="flex items-center gap-2">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-brand/15 text-cyan-glow">
-                  <Globe className="h-4 w-4" />
-                </span>
-                <input
-                  aria-label="Company website"
-                  className={inputCls}
-                  value={form.website}
-                  onChange={(e) => set("website", e.target.value)}
-                  placeholder="acmehvac.com"
+            {/* ── Step 2: the show — what we read, then "is this right?" ── */}
+            {step === "reveal" && (
+              <>
+                <SignupReveal
+                  key={revealRun}
+                  site={form.website.trim()}
+                  scouting={scout.isPending}
+                  brand={brand ? ({ ...brand, companyName: brand.companyName ?? form.name } as any) : null}
+                  error={scout.isError ? (scout.error as any)?.message || "Couldn't read that site" : ""}
+                  onConfirm={confirmReveal}
+                  onFix={() => setStep("details")}
+                  onSkip={skipWebsite}
                 />
-              </div>
-            </Field>
-            <button
-              type="button"
-              onClick={() => { setErr(""); scout.mutate(); }}
-              disabled={!form.website.trim() || scout.isPending}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand to-cyan-500 py-2.5 text-sm font-bold text-white nvc-btn-primary transition hover:opacity-95 disabled:opacity-50"
-            >
-              {scout.isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Reading their website & brand…</>
-              ) : brand ? (
-                <><Sparkles className="h-4 w-4" /> Re-scan this site</>
-              ) : (
-                <><Sparkles className="h-4 w-4" /> Grab Brand Assets</>
-              )}
-            </button>
-            <p className="mt-2 text-center text-[11px] text-slate-500">
-              {scout.isPending
-                ? "AI scans the site for colors, logo, services & the right name for their field staff."
-                : "Fires automatically once a website is typed above — use this button to re-scan or fill it in yourself."}
-            </p>
+                {!scout.isPending && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBrand(null);
+                      setScoutedFor("");
+                      setStep("site");
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"
+                  >
+                    <ArrowLeft className="h-3 w-3" /> Different website
+                  </button>
+                )}
+              </>
+            )}
 
-            {brand && (
-              <BrandReview
-                brand={brand}
-                setField={setBrandField}
-              />
+            {/* ── Step 3: review details ── */}
+            {step === "details" && (
+              <form onSubmit={continueToPerson} className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Company name">
+                    <input aria-label="Company name" className={inputCls} value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Acme HVAC" required />
+                  </Field>
+                  <Field label="Slug (optional)">
+                    <input aria-label="Slug" className={inputCls} value={form.slug} onChange={(e) => set("slug", e.target.value)} placeholder="auto from name" />
+                  </Field>
+                  <Field label="Contact email">
+                    <input aria-label="Contact email" type="email" className={inputCls} value={form.contactEmail} onChange={(e) => set("contactEmail", e.target.value)} placeholder="office@acmehvac.com" />
+                  </Field>
+                  <Field label="Business phone">
+                    <input aria-label="Business phone" type="tel" className={inputCls} value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(204) 555-0199" />
+                  </Field>
+                  <Field label="Plan">
+                    <select aria-label="Plan" className={inputCls} value={form.plan} onChange={(e) => set("plan", e.target.value)}>
+                      <option value="starter">Starter</option>
+                      <option value="pro">Pro</option>
+                      <option value="enterprise">Enterprise</option>
+                    </select>
+                  </Field>
+                </div>
+
+                <Field label="What kind of business is this?">
+                  <select aria-label="Industry" className={inputCls} value={form.industry} onChange={(e) => set("industry", e.target.value)}>
+                    <option value="">Select industry…</option>
+                    {INDUSTRY_GROUPS.map((g) => (
+                      <optgroup key={g} label={g}>
+                        {INDUSTRY_LABELS.filter((i) => i.group === g).map((i) => (
+                          <option key={i.id} value={i.id}>{i.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <option value="other">Other — describe their business…</option>
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Drives starter templates, the service library, work-order intelligence, AI tone, and terminology for this tenant.
+                  </p>
+                  {brand?.suggestedIndustry && form.industry === brand.suggestedIndustry && (
+                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] text-cyan-300">
+                      <Sparkles className="mt-0.5 h-3 w-3 shrink-0" />
+                      <span>
+                        Guessed from their site
+                        {brand.suggestedIndustryRationale ? `: ${brand.suggestedIndustryRationale}` : "."} Change it if it's not quite right.
+                      </span>
+                    </p>
+                  )}
+                </Field>
+                {form.industry === "other" && (
+                  <Field label="Describe their business">
+                    <input
+                      aria-label="Describe their business"
+                      className={inputCls}
+                      value={form.industryOther}
+                      onChange={(e) => set("industryOther", e.target.value)}
+                      placeholder="e.g. Wedding Photography, Pest Control, Mobile Notary…"
+                    />
+                  </Field>
+                )}
+
+                {brand && (
+                  <div className="rounded-xl border border-brand/20 bg-gradient-to-br from-brand/[0.07] to-transparent p-4">
+                    <BrandReview brand={brand} setField={setBrandField} />
+                  </div>
+                )}
+
+                {detailsErr && <p className="text-sm font-medium text-red-400" role="alert">{detailsErr}</p>}
+
+                <button
+                  type="submit"
+                  className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep"
+                >
+                  Continue <ArrowRight className="h-4 w-4" />
+                </button>
+                <div className="flex items-center justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNoWebsite(false);
+                      setStep("site");
+                    }}
+                    className="inline-flex items-center gap-1 text-slate-400 hover:text-white"
+                  >
+                    <ArrowLeft className="h-3 w-3" /> {brand ? "Different website" : "They do have a website"}
+                  </button>
+                  {brand && !noWebsite && (
+                    <button
+                      type="button"
+                      onClick={startScout}
+                      disabled={scout.isPending}
+                      className="inline-flex items-center gap-1.5 font-semibold text-cyan-glow hover:underline disabled:opacity-40"
+                    >
+                      <RefreshCw className="h-3 w-3" /> Re-scan the site
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+
+            {/* ── Step 4: the admin login ── */}
+            {step === "person" && (
+              <>
+                <p className="text-sm text-slate-400">
+                  The login that runs {form.name.trim() || "this company"}. No card is taken for companies provisioned here.
+                </p>
+                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                  <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-rose-300">
+                    <Crown className="h-4 w-4" /> Admin account
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="First name">
+                      <input aria-label="Admin first name" className={inputCls} value={form.adminFirstName} onChange={(e) => set("adminFirstName", e.target.value)} />
+                    </Field>
+                    <Field label="Last name">
+                      <input aria-label="Admin last name" className={inputCls} value={form.adminLastName} onChange={(e) => set("adminLastName", e.target.value)} />
+                    </Field>
+                    <Field label="Mobile number">
+                      <input aria-label="Admin mobile number" type="tel" className={inputCls} value={form.adminPhone} onChange={(e) => set("adminPhone", e.target.value)} />
+                    </Field>
+                    <Field label="Email">
+                      <input aria-label="Admin email" type="email" className={inputCls} value={form.adminEmail} onChange={(e) => set("adminEmail", e.target.value)} />
+                    </Field>
+                    <Field label="Password (min. 8 characters)">
+                      <input aria-label="Admin password" className={inputCls} type="password" autoComplete="new-password" value={form.adminPassword} onChange={(e) => set("adminPassword", e.target.value)} />
+                    </Field>
+                  </div>
+                  {form.contactEmail.trim() && !form.adminEmail && (
+                    <button
+                      type="button"
+                      onClick={() => set("adminEmail", form.contactEmail.trim())}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
+                    >
+                      <Sparkles className="h-3 w-3 text-cyan-glow" /> Use {form.contactEmail.trim()}
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                  <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-violet-300">
+                    <UsersIcon className="h-4 w-4" /> Manager account <span className="text-xs font-normal text-slate-500">(optional)</span>
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Name">
+                      <input aria-label="Manager Name" className={inputCls} value={form.managerName} onChange={(e) => set("managerName", e.target.value)} />
+                    </Field>
+                    <Field label="Email">
+                      <input aria-label="Manager Email" className={inputCls} value={form.managerEmail} onChange={(e) => set("managerEmail", e.target.value)} />
+                    </Field>
+                    <Field label="Password">
+                      <input aria-label="Manager Password" className={inputCls} type="password" value={form.managerPassword} onChange={(e) => set("managerPassword", e.target.value)} />
+                    </Field>
+                  </div>
+                </div>
+
+                {err && <p className="text-sm text-red-400" role="alert">{err}</p>}
+              </>
             )}
           </div>
-
-          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-            <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-rose-300">
-              <Crown className="h-4 w-4" /> Admin account
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Name">
-                <input aria-label="Admin Name" className={inputCls} value={form.adminName} onChange={(e) => set("adminName", e.target.value)} />
-              </Field>
-              <Field label="Email">
-                <input aria-label="Admin Email" className={inputCls} value={form.adminEmail} onChange={(e) => set("adminEmail", e.target.value)} />
-              </Field>
-              <Field label="Password">
-                <input aria-label="Admin Password" className={inputCls} type="password" value={form.adminPassword} onChange={(e) => set("adminPassword", e.target.value)} />
-              </Field>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-            <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-violet-300">
-              <UsersIcon className="h-4 w-4" /> Manager account <span className="text-xs font-normal text-slate-500">(optional)</span>
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Name">
-                <input aria-label="Manager Name" className={inputCls} value={form.managerName} onChange={(e) => set("managerName", e.target.value)} />
-              </Field>
-              <Field label="Email">
-                <input aria-label="Manager Email" className={inputCls} value={form.managerEmail} onChange={(e) => set("managerEmail", e.target.value)} />
-              </Field>
-              <Field label="Password">
-                <input aria-label="Manager Password" className={inputCls} type="password" value={form.managerPassword} onChange={(e) => set("managerPassword", e.target.value)} />
-              </Field>
-            </div>
-          </div>
-
-          {err && <p className="text-sm text-red-400">{err}</p>}
-        </div>
         )}
       </Modal>
     </div>

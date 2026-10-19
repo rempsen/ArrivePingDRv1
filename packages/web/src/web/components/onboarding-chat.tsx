@@ -582,12 +582,12 @@ export function OnboardingChat() {
         {checklist && !checklist.done && (
           <div className="flex items-center gap-2.5 border-b border-white/5 bg-white/[0.02] px-5 py-2">
             <span className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">
-              Question {Math.max(qProgress.current, 1)} of {qProgress.total}
+              {offerFinish || allSet ? "All questions answered" : `Question ${Math.max(qProgress.current, 1)} of ${qProgress.total}`}
             </span>
             <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/5">
               <div
                 className="h-full rounded-full bg-brand transition-all duration-500 ease-out"
-                style={{ width: `${Math.min(100, (Math.max(qProgress.current, 1) / qProgress.total) * 100)}%` }}
+                style={{ width: `${offerFinish || allSet ? 100 : Math.min(100, (Math.max(qProgress.current, 1) / qProgress.total) * 100)}%` }}
               />
             </div>
           </div>
@@ -689,55 +689,61 @@ export function OnboardingChat() {
           </div>
         )}
 
-        {/* composer */}
-        <div className="flex items-center gap-2 border-t border-white/5 p-3">
-          <input
-            aria-label="Reply"
-            className="flex-1 rounded-xl border border-white/10 bg-ink-3/60 px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
-            placeholder="Type your answer…"
-            value={input}
-            disabled={streaming}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") send();
-            }}
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            aria-label="Upload a photo of your team list"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={onPhotoPicked}
-          />
+        {/* The wrap-up choice above is forced: no free typing or "finish later"
+            until they pick one ("add more" brings the composer back). */}
+        {!(offerFinish && !streaming) && !allSet && (
+          <>
+          {/* composer */}
+          <div className="flex items-center gap-2 border-t border-white/5 p-3">
+            <input
+              aria-label="Reply"
+              className="flex-1 rounded-xl border border-white/10 bg-ink-3/60 px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-brand"
+              placeholder="Type your answer…"
+              value={input}
+              disabled={streaming}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") send();
+              }}
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              aria-label="Upload a photo of your team list"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={onPhotoPicked}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={streaming || reading}
+              aria-label="Photo of your team list"
+              title="Snap a photo of your team list — whiteboard, business cards, printout"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-ink-3/60 text-slate-300 transition hover:border-brand hover:text-white disabled:opacity-40"
+            >
+              {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={send}
+              disabled={streaming || !input.trim()}
+              aria-label="Send"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand text-white transition hover:bg-brand-deep disabled:opacity-40"
+            >
+              {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={streaming || reading}
-            aria-label="Photo of your team list"
-            title="Snap a photo of your team list — whiteboard, business cards, printout"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-ink-3/60 text-slate-300 transition hover:border-brand hover:text-white disabled:opacity-40"
+            onClick={finishLater}
+            className="w-full border-t border-white/5 py-2 text-center text-xs font-medium text-slate-500 hover:text-slate-300"
           >
-            {reading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            I'll finish this later
           </button>
-          <button
-            type="button"
-            onClick={send}
-            disabled={streaming || !input.trim()}
-            aria-label="Send"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand text-white transition hover:bg-brand-deep disabled:opacity-40"
-          >
-            {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={finishLater}
-          className="w-full border-t border-white/5 py-2 text-center text-xs font-medium text-slate-500 hover:text-slate-300"
-        >
-          I'll finish this later
-        </button>
+          </>
+        )}
         </div>
 
         {/* fact panel — everything the AI has extracted so far, live. Wide
