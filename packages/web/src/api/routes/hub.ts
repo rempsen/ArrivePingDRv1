@@ -22,11 +22,16 @@ import { audit } from "../lib/audit";
 import { requirePlatform, invalidateCompanyCache, _resetCompanyClosedCache } from "../middleware/auth";
 import { tdb } from "../database/tenant";
 import { atLeast, listStaff, removeStaff, upsertStaff, StaffError, PLATFORM_ROLES, type PlatformRole } from "../../services/platform-staff";
-import { clearFeatureOverride, invalidateFeatures, setFeatureOverride } from "../../services/features";
+import { clearFeatureOverride, invalidateFeatures, isFeatureOn, setFeatureOverride } from "../../services/features";
 import { featureSummary, hubOverview, hubTenantDetail, listHubTenants } from "../../services/hub";
 import { listPlatformAudit, platformAudit } from "../../services/platform-audit";
 import { setTenantKind } from "../../services/tenant-kind";
 import { ActAsError, startActAs } from "../../services/act-as";
+import { createDemo, convertDemo, extendDemo, resetDemo, DemoError, DEMO_DEFAULT_DAYS, DEMO_MAX_DAYS } from "../../services/demo-factory";
+import { installSalesPack, listLeads, salesReps, salesServices, setLeadStatus, LEAD_STATUSES, SALES_SERVICES, SALES_TENANT } from "../../services/sales-pack";
+import { INDUSTRY_PRESETS } from "../../services/industry-presets";
+import { scoutBrand } from "../../services/brand-scout";
+import { slugify } from "../../services/company-provisioning";
 import { FEATURES, TENANT_KINDS, TENANT_KIND_LABELS, featureDef, isFeatureKey, type TenantKind } from "../../shared/features";
 import { PLANS, PLAN_IDS } from "../../shared/plans";
 import { validateHubSettings } from "../../shared/hub-settings";
@@ -81,6 +86,17 @@ const ActAsBody = z.object({
   reason: z.string().max(300),
   minutes: z.number().int(),
 });
+
+const DemoBody = z.object({
+  name: z.string().trim().min(2).max(120),
+  industry: z.string().trim().min(1).max(80),
+  city: z.string().trim().max(120).optional(),
+  website: z.string().trim().max(300).optional(),
+  scoutBrand: z.boolean().optional(),
+  days: z.number().int().min(1).max(180).optional(),
+});
+
+const LeadPatch = z.object({ status: z.enum(LEAD_STATUSES), note: z.string().trim().max(300).optional() });
 
 const StaffBody = z.object({ email: z.string().trim().email().max(200), role: z.enum(PLATFORM_ROLES) });
 
@@ -278,6 +294,78 @@ export const hubRoutes = new Hono<AppEnv>()
       if (e instanceof ActAsError) return c.json({ message: e.message, code: e.code }, e.status as 400);
       throw e;
     }
+  })
+
+  // ── demos ──────────────────────────────────────────────────────────────
+  .get("/demos", requirePlatform("sales"), async (c) => {
+    const tenants = await listHubTenants();
+    return c.json({
+      demos: tenants.filter((t) => t.kind === "demo").sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
+      industries: INDUSTRY_PRESETS.filter((p) => p.tier !== "alias").map((p) => ({ id: p.id, label: p.label, group: p.group })),
+      defaultDays: DEMO_DEFAULT_DAYS,
+      maxDays: DEMO_MAX_DAYS,
+    });
+  })
+
+  .post("/demos", requirePlatform("sales"), jsonBody(DemoBody), async (c) => {
+    const b = c.req.valid("json");
+    const actor = actorOf(c);
+    let brand: Awaited<ReturnType<typeof scoutBrand>> | undefined;
+    // Read the prospect's own website for their logo, colours and words.
+    // Best-effort: a demo is still made in our default look if this fails.
+    if (b.website && b.scoutBrand) {
+      brand = await scoutBrand(b.website, slugify(`demo-${b.name}`)).catch(() => undefined);
+    }
+    try {
+      const demo = await createDemo({ name: b.name, industry: b.industry, city: b.city, website: b.website, days: b.days, brand: brand as never, actor });
+      return c.json({ ok: true, demo, branded: Boolean(brand) }, 201);
+    } catch (e) {
+      if (e instanceof DemoError) return c.json({ message: e.message, code: e.code }, e.status as 400);
+      throw e;
+    }
+  })
+
+  .post("/demos/:id/:action", requirePlatform("sales"), async (c) => {
+    const id = c.req.param("id");
+    const action = c.req.param("action");
+    const actor = actorOf(c);
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
+    try {
+      if (action === "reset") return c.json(await resetDemo(id, actor));
+      if (action === "extend") return c.json(await extendDemo(id, Number(body.days ?? DEMO_DEFAULT_DAYS), actor));
+      if (action === "convert") {
+        if (!atLeast(c.get("platformRole"), "staff")) return c.json({ message: "Ask Staff or an Owner to turn a demo into a customer." }, 403);
+        return c.json(await convertDemo(id, { keepSample: body.keepSample === true }, actor));
+      }
+      return c.json({ message: "Unknown action" }, 404);
+    } catch (e) {
+      if (e instanceof DemoError) return c.json({ message: e.message, code: e.code }, e.status as 400);
+      throw e;
+    }
+  })
+
+  // ── leads & sales (our own tenant) ─────────────────────────────────────
+  .get("/leads", requirePlatform("sales"), async (c) => {
+    const on = await isFeatureOn(SALES_TENANT, "sales.pack");
+    const [leads, services, reps] = await Promise.all([listLeads(), on ? salesServices() : Promise.resolve([]), on ? salesReps() : Promise.resolve([])]);
+    return c.json({ salesPack: on, leads, services, reps, statuses: LEAD_STATUSES, missing: SALES_SERVICES.filter((s) => !services.some((x) => x.name === s.name)).map((s) => s.name) });
+  })
+
+  .post("/leads/install", requirePlatform("sales"), async (c) => {
+    if (!(await isFeatureOn(SALES_TENANT, "sales.pack"))) return c.json({ message: "Switch the Sales pack on for ArrivePing first." }, 400);
+    return c.json(await installSalesPack(actorOf(c)));
+  })
+
+  .patch("/leads/:id", requirePlatform("sales"), jsonBody(LeadPatch), async (c) => {
+    const { status, note } = c.req.valid("json");
+    const row = await setLeadStatus(c.req.param("id"), status, actorOf(c), note);
+    if (!row) return c.json({ message: "No such lead" }, 404);
+    return c.json({ ok: true, lead: row });
   })
 
   // ── team (the staff list) ──────────────────────────────────────────────

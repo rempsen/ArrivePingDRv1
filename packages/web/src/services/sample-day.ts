@@ -408,6 +408,8 @@ export async function refreshSampleDay(companyId: string, now = new Date()): Pro
   const state = parseSampleState(co?.sampleData);
   if (!co || !state?.anchorAt || state.clearedAt) return false;
   if (now.getTime() - Date.parse(state.anchorAt) < REANCHOR_AFTER_MS) return false;
+  // A Control Hub demo past its end date keeps its last day (services/demo-factory.ts).
+  if (co.kind === "demo" && co.demoExpiresAt && co.demoExpiresAt.getTime() <= now.getTime()) return false;
 
   const t = tdb(companyId);
   const anchor = Math.floor(now.getTime() / (5 * MIN)) * 5 * MIN;
