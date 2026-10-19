@@ -84,7 +84,9 @@ function MobileNumberPrompt() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  if (!user || (user.phone || "").trim()) return null;
+  // Office texts go to the company's admins (dispatch.ts officeUsers), so
+  // only an admin is asked: anyone else's number wouldn't get them.
+  if (!user || user.role !== "admin" || (user.phone || "").trim()) return null;
   const digits = phone.replace(/[^0-9]/g, "");
   const save = async () => {
     if (digits.length < 10) {

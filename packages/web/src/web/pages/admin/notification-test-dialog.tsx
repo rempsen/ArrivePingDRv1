@@ -140,7 +140,9 @@ export function NotificationTestDialog({
             {wantsSms && !profilePhone && (
               <label className="flex items-start gap-2 text-sm text-slate-300">
                 <input type="checkbox" aria-label="Save this number to my profile" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5 accent-[var(--brand,#06b6d4)]" />
-                <span>Save this number to my profile, so texts meant for the office reach me too.</span>
+                <span>
+                  Save this number to my profile{user?.role === "admin" ? ", so texts meant for the office reach me too" : ""}.
+                </span>
               </label>
             )}
             {wantsEmail && (
