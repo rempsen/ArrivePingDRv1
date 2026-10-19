@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "../../components/toast";
 import { useConfirm } from "../../components/confirm-dialog";
 import { DialogPanel } from "../../components/dialog-panel";
@@ -1194,18 +1195,48 @@ function RowExportMenu({
   onRestore?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  // The menu is portalled to <body> with fixed coordinates: rendered inline it
+  // sat inside the table's overflow-auto box, so it was clipped and only
+  // reachable by scrolling that box.
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const toggle = () => {
+    if (open) return setOpen(false);
+    const r = ref.current?.getBoundingClientRect();
+    if (r) {
+      const right = Math.max(8, window.innerWidth - r.right);
+      // ~260px is the tallest the menu gets; flip above the button if it won't fit below.
+      setPos(
+        window.innerHeight - r.bottom < 270
+          ? { bottom: window.innerHeight - r.top + 8, right }
+          : { top: r.bottom + 8, right },
+      );
+    }
+    setOpen(true);
+  };
   useEffect(() => {
+    if (!open) return;
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
+    const close = () => setOpen(false);
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
+    // capture: the table scrolls inside its own box, which doesn't bubble to window
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", h);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         title="More actions"
         aria-label="More actions"
         aria-haspopup="menu"
@@ -1214,8 +1245,14 @@ function RowExportMenu({
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
-      {open && (
-        <div className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-ink-2 py-1.5 shadow-2xl">
+      {open &&
+        pos &&
+        createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", top: pos.top, bottom: pos.bottom, right: pos.right }}
+          className="z-50 w-44 overflow-hidden rounded-xl border border-white/10 bg-ink-2 py-1.5 shadow-2xl"
+        >
           <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
             Job {jobNumber}
           </p>
@@ -1264,7 +1301,8 @@ function RowExportMenu({
               }}
             />
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
