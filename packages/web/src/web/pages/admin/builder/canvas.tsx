@@ -31,7 +31,7 @@ export interface CanvasProps {
   items: FormItem[];
   selectedId: string | null;
   problems: Set<string>;
-  onSelect: (id: string | null) => void;
+  onSelect: (id: string | null, opts?: { fromInput?: boolean }) => void;
   onMove: (fromId: string, toId: string) => void;
   onInsert: (type: ItemType, index: number) => void;
   onLabel: (id: string, label: string) => void;
@@ -123,7 +123,7 @@ export function Canvas(p: CanvasProps) {
                 dimmed={carried.has(it.id)}
                 dropLine={!!activePalette && overId === it.id}
                 logicLabel={it.showIf ? p.items.find((x) => x.id === it.showIf!.itemId)?.label : undefined}
-                onSelect={() => p.onSelect(it.id)}
+                onSelect={(opts) => p.onSelect(it.id, opts)}
                 onLabel={(l) => p.onLabel(it.id, l)}
                 onDuplicate={() => p.onDuplicate(it.id)}
                 onRemove={() => p.onRemove(it.id)}
@@ -181,7 +181,7 @@ function SortableRow(p: {
   dimmed: boolean;
   dropLine: boolean;
   logicLabel?: string;
-  onSelect: () => void;
+  onSelect: (opts?: { fromInput?: boolean }) => void;
   onLabel: (l: string) => void;
   onDuplicate: () => void;
   onRemove: () => void;
@@ -197,7 +197,7 @@ function SortableRow(p: {
     <li ref={setNodeRef} style={style} className={`relative ${p.nested ? "ml-4 md:ml-6" : ""} ${isDragging || p.dimmed ? "opacity-40" : ""}`}>
       {p.dropLine && <div className="absolute -top-1 left-0 right-0 h-0.5 rounded bg-cyan-400 shadow-[0_0_8px] shadow-cyan-400" aria-hidden="true" />}
       <div
-        onClick={p.onSelect}
+        onClick={() => p.onSelect()}
         onKeyDown={(e) => {
           if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
             e.preventDefault();
@@ -234,7 +234,7 @@ function SortableRow(p: {
               value={it.label}
               onChange={(e) => p.onLabel(e.target.value)}
               onClick={(e) => e.stopPropagation()}
-              onFocus={p.onSelect}
+              onFocus={() => p.onSelect({ fromInput: true })}
               className={`min-w-0 flex-1 rounded bg-transparent px-1 py-1 text-white outline-none focus:bg-white/5 ${isSection ? "text-[15px] font-semibold" : "text-sm"}`}
             />
             {it.required && <span className="text-red-400" aria-label="required">*</span>}

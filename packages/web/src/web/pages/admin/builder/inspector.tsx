@@ -15,7 +15,7 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ClipboardPaste, GitBranch, GripVertical, Plus, Trash2, X } from "lucide-react";
-import { ITEM_LABELS, ITEM_TYPES, LAYOUT_TYPES, type FormItem, type ItemType, type ShowIf } from "../../../../shared/forms/form-model";
+import { ITEM_LABELS, ITEM_TYPES, LAYOUT_TYPES, answerChoices, type FormItem, type ItemType, type ShowIf } from "../../../../shared/forms/form-model";
 import { ITEM_HINTS, ITEM_ICONS } from "../../../components/forms/item-meta";
 import { logicTargets, retype } from "./form-ops";
 
@@ -289,28 +289,6 @@ function OptionRow({ sortId, value, label, onChange, onRemove, onEnter }: { sort
 }
 
 /* ------------------------------------------------------------------ */
-
-function answerChoices(item: FormItem): { value: string; label: string }[] {
-  switch (item.type) {
-    case "yes_no":
-      return [
-        { value: "yes", label: "Yes" },
-        { value: "no", label: "No" },
-      ];
-    case "pass_fail":
-      return [
-        { value: "pass", label: "Pass" },
-        { value: "fail", label: "Fail" },
-        { value: "na", label: "N/A" },
-      ];
-    case "single_choice":
-    case "multi_choice":
-    case "checklist":
-      return (item.options ?? []).filter(Boolean).map((o) => ({ value: o, label: o }));
-    default:
-      return [];
-  }
-}
 
 function FlagEditor({ item, onChange }: { item: FormItem; onChange: (patch: Partial<FormItem>) => void }) {
   const choices = answerChoices(item);

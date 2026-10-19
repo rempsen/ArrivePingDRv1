@@ -4,7 +4,7 @@
  * office work-order modal, jobs booked while the Job forms v2 switch is off —
  * keeps working. Web-only (not mirrored to the phone app).
  */
-import { isInputItem, type FormDef } from "./form-model";
+import { fromLegacy, isInputItem, newItemId, normalizeForm, type FormDef } from "./form-model";
 
 export interface LegacyField {
   type: "text" | "number" | "checkbox" | "select" | "photo" | "signature" | "date";
@@ -55,4 +55,27 @@ export function toLegacy(def: FormDef): { fields: LegacyField[]; checklist: { la
     }
   }
   return { fields, checklist };
+}
+
+/**
+ * Add a question written in the old (schema 1) shape to a template's
+ * schema-2 form, so writers that still speak the old shape (onboarding
+ * tuning) reach templates the new builder or the library made. Returns the
+ * new form JSON, or "" when the template has no schema-2 form.
+ */
+export function appendLegacyToForm(formJson: string | null | undefined, legacy: { field?: unknown; checklistItem?: { label: string; required?: boolean } }): string {
+  if (!formJson) return "";
+  let def: FormDef;
+  try {
+    def = normalizeForm(JSON.parse(formJson));
+  } catch {
+    return "";
+  }
+  const add = legacy.field
+    ? fromLegacy([legacy.field]).items
+    : legacy.checklistItem
+      ? fromLegacy([], [legacy.checklistItem]).items
+      : [];
+  const items = [...def.items, ...add.map((it) => ({ ...it, id: newItemId() }))];
+  return JSON.stringify(normalizeForm({ items }));
 }

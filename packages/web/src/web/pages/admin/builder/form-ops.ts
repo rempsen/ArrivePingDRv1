@@ -82,8 +82,11 @@ export function moveItem(items: Items, fromId: string, toId: string): Items {
     let start = t;
     while (start >= 0 && rest[start]!.type !== "section") start--;
     let insertAt: number;
-    if (to > from) insertAt = start < 0 ? rest.findIndex((x) => x.type === "section") : blockRange(rest, start)[1];
-    else insertAt = start < 0 ? 0 : start;
+    // Questions before the first section belong to no section: a section is
+    // never placed above them (it would swallow them).
+    const firstSection = rest.findIndex((x) => x.type === "section");
+    if (start < 0) insertAt = firstSection < 0 ? rest.length : firstSection;
+    else insertAt = to > from ? blockRange(rest, start)[1] : start;
     if (insertAt < 0) insertAt = rest.length;
     rest.splice(insertAt, 0, ...block);
     return fixLogic(rest);

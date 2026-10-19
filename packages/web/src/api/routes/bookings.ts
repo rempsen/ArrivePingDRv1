@@ -33,7 +33,7 @@ import { findAvailabilityBlock } from "../../services/availability";
 import { zonedDayBounds, fmtInZone } from "../../shared/tz";
 import { isTerminalStatus } from "../../shared/job-status";
 import { onChecklistTicked } from "../../services/custom-milestones";
-import { closeJobForm, currentVersion, missingForJob } from "../../services/job-forms";
+import { answeredCountFor, closeJobForm, currentVersion, isInternalItem, missingForJob, reopenJobForm, versionFormFor } from "../../services/job-forms";
 import { sendFormCopy } from "../../services/form-copy";
 import { isFeatureOn } from "../../services/features";
 import { z } from "zod";
@@ -997,8 +997,14 @@ export const bookingsRoutes = new Hono<AppEnv>()
       // Job forms v2: a different template means its current version (answers
       // already given to the old form stay stored against the old version).
       if ((body.templateId || null) !== (prev.templateId ?? null)) {
-        const ver = body.templateId && (await isFeatureOn(co, "forms.v2")) ? await currentVersion(co, body.templateId) : null;
-        set.templateVersionId = ver?.id ?? null;
+        // Answers already given belong to this job's form: changing the
+        // template would hide them. A finished job keeps its form as the record.
+        if (prev.templateVersionId && (await answeredCountFor(co, prev)) > 0)
+          return c.json({ message: "This job's form already has answers, so its template can't be changed. Create a new job instead.", reason: "form_has_answers" }, 409);
+        if (!isTerminalStatus(prev.status)) {
+          const ver = body.templateId && (await isFeatureOn(co, "forms.v2")) ? await currentVersion(co, body.templateId) : null;
+          set.templateVersionId = ver?.id ?? null;
+        }
       }
     }
     if (body.region !== undefined) set.region = body.region ?? "";
@@ -1199,6 +1205,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
       throw e;
     }
     if (!b) return c.json({ error: "not found" }, 404);
+    if (status !== "completed" && b.templateVersionId) {
+      await reopenJobForm(co, b).catch((e) => console.error("[bookings] reopen form failed", id, e));
+    }
     if (status === "completed" && b.templateVersionId) {
       await closeJobForm(co, b, u.name || u.email || "").catch((e) => console.error("[bookings] close form failed", id, e));
       // The customer's copy of the form, when the template asks for one.
@@ -1463,6 +1472,18 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // Job forms v2: the question this photo answers (tags the photo only; the
     // answer itself is saved through /api/job-forms with the returned id).
     const formItemId = String(form.get("formItemId") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+    // A photo for an office-only question (or one in an office-only section)
+    // is office-only, whatever the client sent, and carries no caption onto
+    // the customer's timeline.
+    let photoCaption = caption;
+    let photoVisible = customerVisible;
+    if (formItemId) {
+      const vf = await versionFormFor(b.companyId, b);
+      if (vf && isInternalItem(vf, formItemId)) {
+        photoVisible = false;
+        photoCaption = "";
+      }
+    }
     if (!(file instanceof File)) return c.json({ message: "No file" }, 400);
     if (file.size > 15 * 1024 * 1024) return c.json({ message: "Image too large (max 15MB)" }, 400);
     const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
@@ -1478,10 +1499,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const [p] = await t.insert(schema.jobPhotos, {
       bookingId: id,
       url: stored.url,
-      caption,
+      caption: photoCaption,
       source: "upload",
       phase,
-      customerVisible,
+      customerVisible: photoVisible,
       formItemId,
     });
     if (!p) throw new Error("Failed to insert job photo");
@@ -1494,16 +1515,16 @@ export const bookingsRoutes = new Hono<AppEnv>()
       kind: "photo_added",
       actorRole: "tech",
       actorName: me?.name || "",
-      label: caption
-        ? `${phase === "before" ? "Before" : phase === "after" ? "After" : "Job"} photo — ${caption}`
+      label: photoCaption
+        ? `${phase === "before" ? "Before" : phase === "after" ? "After" : "Job"} photo — ${photoCaption}`
         : `${phase === "before" ? "Before" : phase === "after" ? "After" : "Job"} photo added`,
-      meta: { photoId: p.id, url: stored.url, caption, phase },
+      meta: { photoId: p.id, url: stored.url, caption: photoCaption, phase },
       // an office-only photo must not surface a timeline entry to the customer
-      customerVisible: customerVisible ? undefined : false,
+      customerVisible: photoVisible ? undefined : false,
     });
 
     // Notify dispatch in real-time so the office sees the new photo immediately
-    if (b.publicToken) {
+    if (b.publicToken && photoVisible) {
       void publishTrack({
         type: "status",
         token: b.publicToken,

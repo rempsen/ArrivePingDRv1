@@ -71,10 +71,14 @@ export async function formResponsesExport(
   // Question columns: the newest version's questions in its order, then any
   // that only older versions had (newest first). Labels from the newest.
   const forms = new Map(versions.map((v) => [v.id, versionForm(v)]));
+  // Ids from old (converted) templates are positional, so a field inserted
+  // later shifts them: key those by id + wording so two different questions
+  // never share a column.
+  const colKey = (item: FormItem) => (item.id.startsWith("lg_") ? `${item.id}|${item.label.trim().toLowerCase()}` : item.id);
   const cols = new Map<string, string>();
   for (const v of [...versions].reverse()) {
     for (const item of forms.get(v.id)!.items) {
-      if (isInputItem(item) && !cols.has(item.id)) cols.set(item.id, item.label);
+      if (isInputItem(item) && !cols.has(colKey(item))) cols.set(colKey(item), item.label);
     }
   }
 
@@ -106,27 +110,28 @@ export async function formResponsesExport(
   const userName = new Map(users.map((u) => [u.id, u.name]));
   const techName = new Map(riders.map((r) => [r.id, userName.get(r.userId) ?? ""]));
 
+  const respByJob = new Map(responses.map((r) => [`${r.bookingId}:${r.templateVersionId}`, r]));
   const rows = inRange.map((b) => {
     const form = forms.get(b.templateVersionId!)!;
-    const resp = responses.find((r) => r.bookingId === b.id && r.templateVersionId === b.templateVersionId);
+    const resp = respByJob.get(`${b.id}:${b.templateVersionId}`);
     const answers = parseAnswers(resp?.answers);
-    const byId = new Map<string, FormItem>(form.items.map((i) => [i.id, i]));
+    const byKey = new Map<string, FormItem>(form.items.filter(isInputItem).map((i) => [colKey(i), i]));
     const status = formStatusLine({ status: resp?.status === "complete" ? "complete" : "in_progress", missing: Array(resp?.missingCount ?? 0) as string[] });
     const row: Record<string, string | number> = {
       jobNumber: jobNumber(b.id),
       title: csvSafe(b.title),
       date: fmtInZone(jobDate(b), tz, { year: "numeric", month: "2-digit", day: "2-digit" }, "en-CA", ""),
-      technician: b.riderId ? (techName.get(b.riderId) ?? "") : "",
+      technician: b.riderId ? csvSafe(techName.get(b.riderId) ?? "") : "",
       customer: csvSafe(userName.get(b.customerId) ?? ""),
       status: b.status,
       formStatus: resp ? status.text : "Not started",
       version: versions.find((v) => v.id === b.templateVersionId)?.version ?? "",
     };
-    for (const id of cols.keys()) {
-      const item = byId.get(id);
-      const a = answers[id];
+    for (const key of cols.keys()) {
+      const item = byKey.get(key);
+      const a = item ? answers[item.id] : undefined;
       const text = item && a ? answerText(item, a) : "";
-      row[`q:${id}`] = text === "—" ? "" : csvSafe(text);
+      row[`q:${key}`] = text === "—" ? "" : csvSafe(text);
     }
     row.flagged = flaggedItems(form, answers).length;
     return row;
@@ -143,7 +148,7 @@ export async function formResponsesExport(
       { key: "status", label: "Job status" },
       { key: "formStatus", label: "Form status" },
       { key: "version", label: "Form version" },
-      ...[...cols].map(([id, label]) => ({ key: `q:${id}`, label })),
+      ...[...cols].map(([key, label]) => ({ key: `q:${key}`, label: csvSafe(label) })),
       { key: "flagged", label: "Flagged answers" },
     ],
     rows,

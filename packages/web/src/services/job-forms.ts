@@ -20,6 +20,7 @@ import {
   missingRequired,
   normalizeForm,
   progress,
+  questionCount,
   templateForm,
   type Answer,
   type Answers,
@@ -108,7 +109,10 @@ export async function currentVersion(companyId: string, templateId: string): Pro
   if (!tpl) return null;
   if (tpl.currentVersionId) {
     const v = await t.selectOne(schema.templateVersions, eq(schema.templateVersions.id, tpl.currentVersionId));
-    if (v) return v;
+    // Only while it still matches the template: a write that didn't go
+    // through the templates API (onboarding tuning) or a save that failed
+    // half-way must never book new jobs on old questions or prices.
+    if (v && sameSnapshot(snapshotOf(tpl), v)) return v;
   }
   return publishVersion(companyId, templateId);
 }
@@ -209,6 +213,8 @@ export async function jobForm(companyId: string, b: Pick<Booking, "id" | "templa
   const t = tdb(companyId);
   const v = await t.selectOne(schema.templateVersions, eq(schema.templateVersions.id, b.templateVersionId));
   if (!v) return null;
+  // A template with prices but no questions has no form to fill in.
+  if (questionCount(versionForm(v)) === 0) return null;
   const r = await t.selectOne(
     schema.jobFormResponses,
     and(eq(schema.jobFormResponses.bookingId, b.id), eq(schema.jobFormResponses.templateVersionId, v.id)),
@@ -321,4 +327,42 @@ export async function closeJobForm(companyId: string, b: Pick<Booking, "id" | "t
       .set({ status: "complete", completedAt: new Date(), updatedBy: by })
       .where(t.scope(schema.jobFormResponses, and(eq(schema.jobFormResponses.bookingId, b.id), eq(schema.jobFormResponses.templateVersionId, b.templateVersionId!))));
   });
+}
+
+/** Is this question office-only (itself, or because its section is)? */
+export function isInternalItem(form: FormDef, itemId: string): boolean {
+  let sectionInternal = false;
+  for (const it of form.items) {
+    if (it.type === "section") sectionInternal = !!it.internal;
+    if (it.id === itemId) return !!it.internal || (it.type !== "section" && sectionInternal);
+  }
+  return false;
+}
+
+/** The form a job is pinned to (for checks outside the form routes). */
+export async function versionFormFor(companyId: string, b: Pick<Booking, "templateVersionId">): Promise<FormDef | null> {
+  if (!b.templateVersionId) return null;
+  const v = await tdb(companyId).selectOne(schema.templateVersions, eq(schema.templateVersions.id, b.templateVersionId));
+  return v ? versionForm(v) : null;
+}
+
+/** A job taken back from completed: its form is open for answers again. */
+export async function reopenJobForm(companyId: string, b: Pick<Booking, "id" | "templateVersionId">): Promise<void> {
+  if (!b.templateVersionId) return;
+  const t = tdb(companyId);
+  await t.update(
+    schema.jobFormResponses,
+    { status: "in_progress", completedAt: null },
+    and(eq(schema.jobFormResponses.bookingId, b.id), eq(schema.jobFormResponses.templateVersionId, b.templateVersionId), eq(schema.jobFormResponses.status, "complete")),
+  );
+}
+
+/** Answers already given on a job's current form (0 when none). */
+export async function answeredCountFor(companyId: string, b: Pick<Booking, "id" | "templateVersionId">): Promise<number> {
+  if (!b.templateVersionId) return 0;
+  const r = await tdb(companyId).selectOne(
+    schema.jobFormResponses,
+    and(eq(schema.jobFormResponses.bookingId, b.id), eq(schema.jobFormResponses.templateVersionId, b.templateVersionId)),
+  );
+  return r?.answeredCount ?? 0;
 }

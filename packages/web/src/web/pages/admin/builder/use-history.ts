@@ -38,5 +38,10 @@ export function useHistory<T>(initial: T) {
     setState({ past: [], present: value, future: [] });
   }, []);
 
-  return { value: state.present, commit, undo, redo, reset, canUndo: state.past.length > 0, canRedo: state.future.length > 0 };
+  /** Swap in an equal-meaning value (the server's saved copy) without an undo step. */
+  const replacePresent = useCallback((value: T) => {
+    setState((s) => ({ ...s, present: value }));
+  }, []);
+
+  return { value: state.present, commit, undo, redo, reset, replacePresent, canUndo: state.past.length > 0, canRedo: state.future.length > 0 };
 }

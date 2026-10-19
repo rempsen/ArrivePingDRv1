@@ -2,7 +2,7 @@
  * A job's form for the web (tech page and office): load it, save answers as
  * they're given (shown at once, sent in order), upload photos for questions.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiHeaders } from "../../lib/api";
 import type { Answer, Answers, FormDef } from "../../../shared/forms/form-model";
@@ -37,30 +37,59 @@ export function useJobForm(bookingId: string | undefined) {
     queryFn: () => call<{ form: JobFormData | null }>(`/api/job-forms/${bookingId}`).then((r) => r.form),
   });
   const [pending, setPending] = useState<Answers>({});
+  const pendingRef = useRef<Answers>({});
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   const chain = useRef<Promise<unknown>>(Promise.resolve());
 
-  const answer = useCallback(
-    (itemId: string, a: Answer) => {
-      setPending((p) => ({ ...p, [itemId]: a }));
+  const send = useCallback(
+    (answers: Answers) => {
       setState("saving");
       chain.current = chain.current
         .catch(() => {})
-        .then(() => call<{ form: JobFormData }>(`/api/job-forms/${bookingId}`, { method: "PATCH", body: JSON.stringify({ answers: { [itemId]: a } }) }))
+        .then(() => call<{ form: JobFormData }>(`/api/job-forms/${bookingId}`, { method: "PATCH", body: JSON.stringify({ answers }) }))
         .then((r) => {
           qc.setQueryData(key, r.form);
-          setPending((p) => {
-            if (p[itemId] !== a) return p;
-            const { [itemId]: _done, ...rest } = p;
-            return rest;
-          });
-          setState("idle");
+          // Drop what this save carried, unless it was changed again meanwhile.
+          const next = { ...pendingRef.current };
+          for (const [id, a] of Object.entries(answers)) if (next[id] === a) delete next[id];
+          pendingRef.current = next;
+          setPending(next);
+          setState(Object.keys(next).length ? "saving" : "idle");
         })
         .catch(() => setState("error"));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bookingId, qc],
   );
+
+  const answer = useCallback(
+    (itemId: string, a: Answer) => {
+      pendingRef.current = { ...pendingRef.current, [itemId]: a };
+      setPending(pendingRef.current);
+      send({ [itemId]: a });
+    },
+    [send],
+  );
+
+  /** Send every answer that hasn't been saved yet (after an error). */
+  const retry = useCallback(() => {
+    if (Object.keys(pendingRef.current).length) send({ ...pendingRef.current });
+  }, [send]);
+
+  useEffect(() => {
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [retry]);
+
+  /** Waits for saves in flight; true only when every answer is saved. */
+  const settled = useCallback(async () => {
+    await chain.current.catch(() => {});
+    if (Object.keys(pendingRef.current).length) {
+      retry();
+      await chain.current.catch(() => {});
+    }
+    return Object.keys(pendingRef.current).length === 0;
+  }, [retry]);
 
   const uploadPhoto = useCallback(
     async (itemId: string, file: File) => {
@@ -86,7 +115,7 @@ export function useJobForm(bookingId: string | undefined) {
 
   const data = q.data ?? null;
   const answers = data ? { ...data.answers, ...pending } : {};
-  return { data, loading: q.isLoading, answers, answer, uploadPhoto, photoUrls, saveState: state, settled: () => chain.current };
+  return { data, loading: q.isLoading, answers, answer, retry, uploadPhoto, photoUrls, saveState: state, settled };
 }
 
 /** Finish a job from a form-aware page; a 409 lists the required questions still open. */

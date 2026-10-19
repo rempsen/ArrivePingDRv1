@@ -17,6 +17,7 @@ import { officeCan, requireAuth, tenantId, tx } from "../middleware/auth";
 import { jsonBody } from "../lib/validate";
 import { FormInputError, jobForm, saveJobAnswers } from "../../services/job-forms";
 import { publishDispatch } from "../../services/realtime";
+import { isTerminalStatus } from "../../shared/job-status";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
 
@@ -39,7 +40,13 @@ async function loadForCaller(c: Context<AppEnv>, write: boolean) {
   if (await officeCan(u, write ? "work_orders:edit" : "work_orders:view")) return { b, u } as const;
   if (b.riderId) {
     const rider = await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId));
-    if (rider?.userId === u.id) return { b, u } as const;
+    if (rider?.userId === u.id) {
+      // Once a job is finished (or cancelled) its answers are the record:
+      // only the office can correct them, and that is attributed to them.
+      if (write && isTerminalStatus(b.status))
+        return { error: c.json({ message: "This job is finished. Ask the office to change an answer." }, 409) } as const;
+      return { b, u } as const;
+    }
   }
   return { error: c.json({ message: "Forbidden" }, 403) } as const;
 }

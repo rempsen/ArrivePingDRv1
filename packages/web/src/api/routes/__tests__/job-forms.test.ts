@@ -207,3 +207,68 @@ describe("a job booked from a template", () => {
     expect(r.status).toBe(200);
   });
 });
+
+describe("review fixes", () => {
+  let jobId = "";
+  const INTERNAL_FORM = {
+    schema: 2,
+    items: [
+      { id: "q", type: "short_text", label: "Notes", required: true },
+      { id: "s_off", type: "section", label: "Office", internal: true },
+      { id: "upsell", type: "photo", label: "Upsell photo" },
+    ],
+  };
+
+  it("a photo for an office-only question (or section) is never customer-visible", async () => {
+    const r = await call("POST", "/templates", { name: "Internal photo", form: INTERNAL_FORM });
+    const tpl = ((await r.json()) as any).template;
+    const v = await currentVersion(CO, tpl.id);
+    const [b] = await db.insert(schema.bookings).values({ companyId: CO, customerId: "jf-cust", serviceId: "jf-svc", riderId: "jf-rider", templateId: tpl.id, templateVersionId: v!.id, status: "in_progress", scheduledAt: new Date(), address: "x" } as never).returning();
+    jobId = b!.id;
+    const fd = new FormData();
+    fd.append("file", new File([new Uint8Array([137, 80, 78, 71])], "a.png", { type: "image/png" }));
+    fd.append("formItemId", "upsell");
+    fd.append("caption", "Upsell photo");
+    fd.append("customerVisible", "true");
+    const up = await app.request(`/bookings/${jobId}/photos`, { method: "POST", body: fd, headers: { "X-Test-User": TECH, "X-Test-Role": "rider" } });
+    expect(up.status).toBe(201);
+    const { photo } = (await up.json()) as any;
+    expect(photo.customerVisible).toBe(false);
+    expect(photo.caption).toBe("");
+  });
+
+  it("a technician can't change answers once the job is finished; the office can", async () => {
+    await db.update(schema.bookings).set({ status: "completed" } as never).where(eq(schema.bookings.id, jobId));
+    expect((await call("PATCH", `/job-forms/${jobId}`, { answers: { q: { value: "late edit" } } }, TECH, "rider")).status).toBe(409);
+    expect((await call("PATCH", `/job-forms/${jobId}`, { answers: { q: { value: "office fix" } } })).status).toBe(200);
+  });
+
+  it("a job whose form has answers can't silently switch template", async () => {
+    const r = await call("PATCH", `/bookings/${jobId}`, { templateId: tplId });
+    expect(r.status).toBe(409);
+    expect(((await r.json()) as any).reason).toBe("form_has_answers");
+  });
+
+  it("a template changed outside the editor gets a fresh version before booking", async () => {
+    const before = await currentVersion(CO, tplId);
+    await db.update(schema.taskTemplates).set({ rateModel: JSON.stringify(RATE(999)) } as never).where(eq(schema.taskTemplates.id, tplId));
+    const after = await currentVersion(CO, tplId);
+    expect(after!.id).not.toBe(before!.id);
+    expect(JSON.parse(after!.rateModel).flatRate).toBe(999);
+  });
+
+  it("customers can't read templates (office-only questions, pay)", async () => {
+    expect((await call("GET", "/templates", undefined, "jf-cust", "customer")).status).toBe(403);
+    expect((await call("GET", "/templates", undefined, TECH, "rider")).status).toBe(200);
+  });
+
+  it("the library and AI drafts need the Job forms v2 switch", async () => {
+    await db.update(schema.companies).set({ kind: "customer", isInternal: false } as never).where(eq(schema.companies.id, CO));
+    invalidateFeatures();
+    expect((await call("GET", "/templates/library")).status).toBe(403);
+    expect((await call("POST", "/templates/generate", { description: "Furnace tune-up with photos" })).status).toBe(403);
+    await db.update(schema.companies).set({ kind: "test", isInternal: true } as never).where(eq(schema.companies.id, CO));
+    invalidateFeatures();
+    expect((await call("GET", "/templates/library")).status).toBe(200);
+  });
+});

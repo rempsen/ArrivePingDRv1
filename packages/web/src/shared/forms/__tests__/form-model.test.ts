@@ -93,12 +93,16 @@ describe("legacy templates", () => {
       ["lg_4", "checklist"],
       ["lg_5", "photo"],
       ["lg_6", "signature"],
+      ["lg_checklist_req", "checklist"],
       ["lg_checklist", "checklist"],
     ]);
     expect(f.items[3]!.options).toEqual(["Filter", "Coils"]);
     expect(f.items[4]!.options).toEqual(["Customer present"]);
     expect(f.items[5]!.minPhotos).toBe(1);
-    expect(f.items[7]).toMatchObject({ options: ["Wipe down", "Lock up"], required: true });
+    // only the item that was required blocks finishing
+    expect(f.items[7]).toMatchObject({ options: ["Wipe down"], required: true });
+    expect(f.items[8]!.options).toEqual(["Lock up"]);
+    expect(f.items[8]!.required).toBeUndefined();
     expect(fromLegacy([{ type: "text", label: "A" }]).items[0]!.id).toBe(fromLegacy([{ type: "text", label: "A" }]).items[0]!.id);
   });
   it("templateForm prefers a saved schema-2 form", () => {
@@ -146,6 +150,15 @@ describe("logic and validation", () => {
     expect(progress(def, a)).toEqual({ answered: 5, total: 6 }); // "Site" left blank
     expect(flaggedItems(def, a).map((i) => i.id)).toEqual(["filter"]);
   });
+  it("points out logic and flags that no longer match an answer", () => {
+    const f = normalizeForm({
+      items: [
+        { id: "k", type: "single_choice", label: "Kind", options: ["Home", "Office"], flagOn: ["Shed"] },
+        { id: "x", type: "short_text", label: "Desk", showIf: { itemId: "k", op: "is", value: "Commercial" } },
+      ],
+    });
+    expect(formProblems(f).map((p) => p.itemId)).toEqual(["k", "x"]);
+  });
   it("problems before saving", () => {
     expect(formProblems(normalizeForm({ items: [{ type: "section", label: "S" }] }))[0]!.message).toMatch(/at least one question/);
     const f = normalizeForm({ items: [{ id: "c", type: "single_choice", label: "Pick", options: [] }] });
@@ -162,6 +175,12 @@ describe("answers", () => {
     expect(cleanAnswerValue(by("kind"), "Office")).toBeNull();
     expect(cleanAnswerValue(by("steps"), ["B", "Z", "A"])).toEqual(["A", "B"]);
     expect(cleanAnswerValue(by("sig"), "javascript:alert(1)")).toBeNull();
+    // never an outside URL (the PDF builder and office views would load it)
+    expect(cleanAnswerValue(by("sig"), "http://169.254.169.254/latest/meta-data")).toBeNull();
+    expect(cleanAnswerValue(by("sig"), "https://evil.test/pixel.png")).toBeNull();
+    expect(cleanAnswerValue(by("sig"), "data:image/svg+xml;base64,PHN2Zz4=")).toBe("data:image/svg+xml;base64,PHN2Zz4=");
+    expect(cleanAnswerValue(by("sig"), "/uploads/sig/a.png")).toBe("/uploads/sig/a.png");
+    expect(cleanAnswerValue(by("sig"), "data:text/html;base64,AAA")).toBeNull();
     expect(cleanAnswerValue({ id: "n", type: "number", label: "n" }, "12.5")).toBe(12.5);
     expect(cleanAnswerValue({ id: "d", type: "date", label: "d" }, "2026-10-19")).toBe("2026-10-19");
     expect(cleanAnswerValue({ id: "d", type: "date", label: "d" }, "tomorrow")).toBeNull();

@@ -24,6 +24,10 @@ describe("moving questions", () => {
     expect(ids(moveItem(base, "s1", "c"))).toEqual(["s2", "c", "d", "s1", "a", "b", "s3", "e"]);
     expect(ids(moveItem(base, "s1", "e"))).toEqual(["s2", "c", "d", "s3", "e", "s1", "a", "b"]);
   });
+  it("never puts a section above questions that aren't in one (it would swallow them)", () => {
+    const xs = [it_("lead"), it_("s1", "section"), it_("a"), it_("s2", "section", { internal: true }), it_("b")];
+    expect(ids(moveItem(xs, "s2", "lead"))).toEqual(["lead", "s2", "b", "s1", "a"]);
+  });
   it("can't drop a section into itself", () => {
     expect(moveItem(base, "s2", "c")).toBe(base);
   });

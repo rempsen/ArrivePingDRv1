@@ -469,8 +469,8 @@ function PhotoAnswer({
     if (!files?.length) return;
     setErr("");
     setBusy(true);
+    const next = [...ids];
     try {
-      const next = [...ids];
       for (const f of Array.from(files).slice(0, max - ids.length)) {
         if (p.uploadPhoto) {
           const up = await p.uploadPhoto(item.id, f);
@@ -482,10 +482,11 @@ function PhotoAnswer({
           next.push(id);
         }
       }
-      set({ photoIds: next });
     } catch (e) {
       setErr((e as Error).message || "Couldn't upload that photo. Try again.");
     } finally {
+      // Photos that did upload are kept, even if a later one failed.
+      if (next.length !== ids.length) set({ photoIds: next });
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -520,6 +521,7 @@ function PhotoAnswer({
               capture="environment"
               multiple
               className="sr-only"
+              disabled={busy}
               aria-label={`Add photo for ${item.label}`}
               onChange={(e) => add(e.target.files)}
             />

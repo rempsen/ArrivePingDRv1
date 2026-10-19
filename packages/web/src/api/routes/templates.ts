@@ -1,4 +1,6 @@
 import { Hono, type Context } from "hono";
+import { createMiddleware } from "hono/factory";
+import { isOfficeRole } from "../lib/office-access";
 import { parseTechPayModel } from "../../shared/tech-pay";
 import { ensureFormCategories } from "../../services/form-categories";
 import * as schema from "../database/schema";
@@ -16,6 +18,13 @@ import { libraryFor } from "../../shared/forms/library";
 import { getIndustryPreset } from "../../services/industry-presets";
 import { GenerateError, generateTemplateDraft } from "../../services/form-generate";
 import { rateLimit, keyByUser } from "../lib/rate-limit";
+import { isFeatureOn } from "../../services/features";
+
+/** The library and AI drafts are part of Job forms v2 (Control Hub switch). */
+const requireFormsV2 = createMiddleware<AppEnv>(async (c, next) => {
+  if (!(await isFeatureOn(tenantId(c), "forms.v2"))) return c.json({ message: "Job forms v2 isn't switched on for this company." }, 403);
+  return next();
+});
 
 const generateLimit = rateLimit({ limit: 20, windowMs: 60 * 60 * 1000, keyFn: keyByUser, name: "template-generate" });
 
@@ -107,19 +116,27 @@ function log(c: Ctx, action: string, entityId: string, summary: string) {
   return audit({ companyId: tenantId(c), actorId: u?.id ?? "", actorName: actorOf(c), action, entityType: "template", entityId, summary });
 }
 
+/** Templates carry office-only questions and pay: staff only, never customers. */
+const requireStaff = createMiddleware<AppEnv>(async (c, next) => {
+  const u = c.get("user") as { role?: string } | null;
+  if (!u) return c.json({ message: "Unauthorized" }, 401);
+  if (!isOfficeRole(u.role) && u.role !== "rider") return c.json({ message: "Forbidden" }, 403);
+  return next();
+});
+
 export const templatesRoutes = new Hono<AppEnv>()
-  .get("/", requireAuth, async (c) => {
+  .get("/", requireAuth, requireStaff, async (c) => {
     const rows = await tx(c).select(schema.taskTemplates);
     const stats = await templateStats(tenantId(c)).catch(() => new Map());
     return c.json({ templates: rows.map((t) => present(t, stats.get(t.id))) }, 200);
   })
   // The starter library for this company's trade (industry matches first, then general).
-  .get("/library", requireOffice, async (c) => {
+  .get("/library", requireOffice, requireFormsV2, async (c) => {
     const ind = await companyIndustry(tenantId(c));
     return c.json({ industry: ind.id || null, industryLabel: ind.label, templates: structuredClone(libraryFor(ind.id)) }, 200);
   })
   // "Describe it": an AI draft for review in the editor. Never saved here.
-  .post("/generate", requireOffice, generateLimit, jsonBody(z.object({ description: z.string().trim().min(12, "Describe the job in a sentence or two.").max(1500) })), async (c) => {
+  .post("/generate", requireOffice, requireFormsV2, generateLimit, jsonBody(z.object({ description: z.string().trim().min(12, "Describe the job in a sentence or two.").max(1500) })), async (c) => {
     const { description } = c.req.valid("json");
     const ind = await companyIndustry(tenantId(c));
     try {
@@ -130,7 +147,7 @@ export const templatesRoutes = new Hono<AppEnv>()
       throw e;
     }
   })
-  .get("/:id", requireAuth, async (c) => {
+  .get("/:id", requireAuth, requireStaff, async (c) => {
     const t = await tx(c).selectOne(
       schema.taskTemplates,
       eq(schema.taskTemplates.id, c.req.param("id")),

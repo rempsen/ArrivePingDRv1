@@ -8,7 +8,11 @@ export function OfficeFormEditor({ bookingId, by }: { bookingId: string; by?: st
   return (
     <div className="space-y-2">
       <p aria-live="polite" className={`text-right text-[11px] ${jf.saveState === "error" ? "text-red-400" : "text-slate-500"}`}>
-        {jf.saveState === "saving" ? "Saving…" : jf.saveState === "error" ? "Not saved, try again" : "Changes save as you go"}
+        {jf.saveState === "saving" ? "Saving…" : jf.saveState === "error" ? (
+          <button type="button" onClick={jf.retry} className="underline">
+            Not saved. Retry
+          </button>
+        ) : "Changes save as you go"}
       </p>
       <FormFill form={jf.data.form} answers={jf.answers} onAnswer={jf.answer} uploadPhoto={jf.uploadPhoto} photoUrls={jf.photoUrls} by={by} />
     </div>

@@ -80,7 +80,8 @@ ${input.description.slice(0, 1500)}
     });
     object = r.object;
   } catch (e) {
-    throw new GenerateError(`Couldn't draft the form right now. Try again, or start from the library. (${(e as Error).message?.slice(0, 120) ?? "error"})`);
+    console.error("[form-generate] draft failed", (e as Error)?.message);
+    throw new GenerateError("Couldn't draft the form right now. Try again, or start from the library.");
   }
   const form = normalizeForm({ items: object.items.slice(0, MAX_ITEMS) });
   if (questionCount(form) === 0) throw new GenerateError("The draft came back empty. Add a little more detail about the job and try again.");

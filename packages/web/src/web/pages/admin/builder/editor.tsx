@@ -124,7 +124,7 @@ export default function TemplateEditor() {
   const [quickAdd, setQuickAdd] = useState(false);
   const [sheet, setSheet] = useState<"add" | "settings" | "preview" | null>(null);
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
-  const [lastRemoved, setLastRemoved] = useState<string | null>(null);
+  const [lastRemoved, setLastRemoved] = useState<{ label: string; before: FormItem[]; after: FormItem[]; item: FormItem; index: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const tpl = tplQ.data?.template as any;
 
@@ -138,6 +138,13 @@ export default function TemplateEditor() {
       history.reset(d);
       setSaved(null);
       setLoaded(true);
+      try {
+        const raw = localStorage.getItem(draftKey("new"));
+        const parsed = raw ? (JSON.parse(raw) as { at: number; draft: Draft }) : null;
+        if (parsed && (parsed.draft.name || parsed.draft.items.length) && JSON.stringify(parsed.draft) !== JSON.stringify(d)) setRestore(parsed);
+      } catch {
+        /* storage unavailable */
+      }
       return;
     }
     if (!tpl) return;
@@ -160,18 +167,35 @@ export default function TemplateEditor() {
 
   const dirty = loaded && (saved ? JSON.stringify(saved) !== JSON.stringify(draft) : draft.name !== "" || draft.items.length > 0);
 
-  // Keep a local draft so a reload never loses work.
+  // Keep a local draft so a reload never loses work (a new template's under "new").
   useEffect(() => {
-    if (!loaded || !dirty || isNew || !saved) return;
+    if (!loaded || !dirty) return;
     const t = setTimeout(() => {
       try {
-        localStorage.setItem(draftKey(routeId), JSON.stringify({ at: Date.now(), draft, base: JSON.stringify(saved) }));
+        localStorage.setItem(draftKey(routeId), JSON.stringify({ at: Date.now(), draft, base: saved ? JSON.stringify(saved) : "" }));
       } catch {
         /* storage unavailable */
       }
     }, 800);
     return () => clearTimeout(t);
-  }, [draft, dirty, loaded, isNew, saved, routeId]);
+  }, [draft, dirty, loaded, saved, routeId]);
+
+  // Links elsewhere in the dashboard ask before leaving unsaved changes too.
+  useEffect(() => {
+    if (!dirty) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank") return;
+      const href = a.getAttribute("href") ?? "";
+      if (!href.startsWith("/") || href === window.location.pathname) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(href);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [dirty]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -217,16 +241,34 @@ export default function TemplateEditor() {
 
   const removeSelected = useCallback(
     (id: string) => {
-      const it = draft.items.find((x) => x.id === id);
-      setItems((items) => removeItem(items, id));
+      const index = draft.items.findIndex((x) => x.id === id);
+      const it = draft.items[index];
+      if (!it) return;
+      const after = removeItem(draft.items, id);
+      setItems(() => after);
       if (selectedId === id) setSelectedId(null);
-      setLastRemoved(it?.label ?? "Question");
+      setLastRemoved({ label: it.label, before: draft.items, after, item: it, index });
     },
     [draft.items, selectedId, setItems],
   );
+  const undoRemove = useCallback(() => {
+    if (!lastRemoved) return;
+    // Nothing else changed since: put everything back (logic rules included).
+    // Otherwise put the question back where it was, keeping the later edits.
+    setItems((items) => {
+      if (items === lastRemoved.after) return lastRemoved.before;
+      if (items.some((x) => x.id === lastRemoved.item.id)) return items;
+      const next = items.slice();
+      next.splice(Math.min(lastRemoved.index, next.length), 0, lastRemoved.item);
+      return next;
+    });
+    setLastRemoved(null);
+  }, [lastRemoved, setItems]);
 
+  const savingRef = useRef<string>("");
   const save = useMutation({
     mutationFn: async () => {
+      savingRef.current = JSON.stringify(draft);
       const payload = {
         name: draft.name.trim(),
         category: draft.category,
@@ -247,9 +289,12 @@ export default function TemplateEditor() {
       qc.invalidateQueries({ queryKey: ["templates"] });
       const d = draftFromTemplate(t);
       setSaved(d);
-      history.reset(d);
+      // Keep the undo history, and anything typed while the save was in
+      // flight; only swap in the server's copy when nothing changed since.
+      if (JSON.stringify(history.value) === savingRef.current) history.replacePresent(d);
       try {
         localStorage.removeItem(draftKey(t.id));
+        if (isNew) localStorage.removeItem(draftKey("new"));
       } catch {
         /* ignore */
       }
@@ -264,6 +309,8 @@ export default function TemplateEditor() {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+      // A dialog (leave, quick add, question settings) owns the keyboard.
+      if (document.querySelector('[aria-modal="true"]')) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
@@ -287,7 +334,7 @@ export default function TemplateEditor() {
         setQuickAdd(true);
         return;
       }
-      if (!selectedId) return;
+      if (!selectedId || typing) return;
       if (mod && e.key.toLowerCase() === "d") {
         e.preventDefault();
         setItems((items) => {
@@ -303,7 +350,6 @@ export default function TemplateEditor() {
         requestAnimationFrame(() => document.querySelector(`[data-item-id="${selectedId}"]`)?.scrollIntoView({ block: "nearest" }));
         return;
       }
-      if (typing) return;
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         removeSelected(selectedId);
@@ -476,9 +522,9 @@ export default function TemplateEditor() {
               items={draft.items}
               selectedId={selectedId}
               problems={problemIds}
-              onSelect={(id) => {
+              onSelect={(id, opts) => {
                 setSelectedId(id);
-                if (id && window.innerWidth < 1280) setSheet("settings");
+                if (id && !opts?.fromInput && window.innerWidth < 1280) setSheet("settings");
               }}
               onMove={(from, to) => setItems((items) => moveItem(items, from, to))}
               onInsert={(type, index) => addType(type, index)}
@@ -550,15 +596,8 @@ export default function TemplateEditor() {
 
       {lastRemoved && (
         <div className="fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-white/10 bg-ink-3 px-4 py-2.5 text-sm text-white shadow-2xl shadow-black/50">
-          Deleted “{lastRemoved}”
-          <button
-            type="button"
-            className="font-semibold text-cyan-300 hover:text-white"
-            onClick={() => {
-              history.undo();
-              setLastRemoved(null);
-            }}
-          >
+          Deleted “{lastRemoved.label}”
+          <button type="button" className="font-semibold text-cyan-300 hover:text-white" onClick={undoRemove}>
             Undo
           </button>
           <button type="button" aria-label="Dismiss" onClick={() => setLastRemoved(null)} className="text-slate-500 hover:text-white">
@@ -593,7 +632,7 @@ export default function TemplateEditor() {
                 const to = leaveTo!;
                 setLeaveTo(null);
                 try {
-                  if (!isNew) localStorage.removeItem(draftKey(routeId));
+                  localStorage.removeItem(draftKey(routeId));
                 } catch {
                   /* ignore */
                 }

@@ -78,7 +78,10 @@ export default function RiderActive() {
     mutationFn: async (status: JobStatus) => {
       if (status === "completed" && jf.data) {
         // Answers still being sent go first, then the server checks the form.
-        await jf.settled();
+        if (!(await jf.settled())) {
+          setFormMsg("Some answers haven't saved yet. Check your connection and try again.");
+          return;
+        }
         const missing = missingRequired(jf.data.form, jf.answers);
         if (missing.length) {
           setFormMissing(missing.map((m) => m.id));
@@ -314,7 +317,11 @@ export default function RiderActive() {
               <div className="flex items-baseline justify-between px-1">
                 <p className="text-sm font-semibold text-white">{jf.data.templateName || "Job form"}</p>
                 <span aria-live="polite" className={`text-[11px] ${jf.saveState === "error" ? "text-red-400" : "text-slate-500"}`}>
-                  {jf.saveState === "saving" ? "Saving…" : jf.saveState === "error" ? "Not saved, check your connection" : "Saved"}
+                  {jf.saveState === "saving" ? "Saving…" : jf.saveState === "error" ? (
+                    <button type="button" onClick={jf.retry} className="underline">
+                      Not saved. Retry
+                    </button>
+                  ) : "Saved"}
                 </span>
               </div>
               <FormFill

@@ -267,9 +267,47 @@ export function normalizeForm(input: unknown): FormDef {
   return { schema: FORM_SCHEMA, items };
 }
 
+/** The answers a question can have that logic and flags can match (empty for free text, photos…). */
+export function answerChoices(item: Pick<FormItem, "type" | "options">): { value: string; label: string }[] {
+  switch (item.type) {
+    case "yes_no":
+      return [
+        { value: "yes", label: "Yes" },
+        { value: "no", label: "No" },
+      ];
+    case "pass_fail":
+      return [
+        { value: "pass", label: "Pass" },
+        { value: "fail", label: "Fail" },
+        { value: "na", label: "N/A" },
+      ];
+    case "single_choice":
+    case "multi_choice":
+    case "checklist":
+      return (item.options ?? []).filter(Boolean).map((o) => ({ value: o, label: o }));
+    default:
+      return [];
+  }
+}
+
 /** Problems the builder should point at before saving (empty when fine). */
 export function formProblems(def: FormDef): { itemId?: string; message: string }[] {
   const out: { itemId?: string; message: string }[] = [];
+  const byId = new Map(def.items.map((i) => [i.id, i]));
+  for (const it of def.items) {
+    const rule = it.showIf;
+    if (rule && (rule.op === "is" || rule.op === "is_not") && rule.value) {
+      const target = byId.get(rule.itemId);
+      if (target && !answerChoices(target).some((c) => c.value === rule.value)) {
+        out.push({ itemId: it.id, message: `"${it.label}" shows only if "${target.label}" is "${rule.value}", which is no longer an answer` });
+      }
+    }
+    if (it.flagOn?.length) {
+      const choices = answerChoices(it).map((c) => c.value);
+      const stale = it.flagOn.filter((f) => !choices.includes(f));
+      if (stale.length) out.push({ itemId: it.id, message: `"${it.label}" flags "${stale.join(", ")}", which is no longer an answer` });
+    }
+  }
   if (!def.items.some(isInputItem)) out.push({ message: "Add at least one question" });
   for (const it of def.items) {
     if (OPTION_ITEM_TYPES.includes(it.type) && !(it.options ?? []).some((o) => o.trim())) {
@@ -338,8 +376,14 @@ export function fromLegacy(fields: unknown, checklist?: unknown): FormDef {
   const c = Array.isArray(checklist) ? checklist : [];
   const labels = normOptions(c.map((x) => (x && typeof x === "object" ? (x as { label?: unknown }).label : x)));
   if (labels.length) {
-    const anyRequired = c.some((x) => x && typeof x === "object" && (x as { required?: unknown }).required === true);
-    items.push({ id: "lg_checklist", type: "checklist", label: "Checklist", options: labels, required: anyRequired });
+    // A required checklist means every item ticked, so the old per-item
+    // "required" splits into a required checklist and an optional one.
+    const isReq = (l: string) =>
+      c.some((x) => x && typeof x === "object" && (x as { required?: unknown }).required === true && String((x as { label?: unknown }).label ?? "").trim().toLowerCase() === l.toLowerCase());
+    const req = labels.filter(isReq);
+    const opt = labels.filter((l) => !isReq(l));
+    if (req.length) items.push({ id: "lg_checklist_req", type: "checklist", label: opt.length ? "Required checks" : "Checklist", options: req, required: true });
+    if (opt.length) items.push({ id: "lg_checklist", type: "checklist", label: req.length ? "Other checks" : "Checklist", options: opt });
   }
   return normalizeForm({ items: items.map((it) => (it.required ? it : { ...it, required: undefined })) });
 }
@@ -402,7 +446,13 @@ export function cleanAnswerValue(item: FormItem, v: unknown): AnswerValue {
       return picked.length ? picked : null;
     }
     case "signature":
-      return typeof v === "string" && v.length <= LIMITS.signature && /^(data:image\/|https?:\/\/|\/uploads\/)/.test(v) ? v : null;
+      // Only an image we hold: a PNG/JPEG/SVG data URL or our own upload path.
+      // Never an outside URL (the PDF builder and office views would load it).
+      return typeof v === "string" &&
+        v.length <= LIMITS.signature &&
+        (/^data:image\/(png|jpeg|jpg|svg\+xml)(;charset=[\w-]+)?(;utf8)?(;base64)?,/i.test(v) || /^\/uploads\/[\w./-]+$/.test(v))
+        ? v
+        : null;
     case "photo":
       return null;
     default:

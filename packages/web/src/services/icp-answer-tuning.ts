@@ -28,6 +28,7 @@
  * is never blocked by this. Same philosophy as qualifying-tuning.ts: the
  * model decides WHAT, deterministic code decides HOW.
  */
+import { appendLegacyToForm } from "../shared/forms/legacy";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -364,7 +365,9 @@ RULES
               break;
             }
             checklist.push({ id: crypto.randomUUID(), label: action.label.slice(0, 160), required: action.required });
-            await t.update(schema.taskTemplates, { checklist: JSON.stringify(checklist) }, eq(schema.taskTemplates.id, tpl.id));
+            const formWithItem = appendLegacyToForm(tpl.form, { checklistItem: { label: action.label.slice(0, 160), required: action.required } });
+            await t.update(schema.taskTemplates, { checklist: JSON.stringify(checklist), ...(formWithItem ? { form: formWithItem } : {}) }, eq(schema.taskTemplates.id, tpl.id));
+            if (formWithItem) tpl.form = formWithItem;
             tpl.checklist = JSON.stringify(checklist);
             summary.actions.push({ type: action.type, target: `${tpl.name} → ${action.label}`, ok: true });
             break;
@@ -381,8 +384,11 @@ RULES
               summary.skipped++;
               break;
             }
-            fields.push({ id: crypto.randomUUID(), type: action.fieldType, label: action.label.slice(0, 120), required: action.required });
-            await t.update(schema.taskTemplates, { fields: JSON.stringify(fields) }, eq(schema.taskTemplates.id, tpl.id));
+            const newField = { id: crypto.randomUUID(), type: action.fieldType, label: action.label.slice(0, 120), required: action.required };
+            fields.push(newField);
+            const formWithField = appendLegacyToForm(tpl.form, { field: newField });
+            await t.update(schema.taskTemplates, { fields: JSON.stringify(fields), ...(formWithField ? { form: formWithField } : {}) }, eq(schema.taskTemplates.id, tpl.id));
+            if (formWithField) tpl.form = formWithField;
             tpl.fields = JSON.stringify(fields);
             summary.actions.push({ type: action.type, target: `${tpl.name} → ${action.label}`, ok: true });
             break;

@@ -545,8 +545,10 @@ export async function buildJobPdf(
         }
         const valueLines = wrap(valueText, valueFont, 8, valueW, 6);
         const sigKind = r.item.type === "signature" && r.answered ? signatureImageKind(r.answer?.value) : null;
-        const sigUrl = r.item.type === "signature" && r.answered && !sigKind && typeof r.answer?.value === "string" && /^(https?:\/\/|\/)/.test(r.answer.value) ? r.answer.value : "";
-        const sigH = sigKind || sigUrl ? 46 : 0;
+        // Phone signatures are SVG strokes: draw their paths. Nothing is ever
+        // fetched from a URL here (an answer is untrusted input).
+        const sigSvg = r.item.type === "signature" && r.answered && !sigKind ? svgSignature(r.answer?.value) : null;
+        const sigH = sigKind || sigSvg ? 46 : 0;
         const rowH = Math.max(labelLines.length, valueLines.length) * 11 + 5 + sigH;
         ensure(rowH + 6);
         if (stripe++ % 2 === 0) page.drawRectangle({ x: margin, y: y - rowH + 3, width: usableW, height: rowH, color: rgb(0.96, 0.97, 0.98) });
@@ -560,12 +562,10 @@ export async function buildJobPdf(
               const b64 = String(r.answer!.value).split(",")[1] ?? "";
               const bytes = Buffer.from(b64, "base64");
               img = sigKind === "png" ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
-            } else if (sigUrl) {
-              const resp = await fetch(absoluteUrl(sigUrl, baseUrl || ""));
-              if (resp.ok) {
-                const buf = Buffer.from(await resp.arrayBuffer());
-                const ct = resp.headers.get("content-type") || "";
-                img = ct.includes("png") ? await doc.embedPng(buf) : ct.includes("jpeg") || ct.includes("jpg") ? await doc.embedJpg(buf) : null;
+            } else if (sigSvg) {
+              const scale = Math.min(160 / sigSvg.w, 40 / sigSvg.h, 1);
+              for (const d of sigSvg.paths) {
+                page.drawSvgPath(d, { x: valueX, y: top, scale, borderColor: rgb(0.06, 0.09, 0.16), borderWidth: 1.4 });
               }
             }
           } catch {
@@ -1048,3 +1048,29 @@ export const exportRoutes = new Hono<AppEnv>()
     const ds = DATASET_COLUMNS[c.req.param("dataset")];
     return c.json({ columns: ds ? ds.map((c) => c.key) : [] }, 200);
   });
+
+
+/**
+ * The strokes of a signature drawn on the phone (an SVG data URL of <path d>
+ * strokes), for drawing straight into the PDF. Null for anything else.
+ */
+export function svgSignature(value: unknown): { w: number; h: number; paths: string[] } | null {
+  if (typeof value !== "string") return null;
+  let xml = "";
+  const b64 = /^data:image\/svg\+xml;base64,(.*)$/s.exec(value);
+  const raw = /^data:image\/svg\+xml(?:;charset=[\w-]+)?(?:;utf8)?,(.*)$/s.exec(value);
+  try {
+    if (b64) xml = Buffer.from(b64[1]!, "base64").toString("utf8");
+    else if (raw) xml = decodeURIComponent(raw[1]!);
+  } catch {
+    return null;
+  }
+  if (!xml || xml.length > 400_000) return null;
+  const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(xml);
+  const w = vb ? Number(vb[1]) : 0;
+  const h = vb ? Number(vb[2]) : 0;
+  if (!(w > 0 && h > 0)) return null;
+  // Only plain move/line commands with numbers: anything else is ignored.
+  const paths = [...xml.matchAll(/<path[^>]*\sd="([MLml0-9.\s,-]{3,20000})"/g)].map((m) => m[1]!).slice(0, 200);
+  return paths.length ? { w, h, paths } : null;
+}
