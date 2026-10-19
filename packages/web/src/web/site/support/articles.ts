@@ -36,6 +36,7 @@ export type CategoryId =
   | "dispatch"
   | "customer-notifications"
   | "billing"
+  | "money"
   | "account"
   | "troubleshooting"
   | "integrations";
@@ -53,7 +54,8 @@ export const categories: Category[] = [
   { id: "technician-app", title: "Technician app", blurb: "Sign in, share your location on shift, and work a job from the phone.", audience: "Technicians" },
   { id: "dispatch", title: "Dispatch & scheduling", blurb: "Assign jobs, watch the live map and handle a day that runs late.", audience: "Office" },
   { id: "customer-notifications", title: "Customer notifications", blurb: "What customers receive, what they can see, and how to edit the messages.", audience: "Office" },
-  { id: "billing", title: "Billing & plans", blurb: "The free trial, how seats are priced, and changing your plan or card.", audience: "Office" },
+  { id: "billing", title: "Billing & plans", blurb: "The free trial, how seats are priced, what you're billed for, and changing your plan or card.", audience: "Office" },
+  { id: "money", title: "Money & payments", blurb: "Technician pay and payouts, taking card payments through your own Stripe account, and invoices.", audience: "Office" },
   { id: "account", title: "Account & security", blurb: "Passwords, roles, deleting an account and how your data is handled.", audience: "Everyone" },
   { id: "troubleshooting", title: "Troubleshooting", blurb: "ETAs not updating, missing notifications, texts that didn't arrive.", audience: "Everyone" },
   { id: "integrations", title: "Exports & integrations", blurb: "Get your data out: CSV, calendar feeds, webhooks, Zapier, Make and MCP.", audience: "Office" },
@@ -91,10 +93,11 @@ export const articles: Article[] = [
         type: "ol",
         items: [
           "**Sign up free** at [arriveping.com/get-started](/get-started). You create the company and the first admin account in one step. The 30-day free trial starts now and you can add as many users as you like during it.",
-          "**Follow the guided onboarding.** It asks what kind of work you do, sets your industry terms (so Jobs might be called Work orders or Deliveries in your dashboard), loads a starter catalog of services and drafts your customer messages in your voice.",
-          "**Add your service zones** under Setup → Service Zones if you want jobs grouped by area.",
-          "**Invite your technicians** from People → Technicians & Managers. See [Invite your technicians](/support/invite-your-technicians).",
-          "**Create a job** from Operations → Jobs → New job, assign it, and have the technician tap **On the way** so you can see the customer's tracking page for yourself.",
+          "**Follow the guided onboarding.** It asks what kind of work you do, sets your industry terms (so Jobs might be called Work orders or Visits in your dashboard; see [Why your dashboard says Work orders instead of Jobs](/support/industry-terms)), loads a starter catalog of services and drafts your customer messages in your voice.",
+          "**Look around the sample day.** Every new company starts with a few sample technicians, customers and jobs so the Scheduler and Map aren't empty. Nobody is contacted about them. Clear them when you're ready; see [The sample day](/support/sample-day).",
+          "**Add your service zones** under Setup → Service Zones if you want jobs grouped by area. See [Service zones](/support/service-zones).",
+          "**Invite your technicians** from People → Technicians & Managers. See [Invite your technicians](/support/invite-your-technicians). Office staff are added on the same page under **Internal Team**; see [Add a dispatcher or manager](/support/add-office-staff).",
+          "**Create a job** from Operations → Jobs → New job, assign it, and have the technician tap **Start Driving** so you can see the customer's tracking page for yourself.",
         ],
       },
       { type: "note", title: "Stuck during setup?", text: `Email [${support.email}](mailto:${support.email}) with your company name. Our team is available during setup and ${support.response.charAt(0).toLowerCase()}${support.response.slice(1)}` },
@@ -182,13 +185,84 @@ export const articles: Article[] = [
         type: "ol",
         items: [
           "**Book it.** Operations → Jobs → **New job**. Pick the customer (or add one with a mobile number), the service, the address and the time window. The customer's booking confirmation goes out when you save.",
-          "**Assign it.** Leave assignment to ArrivePing and it picks the closest qualified technician, factoring in who is finishing nearby. Or drag it onto a technician in Operations → Scheduler. Dispatchers can reassign any job at any time.",
-          "**On the way.** The technician taps **On the way** in the app. The customer gets a text or email with a link to a live tracking page showing the technician's progress and ETA.",
-          "**Arrival.** A geofence around the address marks the technician as arrived and starts the on-site clock; the technician can also tap to arrive manually. Location sharing to the customer stops at arrival.",
-          "**Finish.** Photos, the customer's signature and any voice notes are saved with the job and visible in the dashboard.",
+          "**Assign it.** Pick a technician on the job (the list is ranked, with the best match first) or drag the job onto a technician in Operations → Scheduler. The technician gets the job as an offer to accept. Once you trust the suggestions you can let an assignment rule do this for you; see [Assignment rules](/support/assignment-rules). Dispatchers can reassign any job at any time.",
+          "**On the way.** The technician taps **Start Driving** in the app. The customer gets a text or email with a link to a live tracking page showing the technician's progress and ETA.",
+          "**Arrival.** A geofence around the address marks the technician as arrived and starts the on-site clock; the technician can also tap **I've Arrived**. Location sharing to the customer stops at arrival.",
+          "**Finish.** The technician taps **Complete Job**. Photos, the customer's signature and any voice notes are saved with the job and visible in the dashboard.",
         ],
       },
       { type: "p", text: "Try it with your own phone as the customer: you'll see exactly what they see. The tracking page needs no app or account." },
+    ],
+  },
+  {
+    slug: "sample-day",
+    title: "The sample day: what it is and how to clear it",
+    summary: "Every new company starts with a few sample technicians, customers and jobs so you can try the dashboard. Nobody is contacted about them.",
+    category: "get-started",
+    updated: U3,
+    keywords: ["sample data", "demo data", "test jobs", "fake jobs", "clear sample", "remove sample", "example jobs"],
+    blocks: [
+      { type: "p", text: "When you first sign in, a banner says \"You're looking at a sample day.\" It's three sample technicians, six customers and eight jobs, all marked **(sample)**, so the Scheduler, Map and reports have something in them while you look around. **See what your customer sees** on the banner opens a sample tracking page." },
+      {
+        type: "ul",
+        items: [
+          "No sample customer or technician is ever texted or emailed.",
+          "Sample jobs never fire webhooks or assignment rules. They show milestones on their timeline but send nothing.",
+          "They don't count toward anything on your bill.",
+        ],
+      },
+      { type: "p", text: "When you're ready to use your own data, an admin chooses **Clear sample data** on the banner and confirms. It can't be undone, but you can add a fresh sample day later from **Guide & help → Add a sample day**." },
+    ],
+  },
+  {
+    slug: "add-office-staff",
+    title: "Add a dispatcher, manager or project manager",
+    summary: "Office users are added under People → Technicians & Managers → Internal Team. Each one beyond the included dispatcher is a licence priced like a driver.",
+    category: "get-started",
+    updated: U3,
+    keywords: ["add manager", "add dispatcher", "office user", "internal team", "new employee", "admin", "second dispatcher", "staff"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **People → Technicians & Managers** and choose the **Internal Team** tab.",
+          "Choose **New Employee**. Enter their name, email and phone, and pick a role: Dispatcher, Manager or Project Manager. An admin can also make another Admin. What each role can do is in [User roles and what each can do](/support/roles-and-permissions).",
+          "They get a welcome email, in your company's name, with a link to set their password and sign in on the web. If it didn't arrive, open their profile and choose **Email a sign-in link**.",
+        ],
+      },
+      { type: "p", text: "Your plan includes one dispatcher licence. Each further office user is a licence priced exactly like a driver, whatever their role; see [How ArrivePing is priced](/support/pricing-and-seats). Deactivating someone frees the licence and keeps their history." },
+      { type: "p", text: "Office staff who also do field work can be given jobs too: open **Setup → Settings → Company** and look for **Who can be assigned jobs**. They keep their office account and also appear in the technician list." },
+    ],
+  },
+  {
+    slug: "industry-terms",
+    title: "Why your dashboard says Work orders (or Visits) instead of Jobs",
+    summary: "ArrivePing uses your trade's words for jobs, technicians and customers, chosen at sign-up. Email us to change them.",
+    category: "get-started",
+    updated: U3,
+    keywords: ["terminology", "rename jobs", "work orders", "visits", "business type", "industry", "wording", "labels", "crew", "installer"],
+    blocks: [
+      { type: "p", text: "During sign-up ArrivePing picks the words your trade uses and applies them across the dashboard, the technician app and your customer messages. A unit of work might be a Job, Work order, Project, Visit, Booking, Session or Reservation; your field staff might be Technicians, Electricians, Installers, Crew leads, Superintendents or Vendors. These articles say \"Jobs\" and \"technicians\" throughout." },
+      { type: "p", text: "There isn't a setting to change the terms yourself yet. Email [support@nvc360.com](mailto:support@nvc360.com) with your company name and the words you'd like (singular and plural), and we'll switch them for you." },
+    ],
+  },
+  {
+    slug: "company-time-zone",
+    title: "Set your company's time zone (and a note on languages)",
+    summary: "Setup → Settings → Company → Tax & Locale. Every time in the dashboard, in customer messages and in booking slots follows it.",
+    category: "get-started",
+    updated: U3,
+    keywords: ["timezone", "time zone", "clock", "locale", "language", "french", "spanish", "translation", "central time"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **Setup → Settings → Company** and find **Tax & Locale**.",
+          "Choose your **Timezone**. Canadian and US zones are listed, from Winnipeg, Toronto, Vancouver, Edmonton, Halifax and St. John's to New York, Chicago, Denver and Los Angeles.",
+          "Save. Times in the dashboard, the customer's booking and on-the-way messages, quiet hours, timed milestones and the slots customers can book in their portal all follow it.",
+        ],
+      },
+      { type: "p", text: "ArrivePing's dashboard and app are in English for now. The texts and emails your customers receive are yours to write, in any language, under **Setup → Notifications**; see [Customize the on-my-way and other messages](/support/customize-messages)." },
     ],
   },
 
@@ -247,9 +321,10 @@ export const articles: Article[] = [
       {
         type: "ul",
         items: [
-          "**On the way.** Tap it when you leave for the job. The customer gets a text or email with a live tracking link and the office sees your status change.",
+          "**Start Driving.** Tap it when you leave for the job. The customer gets a text or email with a live tracking link and the office sees your status change to En route.",
           "**Running late.** If your ETA slips, the customer's arrival window updates automatically and they get a running-late message; you don't have to call anyone.",
-          "**Arrived.** A geofence around the job address marks you as arrived and starts the on-site time clock. If the address is off or you parked around the corner, tap **Arrived** yourself.",
+          "**I've Arrived.** A geofence around the job address marks you as arrived within about 150 m and starts the on-site time clock. If the address is off or you parked around the corner, tap **I've Arrived** yourself. You can't go straight from driving to completing a job; the app asks you to check in first.",
+          "**Complete Job.** Tap it when the work is done. If the job has required checklist items, the app asks for them before it lets you complete.",
         ],
       },
       { type: "p", text: "Customers can text or call you from their tracking page to share gate codes or parking details. The buttons use the phone number on your roster profile, so if you'd rather not take customer calls on a personal phone, ask your office to put a work number on your profile." },
@@ -278,6 +353,40 @@ export const articles: Article[] = [
       { type: "p", text: "If two companies have added you, the Profile tab shows both and lets you switch. Your jobs, messages and earnings are kept separate per company, and only the company you are on the clock for can see your location." },
     ],
   },
+  {
+    slug: "job-offers-accept-decline",
+    title: "Job offers: accept, decline or send a job back",
+    summary: "Jobs reach you as offers under New offers. Declining returns the job to dispatch; after accepting, Send back to dispatch does the same with a reason.",
+    category: "technician-app",
+    updated: U3,
+    keywords: ["offer", "accept", "decline", "reject", "send back", "can't make it", "reassign", "new offers", "up next", "in progress"],
+    blocks: [
+      { type: "p", text: "When dispatch gives you a job it appears under **New offers** on the Jobs tab, with the address, notes, time and price. Tap **Accept** to take it; it moves to **Up next** (or **In progress** once you start). Tap **Decline** to pass." },
+      { type: "p", text: "A declined job goes straight back to the dispatch queue and the office is told (\"It's back in the dispatch queue.\"). It isn't offered to anyone else automatically; your dispatcher picks the next person." },
+      { type: "p", text: "Already accepted and can't do it? Open the job and tap **Send back to dispatch**, then pick a reason: Personal emergency, Vehicle breakdown, Running too late to make it, Missing parts or equipment, Unsafe site conditions, Wrong skill set for this job, or Other. The office sees the reason and reassigns." },
+      { type: "p", text: "Once you're on a job the buttons run in order: **Start Driving**, **I've Arrived** (the geofence usually does this for you), **Complete Job**. See [On the way, running late and arrival](/support/on-the-way-and-arrival)." },
+    ],
+  },
+  {
+    slug: "use-arriveping-in-a-browser",
+    title: "No iPhone? Use ArrivePing in a browser",
+    summary: "The app is for iPhone and iPad. On any other phone, sign in at arriveping.com and work your jobs from the web version.",
+    category: "technician-app",
+    updated: U3,
+    keywords: ["android", "web app", "browser", "no app", "samsung", "pixel", "laptop", "which phones", "devices supported"],
+    blocks: [
+      { type: "p", text: "The ArrivePing app is built for iPhone and iPad. If you carry an Android phone or want to work from a laptop, open [arriveping.com/sign-in](/sign-in) in your browser and sign in with the email your company invited. You land in the web version of the technician app." },
+      {
+        type: "ul",
+        items: [
+          "**My Jobs** lists your offers and the day's work; **Earnings** and **Profile** are the same as in the app.",
+          "Choose **Go online** when your shift starts so dispatch can see you, and keep the page open while you're driving so your position and the customer's ETA keep updating.",
+          "Work the job the same way: **Start job**, then **Start driving**, **I've arrived**, **Begin service** and **Complete job**. Location sharing to the customer begins when you start driving. If the job collects payment on site, the payment step appears once you've arrived.",
+        ],
+      },
+      { type: "p", text: "Office staff always use the browser; the dispatch dashboard isn't in the app." },
+    ],
+  },
 
   /* ---------------------------------------------------------------- */
   /* Dispatch & scheduling                                              */
@@ -285,29 +394,240 @@ export const articles: Article[] = [
   {
     slug: "assigning-jobs",
     title: "How jobs get assigned (and how to override it)",
-    summary: "ArrivePing picks the closest qualified technician; dispatchers can reassign anything, and automation rules decide what waits for a person.",
+    summary: "ArrivePing ranks your technicians for every job and a dispatcher confirms. Add an assignment rule when you want some jobs assigned on their own.",
     category: "dispatch",
-    updated: U,
-    keywords: ["auto assign", "dispatch", "reassign", "automation rules", "licensed", "qualified"],
+    updated: U3,
+    keywords: ["auto assign", "dispatch", "reassign", "automation rules", "licensed", "qualified", "best match", "suggestion", "offer"],
     blocks: [
-      { type: "p", text: "When a job is created, ArrivePing scores your technicians on distance, the skills and licences the job requires, their open jobs and when they are projected to be free. A technician finishing up nearby can outrank one who is free but far away, and urgent jobs lean harder on who can go now." },
+      { type: "p", text: "Out of the box, nothing is assigned without a person. For every unassigned job ArrivePing ranks your technicians on distance, the skill class and skills the job requires, their open jobs and when they are projected to be free. A technician finishing up nearby can outrank one who is free but far away, and High or Urgent jobs lean harder on who can go now. The ranking shows as **Best match** on the job and as **Find a slot** in the Scheduler." },
+      { type: "p", text: "When you pick someone, the job reaches them as an offer in the app. They tap **Accept**, or **Decline** to send it straight back to the queue; see [When a technician declines or sends a job back](/support/job-offers-accept-decline)." },
       { type: "h3", text: "Overriding" },
-      { type: "p", text: "Dispatchers can reassign any job: open it from Operations → Jobs or drag it onto another technician in Operations → Scheduler. The technician is notified and the customer's booking details update." },
-      { type: "h3", text: "Deciding what is automatic" },
-      { type: "p", text: "Setup → Settings → **Automation & AI** holds your automation rules — which jobs are assigned automatically and which wait for a person to confirm. Many teams start with everything manual and switch on auto-assignment once they trust the suggestions." },
-      { type: "p", text: "Skill and licence restrictions (gas-ticketed, licensed electrician, and so on) are set on the technician in People → Technicians & Managers and on the service in Catalog & Forms → Services." },
+      { type: "p", text: "Dispatchers can reassign any job: open it from Operations → Jobs or drag it onto another technician in Operations → Scheduler. The technician is notified and the customer's booking details update. Dropping a job on someone without the required skill class asks you first." },
+      { type: "h3", text: "Letting a rule assign for you" },
+      { type: "p", text: "Setup → Settings → **Automation & AI** holds your assignment rules: nearest available tech, round-robin, zone owner or load balance. Each rule starts by suggesting; a separate switch turns on auto-assign. Many teams run with suggestions for a week and switch on auto-assign once they trust them. See [Assignment rules](/support/assignment-rules)." },
+      { type: "p", text: "Skill classes and skills (gas fitter, licensed electrician, and so on) are set on the technician in People → Technicians & Managers and required on each job. See [Send only qualified technicians](/support/skills-and-skill-classes)." },
+    ],
+  },
+  {
+    slug: "assignment-rules",
+    title: "Assignment rules: nearest, round-robin, zone owner and load balance",
+    summary: "Four ways to hand out unassigned jobs on their own. Each rule suggests first; auto-assign is a separate switch.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["auto allocation", "auto dispatch", "automatic assignment", "round robin", "nearest", "zone", "load balance", "rota", "rotation", "automation"],
+    blocks: [
+      { type: "p", text: "Open **Setup → Settings → Automation & AI** and look under Templates for **Assignment** (\"Who gets the job. Suggests by default — auto-assign is a separate switch.\"). Pick the rule that matches how you'd hand out work yourself:" },
+      {
+        type: "ul",
+        items: [
+          "**Nearest available tech.** The closest technician who is free, with fewest open jobs as the tiebreak. Options: **Ignore techs farther than (km)** (60 km to start) and **Technician must match the job's skill class**.",
+          "**Round-robin.** Takes turns. **Rotate among** the whole team, techs with the job's skill class, a roster per service zone, or a hand-picked list, with **Skip techs who are offline or busy** if you want.",
+          "**Zone owner.** One technician owns each service zone and gets its jobs. For a **Job outside every mapped zone**, choose **Leave it for the office** or **Use the nearest available tech**. See [Service zones](/support/service-zones).",
+          "**Load balance.** Whoever has the fewest open stops, then whoever is free soonest, then distance.",
+        ],
+      },
+      { type: "p", text: "Any rule can be narrowed with **Only for jobs with priority** (for example, only Urgent) or **Only for jobs needing this skill class**, so you can automate the emergencies and keep routine work by hand, or the other way round." },
+      { type: "h3", text: "Suggest first, then auto-assign" },
+      { type: "p", text: "A new rule only suggests: the office gets a notification naming the technician, and you assign from the Scheduler to confirm. When you're ready, switch the rule to auto-assign (you'll be asked to confirm **Turn on auto-assign**). Jobs a rule assigned carry a purple **A** badge so you can always tell them apart." },
+      { type: "p", text: "Rules only touch unassigned jobs that are Pending or Confirmed. They never double-book a technician and never assign over recorded time off. A declined job goes back to the queue rather than to the next technician, so keep an eye on **To schedule** in the Scheduler." },
+    ],
+  },
+  {
+    slug: "skills-and-skill-classes",
+    title: "Send only qualified technicians: skill classes and skills",
+    summary: "Give each technician a skill class and skill tags, require them on the job, and the wrong person is never suggested first.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["tags", "skills", "licence", "license", "certification", "gas", "electrician", "plumber", "qualified", "skill class", "specialist"],
+    blocks: [
+      { type: "p", text: "Two layers describe what a technician can do. **Skill class** is one per technician: General, HVAC, Electrical, Plumbing, Appliance, Carpentry or Landscaping. **Skills** are tags you write yourself, such as gas fitter, EPA 608 or backflow tester. Use skills for trade licences and tickets; the **License #** field on a profile is the driver's licence." },
+      { type: "h3", text: "On the technician" },
+      { type: "p", text: "Open **People → Technicians & Managers**, open the technician and set **Skill class** and **Skills** (\"Pick from the library or type a new skill and press Enter\"). Both can be filled from your spreadsheet when you import; see [Import your existing customers and team](/support/import-customers-and-team)." },
+      { type: "h3", text: "On the job" },
+      { type: "p", text: "In the job form, set **Required skill class** (Any, or one class) and **Required skills**. If you leave both empty, the service's category stands in." },
+      { type: "h3", text: "What it changes" },
+      {
+        type: "ul",
+        items: [
+          "The technician list on the job is filtered to the required skill class, and the ranking puts qualified people first.",
+          "Assignment rules set to **Technician must match the job's skill class** skip everyone else. See [Assignment rules](/support/assignment-rules).",
+          "Dropping a job on an unqualified technician in the Scheduler or Map asks you to confirm, so the override is yours, not an accident.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "priorities",
+    title: "Mark a job urgent",
+    summary: "Low, Normal, High or Urgent. Priority steers suggestions toward who can go now and can switch on a rule for emergencies only.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["emergency", "no heat", "burst pipe", "priority", "urgent", "high priority", "same day"],
+    blocks: [
+      { type: "p", text: "Every job has a **Priority**: Low, Normal, High or Urgent. Set it when you book the job or change it later with **Edit Job**." },
+      {
+        type: "ul",
+        items: [
+          "For High and Urgent jobs, the ranking favours the technician who can go now over the one who is merely closest.",
+          "An assignment rule can be limited with **Only for jobs with priority**, so emergencies assign themselves while routine work waits for a dispatcher. See [Assignment rules](/support/assignment-rules).",
+          "The **Urgent job → alert the office** automation template under Setup → Settings → Automation & AI notifies the office the moment an Urgent job is created, including from an intake form.",
+        ],
+      },
+      { type: "p", text: "If an urgent job bumps someone else's appointment, move that job in the Scheduler; the customer gets an updated confirmation. See [Handling a day that runs late](/support/running-late)." },
     ],
   },
   {
     slug: "live-map",
     title: "See your whole team on the live map",
-    summary: "Operations → Map shows every technician on the clock, their current job and where they are heading.",
+    summary: "Operations → Map shows every technician on the clock, their status and current job, and where they are heading.",
     category: "dispatch",
-    updated: U,
-    keywords: ["fleet", "gps", "where is", "map"],
+    updated: U3,
+    keywords: ["fleet", "gps", "where is", "map", "offline", "available", "en route", "on site"],
     blocks: [
-      { type: "p", text: "Open **Operations → Map**. Each technician who is On the clock appears with their status (assigned, on the way, arriving, arrived) and current job. Technicians who are off the clock do not appear, and location is not stored once a shift ends except as part of the job record." },
-      { type: "p", text: "Use the map to answer the \"where is my tech?\" call in seconds, or to pick the right person for a same-day emergency. The route a technician drove to a job is kept with that job's record." },
+      { type: "p", text: "Open **Operations → Map**. Each technician who is On the clock appears with a live position and one of six statuses: **Available**, **En Route**, **On Site**, **Busy**, **Break** or **Offline**. Technicians who have gone off the clock show dimmed at their last known position so you can see who finished where; their location is not tracked while they are off the clock and is kept only as part of the job record." },
+      { type: "p", text: "Use the map to answer the \"where is my tech?\" call in seconds, or to pick the right person for a same-day emergency: drag the job onto a technician's marker. The route a technician drove to a job is kept with that job's record." },
+    ],
+  },
+  {
+    slug: "job-statuses",
+    title: "What each job status means",
+    summary: "Pending, Confirmed, Assigned, En route, On site, In progress, Paused, Completed, Cancelled, and who moves a job between them.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["status", "pending", "confirmed", "assigned", "en route", "on site", "in progress", "completed", "cancelled", "change status", "stuck"],
+    blocks: [
+      {
+        type: "ul",
+        items: [
+          "**Pending.** Booked but not yet confirmed; intake form submissions arrive here. See [Let customers book online](/support/online-booking-forms).",
+          "**Confirmed.** On the books, no technician yet. Shows under **To schedule** in the Scheduler.",
+          "**Assigned.** Offered to or accepted by a technician.",
+          "**En route.** The technician tapped **Start Driving**. The customer's on-the-way message and tracking link go out now.",
+          "**On site.** The geofence or **I've Arrived** recorded arrival. The on-site clock is running and the customer's page stops showing location.",
+          "**In progress** and **Paused.** Work under way, or set down for a while.",
+          "**Completed.** The technician tapped **Complete Job**, after any required checklist items. Photos, signature and time on site are on the record.",
+          "**Cancelled.** The job won't happen. The customer's tracking page says so.",
+        ],
+      },
+      { type: "p", text: "Filter **Operations → Jobs** by All, Pending, Confirmed, Assigned, In progress, Completed or Cancelled. Statuses change as the technician works the job; the office doesn't set them by hand. If a job seems frozen in one status, see [A job or technician looks stuck](/support/job-or-technician-looks-stuck)." },
+    ],
+  },
+  {
+    slug: "edit-archive-restore-job",
+    title: "Edit, reschedule, archive or restore a job",
+    summary: "Change anything on a job until it's done, move it in the Scheduler, and archive rather than delete; archived jobs can come back.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["edit job", "delete job", "cancel job", "duplicate", "copy job", "archive", "restore", "bulk import jobs", "csv jobs", "change time"],
+    blocks: [
+      {
+        type: "ul",
+        items: [
+          "**Edit.** Open the job and choose **Edit Job**; change the customer, address, time window, priority, required skills, pay or anything else, then **Save and Close**. Editing works after assignment too. If a technician is already working the job, moving it to someone else asks you first.",
+          "**Reschedule.** Drag the job along its row in Operations → Scheduler, or edit the time. The customer gets an updated confirmation once the change sticks; see [Plan the day in the Scheduler](/support/scheduler-views).",
+          "**Archive.** Choose **Archive** on the job's row, or **Delete Job** inside the job form. Both move the job to the archive rather than erasing it (\"It moves to the archive and can be restored later\"). Let the customer know before you archive a booked job.",
+          "**Restore.** Open the archive and choose **Restore**; the job comes back with its history.",
+        ],
+      },
+      { type: "p", text: "Two things the dashboard doesn't do yet: duplicate a job, and import jobs from a spreadsheet (customers and technicians import; jobs don't). For work you book over and over, build it as a template under **Catalog & Forms → Form Builder Templates** so a new job is two clicks, and give customers an [intake form](/support/online-booking-forms) so they book it themselves." },
+    ],
+  },
+  {
+    slug: "service-zones",
+    title: "Service zones: coverage areas and zone-based assignment",
+    summary: "Draw the areas you serve. Jobs outside active zones are refused, zone-owner and round-robin rules use them, and the Zone Breakdown report counts by zone.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["geofence", "coverage area", "territory", "zone", "service area", "out of area", "outside zone"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **Setup → Service Zones**.",
+          "Draw a **Polygon**, **Rectangle** or **Circle** on the map, give it a **Zone name** and a **Color**, and leave **Zone active** on.",
+          "Save, and repeat for each area you serve.",
+        ],
+      },
+      { type: "p", text: "Once any zone is active, a job whose address falls outside every active zone is refused with \"Address is outside all active service zones\", in the dashboard and on intake forms alike. If you'd rather take any address, don't activate zones." },
+      {
+        type: "ul",
+        items: [
+          "The **Zone owner** assignment rule gives each zone's jobs to the technician who owns it, and **Round-robin** can rotate through a roster per zone. See [Assignment rules](/support/assignment-rules).",
+          "**Money → Reports → Zone Breakdown** shows jobs and revenue per zone.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "maintenance-plans",
+    title: "Maintenance plan reminders",
+    summary: "Set a recurring interval for an address and ArrivePing reminds the office when the next visit is due. It doesn't book the job for you.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["recurring", "repeat job", "maintenance agreement", "tune-up", "service plan", "contract", "reminder", "every month"],
+    blocks: [
+      { type: "p", text: "ArrivePing has no repeating job. What it has is a reminder: **People → Maintenance Plans → New plan**." },
+      {
+        type: "ol",
+        items: [
+          "Give the plan a **Plan name** and the service **Address**.",
+          "Set **How often**: Monthly, Quarterly, Twice a year, Yearly, or an interval in days.",
+          "Set **Remind days before** (7 to start), the **First due date** and any **Notes**, then **Create plan**.",
+        ],
+      },
+      { type: "p", text: "When a visit comes due, admins get an alert in the dashboard and the plan's due date rolls forward to the next interval. Book the visit as a job in the usual way, and choose **Mark serviced** on the plan when it's done. Plans can be paused or deleted from their row." },
+      { type: "p", text: "A plan reminds your office; it doesn't create the job or text the customer by itself. If you'd like it to, tell us at [contact@nvc360.com](mailto:contact@nvc360.com)." },
+    ],
+  },
+  {
+    slug: "route-planning",
+    title: "Does ArrivePing plan multi-stop routes?",
+    summary: "No. It's built for appointment work: the best technician for each job, drive time in the Scheduler, and a live ETA for each customer.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["route optimization", "route optimisation", "routing", "multi-stop", "sequence", "stops", "parcel", "courier"],
+    blocks: [
+      { type: "p", text: "ArrivePing dispatches one appointment at a time: a technician, a customer, an address and a window. It does not re-sequence a day's stops into an optimal loop, so a parcel or courier fleet is better served by a routing tool." },
+      {
+        type: "ul",
+        items: [
+          "The **Nearest available tech** rule and the job's ranked technician list weigh distance for you. See [Assignment rules](/support/assignment-rules).",
+          "The Scheduler's **Day** view shows the drive between each technician's jobs and flags overlaps; **Find a slot** ranks openings by drive time. See [Plan the day in the Scheduler](/support/scheduler-views).",
+          "The customer's ETA comes from the technician's live position and the roads between them, and updates as they drive.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "message-technicians",
+    title: "Message one technician or your whole crew",
+    summary: "Direct messages from any dashboard screen, a broadcast to everyone or a group, and a per-job thread the customer is part of.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["announcement", "broadcast", "chat", "inbox", "message all", "group message", "notify technicians", "memo"],
+    blocks: [
+      { type: "p", text: "The **Messages** panel is on every dashboard screen. Pick a technician and type; it reaches them as a push notification and in the app's **Messages** tab (\"Direct line to your dispatcher\")." },
+      { type: "p", text: "To reach several people at once, use the **Broadcast** button in the same panel and choose who: **All**, **Available only**, a **Tag**, a **Skill class** or a **Skill**. Use it for a weather call, a parts recall or \"everyone back to the shop by four\". Broadcasts are delivered in the app with a push notification and listed under **Broadcasts** in **Operations → Inbox**, alongside All, Unread, Customers and Technicians." },
+      { type: "p", text: "Each job also has its own thread, shared by the customer, the technician and the office. Whatever the customer writes on their tracking page (\"Anything you send here goes straight to your technician\") lands on the job, and replies from the technician or the office are texted back to the customer with the link. Gate codes and \"use the side door\" stay with the job instead of in someone's phone." },
+    ],
+  },
+  {
+    slug: "technician-shifts-and-time-off",
+    title: "Record technician shifts and time off",
+    summary: "Add shifts and days off on each technician's profile. Time off blocks assignment (with an override); shift hours are a planning note.",
+    category: "dispatch",
+    updated: U3,
+    keywords: ["schedule", "working hours", "availability", "vacation", "day off", "holiday", "roster", "shift", "time off", "unavailable"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **People → Technicians & Managers**, open the technician and choose the **Shifts** tab.",
+          "Set **Type** to **Shift** or **Time off**, pick the **Date**, add **Start** and **End** for a shift and an optional **Note**, then **Add**.",
+        ],
+      },
+      { type: "p", text: "**Time off** covers the whole day. Assigning a job to someone on time off shows a warning, which a dispatcher can override; assignment rules never assign over it. Double-booking a technician warns the same way." },
+      { type: "p", text: "**Shifts** are there so the office can see who is meant to be working; a job outside shift hours isn't blocked. Technicians can't edit shifts in the app. The app's **On the clock** switch is live presence (sharing location, ready for offers), not a schedule." },
     ],
   },
   {
@@ -320,7 +640,7 @@ export const articles: Article[] = [
     blocks: [
       { type: "p", text: "When a technician's projected arrival moves past the customer's window, the job surfaces on the dashboard's **Running Late** board. The customer automatically receives the running-late message with their new arrival window, so most of these resolve without a phone call." },
       { type: "p", text: "If the delay is too long, reassign the job to a technician who is finishing nearby, or move it in the Scheduler. Either action sends the customer an updated confirmation." },
-      { type: "p", text: "Customer requests to move or cancel a job collect in **Operations → Change Requests**. Nothing changes on the board until someone in the office accepts the request, so a truck never rolls to a job the customer thinks is cancelled." },
+      { type: "p", text: "Customer requests to cancel a job, or to move one close to its time, collect in **Operations → Change Requests**. A cancellation never takes effect until someone in the office approves it, so a truck never rolls to a job the customer thinks is cancelled. See [Let customers move or cancel their own appointment](/support/customer-self-service)." },
     ],
   },
 
@@ -358,7 +678,59 @@ export const articles: Article[] = [
     blocks: [
       { type: "p", text: "Customers get a message when a job is booked, when the technician is on the way, if the technician is running late, and when the technician arrives. Messages go by SMS, email, or both, depending on what you turned on in Setup → Notifications." },
       { type: "p", text: "The on-the-way message carries a link that opens a live tracking page in the customer's browser. It shows the technician on the way, the ETA, and buttons to text or call them. There is nothing to install and no account to create." },
-      { type: "p", text: "The page only ever shows the technician's progress toward that customer's own appointment, and only while the technician is travelling to it. Once the technician arrives, the page confirms the arrival and stops showing location. Opening the link later shows the appointment summary, not a map." },
+      { type: "p", text: "The page only ever shows the technician's progress toward that customer's own appointment, and only while the technician is travelling to it. Once the technician arrives, the page confirms the arrival and stops showing location." },
+      { type: "p", text: "Every job has its own link, so a customer never sees another customer's address, even when one technician is doing several jobs on the same street. After the job is complete the same link shows \"Job complete\", a chance to rate the visit, the service record (service, scheduled and completed times, time on site, address), photos, the sign-off and the job's timeline; there's no map. If a job is cancelled, the page says so." },
+    ],
+  },
+  {
+    slug: "online-booking-forms",
+    title: "Let customers book online with an intake form",
+    summary: "Publish a branded form on a link or inside your website. Submissions arrive as Pending jobs, ready to dispatch.",
+    category: "customer-notifications",
+    updated: U3,
+    keywords: ["booking form", "online booking", "request form", "lead form", "website form", "embed", "iframe", "customer app", "book online", "work order form", "pin"],
+    blocks: [
+      { type: "p", text: "Customers don't need an app or an account to book you. Open **Catalog & Forms → Intake Forms** and choose **New lead form**." },
+      {
+        type: "ol",
+        items: [
+          "Give it a **Form title**, a **URL slug** and some **Intro text**. Add your **Logo** and **Brand color** so it looks like yours, and write the **Success message** the customer sees after sending.",
+          "Choose the fields. The form starts with Full name, Email, Phone, Service address, Service type, Preferred date, Notes / describe the problem and Photo upload; mark each one **Show** and **Req** as you like.",
+          "Set the **Recipient name/email** that is told about each submission, switch the form to **Active**, and open **Share & embed** for the direct link or the code to drop into your website.",
+        ],
+      },
+      { type: "p", text: "Each submission creates a job in **Pending**, with the customer, address and notes already filled in, and emails the recipient. Nothing is dispatched until the office confirms and assigns it. An address outside your active service zones is refused on the form; see [Service zones](/support/service-zones). An Urgent request can alert the office straight away; see [Mark a job urgent](/support/priorities)." },
+      { type: "h3", text: "A form for your own staff" },
+      { type: "p", text: "**New work order form** makes a PIN-protected form for your employees (\"Employee access\"). Someone at the counter or on site enters the PIN, can pick the technician and the time, and the job is created Confirmed or Assigned, skipping the Pending step." },
+      { type: "p", text: "Customers who sign in to their ArrivePing customer portal can also book from there: choose a time from the open slots on your calendar, confirm the address, and the job is created Confirmed." },
+    ],
+  },
+  {
+    slug: "customer-self-service",
+    title: "Let customers move or cancel their own appointment",
+    summary: "Two switches and a cutoff under Setup → Settings → Company. Moves outside the cutoff just happen; cancellations always wait for the office.",
+    category: "customer-notifications",
+    updated: U3,
+    keywords: ["reschedule", "cancel", "change request", "customer portal", "cutoff", "self-serve", "approve", "decline"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **Setup → Settings → Company** and find **Customer self-service**.",
+          "Turn on **Let customers move their own appointment** and, if you want, **Let customers send a cancellation request**.",
+          "Set the **Approval cutoff (hours before the appointment)**. It starts at 12; set 0 to let customers move any appointment themselves.",
+        ],
+      },
+      { type: "p", text: "Customers see the options when they sign in to their customer portal (\"Need to change this?\" and \"Need to cancel?\"); they aren't on the public tracking link. Once the technician has tapped Start Driving, both are closed and the page asks the customer to call the office." },
+      {
+        type: "ul",
+        items: [
+          "**A move outside the cutoff** is applied on the spot. The job changes time, the technician is told, and the request is listed as **Done by customer**.",
+          "**A move inside the cutoff** becomes a request for the office.",
+          "**A cancellation** is always a request. The customer is told their appointment stays booked until you confirm.",
+        ],
+      },
+      { type: "p", text: "Requests collect in **Operations → Change Requests** (the menu shows how many need a decision). Filter by Needs a decision, All, Approved, Declined or Self-serve, then choose **Approve new time**, **Approve cancellation** or **Decline**, with a note to the customer (\"What should we tell them?\")." },
     ],
   },
   {
@@ -367,7 +739,7 @@ export const articles: Article[] = [
     summary: "The setup agent drafts them in your voice; edit the wording any time under Setup → Notifications.",
     category: "customer-notifications",
     updated: U,
-    keywords: ["template", "wording", "business name", "sms text", "edit message"],
+    keywords: ["template", "wording", "business name", "sms text", "edit message", "change the text", "on the way text", "customer text", "technician on the way message", "rewrite"],
     blocks: [
       { type: "p", text: "During onboarding, ArrivePing drafts your booking, on-the-way, running-late and arrived messages in your voice, including your business name and how the technician is introduced." },
       { type: "p", text: "To change them, open **Setup → Notifications**. Each milestone has its own SMS and email text, and you can turn individual messages off. Changes apply to the next message sent; messages already delivered are not altered." },
@@ -510,7 +882,7 @@ export const articles: Article[] = [
     summary: "US dollars, billed monthly, graduated by licence count. One dispatcher licence is included on every plan; extra office users are priced like a driver.",
     category: "billing",
     updated: U,
-    keywords: ["cost", "price", "per driver", "seat", "plan", "usd", "cad"],
+    keywords: ["cost", "price", "per driver", "per technician", "cost per technician", "how much", "monthly", "seat", "plan", "usd", "cad"],
     blocks: [
       { type: "p", text: "Plans are priced in US dollars and billed monthly, graduated like tax brackets so adding a driver never jumps your bill:" },
       {
@@ -530,7 +902,7 @@ export const articles: Article[] = [
     summary: "Inviting a technician adds a seat; deactivating one keeps their history and frees the seat.",
     category: "billing",
     updated: U,
-    keywords: ["deactivate", "remove technician", "seat count", "downsize", "offboard"],
+    keywords: ["deactivate", "remove technician", "add technician cost", "cost per technician", "seat count", "downsize", "offboard"],
     blocks: [
       { type: "p", text: "**To add:** invite the technician from People → Technicians & Managers. The seat is added to your plan from that point on." },
       { type: "p", text: "**To remove:** open the technician and choose **Deactivate**. Their jobs, photos and time on site stay in your records, their access ends immediately, and the seat comes off your plan. You can reactivate them later." },
@@ -547,6 +919,96 @@ export const articles: Article[] = [
     blocks: [
       { type: "p", text: "Open **Setup → Settings → Billing**. You can change the card on file and see your plan, current driver count and the date and amount of the next invoice. Need a copy of a past invoice? Email [support@nvc360.com](mailto:support@nvc360.com) with your company name." },
       { type: "p", text: "If a payment fails, the Billing tab shows **Payment failed** until the card is updated or retried. For a question about a specific charge, email the same address." },
+    ],
+  },
+  {
+    slug: "what-you-are-billed-for",
+    title: "What you're billed for (and what you aren't)",
+    summary: "Licences only. There is no per-job fee and no cap on jobs, customers or form submissions, and archiving a job changes nothing.",
+    category: "billing",
+    updated: U3,
+    keywords: ["per job", "per task", "job limit", "usage", "overage", "deleted jobs billed", "cancelled jobs billed", "fees", "what costs extra"],
+    blocks: [
+      { type: "p", text: "Your ArrivePing bill is the number of licences on your plan, once a month: the dispatcher licence that comes with Starter, two driver licences, and one more for each extra technician or office user. See [How ArrivePing is priced](/support/pricing-and-seats)." },
+      {
+        type: "ul",
+        items: [
+          "**No per-job charge.** Book ten jobs a day or two hundred; the bill is the same. Cancelled, archived and restored jobs don't count for or against anything.",
+          "**No caps** on customers, jobs, intake form submissions, photos or reports.",
+          "**No platform cut on card payments.** When a customer pays through your own Stripe account, Stripe's processing fee goes to Stripe and ArrivePing takes nothing. See [Take card payments through your own Stripe account](/support/take-payments-with-stripe).",
+          "**A licence you free up stops billing.** Deactivate a technician and their licence comes off your plan; their history stays. See [Add or remove drivers from your plan](/support/add-or-remove-drivers).",
+        ],
+      },
+      { type: "p", text: "Your current licence count and next invoice are under **Setup → Settings → Billing**." },
+    ],
+  },
+
+  /* ---------------------------------------------------------------- */
+  /* Money & payments                                                   */
+  /* ---------------------------------------------------------------- */
+  {
+    slug: "technician-pay",
+    title: "How technician pay is calculated",
+    summary: "On-site hours times the hourly rate, plus mileage, plus a flat amount per job, plus any per-unit line pay. Set rates once per technician and override per job or template.",
+    category: "money",
+    updated: U3,
+    keywords: ["pay rate", "hourly", "mileage", "flat rate", "piece rate", "earnings", "wages", "commission", "tech pay", "driver pay"],
+    blocks: [
+      { type: "p", text: "For every completed job ArrivePing works out what the technician earned: **time on site × their hourly rate**, plus **paid distance × their mileage rate**, plus a **flat amount per job**, plus any **per-unit pay** on the job's line items. Time on site runs from arrival (the geofence or **I've Arrived**) to **Complete Job**, to the minute." },
+      { type: "h3", text: "Each technician's own rates" },
+      { type: "p", text: "Open **People → Technicians & Managers**, open the technician and set **Pay rate per hour** (\"Used to compute tech pay from on-site time\") and **Mileage pay rate** (leave 0 to not pay mileage). The hourly rate can also come in from your spreadsheet when you import." },
+      { type: "h3", text: "Per job or per template" },
+      { type: "p", text: "The job form and each template under **Catalog & Forms → Form Builder Templates → Pricing, pay & payment** have a **Technician pay** block, marked internal and never shown to the customer. Set **Hourly (time on site)**, **Mileage** and **Flat per job**; a blank field means the technician's own rate. **Unpaid distance per job** lets you leave the first few kilometres unpaid. **Reset to each technician's own rates** clears the overrides." },
+      { type: "p", text: "Technicians see their running total in the app's **Earnings** tab, with \"How your pay is calculated\" and a breakdown by company if they work for more than one. The office turns the numbers into a pay run with [Generate technician payouts](/support/payouts)." },
+    ],
+  },
+  {
+    slug: "payouts",
+    title: "Generate technician payouts",
+    summary: "Money → Payouts builds a pay period from completed jobs and marks it paid. It's your record for payroll; no money moves.",
+    category: "money",
+    updated: U3,
+    keywords: ["payroll", "pay run", "pay period", "mark paid", "payouts", "earnings report"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "Open **Money → Payouts** and choose **Generate payouts**.",
+          "Pick the **Period start** and **Period end**. Every job completed in the period is included, whether or not the customer has paid its invoice.",
+          "Review each technician's row: **Jobs**, **On site**, **Hourly**, **Mileage**, **Flat**, **Per-unit** and **Total pay**. A job that paid $0 because no rate was set is flagged so you can fix the rate first.",
+          "When you've paid them through your payroll or bank, choose **Mark paid**.",
+        ],
+      },
+      { type: "p", text: "A job is never paid twice across periods, and ArrivePing adds no fee of its own. Payouts are a record, not a transfer: the money goes out the way you pay people today. For a longer view, run **Money → Reports → Payroll & Payouts** and export it as CSV, Excel, JSON or PDF; see [Run and export a report](/support/run-a-report)." },
+    ],
+  },
+  {
+    slug: "take-payments-with-stripe",
+    title: "Take card payments through your own Stripe account",
+    summary: "Connect Stripe once under Setup → Settings → Payments. Customers pay from their tracking page, the technician's phone or the customer portal, and ArrivePing takes no cut.",
+    category: "money",
+    updated: U3,
+    keywords: ["stripe", "payment gateway", "card payment", "collect payment", "pay on site", "invoice", "receipt", "pay link", "qr code", "tap to pay"],
+    blocks: [
+      {
+        type: "ol",
+        items: [
+          "As an admin, open **Setup → Settings → Payments** and answer **Where is your business registered?**",
+          "Choose **Connect with Stripe** and finish Stripe's own onboarding (business details, bank account). Come back any time with **Continue setup on Stripe**; once live, **Open Stripe dashboard** takes you to your payouts and disputes on Stripe.",
+        ],
+      },
+      { type: "p", text: "The money goes to your Stripe account, not ours. There's no monthly fee and ArrivePing takes no cut; Stripe's processing fee is shown on the Payments tab." },
+      { type: "h3", text: "Getting paid on a job" },
+      {
+        type: "ul",
+        items: [
+          "Every job gets an invoice automatically (numbered INV-…), unpaid until the customer pays. Invoices are listed under **Money → Reports → Invoices / AR**.",
+          "Turn on **Collect payment on site** on the job, or on the template so it's on for every job of that kind. The customer's tracking page then shows **Pay $…**, and the technician's app shows **Take payment** with a QR code, **Pay on this phone** and **Text the link to the customer**.",
+          "Customers who sign in to their customer portal can pay any open invoice by card.",
+          "A receipt email goes out the moment a payment lands, and the **Payment / receipt** milestone can notify the office or fire a webhook. See [Set up a webhook](/support/set-up-a-webhook).",
+        ],
+      },
+      { type: "p", text: "There's no separate \"send invoice\" button: the pay link lives on the customer's tracking page and in their portal. If you'd like invoices emailed on their own, tell us at [contact@nvc360.com](mailto:contact@nvc360.com)." },
     ],
   },
 
@@ -579,7 +1041,7 @@ export const articles: Article[] = [
         items: [
           "**Admin:** everything, including billing, payment setup, API keys, settings, and adding office staff or changing roles.",
           "**Manager:** jobs, the scheduler, the live map, customers and the technician roster (can add technicians), catalog, forms, reports and payouts to view. No billing or company settings.",
-          "**Dispatcher:** day-to-day dispatch: jobs (create, assign, cancel), the scheduler, the live map, the inbox and messages to technicians, customers, catalog and forms. Sees the technician roster and reports; no settings or billing.",
+          "**Dispatcher:** day-to-day dispatch: jobs (create, assign, archive), the scheduler, the live map, the inbox and messages to technicians, customers, catalog and forms. Sees the technician roster and reports; no settings or billing.",
           "**Project Manager:** jobs, scheduling and customers, with everything else to view.",
           "**Field Staff:** technicians and drivers on the ArrivePing app; they see only their own jobs.",
         ],
@@ -708,6 +1170,67 @@ export const articles: Article[] = [
       },
     ],
   },
+  {
+    slug: "no-active-jobs",
+    title: "The app says \"No active jobs\"",
+    summary: "Nothing has been offered or assigned to you yet. Being off the clock doesn't hide jobs.",
+    category: "troubleshooting",
+    updated: U3,
+    keywords: ["empty", "no jobs", "can't see jobs", "missing jobs", "filters", "no offers", "jobs disappeared"],
+    blocks: [
+      { type: "p", text: "The Jobs tab shows **New offers**, **In progress** and **Up next**. \"No active jobs\" with \"New offers will appear here automatically\" means dispatch hasn't given you anything yet; there are no filters to clear, and going off the clock doesn't hide jobs you've been given." },
+      {
+        type: "ol",
+        items: [
+          "**Check which company you're in.** If you work for more than one, the Profile tab shows them; switch to the right one. See [Working for more than one company](/support/working-for-more-than-one-company).",
+          "**Ask your dispatcher** whether the job was assigned to you or is still in their To schedule list. If they just assigned it, it arrives as an offer within moments.",
+          "**Check notifications** if offers seem to arrive late; see [I'm not receiving notifications](/support/not-receiving-notifications). The offer is in the app either way.",
+          "**Sign out and back in** once if the list still looks wrong, then email [support@nvc360.com](mailto:support@nvc360.com) with your name and company.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "job-or-technician-looks-stuck",
+    title: "A job or technician looks stuck",
+    summary: "A technician shows On Site or Busy with nothing happening, or a job sits En route for hours. Here's what moves it.",
+    category: "troubleshooting",
+    updated: U3,
+    keywords: ["busy", "stuck", "frozen status", "won't complete", "still en route", "can't close job", "complete on behalf", "change status"],
+    blocks: [
+      { type: "p", text: "Job statuses move when the technician taps, and the office can't set them by hand, so a stuck job is almost always a tap that hasn't happened. Open the job and check which status it's in; see [What each job status means](/support/job-statuses)." },
+      {
+        type: "ul",
+        items: [
+          "**En route for a long time.** The technician hasn't been marked arrived. The geofence checks them in within about 150 m, so if they parked around the corner or the address pin is off, ask them to tap **I've Arrived**. The app won't let them jump from driving to Complete Job (\"Check in on site before completing this job\").",
+          "**On site after the work is done.** They haven't tapped **Complete Job**. If the job has required checklist items, the app shows \"Required steps not done\" until each is ticked; remind them, or edit the job to drop an item that doesn't apply.",
+          "**The technician can't finish it.** Reassign the job to someone else from Operations → Jobs or the Scheduler (it asks you to confirm because work is under way), or have the technician tap **Send back to dispatch**. See [Job offers: accept, decline or send a job back](/support/job-offers-accept-decline).",
+          "**The job won't happen at all.** Choose **Archive**; it can be restored later. See [Edit, reschedule, archive or restore a job](/support/edit-archive-restore-job).",
+        ],
+      },
+      { type: "p", text: "A technician whose marker says **Busy** or **On Site** on the map with no job in progress is usually finishing one of the above; once the job moves, their status follows. If it doesn't, email us the technician's name and the job number." },
+    ],
+  },
+  {
+    slug: "address-not-found",
+    title: "The address won't autocomplete, or the job's pin is in the wrong place",
+    summary: "Pick the address from the suggestions as you type. A typed address is located afterwards, and if that fails the pin can land in the wrong spot.",
+    category: "troubleshooting",
+    updated: U3,
+    keywords: ["address", "autocomplete", "geocode", "wrong location", "pin", "map marker", "outside service zone", "rural address", "can't create job"],
+    blocks: [
+      { type: "p", text: "The address field on the job form suggests matches as you type (\"Start typing an address…\"). Pick the right one from the list; that's what places the pin and feeds distance into suggestions and the customer's ETA." },
+      {
+        type: "ul",
+        items: [
+          "**You typed the whole address and didn't pick a suggestion.** ArrivePing locates it after you save. That usually works, but if the address can't be found the job still saves and its pin can be far from the real place, so nearest-tech suggestions and ETAs will be off. Open the job, choose **Edit Job**, retype the address and pick it from the list.",
+          "**\"Address is outside all active service zones\".** The address is real but outside the zones you've drawn. Widen the zone under Setup → Service Zones, or take the job by hand. See [Service zones](/support/service-zones).",
+          "**A rural or new address that no map knows.** Use the nearest address the suggestions do find, and put the exact directions in the job's **Staff Notes to Driver** field, which the technician sees and the customer doesn't.",
+        ],
+      },
+      { type: "p", text: "There's no pin-drop or manual coordinates on the job form yet. If a particular address keeps failing, email it to [support@nvc360.com](mailto:support@nvc360.com) and we'll look at why." },
+    ],
+  },
 
   /* ---------------------------------------------------------------- */
   /* Exports & integrations                                             */
@@ -747,11 +1270,47 @@ export const articles: Article[] = [
         items: [
           "**Exports:** jobs, customers, technicians and time on site as CSV, Excel, PDF or JSON from Money → Reports.",
           "**Calendar feeds:** subscribe to a technician's or the company's schedule from Google Calendar, Outlook or Apple Calendar. Copy the subscription link from the **Calendar Sync** card on Setup → Settings → **Company**.",
-          "**Webhooks, Zapier and Make:** fire on job created, assigned, on the way, arrived and completed. Add and test webhooks on the **Webhooks** tab under Setup → **Notifications**; Zapier and Make connect through them.",
+          "**Webhooks, Zapier and Make:** a JSON POST to your URL for fifteen job events, from created and assigned through on the way, arrived, completed, cancelled and payment received. Add and test webhooks on the **Webhooks** tab under Setup → **Notifications**; Zapier and Make connect through them. See [Set up a webhook](/support/set-up-a-webhook).",
           "**API & MCP:** Setup → Settings → **API & MCP** issues keys for your own scripts and an MCP server so AI agents can read and act on your dispatch data.",
         ],
       },
       { type: "p", text: "Accounting connections such as QuickBooks are on the roadmap; until then, the Excel and CSV exports map cleanly to invoice imports. Tell us which integration you need at [contact@nvc360.com](mailto:contact@nvc360.com)." },
+    ],
+  },
+  {
+    slug: "set-up-a-webhook",
+    title: "Set up a webhook and the events it sends",
+    summary: "Add a URL, tick Webhook on the milestones you want, and test it. Fifteen job events arrive as JSON with a shared-secret header, and each delivery shows in the Delivery Log.",
+    category: "integrations",
+    updated: U3,
+    keywords: ["webhook", "post", "callback", "zapier", "make", "integromat", "n8n", "events", "payload", "secret", "test", "logs", "retry"],
+    blocks: [
+      { type: "h3", text: "1. Add the webhook" },
+      {
+        type: "ol",
+        items: [
+          "Open **Setup → Notifications** and choose the **Webhooks** tab, then **Add webhook**.",
+          "Give it a **Label** and paste the **POST URL**. For Zapier or Make, this is the URL their webhook trigger gives you (\"Webhooks by Zapier\" or a Make custom webhook).",
+          "Optionally set a **Secret**. It's sent with every request as the `X-Webhook-Secret` header, so your side can refuse anything without it.",
+          "Leave **Events** as `*` for everything, or list the events you want, separated by commas (see the list below). Choose **Add webhook**.",
+          "Choose **Test** on its row. You should see \"Test OK\" with the HTTP status your server returned. Pause or resume a webhook from the same row.",
+        ],
+      },
+      { type: "h3", text: "2. Turn on the milestones" },
+      { type: "p", text: "A webhook only fires for milestones that are allowed to use it. On the **Notification Rules** tab, tick the **Webhook** column for each milestone and recipient row you want sent, and make sure the **Webhooks** master switch on the **Channels** tab is on. A milestone ticked for both the customer and the office row posts once per row, so you may receive the same event twice with different `recipient` values." },
+      { type: "h3", text: "Events" },
+      { type: "p", text: "`created`, `assigned`, `accepted`, `declined`, `released` (a technician sent the job back), `enroute`, `arrived`, `started`, `completed`, `cancelled`, `change_requested`, `change_declined`, `rescheduled`, `delayed` (running late) and `receipt` (payment received). A milestone you add yourself fires as `custom:<id>`; see [Add your own milestone](/support/custom-milestones)." },
+      { type: "h3", text: "Payload" },
+      { type: "p", text: "A JSON POST with `event`, `recipient`, `bookingId`, `shortId`, `status`, `service`, `tech`, `address`, `scheduledAt`, `trackUrl`, `label`, `message` and `at`. Use `trackUrl` to link the customer's tracking page from your own system." },
+      { type: "h3", text: "Good to know" },
+      {
+        type: "ul",
+        items: [
+          "Every delivery, with the HTTP status your server returned, is on the **Delivery Log** tab with the channel **webhook**. Test pings aren't logged. See [Check whether a message was sent](/support/check-what-was-sent).",
+          "Failed deliveries aren't retried. If your endpoint was down, pull the jobs you missed from a report or the API; see [Exports and integrations](/support/exports-and-integrations).",
+          "Sample jobs never fire webhooks, so test with a real job (your own phone as the customer works well).",
+        ],
+      },
     ],
   },
 ];
