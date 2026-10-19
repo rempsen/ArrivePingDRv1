@@ -32,16 +32,29 @@ export async function isNewerBuildAvailable(): Promise<boolean> {
   }
 }
 
+/** sessionStorage can throw (privacy modes); that must only disable the loop guard. */
+function readLast(): number {
+  try {
+    return Number(window.sessionStorage.getItem(RELOAD_KEY) ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function markReload(): void {
+  try {
+    window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  } catch {
+    // No storage: reload anyway. A build that stays "newer" would loop, but
+    // the entry hash then matches after one reload, so it cannot.
+  }
+}
+
 /** Reload once (per minute) if a newer build exists. Resolves true when a reload was triggered. */
 export async function reloadIfStale(): Promise<boolean> {
-  try {
-    const last = Number(window.sessionStorage.getItem(RELOAD_KEY) ?? 0) || 0;
-    if (Date.now() - last < RELOAD_WINDOW_MS) return false;
-    if (!(await isNewerBuildAvailable())) return false;
-    window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
-    window.location.reload();
-    return true;
-  } catch {
-    return false;
-  }
+  if (Date.now() - readLast() < RELOAD_WINDOW_MS) return false;
+  if (!(await isNewerBuildAvailable())) return false;
+  markReload();
+  window.location.reload();
+  return true;
 }
