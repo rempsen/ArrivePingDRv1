@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ClipboardPaste, GitBranch, GripVertical, Plus, Trash2, X } from "lucide-react";
 import { ITEM_LABELS, ITEM_TYPES, LAYOUT_TYPES, answerChoices, type FormItem, type ItemType, type ShowIf } from "../../../../shared/forms/form-model";
 import { ITEM_HINTS, ITEM_ICONS } from "../../../components/forms/item-meta";
+import { duplicatesJobDetail } from "../../../components/forms/job-details-strip";
 import { logicTargets, retype } from "./form-ops";
 
 const input =
@@ -92,6 +93,11 @@ export function Inspector({
 
       <Field label={item.type === "section" ? "Section title" : item.type === "instructions" ? "Heading" : "Question"} htmlFor={id("label")}>
         <input id={id("label")} aria-label="Question wording" value={item.label} onChange={(e) => onChange({ label: e.target.value }, `label:${item.id}`)} className={input} />
+        {!LAYOUT_TYPES.includes(item.type) && duplicatesJobDetail(item.label) && (
+          <p className="mt-1.5 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-200">
+            Every job already shows {duplicatesJobDetail(item.label)} from the work order. You may not need this question.
+          </p>
+        )}
       </Field>
 
       <Field

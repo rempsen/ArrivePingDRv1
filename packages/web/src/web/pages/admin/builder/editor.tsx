@@ -22,6 +22,7 @@ import { RateModelEditor } from "../../../components/rate-model-editor";
 import { CollectPaymentToggle, TechPayEditor } from "../../../components/tech-pay-editor";
 import { CategoryManagerButton } from "../../../components/category-manager";
 import { FormFill } from "../../../components/forms/form-fill";
+import { JobDetailsStrip, SampleJobHeader } from "../../../components/forms/job-details-strip";
 import { ITEM_HINTS, ITEM_ICONS, PALETTE_GROUPS } from "../../../components/forms/item-meta";
 import { EMPTY_RATE_MODEL, parseRateModel, type RateModel } from "../../../../shared/pricing";
 import { parseTechPayModel, type TechPayModel } from "../../../../shared/tech-pay";
@@ -403,8 +404,7 @@ export default function TemplateEditor() {
       </div>
       <div className="mx-auto w-full max-w-[380px] rounded-[2rem] border border-white/15 bg-ink p-2 shadow-2xl shadow-black/40">
         <div className="max-h-[calc(100vh-14rem)] overflow-y-auto rounded-[1.6rem] bg-ink-2 p-3">
-          <p className="mb-0.5 text-[11px] text-slate-500">Job form</p>
-          <p className="mb-3 text-base font-semibold text-white">{draft.name || "Untitled template"}</p>
+          <SampleJobHeader title={draft.name} />
           <FormFill form={form} answers={previewAnswers} by="Preview" onAnswer={(id, a) => setPreviewAnswers((m) => ({ ...m, [id]: a }))} />
         </div>
       </div>
@@ -552,6 +552,7 @@ export default function TemplateEditor() {
                   <Smartphone className="h-4 w-4" aria-hidden="true" /> Preview
                 </button>
               </div>
+              <JobDetailsStrip />
               {draft.items.length === 0 && (
                 <div className="mb-3 rounded-xl border border-white/10 bg-ink-2/60 p-4">
                   <p className="text-sm font-semibold text-white">Build the form your technicians fill in on site</p>

@@ -9,6 +9,7 @@ import { X } from "lucide-react";
 const KEY = "builder:tour:v2:done";
 
 const STEPS: { target: string; title: string; body: string }[] = [
+  { target: "job-details", title: "Job details are built in", body: "Client, phone, address, date and time come from the work order and appear on every job. Add only the extra things the technician should record." },
   { target: "palette", title: "Add questions", body: "Click a type to add it below the selected question, or drag it to exactly where you want it." },
   { target: "canvas", title: "Drag to reorder", body: "Grab the handle on the left of any question. A section brings its questions with it." },
   { target: "preview", title: "Try it as a technician", body: "Preview shows the form the way it looks on the phone. Answers, logic and required checks all work." },

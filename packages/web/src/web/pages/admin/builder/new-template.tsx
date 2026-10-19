@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, FilePlus2, Library, Sparkles } from "lucide-react";
 import { Modal } from "../../../components/modal";
 import { FormFill } from "../../../components/forms/form-fill";
+import { SampleJobHeader } from "../../../components/forms/job-details-strip";
 import { questionCount, type FormDef } from "../../../../shared/forms/form-model";
 import { putSeed } from "./seed";
 import { apiHeaders } from "../../../lib/api";
@@ -117,6 +118,7 @@ export function NewTemplateDialog({ open, onClose }: { open: boolean; onClose: (
             <p className="mt-2 text-xs text-slate-500">It opens in the editor so you can change anything before saving.</p>
           </div>
           <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-ink-2 p-3">
+            <SampleJobHeader title={peek.name} />
             <FormFill form={peek.form} answers={{}} onAnswer={() => {}} disabled />
           </div>
         </div>
