@@ -129,6 +129,17 @@ export interface TenantDetail {
     allowSupportAccess: boolean;
   };
   summary: HubTenant | null;
+  /** Setup check: which plate the logo needs (services/logo-contrast.ts). */
+  logoCheck: {
+    plate: "light" | "dark" | "auto";
+    source: "manual" | "auto" | "none";
+    auto: "light" | "dark" | "";
+    current: boolean;
+    hasLogo: boolean;
+    logo: string;
+    brandColor: string;
+    name: string;
+  };
   settings: Record<string, unknown>;
   features: FeatureRow[];
   people: Person[];

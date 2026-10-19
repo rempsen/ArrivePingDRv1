@@ -24,6 +24,7 @@ import { tdb } from "../database/tenant";
 import { atLeast, listStaff, removeStaff, upsertStaff, StaffError, PLATFORM_ROLES, type PlatformRole } from "../../services/platform-staff";
 import { clearFeatureOverride, invalidateFeatures, isFeatureOn, setFeatureOverride } from "../../services/features";
 import { featureSummary, hubOverview, hubTenantDetail, listHubTenants } from "../../services/hub";
+import { ensureLogoPlate } from "../../services/logo-contrast";
 import { listPlatformAudit, platformAudit } from "../../services/platform-audit";
 import { setTenantKind } from "../../services/tenant-kind";
 import { ActAsError, startActAs } from "../../services/act-as";
@@ -229,6 +230,17 @@ export const hubRoutes = new Hono<AppEnv>()
     await audit({ companyId: id, actorId: actor.id, actorName: `ArrivePing support (${actor.name})`, action: "update", entityType: "settings", entityId: id, summary, meta: v.values });
     await platformAudit({ actor, action: "tenant.settings", companyId: id, entityType: "settings", entityId: id, summary: `${co.name}: ${Object.entries(v.values).map(([k, val]) => `${k} = ${val}`).join(", ")}`, meta: v.values });
     return c.json({ ok: true, values: v.values });
+  })
+
+  // Setup check: re-read the tenant's logo and decide which plate it needs.
+  // Runs on its own whenever a logo lands; this is the "check again" button.
+  .post("/tenants/:id/logo-check", requirePlatform("sales"), async (c) => {
+    const id = c.req.param("id");
+    const co = await companyRow(id);
+    if (!co) return c.json({ message: "No such company" }, 404);
+    const result = await ensureLogoPlate(id, { force: true });
+    await platformAudit({ actor: actorOf(c), action: "tenant.logo_check", companyId: id, entityType: "settings", entityId: id, summary: `${co.name}: logo check → ${result.auto || "could not read the file"}`, meta: { plate: result.plate, auto: result.auto, metrics: result.metrics ?? null } });
+    return c.json({ ok: true, ...result });
   })
 
   // ── features ───────────────────────────────────────────────────────────

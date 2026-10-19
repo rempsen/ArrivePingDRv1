@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { TenantLogo } from "../components/brand";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 // "/pure" defers loading Stripe.js until a payment actually starts (see stripe-pay.tsx).
@@ -73,7 +74,7 @@ export default function PayPublic() {
           <>
             <header className="mb-6 flex items-center gap-3">
               {info.company.logo ? (
-                <img src={info.company.logo} alt="" className="h-11 w-11 rounded-xl bg-white object-contain p-1" />
+                <TenantLogo src={info.company.logo} name={info.company.name} variant="plate" className="h-11 w-11 px-1 py-1" fallbackClassName="h-11 w-11 text-sm" />
               ) : (
                 <div className="grid h-11 w-11 place-items-center rounded-xl bg-sky-500/15 font-bold text-sky-300">
                   {info.company.name.slice(0, 1) || "·"}

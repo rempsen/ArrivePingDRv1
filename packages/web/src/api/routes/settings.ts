@@ -14,6 +14,7 @@ import { loadSiteCrawl } from "../../services/site-crawl";
 import { z } from "zod";
 import { jsonBody } from "../lib/validate";
 import { runCompanyCheck, applyCompanyCheck } from "../../services/company-check";
+import { ensureLogoPlate, ensureLogoPlateSoon, resolveLogoPlate } from "../../services/logo-contrast";
 
 type SessionUser = { id: string; name?: string };
 
@@ -67,7 +68,14 @@ export const settingsRoutes = new Hono<AppEnv>()
     } catch {
       // best-effort; default to empty
     }
-    return c.json({ settings: { ...settings, industry, industryOther, officeAddress, officeLat, officeLng } }, 200);
+    // The plate the logo needs (white or dark). `logoPlate` stays the stored
+    // override (auto | light | dark) because Settings → Company PUTs the whole
+    // object back; `logoPlateEffective` is the resolved answer the UI uses.
+    // "auto" until analysed; the analysis runs in the background on first
+    // sight of a new logo and the browser decides in the meantime (<TenantLogo>).
+    const plate = resolveLogoPlate(settings);
+    if (plate.hasLogo && plate.source === "none") ensureLogoPlateSoon(tenantId(c));
+    return c.json({ settings: { ...settings, logoPlateEffective: plate.plate, industry, industryOther, officeAddress, officeLat, officeLng } }, 200);
   })
   // ---- company logo upload (multipart field: file) ----
   // Pasted share links (Google Drive, Dropbox, OneDrive…) are HTML pages, not
@@ -86,12 +94,15 @@ export const settingsRoutes = new Hono<AppEnv>()
     const stored = await putObject(key, Buffer.from(await file.arrayBuffer()), file.type || "image/png");
     const existing = await getOrInit(c);
     await tx(c).update(schema.companySettings, { logo: stored.url, updatedAt: new Date() } as any, undefined);
+    // Decide the plate for the new file now, so the sidebar is right on the
+    // very next render instead of one page load later.
+    const plate = await ensureLogoPlate(tenantId(c), { force: true }).catch(() => null);
     await audit({
       actorId: me?.id, actorName: me?.name, action: "update",
       entityType: "company_settings", entityId: existing.id,
-      summary: "Uploaded company logo",
+      summary: `Uploaded company logo${plate?.auto ? ` (${plate.auto} plate)` : ""}`,
     });
-    return c.json({ url: stored.url }, 200);
+    return c.json({ url: stored.url, logoPlate: plate?.plate ?? "auto" }, 200);
   })
   // ---- website re-scan (item G) ----------------------------------------
   // Re-runs the brand scout against the tenant's website, stores the raw
@@ -172,6 +183,8 @@ export const settingsRoutes = new Hono<AppEnv>()
     const allowed = [
       "name", "legalName", "email", "phone", "address", "lat", "lng",
       "timezone", "currency", "taxRate", "taxLabel", "logo", "brandColor", "website",
+      // which backing the logo sits on: auto (analysed) | light | dark
+      "logoPlate",
       "defaultRegion", "autoTaxByRegion", "geofenceRadiusM",
       // metric | imperial (shared/units.ts) — display only, storage stays metric
       "distanceUnit",
@@ -209,11 +222,14 @@ export const settingsRoutes = new Hono<AppEnv>()
       const n = Math.round(Number(patch.delayNoticeAutoSendAfterMins));
       patch.delayNoticeAutoSendAfterMins = Number.isFinite(n) ? Math.min(240, Math.max(0, n)) : 10;
     }
+    if ("logoPlate" in patch && !["auto", "light", "dark"].includes(String(patch.logoPlate))) patch.logoPlate = "auto";
     const [updated] = await tx(c).update(
       schema.companySettings,
       patch as any,
       undefined,
     );
+    // A logo pasted or changed here is analysed right away, like an upload.
+    if ("logo" in patch && String(patch.logo ?? "") !== existing.logo) await ensureLogoPlate(tenantId(c), { force: true }).catch(() => null);
     await audit({
       actorId: me?.id, actorName: me?.name, action: "update",
       entityType: "company_settings", entityId: existing.id,

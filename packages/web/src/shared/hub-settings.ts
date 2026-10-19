@@ -14,6 +14,7 @@ export type HubSettingDef =
   | { key: string; label: string; group: string; type: "text"; max: number; help?: string };
 
 export const HUB_SETTINGS = [
+  { key: "logoPlate", label: "Logo backing", group: "Brand", type: "choice", options: [{ value: "auto", label: "Decide from the logo (recommended)" }, { value: "light", label: "Always white" }, { value: "dark", label: "Always dark" }], help: "Logos drawn with white lettering need the dark backing or the name disappears. Auto reads the file and picks." },
   { key: "distanceUnit", label: "Distances", group: "Map & arrival", type: "choice", options: [{ value: "metric", label: "Metres and km" }, { value: "imperial", label: "Feet and miles" }] },
   { key: "geofenceRadiusM", label: "Arrival radius", group: "Map & arrival", type: "int", min: 25, max: 2000, unit: "m", help: "How close a technician must be for the job to count as arrived." },
   { key: "officeStaffAssignable", label: "Office staff can take jobs", group: "Map & arrival", type: "boolean" },

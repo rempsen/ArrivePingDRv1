@@ -701,6 +701,19 @@ export const companySettings = pgTable("company_settings", {
   // Assets"). We keep BOTH: `logo` is our hosted/durable copy used in emails &
   // UI; `logoSourceUrl` preserves the link to where it was found on their site.
   logoSourceUrl: text("logo_source_url").notNull().default(""),
+  // Which backing the logo needs to stay legible (services/logo-contrast.ts).
+  // Real-world logos come in two kinds: drawn for white paper (navy text, dark
+  // marks) and drawn for a dark website header (white lettering, transparent
+  // background). The second kind vanishes on our white plate — Towers Realty's
+  // red mark showed with no name beside it — so every logo is analysed when it
+  // lands and the plate follows.
+  //   logoPlate     "auto" = use the analysis · "light" | "dark" = staff/tenant override
+  //   logoPlateAuto what the analysis decided ("light" | "dark" | "" = not analysed)
+  //   logoPlateFor  the `logo` value that analysis was for; differs from `logo`
+  //                 once the logo changes, which is how a stale answer is spotted
+  logoPlate: text("logo_plate").notNull().default("auto"),
+  logoPlateAuto: text("logo_plate_auto").notNull().default(""),
+  logoPlateFor: text("logo_plate_for").notNull().default(""),
   brandColor: text("brand_color").notNull().default("#06B6D4"),
   accentColor: text("accent_color").notNull().default(""),
   // Worker-facing noun for this tenant — relabels the whole app (Technician,

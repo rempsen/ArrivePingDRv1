@@ -305,6 +305,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             name={brand.name}
             color={brand.brandColor}
             variant="plate"
+            plate={brand.logoPlate}
             className="h-10 max-w-[132px] px-2 py-1"
             fallbackClassName="h-9 w-9 text-sm"
           />
@@ -323,6 +324,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           name={brand.name}
           color={brand.brandColor}
           variant="plate"
+          plate={brand.logoPlate}
           className="h-20 w-full px-3 py-2.5"
           fallbackClassName="h-16 w-16 text-2xl"
         />

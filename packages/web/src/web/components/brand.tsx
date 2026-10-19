@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { plateForImage, type LogoPlate } from "../lib/logo-plate";
 // Logo assets were re-cropped (tight bounding box); ?v=2 busts the 1h browser cache.
 import { cn } from "../lib/utils";
 import { STATUS_META } from "../lib/utils";
@@ -56,12 +57,17 @@ export function monogram(name: string): string {
  * workspace is still unmistakably theirs.
  *
  * variant "tile"  — square dark tile, logo inset (avatars, settings rows).
- * variant "plate" — the logo sits on a white plate at whatever size
- *                   `className` gives it. Real-world logos are drawn for white
- *                   paper/letterhead (navy text, dark marks), so this is the
- *                   only way they stay legible on the dark console. The
- *                   monogram fallback uses `fallbackClassName` so it can stay
- *                   square while the plate is wide.
+ * variant "plate" — the logo sits on a plate at whatever size `className`
+ *                   gives it. Most real-world logos are drawn for white
+ *                   paper/letterhead (navy text, dark marks) and get a white
+ *                   plate. Logos drawn for a dark website header — white
+ *                   lettering on a transparent background — vanish on white,
+ *                   so `plate` picks the backing: "light" | "dark" from the
+ *                   server's analysis (services/logo-contrast.ts), or "auto",
+ *                   where the browser reads the pixels itself once the image
+ *                   loads (lib/logo-plate.ts). The monogram fallback uses
+ *                   `fallbackClassName` so it can stay square while the plate
+ *                   is wide.
  */
 export function TenantLogo({
   src,
@@ -70,6 +76,7 @@ export function TenantLogo({
   className,
   textClassName,
   variant = "tile",
+  plate = "auto",
   fallbackClassName,
   imgClassName,
 }: {
@@ -79,24 +86,44 @@ export function TenantLogo({
   className?: string;
   textClassName?: string;
   variant?: "tile" | "plate";
+  /** Backing for variant "plate": light, dark, or let the browser decide. */
+  plate?: LogoPlate | "auto";
   fallbackClassName?: string;
   imgClassName?: string;
 }) {
   const [broken, setBroken] = useState(false);
-  useEffect(() => setBroken(false), [src]);
+  // What the browser worked out from the pixels when `plate` is "auto".
+  const [seen, setSeen] = useState<LogoPlate | null>(null);
+  useEffect(() => {
+    setBroken(false);
+    setSeen(null);
+  }, [src]);
   const ok = !!src && !broken && /^(https?:)?\//.test(src);
   if (ok && variant === "plate") {
+    const backing: LogoPlate = plate === "auto" ? seen ?? "light" : plate;
     return (
       // Flex (not grid) + min-h-0/min-w-0 on the image: a grid item's implicit
       // `min-height: auto` let tall-ish logos overflow the plate's padding and
       // `overflow-hidden` then sliced the bottom row of letters off (BMD's
       // "MATERIALS" line). Flex with min sizes zeroed forces the image to fit
       // entirely inside the padded box, centred on both axes, for any shape.
-      <span className={cn("flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-white/10", className)}>
+      <span
+        data-plate={backing}
+        className={cn(
+          "flex shrink-0 items-center justify-center overflow-hidden rounded-xl px-3 py-2 ring-1",
+          backing === "dark" ? "bg-slate-950 ring-white/15" : "bg-white ring-white/10",
+          className,
+        )}
+      >
         <img
           src={src}
           alt={name}
           onError={() => setBroken(true)}
+          onLoad={(e) => {
+            if (plate !== "auto" || seen) return;
+            const p = plateForImage(e.currentTarget);
+            if (p) setSeen(p);
+          }}
           className={cn("block h-full max-h-full w-full min-h-0 min-w-0 max-w-full object-contain object-center", imgClassName)}
         />
       </span>
@@ -152,4 +179,45 @@ export function StatusBadge({ status }: { status: string }) {
       {m.label}
     </span>
   );
+}
+
+/**
+ * A tenant logo on a light public page (booking form, work-order form, pay
+ * page). Most logos sit straight on the page; one drawn with white lettering
+ * gets a dark pill behind it, decided from its pixels once it loads. Falls
+ * back to nothing (so the caller's text header shows) when the file is broken.
+ */
+export function PublicLogo({
+  src,
+  alt = "",
+  className,
+  plate = "auto",
+  onBroken,
+}: {
+  src: string;
+  alt?: string;
+  className?: string;
+  plate?: LogoPlate | "auto";
+  onBroken?: () => void;
+}) {
+  const [seen, setSeen] = useState<LogoPlate | null>(null);
+  useEffect(() => setSeen(null), [src]);
+  const backing: LogoPlate = plate === "auto" ? seen ?? "light" : plate;
+  const img = (
+    <img
+      src={src}
+      alt={alt}
+      onError={onBroken}
+      onLoad={(e) => {
+        if (plate !== "auto" || seen) return;
+        const p = plateForImage(e.currentTarget);
+        if (p) setSeen(p);
+      }}
+      className={cn("block object-contain", className)}
+    />
+  );
+  if (backing === "dark") {
+    return <span className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-3 py-2 ring-1 ring-slate-900/10">{img}</span>;
+  }
+  return img;
 }

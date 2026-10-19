@@ -14,6 +14,7 @@ import { toast } from "../../../components/toast";
 import { switchCompany } from "../../../lib/tenant";
 import { beginActAs } from "../../../lib/act-as";
 import { HUB_SETTINGS, type HubSettingDef } from "../../../../shared/hub-settings";
+import { TenantLogo } from "../../../components/brand";
 import { ACT_AS_DENY, ACT_AS_MINUTES, ACT_AS_MIN_REASON } from "../../../../shared/act-as";
 import { HubLayout, KindBadge, StatusText, EmptyNote, sourceText, useHubMe } from "./hub-ui";
 import { hub, KIND_LABEL, OFFICE_ROLE_LABEL, PLAN_LABEL, type FeatureRow, type Person, type TenantDetail, type TenantKind } from "./hub-data";
@@ -134,6 +135,7 @@ function OverviewTab({ d }: { d: TenantDetail }) {
           <Fact label="HubSpot">{c.hubspot.companyId ? `Linked · synced ${fmt.ago(c.hubspot.syncedAt)}` : "Not linked"}</Fact>
         </dl>
       </Card>
+      <LogoCheckCard d={d} />
       <Card title="Connected apps">
         {d.integrations.filter((i) => i.status === "connected").length === 0 ? (
           <p className="text-[13px] text-slate-500">None connected.</p>
@@ -152,6 +154,59 @@ function OverviewTab({ d }: { d: TenantDetail }) {
         <p className="mt-3 text-[12px] text-slate-500">Support access: {c.allowSupportAccess ? "allowed" : "switched off by the company"}</p>
       </Card>
     </div>
+  );
+}
+
+/* ---------------------------------------------------------- logo check -- */
+
+/**
+ * Setup check: the logo on the plate it will actually be shown on. Logos
+ * drawn with white lettering vanish on a white plate, so every logo is read
+ * when it lands and the plate follows (services/logo-contrast.ts). Staff see
+ * the result here, can run it again, and can pin a plate under Settings →
+ * Brand → Logo backing.
+ */
+function LogoCheckCard({ d }: { d: TenantDetail }) {
+  const qc = useQueryClient();
+  const lc = d.logoCheck;
+  const recheck = useMutation({
+    mutationFn: () => hub<{ ok: boolean; auto: string; plate: string }>(`/tenants/${encodeURIComponent(d.company.id)}/logo-check`, { method: "POST" }),
+    onSuccess: (r) => {
+      toast.success(r.auto ? `Logo reads best on the ${r.auto} plate.` : "Couldn't read that logo file; the browser will decide.");
+      void qc.invalidateQueries({ queryKey: ["hub", "tenant", d.company.id] });
+    },
+    onError: () => toast.error("Couldn't check the logo."),
+  });
+  const verdict = !lc.hasLogo
+    ? { tone: "warn", text: "No logo yet. The sidebar shows a monogram until one is added." }
+    : lc.source === "manual"
+      ? { tone: "ok", text: `Pinned to the ${lc.plate} plate by staff${lc.auto ? `; the file reads as ${lc.auto}` : ""}.` }
+      : lc.source === "auto"
+        ? { tone: "ok", text: lc.auto === "dark" ? "White lettering: shown on the dark plate." : "Dark lettering: shown on the white plate." }
+        : { tone: "warn", text: "Not analysed yet, or the file format can't be read here. Run the check." };
+  return (
+    <Card title="Logo" caption="Setup check: does the logo read on the plate it's shown on?">
+      <div className="flex items-start gap-4">
+        <TenantLogo
+          src={lc.logo}
+          name={lc.name}
+          color={lc.brandColor}
+          variant="plate"
+          plate={lc.plate}
+          className="h-20 w-44 shrink-0 px-3 py-2.5"
+          fallbackClassName="h-16 w-16 text-2xl"
+        />
+        <div className="min-w-0 flex-1">
+          <p className={`text-[13px] ${verdict.tone === "ok" ? "text-slate-200" : "text-amber-200"}`}>{verdict.text}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <BtnGhost onClick={() => recheck.mutate()} disabled={!lc.hasLogo || recheck.isPending}>
+              {recheck.isPending ? "Checking…" : "Check again"}
+            </BtnGhost>
+            <span className="text-[12px] text-slate-500">To pin a plate, use Settings → Brand → Logo backing.</span>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
