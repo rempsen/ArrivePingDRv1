@@ -994,6 +994,67 @@ function SecurityTab() {
           </BtnPrimary>
         </div>
       </div>
+      <SupportAccessCard />
+    </div>
+  );
+}
+
+/**
+ * May ArrivePing support sign in as this company's people to help? (Control
+ * Hub act-as.) Admins only. Every session shows in the Audit Log either way.
+ */
+function SupportAccessCard() {
+  const { isAdmin } = useAccess();
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["support-access"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const r = await fetch("/api/settings/support-access", { headers: apiHeaders(), credentials: "include" });
+      if (!r.ok) throw new Error("Couldn't load");
+      return (await r.json()) as { allow: boolean };
+    },
+  });
+  const set = useMutation({
+    mutationFn: async (allow: boolean) => {
+      const r = await fetch("/api/settings/support-access", {
+        method: "PUT",
+        headers: { ...apiHeaders(), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ allow }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((data as any)?.error?.message ?? (data as any)?.message ?? "Couldn't save");
+      return data as { allow: boolean };
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["support-access"] }),
+  });
+  if (!isAdmin || !q.data) return null;
+  const allow = q.data.allow;
+  return (
+    <div className="nvc-card max-w-lg space-y-3 p-5">
+      <h3 className="flex items-center gap-2 font-bold text-white">
+        <UserCheck className="h-4 w-4 text-brand" /> ArrivePing support access
+      </h3>
+      <p className="text-sm text-white/60">
+        When you ask for help, ArrivePing support can sign in as one of your team for up to an hour to see exactly what they see. They have to give a reason, they can't
+        touch billing, payouts, API keys or passwords, and every visit shows in your Audit Log.
+      </p>
+      <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2.5">
+        <span className="text-sm text-white">{allow ? "Allowed" : "Switched off"}</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={allow}
+          aria-label="Allow ArrivePing support to sign in as team members"
+          disabled={set.isPending}
+          onClick={() => set.mutate(!allow)}
+          className={`relative h-[24px] w-[42px] shrink-0 rounded-full transition-colors ${allow ? "bg-emerald-500" : "bg-white/20"}`}
+        >
+          <span className={`absolute top-[2px] h-[20px] w-[20px] rounded-full bg-white shadow transition-[left] duration-200 ${allow ? "left-[20px]" : "left-[2px]"}`} />
+        </button>
+      </label>
+      {set.isError && <p className="text-sm text-rose-400">{(set.error as Error).message}</p>}
     </div>
   );
 }

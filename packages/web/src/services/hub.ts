@@ -10,6 +10,7 @@ import * as schema from "../api/database/schema";
 import { asTenantKind, FEATURES, type FeatureKey, type TenantKind } from "../shared/features";
 import { asPlanId, PLANS } from "../shared/plans";
 import { HUB_SETTINGS } from "../shared/hub-settings";
+import { getIndustryPreset } from "./industry-presets";
 import { getTenantFeatures, allOverrides } from "./features";
 import { tenants as analyticsTenants, headline, type Health, type TenantRow } from "./platform-analytics";
 
@@ -93,7 +94,7 @@ export async function listHubTenants(): Promise<HubTenant[]> {
         plan: asPlanId(c.plan),
         status: c.status,
         industry: c.industry,
-        industryLabel: s?.industry_label ?? c.industry,
+        industryLabel: s?.industry_label ?? getIndustryPreset(c.industry)?.label ?? c.industry,
         billingStatus: c.billingStatus,
         trialEndsAt: iso(c.billingTrialEndsAt),
         demoExpiresAt: iso(c.demoExpiresAt),

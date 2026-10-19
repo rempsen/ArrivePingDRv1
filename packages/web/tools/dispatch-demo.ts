@@ -26,6 +26,7 @@ const SIZE = arg("--size") === "large" ? "large" : "small";
 const PORT = Number(arg("--port") ?? 4300);
 const MOVE = !argv.includes("--no-move");
 const SHOWCASE = argv.includes("--showcase"); // features-page screenshots (tools/features-showcase.ts)
+const HUB = argv.includes("--hub"); // + Control Hub: an NVC360 owner login, ArrivePing's own account, a customer and a lead
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -257,6 +258,41 @@ const rows = jobSeeds.map((j, i) => ({
   acceptedAt: j.assign === "accepted" ? new Date(now - 50 * MIN) : null,
 }));
 for (let i = 0; i < rows.length; i += 400) await db.insert(schema.bookings).values(rows.slice(i, i + 400));
+
+if (HUB) {
+  // Control Hub: Dan as an owner in ArrivePing's own account, a paying
+  // customer with a team, the demo company marked as a demo, and a lead.
+  const { ensureTables } = await import("../src/test-support/tables");
+  await ensureTables(schema.tenantFeatureOverrides, schema.platformStaff);
+  await db.insert(schema.companies).values([
+    { id: "default", name: "ArrivePing", kind: "internal", isInternal: true, plan: "enterprise", officeAddress: "423 Main St, Winnipeg, MB", onboardingCompletedAt: new Date() },
+    { id: "acme-hvac", name: "Acme HVAC & Plumbing", kind: "customer", plan: "pro", industry: "hvac-plumbing", billingStatus: "trialing", billingTrialEndsAt: new Date(now + 2 * 24 * HOUR), officeAddress: "1200 Pembina Hwy, Winnipeg, MB", onboardingCompletedAt: new Date() },
+    { id: "northern-electric", name: "Northern Electric Co", kind: "customer", plan: "starter", industry: "electrical", billingStatus: "past_due", officeAddress: "55 Main St, Brandon, MB", onboardingCompletedAt: new Date() },
+  ] as (typeof schema.companies.$inferInsert)[]);
+  await db.update(schema.companies).set({ kind: "demo", demoExpiresAt: new Date(now + 21 * 24 * HOUR) }).where(eq(schema.companies.id, CO));
+  for (const id of ["default", "acme-hvac", "northern-electric"]) {
+    await db.insert(schema.companySettings).values({ id, companyId: id, timezone: "America/Winnipeg" } as typeof schema.companySettings.$inferInsert);
+  }
+  await auth.api.signUpEmail({ body: { name: "Dan Rosenblat", email: "dan@nvc360.com", password: "demo-hub-123" } as never });
+  const [dan] = await db.select().from(schema.user).where(eq(schema.user.email, "dan@nvc360.com"));
+  await db.update(schema.user).set({ role: "superadmin", companyId: "default", emailVerified: true }).where(eq(schema.user.id, dan!.id));
+  await db.insert(schema.platformStaff).values({ userId: dan!.id, role: "owner", addedBy: "demo" });
+  const people = [
+    { id: "acme-admin", name: "Alex Moreno", email: "alex@acmehvac.test", role: "admin" },
+    { id: "acme-disp", name: "Priya Shah", email: "priya@acmehvac.test", role: "dispatcher" },
+    { id: "acme-tom", name: "Tom Rivera", email: "tom@acmehvac.test", role: "rider" },
+  ];
+  for (const p of people) {
+    await db.insert(schema.user).values({ id: p.id, name: p.name, email: p.email, role: p.role, companyId: "acme-hvac", emailVerified: true } as typeof schema.user.$inferInsert);
+    await attachMembership({ userId: p.id, companyId: "acme-hvac", role: p.role, status: "active" });
+  }
+  await db.insert(schema.contactRequests).values([
+    { name: "Marie Tremblay", email: "marie@prairieplumbing.test", phone: "(204) 555-0142", company: "Prairie Plumbing Ltd", source: "homepage", createdAt: new Date(now - 3 * 24 * HOUR) },
+    { name: "Ken Okafor", email: "ken@okaforelectric.test", company: "Okafor Electric", source: "pricing", createdAt: new Date(now - 5 * HOUR) },
+  ] as (typeof schema.contactRequests.$inferInsert)[]);
+  console.log("HUB_EMAIL=dan@nvc360.com");
+  console.log("HUB_PASSWORD=demo-hub-123");
+}
 
 if (SHOWCASE) {
   const { seedShowcase } = await import("./features-showcase");

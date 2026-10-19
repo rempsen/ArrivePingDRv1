@@ -36,6 +36,17 @@ const CompaniesPage = lazyRoute(() => import("./companies"));
 const AnalyticsPage = lazyRoute(() => import("./analytics"));
 const MobileReleasePage = lazyRoute(() => import("./mobile-release"));
 const JobReportPage = lazyRoute(() => import("./job-report"));
+// Control Hub (NVC360 staff, inside the ArrivePing account).
+const HubOverviewPage = lazyRoute(() => import("./hub/overview"));
+const HubTenantsPage = lazyRoute(() => import("./hub/tenants"));
+const HubTenantDetailPage = lazyRoute(() => import("./hub/tenant-detail"));
+const HubFeaturesPage = lazyRoute(() => import("./hub/features"));
+const HubPlansPage = lazyRoute(() => import("./hub/plans"));
+const HubDemosPage = lazyRoute(() => import("./hub/demos"));
+const HubLeadsPage = lazyRoute(() => import("./hub/leads"));
+const HubOpsPage = lazyRoute(() => import("./hub/ops"));
+const HubAuditPage = lazyRoute(() => import("./hub/audit"));
+const HubTeamPage = lazyRoute(() => import("./hub/team"));
 
 function AdminNotFound() {
   return (
@@ -117,6 +128,16 @@ export default function AdminApp() {
           <Route path="/admin/companies" component={CompaniesPage} />
           <Route path="/admin/analytics" component={AnalyticsPage} />
           <Route path="/admin/mobile-release" component={MobileReleasePage} />
+          <Route path="/admin/hub" component={HubOverviewPage} />
+          <Route path="/admin/hub/tenants" component={HubTenantsPage} />
+          <Route path="/admin/hub/tenants/:id" component={HubTenantDetailPage} />
+          <Route path="/admin/hub/features" component={HubFeaturesPage} />
+          <Route path="/admin/hub/plans" component={HubPlansPage} />
+          <Route path="/admin/hub/demos" component={HubDemosPage} />
+          <Route path="/admin/hub/leads" component={HubLeadsPage} />
+          <Route path="/admin/hub/ops" component={HubOpsPage} />
+          <Route path="/admin/hub/audit" component={HubAuditPage} />
+          <Route path="/admin/hub/team" component={HubTeamPage} />
           <Route>
             <AdminNotFound />
           </Route>

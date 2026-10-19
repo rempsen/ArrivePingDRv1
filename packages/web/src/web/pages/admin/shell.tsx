@@ -46,7 +46,11 @@ import {
   Rocket,
   Menu,
   X,
+  LayoutGrid,
+  Sparkles,
+  Handshake,
 } from "lucide-react";
+import { ActAsBanner, StaffBar, useActAsNotice } from "../../components/act-as-banner";
 
 type NavItem = {
   to: string;
@@ -153,27 +157,38 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("ap:guide", onGuide);
   }, []);
 
-  // Super admins get their cross-tenant tools in their own section, right
-  // under Operations, so it's clear these act on every company, not this one.
+  // Managers, dispatchers and project managers see the sections their role
+  // includes (shared/office-pages.ts); admins see everything.
+  const { access, loading: accessLoading, canOpen } = useAccess();
+  useActAsNotice();
+
+  // NVC360 staff get the Control Hub, right under Operations, but only inside
+  // our own ArrivePing account: opening a customer's account shows exactly
+  // what they see, with a bar to come back (StaffBar below).
+  const platformRole = access?.actingAs ? null : access?.platformRole ?? null;
+  const inOwnTenant = (access?.companyId ?? "default") === "default";
   const allGroups: NavGroup[] =
-    role === "superadmin"
+    platformRole && inOwnTenant
       ? [
           NAV_GROUPS[0]!,
           {
-            heading: "Super Admin",
+            heading: "Control Hub",
             items: [
-              { to: "/admin/companies", label: "Companies", icon: Building2 },
-              { to: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined },
-              { to: "/admin/mobile-release", label: "Push to TestFlight", icon: Rocket },
+              { to: "/admin/hub", label: "Control Hub", icon: LayoutGrid },
+              { to: "/admin/hub/tenants", label: "Companies", icon: Building2 },
+              { to: "/admin/hub/demos", label: "Demos", icon: Sparkles },
+              { to: "/admin/hub/leads", label: "Leads & sales", icon: Handshake },
+              ...(platformRole !== "sales"
+                ? [
+                    { to: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined },
+                    { to: "/admin/mobile-release", label: "Push to TestFlight", icon: Rocket },
+                  ]
+                : []),
             ],
           },
           ...NAV_GROUPS.slice(1),
         ]
       : NAV_GROUPS;
-
-  // Managers, dispatchers and project managers see the sections their role
-  // includes (shared/office-pages.ts); admins see everything.
-  const { access, loading: accessLoading, canOpen } = useAccess();
   const groups: NavGroup[] = access
     ? allGroups.map((g) => ({ ...g, items: g.items.filter((n) => canOpen(n.to)) })).filter((g) => g.items.length > 0)
     : [];
@@ -229,7 +244,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <div className="space-y-px">
               {g.items.map((n) => {
                 const active =
-                  n.to === "/admin" ? loc === "/admin" : loc.startsWith(n.to);
+                  n.to === "/admin" || n.to === "/admin/hub" ? loc === n.to : loc.startsWith(n.to);
                 return (
                   <Link
                     key={n.to}
@@ -329,9 +344,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-slate-100 leading-tight">
-              {user?.name}
+              {access?.actingAs ? access.actingAs.targetName : user?.name}
             </p>
-            <p className="truncate text-[11px] text-slate-500 leading-tight mt-0.5">{roleLabel(role)}</p>
+            <p className="truncate text-[11px] text-slate-500 leading-tight mt-0.5">
+              {access?.actingAs ? `${roleLabel(access.role)} · via ${user?.name ?? "support"}` : roleLabel(role)}
+            </p>
           </div>
           <button
             onClick={logout}
@@ -416,6 +433,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="md:pl-[228px]">
+        {access?.actingAs ? <ActAsBanner session={access.actingAs} /> : platformRole && !inOwnTenant ? <StaffBar /> : null}
         <SampleDayBanner />
         {accessLoading ? (
           <div className="grid min-h-[60vh] place-items-center">

@@ -86,6 +86,10 @@ export interface OfficeAccess {
   platformRole?: "owner" | "staff" | "sales" | null;
   /** Feature switches that are on for the acting company (shared/features.ts). */
   features?: string[];
+  /** The company this request acts as. */
+  companyId?: string;
+  /** Set while ArrivePing support is signed in as this person (Control Hub act-as). */
+  actingAs?: { sessionId: string; actorName: string; targetName: string; companyId: string; reason: string; expiresAt: string } | null;
 }
 
 /** May this person open this dashboard path? Unknown /admin paths are admin-only. */

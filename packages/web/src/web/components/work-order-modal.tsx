@@ -439,6 +439,7 @@ export function WorkOrderModal({
   defaultRiderId,
   editBooking,
   onCreated,
+  prefill,
 }: {
   open: boolean;
   onClose: () => void;
@@ -446,6 +447,12 @@ export function WorkOrderModal({
   defaultRiderId?: string;
   editBooking?: any;
   onCreated?: () => void;
+  /**
+   * Start a new work order already filled in (Control Hub → Leads books a
+   * sales meeting this way): a new customer by name and email, the service,
+   * title, address and notes. Everything stays editable.
+   */
+  prefill?: { customerName?: string; customerEmail?: string; phone?: string; serviceId?: string; title?: string; address?: string; notes?: string };
 }) {
   const isEdit = !!editBooking;
   const qc = useQueryClient();
@@ -751,8 +758,21 @@ export function WorkOrderModal({
       prefilledEmailCustomerRef.current = "";
       setCreatingCustomer(false);
       setNewCustomerName("");
+      if (prefill) {
+        if (prefill.customerName) {
+          setCustomerId("");
+          setCreatingCustomer(true);
+          setNewCustomerName(prefill.customerName);
+        }
+        if (prefill.customerEmail) setEmail(prefill.customerEmail);
+        if (prefill.phone) setPhone(prefill.phone);
+        if (prefill.serviceId) setServiceId(prefill.serviceId);
+        if (prefill.title) setTitle(prefill.title);
+        if (prefill.address) setAddress(prefill.address);
+        if (prefill.notes) setNotes(prefill.notes);
+      }
     }
-  }, [open, defaultDate, defaultRiderId, editBooking]);
+  }, [open, defaultDate, defaultRiderId, editBooking, prefill]);
 
   // Prefill address + phone from the selected client's CRM record. Only for
   // brand-new work orders (editBooking sets prefilledCustomerRef up front so
