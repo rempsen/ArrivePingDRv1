@@ -89,7 +89,7 @@ function MobileNumberPrompt() {
   if (!user || user.role !== "admin" || (user.phone || "").trim()) return null;
   const digits = phone.replace(/[^0-9]/g, "");
   const save = async () => {
-    if (digits.length < 10) {
+    if (digits.length < 10 || digits.length > 15) {
       setError("Enter your mobile number with its area code, like (204) 555-0123.");
       return;
     }
