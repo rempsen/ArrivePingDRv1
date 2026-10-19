@@ -19,6 +19,13 @@ import { capture } from "../lib/analytics";
 import { incr } from "../lib/metrics";
 import { companyTimeZone } from "../../services/company-tz";
 import { fmtInZone } from "../../shared/tz";
+import {
+  formServiceIds,
+  intakePriority,
+  preferredStart,
+  resolveIntakeService,
+  servicesOfferedOnForm,
+} from "../../shared/intake-services";
 import { z } from "zod";
 import {
   parseBody,
@@ -284,8 +291,12 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     // useWorkerNoun(), so the public work-order form's per-unit pay labels
     // match ("pay the Installer" instead of a hardcoded "Technician").
     const cs = await t.selectOne(schema.companySettings);
-    // active services for the "service type" dropdown
-    const services = (await t.select(schema.services, eq(schema.services.active, true)))
+    const fields = normalizePublicFields(JSON.parse(form.fields || "[]"));
+    // The "service type" dropdown: the active services THIS form offers. A
+    // lead form lists only its own (a leasing inquiry never offers an owner
+    // NTE review); the internal work-order form keeps the full list.
+    const active = await t.select(schema.services, eq(schema.services.active, true));
+    const services = (form.formType === "work_order" ? active : servicesOfferedOnForm(active, fields))
       .map((s) => ({ id: s.id, name: s.name, category: s.category }));
 
     // include the public key prefix so the browser can submit (the page reads it)
@@ -301,7 +312,8 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       form: {
         title: form.title,
         intro: form.intro,
-        fields: normalizePublicFields(JSON.parse(form.fields || "[]")),
+        // The service ids stay server-side; the dropdown gets `services` below.
+        fields: fields.map(({ serviceIds: _ids, ...f }: any) => f),
         sections: JSON.parse(form.sections || "[]"),
         brandColor: form.brandColor,
         logoUrl: form.logoUrl,
@@ -478,11 +490,6 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     const address = cap(body.address, 500);
     const notes = cap(body.notes, 10_000);
     const serviceId = cap(body.serviceId || body.serviceType, 128);
-    // `new Date("next tuesday")` is an Invalid Date, which drizzle writes
-    // happily and which then breaks every screen that formats the column.
-    const preferredRaw = body.preferredAt ? new Date(String(body.preferredAt)) : null;
-    const preferredAt =
-      preferredRaw && !Number.isNaN(preferredRaw.getTime()) ? preferredRaw : null;
 
     // ---- field config (rich) ----
     type RF = {
@@ -556,12 +563,15 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       incr("intake_address_unresolved");
     }
 
-    // ---- resolve a service (picked, form default, or first active) ----
-    let svcId = serviceId || form.defaultServiceId || "";
-    let svc = svcId ? await t.selectOne(schema.services, eq(schema.services.id, svcId)) : undefined;
-    if (!svc) {
-      svc = await t.selectOne(schema.services, eq(schema.services.active, true));
-    }
+    // ---- resolve the service, within what this form offers ----
+    // Picked (if this form offers it), else the form's default, else the first
+    // service on the form's list, else any active one. See resolveIntakeService.
+    let svc = resolveIntakeService({
+      picked: serviceId,
+      defaultId: form.defaultServiceId,
+      allowedIds: formServiceIds(fields),
+      services: await t.select(schema.services, eq(schema.services.active, true)),
+    });
     // Safety net: a tenant may publish an intake form before adding any
     // bookable service. Rather than dead-ending the customer (lead lost), we
     // auto-provision a generic "General Request" service for this tenant so the
@@ -582,7 +592,16 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       svc = created[0];
     }
     if (!svc) return c.json({ message: "We couldn't process your request right now. Please try again shortly." }, 503);
-    svcId = svc.id;
+    const svcId = svc.id;
+
+    // ---- when, and how urgent ----
+    // A date-only pick is that day on the COMPANY's clock (see preferredStart);
+    // read as UTC it landed on the previous evening for any company west of
+    // Greenwich. `new Date("next tuesday")` and friends come back null.
+    const tz = await companyTimeZone(companyId);
+    const preferred = preferredStart(body.preferredAt, tz);
+    const preferredAt = preferred?.at ?? null;
+    const priority = intakePriority({ serviceName: svc.name, serviceCategory: svc.category, formTitle: form.title });
 
     // ---- find-or-create the customer user (tenant-scoped by email) ----
     // Match on membership, not user.companyId: a customer this company shares
@@ -635,14 +654,14 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     // (zone enforcement already ran above, before any write)
 
     // ---- create the pending lead booking ----
-    const scheduledAt = preferredAt && !isNaN(preferredAt.getTime()) ? preferredAt : new Date(Date.now() + 86400_000);
+    const scheduledAt = preferredAt ?? new Date(Date.now() + 86400_000);
     const customNotes = customAnswers.filter((a) => a.value).map((a) => `${a.label}: ${a.value}`).join("\n");
     const composedNotes = [notes, customNotes, photoUrl ? `Photo: ${photoUrl}` : ""].filter(Boolean).join("\n");
     const [booking] = await t.insert(schema.bookings, {
       customerId: customer.id,
       serviceId: svcId,
       title: svc.name,
-      priority: "normal",
+      priority,
       status: "pending", // lands in the pipeline as a new lead
       scheduledAt,
       address: address || "(no address provided)",
@@ -687,22 +706,20 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     // ---- email the form's designated recipient (master "where it's sent") ----
     if (form.recipientEmail) {
       // The customer's preferred time, on the TENANT's clock — formatted on
-      // the server's (UTC) it landed in the office inbox hours out.
-      companyTimeZone(form.companyId)
-        .then((tz) =>
-          notifyRecipient(form, {
-            name, email, phone, address, notes, service: svc.name,
-            preferredAt: fmtInZone(
-              preferredAt,
-              tz,
-              { dateStyle: "medium", timeStyle: "short" },
-              "en-US",
-              "",
-            ),
-            photoUrl, custom: customAnswers,
-          }),
-        )
-        .catch((e) => console.error("intake recipient email failed", e));
+      // the server's (UTC) it landed in the office inbox hours out. A day the
+      // customer picked without a time reads as a day, not "9:00 AM".
+      notifyRecipient(form, {
+        name, email, phone, address, notes, service: svc.name,
+        priority,
+        preferredAt: fmtInZone(
+          preferredAt,
+          tz,
+          preferred?.dateOnly ? { dateStyle: "medium" } : { dateStyle: "medium", timeStyle: "short" },
+          "en-US",
+          "",
+        ),
+        photoUrl, custom: customAnswers,
+      }).catch((e) => console.error("intake recipient email failed", e));
     }
 
     return c.json({ ok: true, message: form.successMessage }, 201);
@@ -713,7 +730,7 @@ async function notifyRecipient(
   form: typeof schema.intakeForms.$inferSelect,
   d: {
     name: string; email: string; phone: string; address: string; notes: string;
-    service: string; preferredAt: string; photoUrl: string;
+    service: string; priority?: string; preferredAt: string; photoUrl: string;
     custom: Array<{ label: string; value: string }>;
   },
 ) {
@@ -724,6 +741,7 @@ async function notifyRecipient(
     ["Phone", d.phone],
     ["Address", d.address],
     ["Service", d.service],
+    ["Priority", d.priority === "urgent" ? "Urgent (emergency request)" : ""],
     ["Preferred date", d.preferredAt],
     ["Notes", d.notes],
     ...d.custom.filter((c) => c.value).map((c) => [c.label, c.value] as [string, string]),

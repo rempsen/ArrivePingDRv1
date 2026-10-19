@@ -2,11 +2,14 @@ import { useRef, useState } from "react";
 import { toast } from "../../components/toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiHeaders } from "../../lib/api";
+import { UserFacingError } from "../../lib/api-error";
 import { Modal, Field, inputCls, BtnPrimary, BtnGhost, ConfirmModal } from "../../components/modal";
 import {
   FileText, Plus, Copy, Check, Trash2, ExternalLink, Code2, Pencil,
   GripVertical, ChevronDown, ChevronUp, Mail, LayoutList, Wrench, AlertTriangle, Image as ImageIcon,
+  ListChecks, Sparkles,
 } from "lucide-react";
+import { formServiceIds } from "../../../shared/intake-services";
 
 // Google Drive "share" links (e.g. drive.google.com/open?id=... or /file/d/.../view)
 // require the viewer to be signed in and never resolve as a raw <img> source —
@@ -32,6 +35,8 @@ type FieldCfg = {
   width?: "full" | "half";
   fixed?: boolean;
   core?: boolean;
+  /** serviceType only: the services this form offers (empty = every service). */
+  serviceIds?: string[];
 };
 type SectionCfg = { id: string; title: string; description?: string };
 type IntakeForm = {
@@ -40,6 +45,7 @@ type IntakeForm = {
   recipientName: string; recipientEmail: string;
   publicKeyId: string; brandColor: string; logoUrl: string;
   successMessage: string; active: boolean; submitCount: number; createdAt: number;
+  defaultServiceId: string;
   formType: "lead" | "work_order"; accessCode: string; allowTechAssign: boolean;
 };
 type PubKey = { id: string; label: string; prefix: string; keyType: string; active: boolean; publicKey?: string };
@@ -71,6 +77,7 @@ async function jsend<T>(url: string, method: string, body?: unknown): Promise<T>
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
+type Svc = { id: string; name: string; category: string };
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 const slugFromLabel = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32) || "field";
 
@@ -96,6 +103,10 @@ const DEFAULT_FIELDS: FieldCfg[] = [
   { id: "f_notes", key: "notes", type: "textarea", label: "Notes / describe the problem", enabled: true, required: false, core: true, width: "full" },
   { id: "f_photo", key: "photo", type: "file", label: "Photo upload", enabled: true, required: false, core: true, width: "full" },
 ];
+
+/** A lead form whose Service type dropdown is shown and was never narrowed down. */
+const offersEveryService = (f: IntakeForm) =>
+  f.fields.some((x) => x.key === "serviceType" && x.enabled) && formServiceIds(f.fields).length === 0;
 
 // ================================================================ PAGE
 export default function IntakeFormsPage() {
@@ -209,7 +220,7 @@ export function IntakeFormsSection({ publicKeys }: { publicKeys: PubKey[] }) {
           {forms.map((f) => (
             <div key={f.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-white">{f.title}</span>
                   {f.formType === "work_order"
                     ? <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-semibold text-violet-300"><Wrench className="h-3 w-3" /> Work order</span>
@@ -218,6 +229,16 @@ export function IntakeFormsSection({ publicKeys }: { publicKeys: PubKey[] }) {
                     ? <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">Live</span>
                     : <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-[11px] font-semibold text-slate-400">Disabled</span>}
                   {!f.publicKeyId && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">No key bound</span>}
+                  {f.formType === "lead" && serviceCount > 1 && offersEveryService(f) && (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(f)}
+                      title="The Service type dropdown lists every service you offer. Choose the ones that fit this form."
+                      className="whitespace-nowrap rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25"
+                    >
+                      Lists all {serviceCount} services — choose
+                    </button>
+                  )}
                   {f.formType === "lead" && !f.recipientEmail && settingRecipientFor !== f.id && (
                     <button
                       type="button"
@@ -335,6 +356,48 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
     form?.fields?.length ? form.fields.map((f) => ({ ...f })) : (isWorkOrder ? [] : DEFAULT_FIELDS.map((f) => ({ ...f })))
   );
 
+  // ---- services this (lead) form offers ----
+  // Kept apart from the field list while editing; saved onto the Service type
+  // field (see shared/intake-services.ts). Empty = every service.
+  const svcQ = useQuery({ queryKey: ["services"], queryFn: () => jget<{ services: Svc[] }>("/api/services") });
+  const allServices = [...(svcQ.data?.services ?? [])].sort(
+    (a, b) => (a.category || "").localeCompare(b.category || "") || a.name.localeCompare(b.name),
+  );
+  // Grouped by category, so "which of these would someone filling in THIS
+  // form ask for?" reads at a glance.
+  const serviceGroups = [...allServices.reduce((m, s) => {
+    const cat = s.category?.trim() || "Other";
+    m.set(cat, [...(m.get(cat) ?? []), s]);
+    return m;
+  }, new Map<string, Svc[]>())];
+  const [svcIds, setSvcIds] = useState<string[]>(() => formServiceIds(form?.fields));
+  const [defaultServiceId, setDefaultServiceId] = useState(form?.defaultServiceId ?? "");
+  // Ticked services that still exist (a retired service drops off the count).
+  const ticked = svcQ.isSuccess ? svcIds.filter((id) => allServices.some((s) => s.id === id)) : svcIds;
+  const toggleService = (id: string) => {
+    const next = svcIds.includes(id) ? svcIds.filter((x) => x !== id) : [...svcIds, id];
+    setSvcIds(next);
+    if (defaultServiceId && next.length && !next.includes(defaultServiceId)) setDefaultServiceId("");
+  };
+  const suggestM = useMutation({
+    mutationFn: async () => {
+      const r = await fetch("/api/forms/suggest-services", {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ title, intro, fieldLabels: fields.filter((f) => f.enabled).map((f) => f.label) }),
+      });
+      const d = await r.json().catch(() => ({}));
+      // Shown in the panel below, so no global toast on top of it.
+      if (!r.ok) throw new UserFacingError(d?.message || "Couldn't suggest services right now.", { status: r.status });
+      return d as { serviceIds: string[]; defaultServiceId: string };
+    },
+    // Reported in the panel, not a toast: a toast sits over the Save button.
+    onSuccess: (d) => {
+      setSvcIds(d.serviceIds);
+      setDefaultServiceId(d.defaultServiceId);
+    },
+  });
+
   // ---- field ops ----
   const patchField = (id: string, p: Partial<FieldCfg>) =>
     setFields((cur) => cur.map((f) => (f.id === id ? { ...f, ...p } : f)));
@@ -373,16 +436,26 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
   const saveM = useMutation({
     mutationFn: () => {
       // auto-derive key from label for custom fields if still placeholder
-      const cleanFields = fields.map((f) => ({
+      let cleanFields = fields.map((f) => ({
         ...f,
         key: f.core ? f.key : (f.key?.startsWith("custom_") ? slugFromLabel(f.label) || f.key : f.key),
-        options: hasOptions(f.type) ? (f.options || []).filter(Boolean) : [],
+        options: hasOptions(f.type) && f.key !== "serviceType" ? (f.options || []).filter(Boolean) : [],
       }));
+      if (!isWorkOrder) {
+        // The service list lives on the Service type field. A form that has
+        // none (hidden or removed) still keeps its list on a hidden one.
+        const hasSvcField = cleanFields.some((f) => f.key === "serviceType");
+        cleanFields = hasSvcField
+          ? cleanFields.map((f) => (f.key === "serviceType" ? { ...f, serviceIds: ticked } : f))
+          : ticked.length
+            ? [...cleanFields, { ...DEFAULT_FIELDS.find((f) => f.key === "serviceType")!, options: [], enabled: false, serviceIds: ticked }]
+            : cleanFields;
+      }
       const body = {
         title, intro, slug: slug || undefined, brandColor, logoUrl, successMessage, publicKeyId, active,
         recipientName, recipientEmail, sections, fields: cleanFields,
         formType,
-        ...(isWorkOrder ? { allowTechAssign, accessCode } : {}),
+        ...(isWorkOrder ? { allowTechAssign, accessCode } : { defaultServiceId }),
       };
       return editing ? jsend(`/api/forms/${form!.id}`, "PATCH", body) : jsend("/api/forms", "POST", body);
     },
@@ -505,6 +578,56 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
         </div>
         <Field label="Success message"><input aria-label="Success Message" className={inputCls} value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} /></Field>
 
+        {/* ---- SERVICES THIS FORM OFFERS (lead forms) ---- */}
+        {!isWorkOrder && allServices.length > 0 && (
+          <div className="rounded-xl border border-white/10 bg-ink-3/30 p-4">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <ListChecks className="h-4 w-4 text-cyan-glow" />
+              <h3 className="text-sm font-bold text-white">Services this form offers</h3>
+              <button type="button" onClick={() => suggestM.mutate()} disabled={suggestM.isPending || allServices.length < 2 || !title.trim()}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50">
+                <Sparkles className="h-3.5 w-3.5" /> {suggestM.isPending ? "Suggesting…" : "Suggest for this form"}
+              </button>
+            </div>
+            <p className="mb-3 text-xs text-slate-400">
+              {ticked.length === 0
+                ? `None ticked: the Service type dropdown lists all ${allServices.length} of your services.`
+                : ticked.length === 1
+                  ? "One service: the dropdown is hidden and every submission is booked under it."
+                  : `The dropdown lists these ${ticked.length} services. A submission that skips it is booked under the default.`}
+            </p>
+            {suggestM.isError && <p role="alert" className="mb-3 text-xs font-semibold text-rose-400">{(suggestM.error as Error).message}</p>}
+            {suggestM.isSuccess && (
+              <p className="mb-3 text-xs font-semibold text-emerald-400">
+                Ticked {suggestM.data.serviceIds.length} service{suggestM.data.serviceIds.length === 1 ? "" : "s"} for this form. Review, then save.
+              </p>
+            )}
+            <div className="space-y-3">
+              {serviceGroups.map(([cat, list]) => (
+                <div key={cat}>
+                  <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">{cat}</div>
+                  <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                    {list.map((s) => (
+                      <label key={s.id} className="flex min-w-0 items-center gap-2 text-sm text-slate-200">
+                        <input type="checkbox" aria-label={s.name} checked={svcIds.includes(s.id)} onChange={() => toggleService(s.id)} className="h-4 w-4 shrink-0 accent-cyan-500" />
+                        <span className="truncate">{s.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 max-w-sm">
+              <Field label="Default service" hint="Booked when the visitor doesn't choose, or when the dropdown is hidden.">
+                <select aria-label="Default service" className={inputCls} value={defaultServiceId} onChange={(e) => setDefaultServiceId(e.target.value)}>
+                  <option value="">{ticked.length ? "First ticked service" : "First service in your catalog"}</option>
+                  {allServices.filter((s) => !ticked.length || ticked.includes(s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+        )}
+
         {/* ---- FIELDS + SECTIONS BUILDER ---- */}
         <div>
           <div className="mb-2 flex items-center gap-2">
@@ -573,7 +696,8 @@ function FieldRow({ f, sections, onPatch, onRemove, onMoveUp, onMoveDown }: {
   onPatch: (p: Partial<FieldCfg>) => void; onRemove: () => void; onMoveUp: () => void; onMoveDown: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const showOptions = hasOptions(f.type);
+  // The Service type dropdown's choices are the form's services, set above.
+  const showOptions = hasOptions(f.type) && f.key !== "serviceType";
   return (
     <div className="rounded-lg border border-white/10 bg-ink-2/60">
       <div className="flex items-center gap-2 px-2.5 py-2">
@@ -607,7 +731,7 @@ function FieldRow({ f, sections, onPatch, onRemove, onMoveUp, onMoveDown }: {
       {open && (
         <div className="space-y-3 border-t border-white/5 px-3 py-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            {!showOptions && f.type !== "file" && f.type !== "address" && (
+            {!showOptions && f.type !== "file" && (
               <Field label="Placeholder"><input aria-label="Placeholder" className={inputCls} value={f.placeholder || ""} onChange={(e) => onPatch({ placeholder: e.target.value })} /></Field>
             )}
             <Field label="Width">
@@ -623,6 +747,9 @@ function FieldRow({ f, sections, onPatch, onRemove, onMoveUp, onMoveDown }: {
               </select>
             </Field>
           </div>
+          {f.key === "serviceType" && (
+            <p className="text-[11px] text-slate-500">Its choices are the services ticked under “Services this form offers”. The placeholder is the dropdown’s blank option.</p>
+          )}
           {showOptions && (
             <Field label="Options (one per line)">
               <textarea aria-label="Options" rows={3} className={inputCls} value={(f.options || []).join("\n")}

@@ -40,7 +40,7 @@ import {
   phone,
   formatPhone,
 } from "../api/lib/validate";
-import { scoutStarterForms } from "./form-scout";
+import { scoutStarterForms, starterFormServiceIds } from "./form-scout";
 import { scoutStarterTemplates } from "./template-scout";
 import { scoutStarterServices } from "./service-scout";
 import { provisionNotificationBranding, seedNotificationRules } from "./dispatch";
@@ -708,65 +708,6 @@ export async function provisionCompany(
       ? brand.services.split(/[\n,;|]/).map((s: string) => s.trim()).filter(Boolean)
       : [];
 
-  // 2c) auto-seed 2-3 industry-appropriate starter intake forms based on the
-  //     company's services/website so the tenant's Form Creator isn't empty.
-  //     AI-generated; falls back to generic forms on any failure. Best-effort
-  //     and non-blocking — provisioning must still succeed if this fails.
-  let formsSeeded = 0;
-  try {
-    const starters = await scoutStarterForms({
-      name,
-      industry: resolvedIndustry || null,
-      industryOther: resolvedIndustry === "other" ? industryOther : null,
-      services: servicesArr,
-      description: str(brand.description) || str(brand.tagline) || null,
-      website: str(b.website) || null,
-      workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
-      customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
-      siteExcerpts,
-      knowledge: icpKnowledge,
-    });
-    const brandColor = str(brand.primaryColor, "#06B6D4");
-    const logoUrl = str(brand.logoUrl);
-    // auto-issue + bind a public (form-submit) key so the seeded forms are
-    // immediately publishable — no manual "bind a key" step needed.
-    let publicKeyId = "";
-    try {
-      const pub = await ensureDefaultPublicKey({
-        companyId: slug,
-        createdBy: actor.id,
-        createdByName: actor.name,
-      });
-      publicKeyId = pub.id;
-    } catch (e) {
-      console.error("[provisioning] public key provisioning failed", e);
-    }
-    const usedSlugs = new Set<string>();
-    for (const f of starters) {
-      let s = f.slug;
-      let i = 2;
-      while (usedSlugs.has(s)) s = `${f.slug}-${i++}`;
-      usedSlugs.add(s);
-      await t.insert(schema.intakeForms, {
-        slug: s,
-        title: f.title,
-        intro: f.intro,
-        fields: JSON.stringify(f.fields),
-        publicKeyId,
-        brandColor,
-        logoUrl,
-        successMessage: f.successMessage,
-        active: true,
-        createdBy: actor.id ?? "",
-        updatedAt: new Date(),
-      });
-    }
-    formsSeeded = starters.length;
-    console.log(`[provisioning] seeded ${formsSeeded} starter forms for "${slug}" (${source})`);
-  } catch (e) {
-    console.error("[provisioning] starter-form seeding failed", e);
-  }
-
   // 2d) auto-seed 2-3 industry-appropriate WORK-ORDER templates (the Form
   //     Builder / task_templates) so the tenant's builder isn't empty —
   //     residential / commercial / service workflows tailored to their trade.
@@ -811,6 +752,8 @@ export async function provisionCompany(
   //     the plain ICP preset list when there's no scrape data or the model
   //     call fails). Best-effort, non-blocking.
   let servicesSeeded = 0;
+  // What the intake forms below pick their services from.
+  const seededLibrary: Array<{ id: string; name: string; category: string }> = [];
   if (preset || servicesArr.length) {
     try {
       const tailored = await scoutStarterServices({
@@ -824,12 +767,13 @@ export async function provisionCompany(
         knowledge: icpKnowledge,
       });
       for (const s of tailored) {
-        await t.insert(schema.services, {
+        const [row] = await t.insert(schema.services, {
           name: s.name,
           category: s.category,
           durationMins: s.durationMins,
           active: true,
         });
+        if (row) seededLibrary.push({ id: row.id, name: row.name, category: row.category });
       }
       servicesSeeded = tailored.length;
       console.log(
@@ -838,6 +782,73 @@ export async function provisionCompany(
     } catch (e) {
       console.error("[provisioning] service-library seeding failed", e);
     }
+  }
+
+  // 2e-2) auto-seed 2-3 industry-appropriate starter intake forms based on
+  //     the company's services/website so the tenant's Form Creator isn't
+  //     empty. Runs AFTER the service library so each form can name the real
+  //     services it offers (and the one it books by default) — before, forms
+  //     were designed blind and every one listed every service. AI-generated;
+  //     falls back to generic forms on any failure. Best-effort and
+  //     non-blocking — provisioning must still succeed if this fails.
+  let formsSeeded = 0;
+  try {
+    const starters = await scoutStarterForms({
+      name,
+      industry: resolvedIndustry || null,
+      industryOther: resolvedIndustry === "other" ? industryOther : null,
+      services: servicesArr,
+      description: str(brand.description) || str(brand.tagline) || null,
+      website: str(b.website) || null,
+      workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
+      customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
+      siteExcerpts,
+      knowledge: icpKnowledge,
+      library: seededLibrary,
+    });
+    const brandColor = str(brand.primaryColor, "#06B6D4");
+    const logoUrl = str(brand.logoUrl);
+    // auto-issue + bind a public (form-submit) key so the seeded forms are
+    // immediately publishable — no manual "bind a key" step needed.
+    let publicKeyId = "";
+    try {
+      const pub = await ensureDefaultPublicKey({
+        companyId: slug,
+        createdBy: actor.id,
+        createdByName: actor.name,
+      });
+      publicKeyId = pub.id;
+    } catch (e) {
+      console.error("[provisioning] public key provisioning failed", e);
+    }
+    const usedSlugs = new Set<string>();
+    for (const f of starters) {
+      let s = f.slug;
+      let i = 2;
+      while (usedSlugs.has(s)) s = `${f.slug}-${i++}`;
+      usedSlugs.add(s);
+      // The form's services ride on its Service type field (see
+      // shared/intake-services.ts); empty = every service, as before.
+      const { fields, defaultServiceId } = starterFormServiceIds(f, seededLibrary);
+      await t.insert(schema.intakeForms, {
+        slug: s,
+        title: f.title,
+        intro: f.intro,
+        fields: JSON.stringify(fields),
+        defaultServiceId,
+        publicKeyId,
+        brandColor,
+        logoUrl,
+        successMessage: f.successMessage,
+        active: true,
+        createdBy: actor.id ?? "",
+        updatedAt: new Date(),
+      });
+    }
+    formsSeeded = starters.length;
+    console.log(`[provisioning] seeded ${formsSeeded} starter forms for "${slug}" (${source})`);
+  } catch (e) {
+    console.error("[provisioning] starter-form seeding failed", e);
   }
 
   // 2f) auto-seed the CATALOG (schema.catalogItems) — the industry preset,
