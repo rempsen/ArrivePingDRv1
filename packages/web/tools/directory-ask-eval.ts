@@ -41,7 +41,9 @@ const words = {
   manager: "Property Manager",
   job: "Request",
   jobs: "Requests",
+  customer: "Resident",
   customers: "Residents",
+  worker: "Property Manager",
   workers: "Property Managers",
 };
 

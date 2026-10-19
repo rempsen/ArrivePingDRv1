@@ -34,6 +34,7 @@ import {
   hasStructure,
   heuristicInterpretation,
   needsJobs,
+  placeFreeFilter,
   resolveInterpretation,
   suggestNames,
   type AskWords,
@@ -142,16 +143,20 @@ export async function customersWithJobs(
 /** Run a resolved filter over a company's Directory. */
 export async function runDirectoryFilter(
   companyId: string,
-  filter: DirectoryFilter,
+  input: DirectoryFilter,
   page: { page?: number; pageSize?: number; withIds?: boolean },
-  tz: string,
+  ctx: { tz: string; words: AskWords },
   loaded?: { rows: DirectoryRow[] },
 ): Promise<DirectoryResult> {
+  const { tz, words } = ctx;
+  // No places: the page's re-sent sort or grouping can't bring them back either.
+  const filter = words.placesEnabled ? input : placeFreeFilter(input);
   const { rows } = loaded ?? (await loadDirectory(companyId));
   const jobs = needsJobs(filter) ? await customersWithJobs(companyId, filter, tz) : null;
   const test = filterPredicate(filter, jobs, tz);
   const ids = rows.filter(test).map((r) => r.id);
   return applyDirectoryQuery(rows, {
+    labels: { place: words.place, places: words.places, manager: words.manager },
     kind: filter.kind,
     q: filter.keywords,
     ids,
@@ -182,7 +187,9 @@ export async function companyAskContext(companyId: string): Promise<{ words: Ask
       manager: vocab.manager,
       job: clean(s?.jobNoun, "Job"),
       jobs: clean(s?.jobNounPlural, "Jobs"),
+      customer: clean(s?.customerNoun, "Customer"),
       customers: clean(s?.customerNounPlural, "Customers"),
+      worker: clean(s?.workerNoun, "Technician"),
       workers: clean(s?.workerNounPlural, "Technicians"),
     },
     tz: safeTimeZone(s?.timezone),
@@ -255,12 +262,12 @@ export async function askDirectory(
   const { filter, notes } = resolveInterpretation(interpretation, named, team, opts.words);
   if (note) notes.unshift(note);
   const page = { page: opts.page, pageSize: opts.pageSize };
-  let result = await runDirectoryFilter(companyId, filter, page, opts.tz, loaded);
+  let result = await runDirectoryFilter(companyId, filter, page, opts, loaded);
   let used = filter;
   // Words that matched nobody, alongside filters that did: try without the words.
   if (result.total === 0 && filter.keywords && hasStructure(filter)) {
     const looser = { ...filter, keywords: "" };
-    const retry = await runDirectoryFilter(companyId, looser, page, opts.tz, loaded);
+    const retry = await runDirectoryFilter(companyId, looser, page, opts, loaded);
     if (retry.total > 0) {
       notes.push(`Nobody matched “${filter.keywords}” as well, so those words were left out.`);
       result = retry;

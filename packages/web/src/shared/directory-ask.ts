@@ -100,7 +100,9 @@ export interface AskWords {
   manager: string;
   job: string;
   jobs: string;
+  customer: string;
   customers: string;
+  worker: string;
   workers: string;
 }
 export const DEFAULT_ASK_WORDS: AskWords = {
@@ -111,7 +113,9 @@ export const DEFAULT_ASK_WORDS: AskWords = {
   manager: "Manager",
   job: "Job",
   jobs: "Jobs",
+  customer: "Customer",
   customers: "Customers",
+  worker: "Technician",
   workers: "Technicians",
 };
 const lower = (s: string) => s.toLowerCase();
@@ -213,6 +217,22 @@ export function suggestNames(text: string, list: Named[]): string[] {
 }
 
 const didYouMean = (names: string[]) => (names.length ? ` Did you mean ${names.join(" or ")}?` : "");
+
+/**
+ * A filter for a Directory without places: nothing in it can be about places,
+ * including the sort and grouping the page re-sends with an answer.
+ */
+export function placeFreeFilter(f: DirectoryFilter): DirectoryFilter {
+  return {
+    ...f,
+    propertyIds: [],
+    managerIds: [],
+    units: [],
+    missing: f.missing.filter((m) => m !== "property" && m !== "unit"),
+    sort: f.sort === "property" || f.sort === "unit" || f.sort === "manager" ? "name" : f.sort,
+    groupBy: f.groupBy === "property" || f.groupBy === "manager" ? "none" : f.groupBy,
+  };
+}
 
 /** Names → this company's ids. Notes say what didn't match, so the answer is never silently wider. */
 export function resolveInterpretation(
@@ -440,7 +460,7 @@ export function heuristicInterpretation(question: string, properties: Named[], s
     text = text.replace(` ${n} `, " ");
   };
   // The tenant's own words count as plain words too ("communities", "lot", "coach").
-  const own = [words.place, words.places, words.unit ?? "", words.manager, words.job, words.jobs, words.customers, words.workers]
+  const own = [words.place, words.places, words.unit ?? "", words.manager, words.job, words.jobs, words.customer, words.customers, words.worker, words.workers]
     .flatMap((x) => norm(x).split(" "))
     .filter(Boolean);
   const alt = (...xs: string[]) => [...new Set(xs.map((x) => norm(x)).filter(Boolean))].map((x) => x.replace(/ /g, "\\s+")).join("|");
@@ -483,8 +503,9 @@ export function heuristicInterpretation(question: string, properties: Named[], s
     out.units.push(unit[1]!.toUpperCase());
     take(unit[1]!);
   }
-  const customerWords = alt(words.customers, "residents", "tenants", "customers", "clients", "people at", "who live", "living");
-  const workerWords = alt(words.workers, "technicians", "techs", "field staff", "vendors");
+  // One or many: "parent with no phone" asks about parents.
+  const customerWords = alt(words.customers, words.customer, "residents", "resident", "tenants", "tenant", "customers", "customer", "clients", "client", "people at", "who live", "living");
+  const workerWords = alt(words.workers, words.worker, "technicians", "technician", "techs", "tech", "field staff", "vendors", "vendor");
   if (has(re(`\\b(${customerWords})\\b`)) || out.properties.length || out.managers.length || out.units.length || out.noProperty)
     out.kind = "customer";
   else if (has(re(`\\b(${workerWords})\\b`))) out.kind = "field";

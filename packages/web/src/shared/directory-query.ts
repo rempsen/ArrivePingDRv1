@@ -99,6 +99,24 @@ export interface DirectoryLabels {
 }
 const DEFAULT_LABELS: DirectoryLabels = { place: "Property", places: "Properties", manager: "Manager" };
 
+/** Sorts that only mean something where the Directory has places. */
+export const PLACE_SORTS: ReadonlySet<DirectorySort> = new Set<DirectorySort>(["property", "unit", "manager"]);
+
+/**
+ * A Directory without places (shared/directory-vocab.ts) ignores place-only
+ * sorting, grouping and filters, wherever they came from: a view saved while
+ * signed in to another company, or an old link.
+ */
+export function withoutPlaces(query: DirectoryQuery): DirectoryQuery {
+  return {
+    ...query,
+    sort: query.sort && PLACE_SORTS.has(query.sort) ? "name" : query.sort,
+    groupBy: query.groupBy === "property" || query.groupBy === "manager" ? "none" : query.groupBy,
+    propertyId: undefined,
+    managerId: undefined,
+  };
+}
+
 /** The most ids one query returns for a select-all. */
 export const MAX_IDS = 5000;
 

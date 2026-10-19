@@ -30,7 +30,7 @@ const schema = await import("../../database/schema");
 const { directoryRoutes } = await import("../directory");
 const { importRoutes } = await import("../import");
 const { setDirectoryAskModelForTests } = await import("../../../services/directory-ask");
-const { emptyInterpretation } = await import("../../../shared/directory-ask");
+const { emptyInterpretation, resolveInterpretation } = await import("../../../shared/directory-ask");
 
 function colDdl(col: PgColumn, withPk: boolean): string {
   const parts = [`"${col.name}"`, col.getSQLType()];
@@ -112,6 +112,13 @@ describe("each tenant's Directory vocabulary", () => {
     const body = await json(await get("/api/directory?kind=customer&groupBy=property", BUILDER));
     expect(body.vocab).toMatchObject({ enabled: true, place: "Community", places: "Communities", unit: "Lot", manager: "Superintendent" });
     expect(body.groups.map((g: any) => g.label)).toEqual(["No community"]);
+  });
+
+  it("HVAC: a place grouping, sort or filter saved on another company's Directory is ignored", async () => {
+    const plain = await json(await get("/api/directory?kind=all", HVAC));
+    const body = await json(await get("/api/directory?kind=all&groupBy=property&sort=property&propertyId=none&managerId=none", HVAC));
+    expect(body.groups).toEqual([]);
+    expect(body.total).toBe(plain.total);
   });
 
   it("messages use the tenant's words", async () => {
@@ -221,6 +228,17 @@ describe("the AI search in the tenant's words", () => {
     const sent = JSON.stringify(model.doGenerateCalls[0]!.prompt);
     expect(sent).toContain("doesn't group them by place");
     expect(sent).not.toContain("PROPERTIES:");
+  });
+
+  it("a re-sent answer groups in the tenant's words, and never by place where there are none", async () => {
+    const resend = (co: string) =>
+      app.request("/api/directory/ask", {
+        method: "POST",
+        headers: h(co),
+        body: JSON.stringify({ filter: { ...resolveInterpretation({ ...emptyInterpretation(), kind: "customer" }, [], []).filter, groupBy: "property" } }),
+      });
+    expect((await json(await resend(BUILDER))).groups.map((g: any) => g.label)).toContain("No community");
+    expect((await json(await resend(HVAC))).groups).toEqual([]);
   });
 
   it("a builder: communities in the prompt and the chips", async () => {

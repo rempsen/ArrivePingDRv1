@@ -229,9 +229,18 @@ export default function AdminClients() {
   // (shared/directory-vocab.ts): an HVAC company's has none.
   const v: DirectoryVocab = directory.data?.vocab ?? props.data?.vocab ?? NO_PLACES;
   const placesOn = v.enabled;
+  // Once the server has said there are no places, drop every place-only
+  // control too: a view saved on another company's Directory (or before
+  // places were turned off) mustn't keep grouping, sorting or filtering by them.
+  const placesKnownOff = !!(directory.data?.vocab ?? props.data?.vocab) && !placesOn;
   useEffect(() => {
-    if (!placesOn && tab === "properties") setTab("all");
-  }, [placesOn, tab]);
+    if (!placesKnownOff) return;
+    if (tab === "properties") setTab("all");
+    if (groupBy === "property" || groupBy === "manager") setGroupBy("none");
+    if (sort === "property" || sort === "unit" || sort === "manager") setSort("name");
+    if (propertyId) setPropertyId("");
+    if (managerId) setManagerId("");
+  }, [placesKnownOff, tab, groupBy, sort, propertyId, managerId]);
 
   // An AI answer re-runs its filter (never the model) to sort, group or page.
   const askFilter: DirectoryFilter | null = ask

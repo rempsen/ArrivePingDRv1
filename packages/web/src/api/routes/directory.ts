@@ -26,6 +26,7 @@ import {
   DIRECTORY_GROUPS,
   DIRECTORY_KINDS,
   DIRECTORY_SORTS,
+  withoutPlaces,
   type DirectoryQuery,
 } from "../../shared/directory-query";
 import {
@@ -94,7 +95,8 @@ export const directoryRoutes = new Hono<AppEnv>()
     const cid = tenantId(c);
     const { rows, properties } = await loadDirectory(cid);
     const { vocab, labels } = await directoryVocabFor(cid, properties.length > 0);
-    const result = applyDirectoryQuery(rows, { ...parseDirectoryQuery(c.req.query()), labels });
+    const query = { ...parseDirectoryQuery(c.req.query()), labels };
+    const result = applyDirectoryQuery(rows, vocab.enabled ? query : withoutPlaces(query));
     return c.json({ ...result, propertyCount: properties.length, vocab }, 200);
   })
   .post("/assign", requireAdmin, jsonBody(AssignBody), async (c) => {
@@ -171,7 +173,7 @@ export const directoryRoutes = new Hono<AppEnv>()
       );
     }
     const filter = body.filter!;
-    const result = await runDirectoryFilter(cid, filter, { page: body.page, pageSize: body.pageSize, withIds: body.withIds }, tz);
+    const result = await runDirectoryFilter(cid, filter, { page: body.page, pageSize: body.pageSize, withIds: body.withIds }, { tz, words });
     const chips = await chipsForFilter(cid, filter, words);
     return c.json({ ...result, ask: { question: "", filter, chips, summary: "", notes: [] as string[], usedAI: false } }, 200);
   })
