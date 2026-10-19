@@ -15,6 +15,9 @@ import { tdb } from "../database/tenant";
 import { STAFF_OFFICE_ROLES, permissionFor } from "../lib/office-access";
 import { platformRoleOf, atLeast, type PlatformRole } from "../../services/platform-staff";
 import { noteTenantVisit } from "../../services/platform-audit";
+import { resolveActAs } from "../../services/act-as";
+import { deniedDuringActAs } from "../../shared/act-as";
+import { withRequestFacts } from "../lib/request-context";
 import { isFeatureOn } from "../../services/features";
 import { featureDef, featureForApiPath } from "../../shared/features";
 
@@ -222,6 +225,51 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     }
   }
   c.set("platformRole", platformRole);
+
+  // ---- Control Hub act-as ---------------------------------------------------
+  // A staff member signed in as one of a tenant's people (services/act-as.ts).
+  // The X-Act-As header names the session; it only counts for the staff
+  // member who started it, until it ends or runs out. From here on the
+  // request IS that person at that company, except for the writes nobody may
+  // make while acting as someone (shared/act-as.ts).
+  const actHeader = (c.req.header("X-Act-As") || c.req.header("x-act-as") || "").trim();
+  if (actHeader && platformRole) {
+    const r = await resolveActAs(actHeader, userId);
+    if (r.ok && (await platformMayOpen(platformRole, r.session.companyId))) {
+      const { session, target } = r;
+      const tu = target.user as Record<string, unknown> & { id: string; name: string; role?: string | null; permissions?: string | null; companyId?: string | null };
+      const tm = target.membership;
+      c.set("user", {
+        ...tu,
+        role: tm?.role ?? tu.role ?? "customer",
+        permissions: overrideAt({ membership: tm?.permissions, user: tu.permissions, companyId: session.companyId, homeCompany: tu.companyId }),
+        staffType: tm?.staffType ?? null,
+        managerId: tm?.managerId ?? null,
+        companyId: session.companyId,
+      } as unknown as typeof u);
+      c.set("memberships", await loadMemberships(tu.id));
+      c.set("companyId", session.companyId);
+      c.set("actAs", {
+        sessionId: session.id,
+        actorId: userId,
+        actorName: (u as { name?: string }).name ?? "",
+        targetUserId: tu.id,
+        targetName: tu.name,
+        companyId: session.companyId,
+        reason: session.reason,
+        expiresAt: new Date(session.expiresAt).toISOString(),
+      });
+      c.header("X-Act-As-Expires", new Date(session.expiresAt).toISOString());
+      const denied = deniedDuringActAs(c.req.method, c.req.path);
+      if (denied) {
+        return c.json({ error: { code: "act_as_blocked", message: `ArrivePing support can't change ${denied} while signed in as someone. Leave act-as first.` } }, 403);
+      }
+      return withRequestFacts({ supportActor: { id: userId, name: (u as { name?: string }).name ?? "", sessionId: session.id } }, () => next());
+    }
+    // Ended, expired or no longer allowed: carry on as the staff member and
+    // tell the browser to drop the header.
+    c.header("X-Act-As-Ended", r.ok ? "not_allowed" : r.reason);
+  }
 
   let companyId = homeCompany;
   if (requested) {

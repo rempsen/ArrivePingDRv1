@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { FullLoader } from "../../components/loader";
 import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
-import { Plus, Pencil, Trash2, UserCheck, Wallet, ScrollText, ShieldAlert } from "lucide-react";
+import { Plus, Pencil, Trash2, UserCheck, Wallet, ScrollText, ShieldAlert, LifeBuoy } from "lucide-react";
 
 const ACTION_META: Record<string, { icon: any; color: string }> = {
   create: { icon: Plus, color: "#22c55e" },
@@ -15,6 +15,9 @@ const ACTION_META: Record<string, { icon: any; color: string }> = {
   // Permission changes are the highest-stakes entry in the log — give them
   // their own icon/colour so they stand out from routine edits.
   role_change: { icon: ShieldAlert, color: "#f43f5e" },
+  // ArrivePing support signing in as someone here (Settings → Security can turn it off).
+  support_access: { icon: LifeBuoy, color: "#f97316" },
+  support_access_end: { icon: LifeBuoy, color: "#f97316" },
 };
 
 const fmt = (d: string) =>
@@ -67,6 +70,11 @@ export default function AdminAudit() {
                   </p>
                   <p className="text-[11px] text-slate-500">
                     {e.entityType.replace(/_/g, " ")} · {fmt(e.createdAt)}
+                    {e.supportActorName ? (
+                      <span className="ml-2 rounded-full bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">
+                        by ArrivePing support ({e.supportActorName})
+                      </span>
+                    ) : null}
                   </p>
                 </div>
               </div>

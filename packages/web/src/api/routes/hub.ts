@@ -26,6 +26,7 @@ import { clearFeatureOverride, invalidateFeatures, setFeatureOverride } from "..
 import { featureSummary, hubOverview, hubTenantDetail, listHubTenants } from "../../services/hub";
 import { listPlatformAudit, platformAudit } from "../../services/platform-audit";
 import { setTenantKind } from "../../services/tenant-kind";
+import { ActAsError, startActAs } from "../../services/act-as";
 import { FEATURES, TENANT_KINDS, TENANT_KIND_LABELS, featureDef, isFeatureKey, type TenantKind } from "../../shared/features";
 import { PLANS, PLAN_IDS } from "../../shared/plans";
 import { validateHubSettings } from "../../shared/hub-settings";
@@ -72,6 +73,13 @@ const BulkBody = z.object({
   enabled: z.boolean().nullable(),
   reason: z.string().trim().max(300).optional(),
   expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+});
+
+const ActAsBody = z.object({
+  targetUserId: z.string().min(1).max(120),
+  companyId: z.string().min(1).max(120),
+  reason: z.string().max(300),
+  minutes: z.number().int(),
 });
 
 const StaffBody = z.object({ email: z.string().trim().email().max(200), role: z.enum(PLATFORM_ROLES) });
@@ -255,6 +263,21 @@ export const hubRoutes = new Hono<AppEnv>()
     });
     const sessions = await sdb.select().from(schema.actAsSessions).orderBy(desc(schema.actAsSessions.startedAt)).limit(50);
     return c.json({ entries: rows, sessions });
+  })
+
+  // ── act-as ─────────────────────────────────────────────────────────────
+  // Start: the browser then sends X-Act-As on every request and opens the
+  // tenant as that person (middleware/auth.ts). Leaving is /api/act-as/end,
+  // which works from inside the session.
+  .post("/act-as", requirePlatform("sales"), jsonBody(ActAsBody), async (c) => {
+    const b = c.req.valid("json");
+    try {
+      const s = await startActAs({ actor: actorOf(c), role: c.get("platformRole")!, targetUserId: b.targetUserId, companyId: b.companyId, reason: b.reason, minutes: b.minutes });
+      return c.json({ ok: true, session: { id: s.id, companyId: s.companyId, targetName: s.targetName, expiresAt: s.expiresAt } });
+    } catch (e) {
+      if (e instanceof ActAsError) return c.json({ message: e.message, code: e.code }, e.status as 400);
+      throw e;
+    }
   })
 
   // ── team (the staff list) ──────────────────────────────────────────────

@@ -67,7 +67,7 @@ beforeAll(async () => {
   await db.insert(schema.user).values([
     { id: "hub-owner", name: "Dan R.", email: "hub-owner@nvc360.com", role: "superadmin", companyId: "default" },
     { id: "hub-other-owner", name: "Gregor", email: "hub-other-owner@nvc360.com", role: "superadmin", companyId: "default" },
-    { id: "hub-new", name: "Joel", email: "joel@nvc360.com", role: "admin", companyId: "default" },
+    { id: "hub-new", name: "Joel", email: "hub-joel@nvc360.com", role: "admin", companyId: "default" },
     { id: "hub-acme-admin", name: "Alex Admin", email: "alex@acme.test", role: "admin", companyId: "hub-cust" },
   ] as never);
   await db.insert(schema.memberships).values({ id: "hub-m1", userId: "hub-acme-admin", companyId: "hub-cust", role: "admin", status: "active" } as never);
@@ -86,10 +86,12 @@ describe("access", () => {
     const o = await req("GET", "/overview", "sales");
     expect(o.status).toBe(200);
     const body = (await o.json()) as { kpis: { customers: number; demos: number } };
-    expect(body.kpis.customers).toBe(1);
-    expect(body.kpis.demos).toBe(1);
+    // Other test files share this in-memory database, so count at least ours.
+    expect(body.kpis.customers).toBeGreaterThanOrEqual(1);
+    expect(body.kpis.demos).toBeGreaterThanOrEqual(1);
     const t = (await (await req("GET", "/tenants", "sales")).json()) as { tenants: { id: string; kind: string }[] };
-    expect(t.tenants.map((x) => x.id).sort()).toEqual(["hub-cust", "hub-demo"]);
+    expect(t.tenants.find((x) => x.id === "hub-cust")?.kind).toBe("customer");
+    expect(t.tenants.find((x) => x.id === "hub-demo")?.kind).toBe("demo");
   });
   it("shows sales a customer's summary but not its people", async () => {
     const d = (await (await req("GET", "/tenants/hub-cust", "sales")).json()) as { readOnly: boolean; people: unknown[] };
@@ -131,8 +133,10 @@ describe("feature switches", () => {
     expect((await req("POST", "/features/dispatch.map_v2/bulk", "staff", body)).status).toBe(403);
     const r = await req("POST", "/features/dispatch.map_v2/bulk", "owner", body);
     expect(((await r.json()) as { changed: number }).changed).toBe(2);
-    const f = (await (await req("GET", "/features", "sales")).json()) as { features: { key: string; onCount: number; overrides: unknown[] }[] };
-    expect(f.features.find((x) => x.key === "dispatch.map_v2")).toMatchObject({ onCount: 2 });
+    const f = (await (await req("GET", "/features", "sales")).json()) as { features: { key: string; onCount: number; overrides: { companyId: string; enabled: boolean }[] }[] };
+    const map = f.features.find((x) => x.key === "dispatch.map_v2")!;
+    expect(map.overrides.filter((o) => o.companyId.startsWith("hub-")).map((o) => o.companyId).sort()).toEqual(["hub-cust", "hub-demo"]);
+    expect(map.onCount).toBeGreaterThanOrEqual(2);
     await req("POST", "/features/dispatch.map_v2/bulk", "owner", { companyIds: ["hub-cust", "hub-demo"], enabled: null });
   });
 });
@@ -187,12 +191,13 @@ describe("tenant changes", () => {
 
 describe("staff list", () => {
   it("is managed by owners only", async () => {
-    expect((await req("POST", "/team", "staff", { email: "joel@nvc360.com", role: "sales" })).status).toBe(403);
-    const r = await req("POST", "/team", "owner", { email: "joel@nvc360.com", role: "sales" });
+    expect((await req("POST", "/team", "staff", { email: "hub-joel@nvc360.com", role: "sales" })).status).toBe(403);
+    const r = await req("POST", "/team", "owner", { email: "hub-joel@nvc360.com", role: "sales" });
     expect(r.status).toBe(200);
-    const list = (await (await req("GET", "/team", "staff")).json()) as { staff: { email: string; role: string }[] };
-    expect(list.staff.find((s) => s.email === "joel@nvc360.com")?.role).toBe("sales");
-    expect((await req("DELETE", "/team/hub-new", "owner")).status).toBe(200);
+    const { member } = (await r.json()) as { member: { userId: string } };
+    const list = (await (await req("GET", "/team", "staff")).json()) as { staff: { userId: string; role: string }[] };
+    expect(list.staff.find((s) => s.userId === member.userId)?.role).toBe("sales");
+    expect((await req("DELETE", `/team/${member.userId}`, "owner")).status).toBe(200);
   });
   it("won't let an owner remove themselves", async () => {
     expect((await req("DELETE", "/team/hub-owner", "owner")).status).toBe(400);

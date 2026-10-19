@@ -72,6 +72,9 @@ beforeEach(() => {
 
 describe("with an empty staff list", () => {
   it("every super admin is an owner and can open any tenant", async () => {
+    // Test files share one in-memory database: start from an empty list.
+    await sdb.delete(schema.platformStaff);
+    staff.invalidateRoster();
     expect(await who(u("ps-off"), "ps-cust")).toEqual({ companyId: "ps-cust", role: "superadmin", platformRole: "owner" });
   });
 });

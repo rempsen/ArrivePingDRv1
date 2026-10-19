@@ -2,6 +2,7 @@ import { hc } from "hono/client";
 import type { AppType } from "../../api";
 import { getToken } from "./auth";
 import { ApiError, messageFromBody } from "./api-error";
+import { actAsEnded } from "./act-as";
 
 /**
  * Shared auth/tenant headers for every API request.
@@ -17,6 +18,10 @@ export function apiHeaders(): Record<string, string> {
       ? localStorage.getItem("active_company")
       : null;
   if (active) h["X-Company-Id"] = active;
+  // Control Hub act-as (lib/act-as.ts): the session this browser is acting
+  // under. The server checks it on every request and ignores it once over.
+  const act = typeof localStorage !== "undefined" ? localStorage.getItem("act_as_session") : null;
+  if (act) h["X-Act-As"] = act;
   return h;
 }
 
@@ -43,6 +48,9 @@ export async function apiFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const res = await fetch(input, init);
+  // The server ended an act-as session (time up, or the company said no):
+  // drop it so the next request is the staff member again.
+  if (res.headers.get("X-Act-As-Ended")) actAsEnded(res.headers.get("X-Act-As-Ended")!);
   if (res.ok) return res;
 
   // Read the error body once, defensively — it may be JSON, text, or empty.

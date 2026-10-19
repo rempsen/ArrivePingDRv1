@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import * as schema from "../database/schema";
 import { db } from "../database";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
+import { isAdminRole } from "../lib/permissions";
+import { invalidateSupportAccess } from "../../services/act-as";
 import { audit } from "../lib/audit";
 import { putObject } from "../lib/storage";
 import type { AppEnv } from "../env";
@@ -127,6 +129,27 @@ export const settingsRoutes = new Hono<AppEnv>()
     });
     const settings = await getOrInit(c);
     return c.json({ result: r, settings }, 200);
+  })
+  // ---- ArrivePing support access (Control Hub act-as) --------------------
+  // Whether NVC360 support may sign in as this company's people to help.
+  // Admins only; never changeable while support is signed in as someone.
+  .get("/support-access", requireAdmin, async (c) => {
+    const existing = await getOrInit(c);
+    return c.json({ allow: (existing as { allowSupportAccess?: boolean }).allowSupportAccess ?? true }, 200);
+  })
+  .put("/support-access", requireAdmin, jsonBody(z.object({ allow: z.boolean() })), async (c) => {
+    const me = c.get("user") as SessionUser & { role?: string };
+    if (!isAdminRole(me?.role)) return c.json({ message: "Only an admin can change this." }, 403);
+    const { allow } = c.req.valid("json");
+    await getOrInit(c);
+    await tx(c).update(schema.companySettings, { allowSupportAccess: allow } as never, undefined);
+    invalidateSupportAccess(tenantId(c));
+    await audit({
+      actorId: me?.id, actorName: me?.name, action: "update",
+      entityType: "company_settings", entityId: tenantId(c),
+      summary: allow ? "Allowed ArrivePing support to sign in as team members" : "Stopped ArrivePing support from signing in as team members",
+    });
+    return c.json({ allow }, 200);
   })
   .put("/", requireAdmin, async (c) => {
     const me = c.get("user") as SessionUser;
