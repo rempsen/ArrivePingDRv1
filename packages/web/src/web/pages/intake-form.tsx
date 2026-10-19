@@ -207,13 +207,15 @@ export default function IntakeForm() {
     const fType = f.type || CORE_KEY_TYPES[f.key] || "text";
     f = { ...f, type: fType };
 
-    // serviceType maps to the live services dropdown
+    // serviceType maps to the services THIS form offers (the server filters).
+    // With one or none there is nothing to choose: the server books the
+    // form's own service, so the question is left off.
     if (f.key === "serviceType") {
-      if (!services.length) return null;
+      if (services.length < 2) return null;
       return (
         <Field key={f.id} label={f.label} required={req}>
           <select className={inputCls} style={ring(brand)} value={v.serviceId || ""} onChange={(e) => set("serviceId", e.target.value)} required={req}>
-            <option value="">Select…</option>
+            <option value="">{f.placeholder || "Select…"}</option>
             {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </Field>
@@ -226,6 +228,7 @@ export default function IntakeForm() {
             source="public"
             form={{ companyId, slug }}
             theme="light"
+            {...(f.placeholder ? { placeholder: f.placeholder } : {})}
             value={v[f.key] || ""}
             inputClassName={inputCls}
             inputStyle={ring(brand)}

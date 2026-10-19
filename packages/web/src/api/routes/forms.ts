@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
+import { db } from "../database";
 import { requireAdmin, tx } from "../middleware/auth";
 import { audit } from "../lib/audit";
 import { putObject } from "../lib/storage";
 import { publicOrigin } from "../lib/request-origin";
 import type { AppEnv } from "../env";
+import { cleanServiceIds } from "../../shared/intake-services";
 
 type SessionUser = { id: string; name?: string };
 
@@ -64,7 +66,7 @@ const CORE_KEY_TYPES: Record<string, IntakeFieldType> = {
   serviceType: "select", preferredAt: "date", notes: "textarea", photo: "file",
 };
 
-function normalizeFields(raw: any): any[] {
+export function normalizeFields(raw: any): any[] {
   const arr = Array.isArray(raw) ? raw : [];
   return arr.map((f: any, i: number) => {
     const fixedDef = INTAKE_FIELD_CATALOG.find((d) => d.key === f.key);
@@ -81,6 +83,8 @@ function normalizeFields(raw: any): any[] {
       width: f.width === "half" ? "half" : "full",
       fixed: (!!fixedDef && "fixed" in fixedDef && !!fixedDef.fixed) || !!f.fixed,
       core: !!fixedDef, // maps to a built-in pipeline field
+      // The services this form's Service type dropdown offers (empty = all).
+      ...(f.key === "serviceType" ? { serviceIds: cleanServiceIds(f.serviceIds) } : {}),
     };
   });
 }
@@ -138,6 +142,34 @@ export const formsRoutes = new Hono<AppEnv>()
     const key = `intake-form-logos/${crypto.randomUUID()}.${ext}`;
     const stored = await putObject(key, Buffer.from(await file.arrayBuffer()), file.type || "image/png");
     return c.json({ url: stored.url }, 200);
+  })
+
+  // Which of the company's services a form should offer — the editor's
+  // "Suggest" button. Reads the form as it stands in the editor (title, intro,
+  // questions), saves nothing: the admin reviews the ticks and saves.
+  .post("/suggest-services", requireAdmin, async (c) => {
+    const b = await c.req.json().catch(() => ({}));
+    const t = tx(c);
+    const library = (await t.select(schema.services, eq(schema.services.active, true)))
+      .map((s) => ({ id: s.id, name: s.name, category: s.category }));
+    if (library.length < 2) return c.json({ message: "Add at least two services before narrowing a form down." }, 400);
+    const [company] = await db.select().from(schema.companies).where(eq(schema.companies.id, t.companyId)).limit(1);
+    const cs = await t.selectOne(schema.companySettings);
+    // Dynamic: form-scout imports this module's field catalog.
+    const { suggestFormServices } = await import("../../services/form-scout");
+    const picked = await suggestFormServices({
+      companyName: cs?.name || company?.name || "",
+      industry: company?.industry || null,
+      industryOther: company?.industryOther || null,
+      form: {
+        title: String(b.title ?? "").slice(0, 200),
+        intro: String(b.intro ?? "").slice(0, 1000),
+        fieldLabels: (Array.isArray(b.fieldLabels) ? b.fieldLabels : []).map((x: unknown) => String(x ?? "").slice(0, 120)).slice(0, 40),
+      },
+      library,
+    });
+    if (!picked) return c.json({ message: "Couldn't suggest services right now. Tick them by hand, or try again." }, 503);
+    return c.json(picked, 200);
   })
 
   // list forms for the acting tenant

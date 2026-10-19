@@ -3,14 +3,22 @@
  * brand-new tenant during provisioning ("Grab Brand Assets" onboarding).
  *
  * Given what we learned about the company (name, services, description,
- * website, worker-noun), it asks the text model to design starter forms that
- * match how THAT industry actually intakes work — picking sensible fields,
- * titles, intros and success messages.
+ * website, worker-noun) AND the service library just seeded for it, it asks
+ * the text model to design starter forms that match how THAT industry actually
+ * intakes work: sensible fields worded for the form, titles, intros, success
+ * messages, and which of the company's real services each form offers.
+ *
+ * That last part is what a form needs to make decisions with. Each form now
+ * names the services a visitor of that form could be asking for (a leasing
+ * inquiry offers leasing services, never an owner NTE review) and the one a
+ * submission is booked under when the visitor doesn't choose. The names are
+ * constrained to the library, so they map back to real service ids.
  *
  * Field keys are constrained to the platform's INTAKE_FIELD_CATALOG so every
  * generated field maps to a real, renderable input. Everything degrades
- * gracefully: if the model is unavailable or returns junk, we fall back to a
- * single generic "Request Service" form so provisioning never blocks.
+ * gracefully: if the model is unavailable or returns junk, we fall back to
+ * generic forms (which offer every service, as before) so provisioning never
+ * blocks.
  */
 import { generateObject } from "ai";
 import { z } from "zod";
@@ -43,9 +51,14 @@ const FIELD_LABEL: Record<string, string> = Object.fromEntries(
 // name/email/phone/address are always present & required on every form.
 const ALWAYS_REQUIRED = new Set(["name", "email", "phone", "address"]);
 
+/** Longest label / placeholder the model may set (the form is read on a phone). */
+const LABEL_MAX = 60;
+const PLACEHOLDER_MAX = 120;
+
 export interface StarterFormField {
   key: string;
   label: string;
+  placeholder?: string;
   enabled: boolean;
   required: boolean;
   fixed?: boolean;
@@ -56,6 +69,16 @@ export interface StarterForm {
   intro: string;
   successMessage: string;
   fields: StarterFormField[];
+  /** Library services this form offers, by exact name. Empty = every service. */
+  serviceNames: string[];
+  /** The service a submission is booked under when the visitor doesn't pick one. */
+  defaultServiceName: string;
+}
+
+/** A service in the tenant's library, as the scout sees it. */
+export interface LibraryService {
+  name: string;
+  category: string;
 }
 
 export interface FormScoutInput {
@@ -76,6 +99,9 @@ export interface FormScoutInput {
   // Verbatim excerpts of the tenant's own website (item D) — when present
   // this is the PRIMARY source; the ICP preset becomes the fallback.
   siteExcerpts?: string | null;
+  // The service library seeded for this tenant (exact names). When present,
+  // each form picks the services it offers from it.
+  library?: LibraryService[] | null;
 }
 
 const slugify = (s: string) =>
@@ -86,48 +112,151 @@ const slugify = (s: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 48) || "intake";
 
-const FormSchema = z.object({
-  forms: z
-    .array(
-      z.object({
-        title: z
-          .string()
-          .describe("Short, customer-facing form title, e.g. 'Request a Roofing Estimate'"),
-        intro: z
-          .string()
-          .describe("1-2 sentence intro shown atop the form, friendly and on-brand"),
-        successMessage: z
-          .string()
-          .describe("Confirmation message shown after submission"),
-        fieldKeys: z
-          .array(z.enum(FIELD_KEYS as [string, ...string[]]))
-          .describe(
-            "Which catalog fields this specific form should collect. Always include name, email, phone, address. Add serviceType, preferredAt, notes, photo only when they make sense for this form's purpose.",
+/** Unique, non-empty library names in library order. */
+export function libraryNames(library: readonly LibraryService[] | null | undefined): string[] {
+  const out: string[] = [];
+  for (const s of library ?? []) {
+    const n = (s?.name || "").trim();
+    if (n && !out.includes(n)) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * The rules for which services a form offers. Shared by onboarding and the
+ * form editor's "Suggest" button so both pick the same way.
+ */
+export const SERVICE_PICK_RULES = `- Offer ONLY the services a person filling in this particular form could be asking for. A leasing or viewing inquiry offers leasing / viewing services; a maintenance or repair request offers repair and work-order services; a quote request offers the services that get quoted.
+- Never offer office-side work on a customer-facing form: approvals, accounting or financial reporting, compliance / insurance / certificate checks, internal reviews, vendor management. People don't request those from a public web form.
+- If exactly one service fits, offer just that one: the dropdown is then hidden and every submission is booked under it.
+- The default service is the one a submission is booked under when the visitor doesn't choose: the most common request for this form. It must be one of the offered services.`;
+
+/** The model's output schema, with service names constrained to the library. */
+function formSchema(names: string[]) {
+  const nameEnum = names.length ? z.enum(names as [string, ...string[]]) : null;
+  const form = z.object({
+    title: z
+      .string()
+      .describe("Short, customer-facing form title, e.g. 'Request a Roofing Estimate'"),
+    intro: z
+      .string()
+      .describe("1-2 sentence intro shown atop the form, friendly and on-brand"),
+    successMessage: z
+      .string()
+      .describe("Confirmation message shown after submission"),
+    fieldKeys: z
+      .array(z.enum(FIELD_KEYS as [string, ...string[]]))
+      .describe(
+        "Which catalog fields this specific form should collect. Always include name, email, phone, address. Add serviceType, preferredAt, notes, photo only when they make sense for this form's purpose.",
+      ),
+    requiredKeys: z
+      .array(z.enum(FIELD_KEYS as [string, ...string[]]))
+      .describe(
+        "Subset of fieldKeys that are mandatory. name/email/phone/address are always required.",
+      ),
+    fieldCopy: z
+      .array(
+        z.object({
+          key: z.enum(FIELD_KEYS as [string, ...string[]]),
+          label: z.string().describe(`The question as this form asks it, under ${LABEL_MAX} characters`),
+          placeholder: z.string().describe(`Example or hint shown inside the input, under ${PLACEHOLDER_MAX} characters; "" for none`),
+        }),
+      )
+      .describe("Wording for each field in fieldKeys, written for this form's purpose."),
+    ...(nameEnum
+      ? {
+          serviceNames: z
+            .array(nameEnum)
+            .describe("The company's services this form offers in its Service type dropdown (exact names from the SERVICE LIBRARY)."),
+          defaultServiceName: nameEnum.describe(
+            "The service a submission is booked under when the visitor doesn't pick one. One of serviceNames.",
           ),
-        requiredKeys: z
-          .array(z.enum(FIELD_KEYS as [string, ...string[]]))
-          .describe(
-            "Subset of fieldKeys that are mandatory. name/email/phone/address are always required.",
-          ),
-      }),
-    )
-    .min(2)
-    .max(3)
-    .describe("2 or 3 distinct starter intake forms tailored to this company's work"),
-});
+        }
+      : {}),
+  });
+  return z.object({
+    forms: z.array(form).min(2).max(3).describe("2 or 3 distinct starter intake forms tailored to this company's work"),
+  });
+}
+
+type CopyMap = Record<string, { label?: string; placeholder?: string }>;
 
 /** Build the platform field array from a model's key picks. */
-function toFields(fieldKeys: string[], requiredKeys: string[]): StarterFormField[] {
+function toFields(fieldKeys: string[], requiredKeys: string[], copy: CopyMap = {}): StarterFormField[] {
   const enabled = new Set<string>([...ALWAYS_REQUIRED, ...fieldKeys]);
   const required = new Set<string>([...ALWAYS_REQUIRED, ...requiredKeys]);
   // preserve catalog order; only emit catalog fields
-  return INTAKE_FIELD_CATALOG.filter((f) => enabled.has(f.key)).map((f) => ({
-    key: f.key,
-    label: FIELD_LABEL[f.key] || f.label,
-    enabled: true,
-    required: required.has(f.key),
-    ...(f.key === "name" ? { fixed: true } : {}),
-  }));
+  return INTAKE_FIELD_CATALOG.filter((f) => enabled.has(f.key)).map((f) => {
+    const label = (copy[f.key]?.label || "").trim().slice(0, LABEL_MAX);
+    const placeholder = (copy[f.key]?.placeholder || "").trim().slice(0, PLACEHOLDER_MAX);
+    return {
+      key: f.key,
+      label: label || FIELD_LABEL[f.key] || f.label,
+      ...(placeholder ? { placeholder } : {}),
+      enabled: true,
+      required: required.has(f.key),
+      ...(f.key === "name" ? { fixed: true } : {}),
+    };
+  });
+}
+
+/**
+ * Settle a model-designed form against the library: offered services limited
+ * to real library names, a default that is one of them, and a Service type
+ * field that is always present (it carries the form's service list) but only
+ * shown when there are two or more services to choose between.
+ */
+export function settleServices(
+  form: Omit<StarterForm, "serviceNames" | "defaultServiceName">,
+  picked: { serviceNames?: readonly string[] | null; defaultServiceName?: string | null },
+  names: readonly string[],
+): StarterForm {
+  const known = new Set(names);
+  const serviceNames: string[] = [];
+  for (const n of picked.serviceNames ?? []) {
+    if (known.has(n) && !serviceNames.includes(n)) serviceNames.push(n);
+  }
+  const dflt = picked.defaultServiceName && known.has(picked.defaultServiceName) ? picked.defaultServiceName : "";
+  // The default is always offered; with no list, the default alone is the list.
+  if (dflt && serviceNames.length && !serviceNames.includes(dflt)) serviceNames.unshift(dflt);
+  const defaultServiceName = dflt || serviceNames[0] || "";
+  if (!serviceNames.length && defaultServiceName) serviceNames.push(defaultServiceName);
+
+  let fields = form.fields;
+  if (names.length) {
+    const showDropdown = serviceNames.length >= 2;
+    const existing = fields.find((f) => f.key === "serviceType");
+    if (existing) {
+      fields = fields.map((f) => (f.key === "serviceType" ? { ...f, enabled: showDropdown && f.enabled } : f));
+    } else {
+      const def = INTAKE_FIELD_CATALOG.find((f) => f.key === "serviceType")!;
+      const at = fields.findIndex((f) => f.key === "address");
+      const svcField: StarterFormField = { key: "serviceType", label: def.label, enabled: showDropdown, required: false };
+      fields = [...fields.slice(0, at + 1), svcField, ...fields.slice(at + 1)];
+    }
+  }
+  return { ...form, fields, serviceNames, defaultServiceName };
+}
+
+/**
+ * A starter form as stored: its services (by name) become ids on the Service
+ * type field, and its default becomes the form's defaultServiceId. Names the
+ * library doesn't have are dropped; no list stays "every service".
+ */
+export function starterFormServiceIds(
+  form: Pick<StarterForm, "fields" | "serviceNames" | "defaultServiceName">,
+  library: ReadonlyArray<{ id: string; name: string }>,
+): { fields: Array<StarterFormField & { serviceIds?: string[] }>; defaultServiceId: string } {
+  const idByName = new Map<string, string>();
+  for (const s of library) {
+    const n = (s.name || "").trim();
+    if (n && !idByName.has(n)) idByName.set(n, s.id);
+  }
+  const serviceIds = form.serviceNames.map((n) => idByName.get(n)).filter((x): x is string => !!x);
+  return {
+    fields: form.fields.map((f) => (f.key === "serviceType" ? { ...f, serviceIds } : f)),
+    defaultServiceId: idByName.get(form.defaultServiceName) ?? "",
+  };
 }
 
 /** A safe single-form fallback so provisioning never fails. */
@@ -141,6 +270,8 @@ export function fallbackStarterForms(input: FormScoutInput): StarterForm[] {
       successMessage:
         "Thanks! We've received your request and will reach out shortly.",
       fields: toFields(allKeys, ["serviceType"]),
+      serviceNames: [],
+      defaultServiceName: "",
     },
     {
       title: "Get a Free Quote",
@@ -152,6 +283,8 @@ export function fallbackStarterForms(input: FormScoutInput): StarterForm[] {
         ["name", "email", "phone", "address", "serviceType", "notes", "photo"],
         ["serviceType"],
       ),
+      serviceNames: [],
+      defaultServiceName: "",
     },
   ];
 }
@@ -183,11 +316,24 @@ export async function scoutStarterForms(
     : "";
   const research = knowledgeBlock(input.knowledge);
   const site = siteBlock(input.siteExcerpts);
+  const names = libraryNames(input.library);
+  const libraryBlock = names.length
+    ? `\n\nSERVICE LIBRARY (the company's bookable services, exact names — every submission becomes a job under ONE of these):\n${(input.library ?? [])
+        .filter((s) => (s.name || "").trim())
+        .map((s) => `  - ${s.name.trim()} (${s.category || "General"})`)
+        .join("\n")}`
+    : "";
+  const serviceRules = names.length
+    ? `
+- serviceNames / defaultServiceName — which services from the SERVICE LIBRARY this form offers:
+${SERVICE_PICK_RULES}
+- Include serviceType in fieldKeys only when the form offers two or more services.`
+    : "";
 
   try {
     const { object } = await generateObject({
       model: gateway(MODELS.text),
-      schema: FormSchema,
+      schema: formSchema(names),
       prompt: `You are onboarding a service business into a dispatch & booking platform and must design its starter customer intake forms (the public web forms prospects fill out to request work).
 
 PRIMARY INDUSTRY (ICP): ${industryLine}
@@ -196,7 +342,7 @@ WEBSITE: ${input.website || "(unknown)"}
 SERVICES OFFERED: ${servicesLine}
 DESCRIPTION: ${input.description || "(none)"}
 THEY CALL THEIR FIELD WORKERS: ${noun}
-THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedCategories}${research}${site}
+THEY CALL THE PEOPLE THEY SERVE: ${customerNoun}${toneLine}${suggestedCategories}${research}${site}${libraryBlock}
 
 ${sourcePriority(
         Boolean(site),
@@ -216,23 +362,29 @@ For each form:
 - Choose ONLY fields from this catalog (use the exact keys): ${FIELD_KEYS.join(", ")}.
 - name, email, phone, address are ALWAYS included and required. Add serviceType, preferredAt, notes, photo only when they fit that form's purpose (e.g. include photo for damage/inspection forms; include preferredAt for scheduling/delivery forms).
 - CONVERSION vs. FIRST-VISIT-EFFECTIVENESS tradeoff: shorter forms convert better (fewer required fields = more submissions), but for repair/service-call industries, capturing a bit more diagnostic detail up front (in "notes", or via serviceType) measurably raises first-time-fix rate and avoids a wasted second truck roll — ACCA and field-service research both treat this as a real efficiency lever, not just a data-collection nicety. Balance the two: keep required fields minimal, but make the notes/serviceType prompt text explicitly ask for the 1-2 diagnostic details that matter most for this trade (e.g. "What's the make/model and what's it doing?" for an appliance/HVAC repair form; "What symptoms are you noticing?" for a request-emergency-repair form). Don't add this friction to forms that don't need it (e.g. a simple delivery-scheduling or quote-request form).
+- fieldCopy: word each field for THIS form (label + placeholder). The address is where the work or visit happens — it is checked against the company's service area and becomes the job's location on the map — so label it that way ("Unit address", "Property address", "Which building are you interested in?"), never as the visitor's mailing address. The notes field asks for the 1-2 details this form's request needs. For serviceType, label it as the choice this form offers ("What do you need?", "What can we help with?").${serviceRules}
 - Write a warm, on-brand success message.
 
 Tailor everything to ${input.name}'s actual line of work. Avoid generic duplicates — each form should serve a different customer intent.`,
     });
 
-    const forms = (object.forms || [])
+    const forms = ((object as any).forms || [])
       .slice(0, 3)
-      .map((f) => ({
-        title: (f.title || "Request Service").trim(),
-        slug: slugify(f.title),
-        intro: (f.intro || "").trim(),
-        successMessage:
-          (f.successMessage || "").trim() ||
-          "Thanks! We've received your request and will reach out shortly.",
-        fields: toFields(f.fieldKeys || [], f.requiredKeys || []),
-      }))
-      .filter((f) => f.fields.length >= 4); // sanity: must keep core contact fields
+      .map((f: any) => {
+        const copy: CopyMap = {};
+        for (const c of f.fieldCopy || []) if (c?.key) copy[c.key] = { label: c.label, placeholder: c.placeholder };
+        const base = {
+          title: (f.title || "Request Service").trim(),
+          slug: slugify(f.title),
+          intro: (f.intro || "").trim(),
+          successMessage:
+            (f.successMessage || "").trim() ||
+            "Thanks! We've received your request and will reach out shortly.",
+          fields: toFields(f.fieldKeys || [], f.requiredKeys || [], copy),
+        };
+        return settleServices(base, { serviceNames: f.serviceNames, defaultServiceName: f.defaultServiceName }, names);
+      })
+      .filter((f: StarterForm) => f.fields.filter((x) => x.enabled).length >= 4); // sanity: must keep core contact fields
 
     if (forms.length < 2) {
       log.warn("form-scout: model returned too few usable forms; using fallback", {
@@ -244,7 +396,7 @@ Tailor everything to ${input.name}'s actual line of work. Avoid generic duplicat
 
     // de-dupe slugs within the batch
     const seen = new Set<string>();
-    for (const f of forms) {
+    for (const f of forms as StarterForm[]) {
       let s = f.slug;
       let i = 2;
       while (seen.has(s)) s = `${f.slug}-${i++}`;
@@ -259,5 +411,59 @@ Tailor everything to ${input.name}'s actual line of work. Avoid generic duplicat
       err: String(e),
     });
     return fallbackStarterForms(input);
+  }
+}
+
+/**
+ * Which of a company's services an existing form should offer — the form
+ * editor's "Suggest" button. Returns null when the model can't answer, so the
+ * editor says so instead of guessing.
+ */
+export async function suggestFormServices(input: {
+  companyName: string;
+  industry?: string | null;
+  industryOther?: string | null;
+  form: { title: string; intro: string; fieldLabels: string[] };
+  library: Array<{ id: string; name: string; category: string }>;
+}): Promise<{ serviceIds: string[]; defaultServiceId: string } | null> {
+  const names = libraryNames(input.library);
+  if (!names.length) return null;
+  const preset = getIndustryPreset(input.industry);
+  const industry = preset?.label || (input.industry === "other" ? input.industryOther : "") || "(not specified)";
+  const nameEnum = z.enum(names as [string, ...string[]]);
+  try {
+    const { object } = await generateObject({
+      model: gateway(MODELS.text),
+      schema: z.object({
+        serviceNames: z.array(nameEnum).describe("The services this form offers (exact names from the SERVICE LIBRARY)."),
+        defaultServiceName: nameEnum.describe("The service a submission is booked under when the visitor doesn't pick one."),
+      }),
+      prompt: `A service company's public intake form needs its Service type dropdown narrowed to the services that fit the form.
+
+COMPANY: ${input.companyName}
+INDUSTRY: ${industry}
+FORM TITLE: ${input.form.title}
+FORM INTRO: ${input.form.intro || "(none)"}
+FORM QUESTIONS: ${input.form.fieldLabels.join("; ") || "(none)"}
+
+SERVICE LIBRARY (exact names):
+${input.library.map((s) => `  - ${s.name} (${s.category || "General"})`).join("\n")}
+
+Pick the services this form offers and its default:
+${SERVICE_PICK_RULES}`,
+    });
+    const settled = settleServices(
+      { title: "", slug: "", intro: "", successMessage: "", fields: [] },
+      object,
+      names,
+    );
+    const idOf = new Map<string, string>();
+    for (const s of input.library) if (!idOf.has(s.name.trim())) idOf.set(s.name.trim(), s.id);
+    const serviceIds = settled.serviceNames.map((n) => idOf.get(n)).filter((x): x is string => !!x);
+    const defaultServiceId = idOf.get(settled.defaultServiceName) || serviceIds[0] || "";
+    return serviceIds.length ? { serviceIds, defaultServiceId } : null;
+  } catch (e) {
+    log.warn("form-scout: service suggestion failed", { company: input.companyName, err: String(e) });
+    return null;
   }
 }
