@@ -172,10 +172,10 @@ function LogoCheckCard({ d }: { d: TenantDetail }) {
   const recheck = useMutation({
     mutationFn: () => hub<{ ok: boolean; auto: string; plate: string }>(`/tenants/${encodeURIComponent(d.company.id)}/logo-check`, { method: "POST" }),
     onSuccess: (r) => {
-      toast.success(r.auto ? `Logo reads best on the ${r.auto} plate.` : "Couldn't read that logo file; the browser will decide.");
+      toast({ kind: "success", message: r.auto ? `Logo reads best on the ${r.auto} plate.` : "Couldn't read that logo file; the browser will decide." });
       void qc.invalidateQueries({ queryKey: ["hub", "tenant", d.company.id] });
     },
-    onError: () => toast.error("Couldn't check the logo."),
+    onError: () => toast({ kind: "error", message: "Couldn't check the logo." }),
   });
   const verdict = !lc.hasLogo
     ? { tone: "warn", text: "No logo yet. The sidebar shows a monogram until one is added." }

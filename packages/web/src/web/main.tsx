@@ -5,10 +5,13 @@ import "./styles.css";
 import App from "./app.tsx";
 import { initSentry, reportError } from "./lib/sentry";
 import { installGlobalErrorHandlers } from "./lib/global-errors";
+import { installEffectGuard } from "./lib/effect-guard";
 
 // Crash reporting first, so anything that blows up during boot is still caught.
 initSentry();
 installGlobalErrorHandlers();
+// Before the first render: a stray non-function effect return must not crash a page on unmount.
+installEffectGuard();
 
 // NOTE: the QueryClientProvider lives inside <App> (see components/provider.tsx)
 // as a single shared client. There used to be a second QueryClient created here
