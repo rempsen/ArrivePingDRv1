@@ -513,7 +513,7 @@ function CardForm({ setupIntentId, onDone }: { setupIntentId: string; onDone: ()
       <button
         type="submit"
         disabled={!stripe || busy}
-        className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white disabled:opacity-60"
+        className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Use this card
       </button>
@@ -545,7 +545,7 @@ function ConfirmModal({
         <h3 className="text-lg font-extrabold text-white">{title}</h3>
         <p className="mt-2 text-sm text-slate-300">{body}</p>
         <div className="mt-5 flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/15 py-2.5 text-sm font-semibold text-white hover:bg-white/5">
+          <button type="button" onClick={onClose} className="nvc-btn flex-1 border border-white/15 text-white hover:bg-white/5">
             Keep my plan
           </button>
           <button
@@ -553,7 +553,7 @@ function ConfirmModal({
             onClick={onConfirm}
             disabled={busy}
             className={cn(
-              "flex-1 rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-60",
+              "nvc-btn flex-1 text-white",
               tone === "danger" ? "bg-rose-600 hover:bg-rose-500" : "bg-amber-600 hover:bg-amber-500",
             )}
           >
@@ -596,14 +596,14 @@ function CloseAccountModal({ onClose }: { onClose: () => void }) {
         <input aria-label="Company name" className={cn(inputCls, "mt-4")} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Company name" />
         {err && <p className="mt-2 text-sm text-red-400">{err}</p>}
         <div className="mt-5 flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/15 py-2.5 text-sm font-semibold text-white hover:bg-white/5">
+          <button type="button" onClick={onClose} className="nvc-btn flex-1 border border-white/15 text-white hover:bg-white/5">
             Never mind
           </button>
           <button
             type="button"
             onClick={go}
             disabled={busy || !typed.trim()}
-            className="flex-1 rounded-lg bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
+            className="nvc-btn flex-1 bg-rose-600 text-white hover:bg-rose-500"
           >
             {busy ? "Closing…" : "Close my account"}
           </button>

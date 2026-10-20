@@ -214,7 +214,7 @@ export function RateModelEditor({
                   type="button"
                   onClick={() => set({ freeMinutes: min })}
                   className={[
-                    "flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-all",
+                    "nvc-btn nvc-btn-xs flex-1 border",
                     (rm.freeMinutes || 0) === min
                       ? "border-brand/60 bg-brand/20 text-brand"
                       : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10",

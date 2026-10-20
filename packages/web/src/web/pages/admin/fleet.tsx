@@ -498,20 +498,20 @@ export default function FleetPage() {
               {active.phone && (
                 <a
                   href={`tel:${active.phone}`}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                  className="nvc-btn w-full bg-white/5 text-slate-200 hover:bg-white/10"
                 >
                   <Phone className="h-4 w-4" /> Call
                 </a>
               )}
               <button
                 onClick={() => setSmsFor(active)}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                className="nvc-btn w-full bg-white/5 text-slate-200 hover:bg-white/10"
               >
                 <Smartphone className="h-4 w-4" /> Text
               </button>
               <button
                 onClick={() => { setChatFor(active); unreadQuery.refetch(); }}
-                className="relative flex items-center justify-center gap-1.5 rounded-xl bg-white/5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10"
+                className="nvc-btn w-full relative bg-white/5 text-slate-200 hover:bg-white/10"
               >
                 <MessageSquare className="h-4 w-4" /> Message
                 {unreadCount > 0 && (
@@ -524,7 +524,7 @@ export default function FleetPage() {
             <button
               onClick={() => optimize.mutate(active.id)}
               disabled={optimize.isPending}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-60"
+              className="nvc-btn nvc-btn-brand w-full"
             >
               <Sparkles className="h-4 w-4" />
               {optimize.isPending ? "Optimizing…" : "Optimize Route"}

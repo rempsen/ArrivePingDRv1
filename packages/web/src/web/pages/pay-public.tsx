@@ -216,7 +216,7 @@ function PayForm({ token, total, onPaid }: { token: string; total: number; onPai
       <button
         type="submit"
         disabled={!stripe || busy}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 py-3.5 font-semibold text-white transition hover:bg-sky-400 disabled:opacity-60"
+        className="nvc-btn nvc-btn-lg mt-5 w-full bg-sky-500 text-white hover:bg-sky-400"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
         Pay {money(total)}

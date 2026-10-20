@@ -96,14 +96,14 @@ export function AutoAssignWarning({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-lg border border-white/10 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/5"
+            className="nvc-btn flex-1 border border-white/10 text-slate-300 hover:bg-white/5"
           >
             Keep suggesting
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 rounded-lg bg-amber-warn py-2.5 text-sm font-semibold text-ink hover:bg-amber-300"
+            className="nvc-btn flex-1 bg-amber-warn text-ink hover:bg-amber-300"
           >
             Yes, auto-assign
           </button>
@@ -546,7 +546,7 @@ export function TemplateRuleDialog({
             type="button"
             disabled={!draft.name.trim() || saving}
             onClick={() => onSave(draft)}
-            className="w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
+            className="nvc-btn nvc-btn-brand w-full"
           >
             {saving ? "Saving…" : existing ? "Save changes" : "Create rule"}
           </button>

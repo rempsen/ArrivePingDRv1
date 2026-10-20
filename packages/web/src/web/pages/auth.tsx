@@ -188,7 +188,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
             <button
               type="submit"
               disabled={loading}
-              className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+              className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
             >
               {loading ? (
                 <Loader className="h-5 w-5 border-white/40 border-t-white" />

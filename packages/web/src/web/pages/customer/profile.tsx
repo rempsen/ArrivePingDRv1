@@ -56,7 +56,7 @@ export default function ProfilePage() {
       <button
         onClick={logout}
         disabled={signingOut}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-ink-2 py-3.5 font-semibold text-red-400 transition hover:bg-red-500/10 disabled:opacity-60"
+        className="nvc-btn nvc-btn-lg w-full border border-red-500/20 bg-ink-2 text-red-400 hover:bg-red-500/10"
       >
         <LogOut className="h-5 w-5" /> {signingOut ? "Signing out…" : "Sign out"}
       </button>

@@ -622,7 +622,7 @@ export default function CompaniesPage() {
                 <button
                   type="submit"
                   disabled={!looksLikeDomain(form.website)}
-                  className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+                  className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
                 >
                   Scan the site <ArrowRight className="h-4 w-4" />
                 </button>
@@ -736,7 +736,7 @@ export default function CompaniesPage() {
 
                 <button
                   type="submit"
-                  className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep"
+                  className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
                 >
                   Continue <ArrowRight className="h-4 w-4" />
                 </button>

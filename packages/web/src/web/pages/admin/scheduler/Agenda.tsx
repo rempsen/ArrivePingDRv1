@@ -14,7 +14,7 @@ export function Agenda(p: { techs: BoardTech[]; jobsByTech: Map<string, BoardJob
   const any = rows.some((r) => r.jobs.length > 0);
   return (
     <div className="flex flex-col gap-3">
-      <button type="button" onClick={p.onNewJob} className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/15 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/5">
+      <button type="button" onClick={p.onNewJob} className="nvc-btn w-full border border-dashed border-white/15 text-slate-300 hover:bg-white/5">
         <Plus className="h-4 w-4" /> New job on this day
       </button>
       {!any && <p className="nvc-card px-4 py-8 text-center text-sm text-slate-500">Nothing booked this day.</p>}

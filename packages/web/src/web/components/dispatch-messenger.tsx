@@ -323,7 +323,7 @@ function BroadcastView({
         <button
           onClick={() => broadcast.mutate()}
           disabled={broadcast.isPending || !body.trim() || targetCount === 0}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-2.5 text-sm font-bold text-white hover:bg-brand-deep disabled:opacity-50"
+          className="nvc-btn nvc-btn-brand w-full"
         >
           <Megaphone className="h-4 w-4" />
           {broadcast.isPending

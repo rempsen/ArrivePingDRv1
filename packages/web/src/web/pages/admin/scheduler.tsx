@@ -513,7 +513,7 @@ export default function SchedulerPage() {
                                 techName: suggest.data!.best!.name,
                               });
                             }}
-                            className={`mt-1.5 w-full rounded-md py-1 font-semibold text-white ${
+                            className={`nvc-btn nvc-btn-xs mt-1.5 w-full text-white ${
                               suggest.data.confident
                                 ? "bg-brand hover:bg-brand-deep"
                                 : "bg-white/10 hover:bg-white/15"

@@ -98,7 +98,7 @@ export function SignupPayment({
             type="button"
             disabled={submitting}
             onClick={() => void onSaved(null)}
-            className="nvc-btn-primary mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white"
+            className="nvc-btn nvc-btn-lg nvc-btn-brand mt-3 w-full"
           >
             {submitting ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <>Create my account <ArrowRight className="h-4 w-4" /></>}
           </button>
@@ -184,7 +184,7 @@ function CardForm({
       <button
         type="submit"
         disabled={!stripe || busy}
-        className="nvc-btn-primary flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+        className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
       >
         {busy ? (
           <>

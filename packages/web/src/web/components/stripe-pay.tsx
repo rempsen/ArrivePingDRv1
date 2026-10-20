@@ -235,7 +235,7 @@ function PayForm({
       <button
         type="submit"
         disabled={!stripe || submitting}
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-60"
+        className="nvc-btn nvc-btn-lg nvc-btn-brand mt-5 w-full"
       >
         {submitting ? (
           <Loader className="h-5 w-5 border-white/40 border-t-white" />

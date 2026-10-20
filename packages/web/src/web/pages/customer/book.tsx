@@ -127,13 +127,13 @@ export default function BookPage() {
         <div className="mt-6 flex flex-col gap-3">
           <button
             onClick={() => navigate(`/app/track/${done}`)}
-            className="rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep"
+            className="nvc-btn nvc-btn-lg nvc-btn-brand"
           >
             Track my booking
           </button>
           <button
             onClick={() => navigate("/app")}
-            className="rounded-xl border border-white/10 bg-ink-2 py-3.5 font-semibold text-slate-200 transition hover:border-white/20"
+            className="nvc-btn nvc-btn-lg border border-white/10 bg-ink-2 text-slate-200 hover:border-white/20"
           >
             Back to home
           </button>
@@ -257,7 +257,7 @@ export default function BookPage() {
             <button
               disabled={!slot || !address || create.isPending}
               onClick={() => create.mutate()}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-50"
+              className="nvc-btn nvc-btn-lg nvc-btn-brand mt-4 w-full"
             >
               {create.isPending ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : "Confirm booking"}
             </button>

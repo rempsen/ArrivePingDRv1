@@ -809,7 +809,7 @@ export default function TrackPublic() {
                   {company?.email && (
                     <a
                       href={`mailto:${company.email}?subject=${encodeURIComponent(`Re: ${data.title}`)}`}
-                      className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep"
+                      className="nvc-btn nvc-btn-brand w-full mt-5"
                     >
                       <Mail className="h-4 w-4" /> Email {company.name || "the company"}
                     </a>
@@ -833,7 +833,7 @@ export default function TrackPublic() {
                             href={publicReviewUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep"
+                            className="nvc-btn nvc-btn-brand mt-2 w-full"
                           >
                             <Star className="h-4 w-4" /> Leave a Google review
                           </a>
@@ -877,7 +877,7 @@ export default function TrackPublic() {
                             <button
                               onClick={() => submitReview.mutate({ rating: reviewRating, comment: reviewComment })}
                               disabled={submitReview.isPending}
-                              className="w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
+                              className="nvc-btn nvc-btn-brand w-full"
                             >
                               {submitReview.isPending ? "Submitting…" : "Submit review"}
                             </button>
@@ -1005,14 +1005,14 @@ export default function TrackPublic() {
                           <a
                             href={`tel:${data.tech.phone}`}
                             aria-label={`Call ${data.tech.name}`}
-                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-brand text-[15px] font-semibold text-white hover:bg-brand-deep"
+                            className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
                           >
                             <Phone className="h-[18px] w-[18px]" /> Call
                           </a>
                           <a
                             href={`sms:${data.tech.phone}`}
                             aria-label={`Text ${data.tech.name}`}
-                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-live text-[15px] font-semibold text-ink hover:opacity-90"
+                            className="nvc-btn nvc-btn-lg w-full bg-emerald-live text-ink hover:opacity-90"
                           >
                             <MessageCircle className="h-[18px] w-[18px]" /> Text
                           </a>

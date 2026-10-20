@@ -492,7 +492,7 @@ export default function AutomationPage() {
               <button
                 disabled={!form.name || create.isPending}
                 onClick={() => create.mutate()}
-                className="w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
+                className="nvc-btn nvc-btn-brand w-full"
               >
                 {create.isPending ? "Creating…" : "Create rule"}
               </button>

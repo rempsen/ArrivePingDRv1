@@ -252,7 +252,7 @@ function HourlyForm({ onAdd }: { onAdd: (c: HourlyCharge) => void }) {
               type="button"
               onClick={() => setFreeMin(m)}
               className={[
-                "flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-all",
+                "nvc-btn nvc-btn-xs flex-1 border",
                 freeMin === m
                   ? "border-brand/60 bg-brand/20 text-brand"
                   : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10",
@@ -376,9 +376,9 @@ function AddBtn({ onClick, disabled }: { onClick: () => void; disabled?: boolean
       onClick={onClick}
       disabled={disabled}
       className={[
-        "flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-all",
+        "nvc-btn w-full",
         disabled
-          ? "cursor-not-allowed bg-white/5 text-slate-600"
+          ? "cursor-not-allowed bg-white/5 text-slate-600 disabled:opacity-100"
           : "bg-brand text-white shadow-md shadow-brand/30 hover:bg-brand/90 active:scale-[0.98]",
       ].join(" ")}
     >

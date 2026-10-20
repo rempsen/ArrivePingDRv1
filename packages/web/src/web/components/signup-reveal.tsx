@@ -305,7 +305,7 @@ export function SignupReveal({
                 <button
                   type="button"
                   onClick={onConfirm}
-                  className="nvc-btn-primary flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand font-semibold text-white transition hover:bg-brand-deep"
+                  className="nvc-btn nvc-btn-lg nvc-btn-brand flex-1"
                 >
                   <CheckCircle2 className="h-4 w-4" /> {findings.length ? "Yes, that's us" : "Continue"}
                 </button>
@@ -313,7 +313,7 @@ export function SignupReveal({
                   <button
                     type="button"
                     onClick={onFix}
-                    className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-white/15 font-semibold text-slate-200 transition hover:bg-white/5"
+                    className="nvc-btn nvc-btn-lg flex-1 border border-white/15 text-slate-200 hover:bg-white/5"
                   >
                     <X className="h-4 w-4" /> Fix something
                   </button>

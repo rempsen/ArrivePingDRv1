@@ -103,7 +103,7 @@ function TokenMenu({ onPick, exclude = [] }: { onPick: (token: string) => void; 
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
         title="Insert a fill-in, like the customer's name"
-        className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-slate-400 hover:bg-white/5 hover:text-cyan-200"
+        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-slate-400 hover:bg-white/5 hover:text-cyan-200"
       >
         <Braces className="h-3.5 w-3.5" aria-hidden="true" /> Insert
       </button>

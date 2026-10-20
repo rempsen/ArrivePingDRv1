@@ -123,12 +123,12 @@ export default function IntegrationsPage() {
                         <>
                           {it.provider === "google_drive" ? (
                             <button onClick={() => setDriveExport(true)}
-                              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand/15 py-2 text-xs font-semibold text-brand hover:bg-brand/25">
+                              className="nvc-btn nvc-btn-sm flex-1 bg-brand/15 text-brand hover:bg-brand/25">
                               <UploadCloud className="h-3.5 w-3.5" /> Export data
                             </button>
                           ) : (
                             <button onClick={() => sync.mutate(it.id)} disabled={sync.isPending}
-                              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-white/5 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-60">
+                              className="nvc-btn nvc-btn-sm flex-1 bg-white/5 text-slate-200 hover:bg-white/10">
                               <RefreshCw className={`h-3.5 w-3.5 ${sync.isPending && sync.variables === it.id ? "animate-spin" : ""}`} /> Sync
                             </button>
                           )}
@@ -140,17 +140,17 @@ export default function IntegrationsPage() {
                         </>
                       ) : soon ? (
                         <button onClick={() => connect(it)}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-semibold text-slate-400 hover:bg-white/10">
+                          className="nvc-btn nvc-btn-sm w-full border border-white/10 bg-white/5 text-slate-400 hover:bg-white/10">
                           <Clock className="h-3.5 w-3.5" /> Coming soon
                         </button>
                       ) : err ? (
                         <button onClick={() => connect(it)} disabled={connecting === it.id}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500/15 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-60">
+                          className="nvc-btn nvc-btn-sm w-full bg-red-500/15 text-red-300 hover:bg-red-500/25">
                           <RefreshCw className="h-3.5 w-3.5" /> {connecting === it.id ? "Reconnecting…" : "Reconnect"}
                         </button>
                       ) : (
                         <button onClick={() => connect(it)} disabled={connecting === it.id}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-xs font-semibold text-white hover:bg-brand-deep disabled:opacity-60">
+                          className="nvc-btn nvc-btn-sm nvc-btn-brand w-full">
                           <Plug className="h-3.5 w-3.5" /> {connecting === it.id ? "Connecting…" : "Connect"}
                         </button>
                       )}
@@ -285,15 +285,15 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
           </div>
           {result.folderLink && (
             <a href={result.folderLink} target="_blank" rel="noreferrer"
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand/15 py-2 text-xs font-semibold text-brand hover:bg-brand/25">
+              className="nvc-btn nvc-btn-sm w-full bg-brand/15 text-brand hover:bg-brand/25">
               <ExternalLink className="h-3.5 w-3.5" /> Open folder in Google Drive
             </a>
           )}
           <a href={result.link} target="_blank" rel="noreferrer"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10">
+            className="nvc-btn nvc-btn-sm w-full bg-white/5 text-slate-200 hover:bg-white/10">
             <ExternalLink className="h-3.5 w-3.5" /> Open file
           </a>
-          <button onClick={close} className="w-full rounded-lg bg-brand py-2 text-xs font-semibold text-white hover:bg-brand-deep">Done</button>
+          <button onClick={close} className="nvc-btn nvc-btn-sm nvc-btn-brand w-full">Done</button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -311,7 +311,7 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
             <div className="flex gap-2">
               {(["xlsx", "csv"] as const).map((f) => (
                 <button key={f} onClick={() => setFormat(f)}
-                  className={`flex-1 rounded-lg border py-2 text-xs font-semibold ${format === f ? "border-brand bg-brand/15 text-brand" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}>
+                  className={`nvc-btn nvc-btn-sm flex-1 border ${format === f ? "border-brand bg-brand/15 text-brand" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}>
                   {f === "xlsx" ? "Excel (.xlsx)" : "CSV (.csv)"}
                 </button>
               ))}
@@ -372,7 +372,7 @@ function DriveExportModal({ open, onClose, onReconnect }: { open: boolean; onClo
             </div>
           )}
           <button onClick={() => run.mutate()} disabled={run.isPending}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-60">
+            className="nvc-btn nvc-btn-brand w-full">
             <UploadCloud className={`h-4 w-4 ${run.isPending ? "animate-pulse" : ""}`} /> {run.isPending ? "Backing up…" : "Back up now"}
           </button>
         </div>
@@ -394,7 +394,7 @@ function ComingSoonModal({ item, onClose, isOwner, onSetup }: { item: any; onClo
         </p>
       </div>
       {isOwner ? (
-        <button onClick={onSetup} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep">
+        <button onClick={onSetup} className="nvc-btn nvc-btn-brand mt-4 w-full">
           <Settings className="h-4 w-4" /> Open developer setup
         </button>
       ) : (
@@ -520,7 +520,7 @@ function ProviderForm({ p, stored, onSaved }: { p: any; stored: any; onSaved: ()
 
           <div className="flex items-center gap-2 pt-1">
             <button onClick={() => save.mutate()} disabled={save.isPending || !clientId}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand py-2 text-xs font-semibold text-white hover:bg-brand-deep disabled:opacity-50">
+              className="nvc-btn nvc-btn-sm nvc-btn-brand flex-1">
               <Save className="h-3.5 w-3.5" /> {save.isPending ? "Saving…" : save.isSuccess ? "Saved ✓" : "Save & enable"}
             </button>
             {isDb && (

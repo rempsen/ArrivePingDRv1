@@ -39,7 +39,7 @@ export function TakePayment({ bookingId, total }: { bookingId: string; total?: n
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 py-3.5 text-base font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+        className="nvc-btn nvc-btn-lg w-full border border-emerald-400/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
       >
         <CreditCard className="h-5 w-5" /> Take payment{total ? ` · ${money(total)}` : ""}
       </button>
@@ -80,14 +80,14 @@ export function TakePayment({ bookingId, total }: { bookingId: string; total?: n
                 </div>
                 <p className="text-center text-xs text-slate-400">The customer scans this with their phone camera to pay.</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <a href={d.url} target="_blank" rel="noopener" className="flex items-center justify-center gap-1.5 rounded-xl bg-brand py-3 text-sm font-semibold text-white hover:bg-brand-deep">
+                  <a href={d.url} target="_blank" rel="noopener" className="nvc-btn nvc-btn-brand w-full">
                     <ExternalLink className="h-4 w-4" /> Pay on this phone
                   </a>
                   <button
                     type="button"
                     disabled={!d.canText || text.isPending || text.data?.sent}
                     onClick={() => text.mutate()}
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 disabled:opacity-50"
+                    className="nvc-btn w-full border border-white/10 text-slate-200 hover:border-white/20"
                   >
                     <MessageSquare className="h-4 w-4" /> {text.data?.sent ? "Link sent" : "Text the link"}
                   </button>
