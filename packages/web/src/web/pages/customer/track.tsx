@@ -210,7 +210,7 @@ export default function TrackPage() {
               ) : cardEnabled ? (
                 <button
                   onClick={() => setPayOpen(true)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3.5 font-semibold text-white nvc-btn-primary transition hover:bg-brand-deep"
+                  className="nvc-btn nvc-btn-lg nvc-btn-brand mt-4 w-full"
                 >
                   <CreditCard className="h-4.5 w-4.5" /> Pay {money(inv.total)}
                 </button>

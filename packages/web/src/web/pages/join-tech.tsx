@@ -117,7 +117,7 @@ export default function JoinTech() {
               <input aria-label="Create a password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" className="w-full rounded-xl border border-white/10 bg-ink-2 py-3 pl-10 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-brand focus:outline-none" />
             </div>
             {error && <p className="text-sm text-red-400">{error}</p>}
-            <button disabled={loading || !password} className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-bold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-60">
+            <button disabled={loading || !password} className="nvc-btn nvc-btn-brand w-full">
               {loading ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <>{valid.accountExists ? "Set password & sign in" : "Activate my account"} <ArrowRight className="h-4 w-4" /></>}
             </button>
           </form>

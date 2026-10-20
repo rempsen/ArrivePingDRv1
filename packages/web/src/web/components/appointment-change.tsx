@@ -180,7 +180,7 @@ export function AppointmentChangeCard({ bookingId }: { bookingId: string }) {
             {canMove && (
               <button
                 onClick={() => { setOpen("reschedule"); setError(""); }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-semibold text-white transition hover:bg-brand-deep"
+                className="nvc-btn nvc-btn-brand w-full"
               >
                 <CalendarClock className="h-4 w-4" />
                 {needsApproval ? "Request a new time" : "Change my appointment time"}
@@ -189,7 +189,7 @@ export function AppointmentChangeCard({ bookingId }: { bookingId: string }) {
             {canAskCancel && (
               <button
                 onClick={() => { setOpen("cancel"); setError(""); }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/5"
+                className="nvc-btn w-full border border-white/10 text-slate-300 hover:bg-white/5"
               >
                 <XCircle className="h-4 w-4" /> Need to cancel?
               </button>

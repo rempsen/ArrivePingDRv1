@@ -194,7 +194,7 @@ export default function PropertyPublic() {
           {requestUrl && (
             <a
               href={requestUrl}
-              className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-semibold text-white hover:bg-brand-deep"
+              className="nvc-btn nvc-btn-brand w-full mt-4"
             >
               <Plus className="h-4 w-4" /> Request service at this address
             </a>

@@ -674,14 +674,14 @@ export function OnboardingChat() {
               <button
                 type="button"
                 onClick={() => quickReply("Yes, I'm ready to start. Finish the setup.")}
-                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white transition hover:bg-brand-deep"
+                className="nvc-btn nvc-btn-brand flex-1"
               >
                 <CheckCircle2 className="h-4 w-4" /> Yes, I'm ready to start
               </button>
               <button
                 type="button"
                 onClick={() => quickReply("I'd like to add or change a few more things first.")}
-                className="flex h-10 flex-1 items-center justify-center rounded-lg border border-white/15 text-sm font-semibold text-slate-200 transition hover:bg-white/5"
+                className="nvc-btn flex-1 border border-white/15 text-slate-200 hover:bg-white/5"
               >
                 I'd like to add more
               </button>

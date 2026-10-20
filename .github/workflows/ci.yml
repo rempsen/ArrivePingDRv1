@@ -47,7 +47,7 @@ jobs:
 
       - name: Unit tests
         working-directory: packages/web
-        run: bun test src/shared/__tests__ src/shared/forms/__tests__ src/shared/email/__tests__ src/web/pages/admin/builder/__tests__ src/web/components/email-designer/__tests__ src/api/lib/__tests__ src/api/routes/__tests__ src/services/__tests__
+        run: bun test src/shared/__tests__ src/shared/forms/__tests__ src/shared/email/__tests__ src/web/pages/admin/builder/__tests__ src/web/components/email-designer/__tests__ src/web/__tests__ src/api/lib/__tests__ src/api/routes/__tests__ src/services/__tests__
 
       - name: Migration drift check (schema.ts must match committed drizzle/ migrations)
         working-directory: packages/web

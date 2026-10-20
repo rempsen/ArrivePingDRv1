@@ -120,7 +120,7 @@ export function WeekCapacity(p: {
                       );
                     })}
                     {list.length > max && (
-                      <button type="button" onClick={() => p.onOpenDay(d)} className="self-start rounded px-1 text-[11.5px] font-bold text-brand hover:bg-brand/10">
+                      <button type="button" onClick={() => p.onOpenDay(d)} className="self-start rounded px-2 text-[11.5px] font-bold text-brand hover:bg-brand/10">
                         +{list.length - max} more
                       </button>
                     )}

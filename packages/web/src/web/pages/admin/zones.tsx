@@ -429,7 +429,7 @@ export default function AdminZones() {
                 <Row k="Status" v={sel.active ? "Active" : "Inactive"} />
                 <Row k="Boundary pts" v={String(sel.polygon.length)} />
               </dl>
-              <button onClick={() => editZone(sel)} className="mt-3 w-full rounded-xl bg-white/5 py-2 text-sm font-semibold text-white hover:bg-white/10">
+              <button onClick={() => editZone(sel)} className="nvc-btn mt-3 w-full bg-white/5 text-white hover:bg-white/10">
                 Edit zone
               </button>
             </div>

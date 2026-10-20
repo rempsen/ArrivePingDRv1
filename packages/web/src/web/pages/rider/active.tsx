@@ -283,14 +283,14 @@ export default function RiderActive() {
               <button
                 disabled={accept.isPending}
                 onClick={() => accept.mutate()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-3.5 text-base font-bold text-white nvc-btn-primary transition hover:bg-green-600 disabled:opacity-60"
+                className="nvc-btn nvc-btn-lg w-full bg-green-500 text-white hover:bg-green-600"
               >
                 {accept.isPending ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <><Check className="h-5 w-5" /> Accept job</>}
               </button>
               <button
                 disabled={decline.isPending}
                 onClick={() => setDeclineOpen(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-ink py-3 text-sm font-bold text-slate-300 transition hover:border-red-500/40 hover:text-red-400 disabled:opacity-60"
+                className="nvc-btn w-full border border-white/10 bg-ink text-slate-300 hover:border-red-500/40 hover:text-red-400"
               >
                 <X className="h-4 w-4" /> Decline
               </button>
@@ -302,7 +302,7 @@ export default function RiderActive() {
                 if (step.next === "enroute" && !sharing) startSharing();
                 setStatus.mutate(step.next);
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-4 text-base font-bold text-white nvc-btn-primary transition hover:bg-brand-deep disabled:opacity-60"
+              className="nvc-btn nvc-btn-lg nvc-btn-brand w-full py-4"
             >
               {setStatus.isPending ? <Loader className="h-5 w-5 border-white/40 border-t-white" /> : <><step.icon className="h-5 w-5" />{step.label}</>}
             </button>
@@ -352,7 +352,7 @@ export default function RiderActive() {
           {canRelease && (
             <button
               onClick={() => { setReleaseErr(""); setReleaseOpen(true); }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-ink py-3 text-sm font-bold text-amber-300 transition hover:border-amber-400/40"
+              className="nvc-btn w-full border border-white/10 bg-ink text-amber-300 hover:border-amber-400/40"
             >
               <HandMetal className="h-4 w-4" /> I can't do this job
             </button>
@@ -385,14 +385,14 @@ export default function RiderActive() {
           <div className="mt-4 flex gap-3">
             <button
               onClick={() => { setDeclineOpen(false); setDeclineReason(""); }}
-              className="flex-1 rounded-xl border border-white/10 py-3 text-sm font-semibold text-slate-300 hover:border-white/20"
+              className="nvc-btn flex-1 border border-white/10 text-slate-300 hover:border-white/20"
             >
               Cancel
             </button>
             <button
               disabled={decline.isPending}
               onClick={() => decline.mutate(declineReason)}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60"
+              className="nvc-btn flex-1 bg-red-500 text-white hover:bg-red-600"
             >
               {decline.isPending ? <Loader className="h-4 w-4 border-white/30 border-t-white" /> : "Confirm decline"}
             </button>
@@ -443,14 +443,14 @@ export default function RiderActive() {
           <div className="mt-4 flex gap-3">
             <button
               onClick={() => { setReleaseOpen(false); setReleaseReason(""); setReleaseNote(""); }}
-              className="flex-1 rounded-xl border border-white/10 py-3 text-sm font-semibold text-slate-300 hover:border-white/20"
+              className="nvc-btn flex-1 border border-white/10 text-slate-300 hover:border-white/20"
             >
               Keep job
             </button>
             <button
               disabled={release.isPending || !releaseReason}
               onClick={() => release.mutate({ reason: releaseReason, note: releaseNote.trim() })}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-sm font-bold text-ink hover:bg-amber-400 disabled:opacity-60"
+              className="nvc-btn flex-1 bg-amber-500 text-ink hover:bg-amber-400"
             >
               {release.isPending ? <Loader className="h-4 w-4 border-ink/30 border-t-ink" /> : "Send back"}
             </button>

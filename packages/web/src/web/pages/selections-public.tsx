@@ -214,7 +214,7 @@ export default function SelectionsPublic() {
                 type="button"
                 disabled={!allPicked || !signatureName.trim() || submit.isPending}
                 onClick={() => submit.mutate()}
-                className="w-full rounded-lg bg-brand py-2.5 text-sm font-semibold text-white hover:bg-brand-deep disabled:opacity-50"
+                className="nvc-btn nvc-btn-brand w-full"
               >
                 {submit.isPending ? "Submitting…" : "Confirm selections"}
               </button>
