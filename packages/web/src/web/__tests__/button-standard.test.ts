@@ -34,17 +34,33 @@ const isFixedSquare = (cls: string) =>
 /** A label of 14px or more: text-sm and up, or an arbitrary size from 13px. */
 const largeText = (cls: string) => /\btext-(sm|base|lg|xl|[2-9]xl)\b|\btext-\[(1[3-9]|[2-9]\d)(\.\d+)?px\]/.test(cls);
 
-/** The smallest side padding a class string sets, in Tailwind spacing units (1 = 4px), or null for none. */
-export function sidePadding(cls: string): number | null {
-  const units: number[] = [];
-  for (const m of cls.matchAll(/(?:^|[\s"'`{(])!?(?:px|pl|pr|ps|pe|p)-(\[[^\]]+\]|[\d.]+)(?=[\s"'`})]|$)/g)) {
-    const v = m[1]!;
+/**
+ * Each side's padding a class string sets, in Tailwind spacing units (1 = 4px),
+ * or null where that side has none. px- and p- set both sides; pl-/ps- the
+ * left and pr-/pe- the right. The smallest value counts when conditional
+ * classes set several.
+ */
+export function sidePaddings(cls: string): { left: number | null; right: number | null } {
+  const left: number[] = [];
+  const right: number[] = [];
+  for (const m of cls.matchAll(/(?:^|[\s"'`{(])!?(px|pl|pr|ps|pe|p)-(\[[^\]]+\]|[\d.]+)(?=[\s"'`})]|$)/g)) {
+    const [, side, v] = m as unknown as [string, string, string];
+    let units: number | null = null;
     if (v.startsWith("[")) {
-      const px = /^\[([\d.]+)px\]$/.exec(v)?.[1] ?? /^\[([\d.]+)rem\]$/.exec(v)?.[1];
-      if (px) units.push(v.endsWith("rem]") ? Number(px) * 4 : Number(px) / 4);
-    } else units.push(Number(v));
+      const n = /^\[([\d.]+)(px|rem)\]$/.exec(v);
+      if (n) units = n[2] === "rem" ? Number(n[1]) * 4 : Number(n[1]) / 4;
+    } else units = Number(v);
+    if (units === null) continue;
+    if (side !== "pr" && side !== "pe") left.push(units);
+    if (side !== "pl" && side !== "ps") right.push(units);
   }
-  return units.length ? Math.min(...units) : null;
+  return { left: left.length ? Math.min(...left) : null, right: right.length ? Math.min(...right) : null };
+}
+
+/** The tighter of the two sides, or null when either side has none. */
+export function sidePadding(cls: string): number | null {
+  const { left, right } = sidePaddings(cls);
+  return left === null || right === null ? null : Math.min(left, right);
 }
 
 /** Labelled buttons in one TSX source that break the rule. */
@@ -57,10 +73,12 @@ export function findCrampedButtons(file: string, text: string): ButtonFinding[] 
       const cls = attr?.initializer?.getText(sf) ?? "";
       if (cls && isLabelledButton(cls) && !usesStandard(cls) && !isFixedSquare(cls)) {
         const need = largeText(cls) ? 3 : 2;
-        const pad = sidePadding(cls);
+        const { left, right } = sidePaddings(cls);
         const line = sf.getLineAndCharacterOfPosition(n.getStart()).line + 1;
-        if (pad === null) out.push({ file, line, reason: "no side padding", className: cls });
-        else if (pad < need) out.push({ file, line, reason: `side padding ${pad * 4}px, under ${need * 4}px`, className: cls });
+        const add = (reason: string) => out.push({ file, line, reason, className: cls });
+        if (left === null && right === null) add("no side padding");
+        else if (left === null || right === null) add(`no ${left === null ? "left" : "right"} padding`);
+        else if (Math.min(left, right) < need) add(`side padding ${Math.min(left, right) * 4}px, under ${need * 4}px`);
       }
     }
     ts.forEachChild(n, visit);
@@ -107,5 +125,14 @@ describe("the button standard", () => {
     expect(sidePadding("`rounded-md px-2.5 ${on ? 'bg-brand' : ''}`")).toBe(2.5);
     expect(sidePadding('"rounded-lg px-[14px] py-2"')).toBe(3.5);
     expect(sidePadding('"rounded-lg py-2"')).toBeNull();
+  });
+
+  it("checks each side: padding on one side only still lets the label touch the other", () => {
+    const btn = (cls: string) => findCrampedButtons("x.tsx", `<button className="${cls}">Go</button>`).map((x) => x.reason);
+    expect(btn("rounded-lg bg-brand pl-3 py-2 text-sm font-semibold")).toEqual(["no right padding"]);
+    expect(btn("rounded-lg bg-brand pr-4 py-2 text-sm font-semibold")).toEqual(["no left padding"]);
+    expect(btn("rounded-lg bg-brand pl-3 pr-1 py-2 text-sm font-semibold")).toEqual(["side padding 4px, under 12px"]);
+    expect(btn("rounded-lg bg-brand pl-3 pr-4 py-2 text-sm font-semibold")).toEqual([]);
+    expect(sidePaddings('"rounded-lg ps-2 pe-[12px]"')).toEqual({ left: 2, right: 3 });
   });
 });
