@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import type { bookings } from "../../api/database/schema";
 import { DistanceInput } from "./distance-inputs";
 import { distanceLabel, fmtDistance } from "../../shared/units";
 import { useDistanceUnit } from "../lib/use-brand";
@@ -435,6 +436,13 @@ function formatClientAddress(c: any): string {
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
+type BookingRow = typeof bookings.$inferSelect;
+
+/** The booking fields the edit form reads back, taken from the table so a column
+ * rename or type change is caught here. Bookings reach the modal as API JSON, so
+ * the date columns are strings by then. */
+type EditBooking = Partial<BookingRow>;
+
 export function WorkOrderModal({
   open,
   onClose,
@@ -684,7 +692,7 @@ export function WorkOrderModal({
     if (!open) return;
     setErr("");
     if (editBooking) {
-      const b = editBooking;
+      const b: EditBooking = editBooking;
       setCustomerId(b.customerId ?? "");
       setServiceId(b.serviceId ?? "");
       setTemplateId(b.templateId ?? "");
@@ -706,15 +714,15 @@ export function WorkOrderModal({
       setCreatingCustomer(false);
       setNewCustomerName("");
       setRiderId(b.riderId ?? "");
-      setRequiredSkillClass((b as any).requiredSkillClass ?? "");
-      setRequiredSkills((b as any).requiredSkills ? (b as any).requiredSkills.split(",").filter(Boolean) : []);
+      setRequiredSkillClass(b.requiredSkillClass ?? "");
+      setRequiredSkills(b.requiredSkills ? b.requiredSkills.split(",").filter(Boolean) : []);
       setNotes(b.notes ?? "");
-      setStaffNotes((b as any).staffNotes ?? "");
+      setStaffNotes(b.staffNotes ?? "");
       setRegion(b.region ?? "");
       const rm = parseRateModel(b.rateModel);
       if (rm) { setRateModel(rm); setRateTouched(true); }
-      setTechPayModel(parseTechPayModel((b as any).techPayModel));
-      setCollectPayment((b as any).collectPayment === "on_site" ? "on_site" : "");
+      setTechPayModel(parseTechPayModel(b.techPayModel));
+      setCollectPayment(b.collectPayment === "on_site" ? "on_site" : "");
       setPayTouched(true);
       try {
         const li = typeof b.lineItems === "string" ? JSON.parse(b.lineItems || "[]") : b.lineItems;
