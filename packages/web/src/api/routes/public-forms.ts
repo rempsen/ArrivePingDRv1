@@ -656,7 +656,10 @@ export const publicFormsRoutes = new Hono<AppEnv>()
     // ---- create the pending lead booking ----
     const scheduledAt = preferredAt ?? new Date(Date.now() + 86400_000);
     const customNotes = customAnswers.filter((a) => a.value).map((a) => `${a.label}: ${a.value}`).join("\n");
-    const composedNotes = [notes, customNotes, photoUrl ? `Photo: ${photoUrl}` : ""].filter(Boolean).join("\n");
+    // Every line carries its field's name, like the custom answers already do; the
+    // core notes field is labelled with whatever this form calls it.
+    const notesLabel = fields.find((f) => f.key === "notes")?.label?.trim() || "Notes";
+    const composedNotes = [notes ? `${notesLabel}: ${notes}` : "", customNotes, photoUrl ? `Photo: ${photoUrl}` : ""].filter(Boolean).join("\n");
     const [booking] = await t.insert(schema.bookings, {
       customerId: customer.id,
       serviceId: svcId,
