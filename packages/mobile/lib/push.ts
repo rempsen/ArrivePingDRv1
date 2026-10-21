@@ -7,6 +7,8 @@ import { useRouter } from "expo-router";
 import { api } from "./api";
 import { getToken } from "./auth";
 import { routeForNotification as routeFor } from "./push-route";
+import { getActiveCompany, setActiveCompany } from "./active-company";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Expo push notifications for the technician app.
@@ -131,11 +133,27 @@ export function setPushRouting(mode: "field" | "office") {
  */
 export function usePushNotifications() {
   const router = useRouter();
+  const qc = useQueryClient();
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
-  const routeFromNotification = (data: Record<string, any> | undefined) => {
+  const routeFromNotification = async (data: Record<string, any> | undefined) => {
     const to = routeFor(data, routing);
-    if (to) router.push(to as never);
+    if (!to) return;
+    // Office mode: the alert names its company. A dispatcher on two rosters
+    // (or a superadmin) may have the other one open, and every request
+    // carries the active company, so switch first or the thread/job 404s.
+    // Field mode is left alone: a tech switches companies deliberately
+    // because it changes which shift they are on.
+    const companyId = typeof data?.companyId === "string" ? data.companyId : "";
+    if (routing === "office" && companyId && companyId !== getActiveCompany()) {
+      try {
+        await setActiveCompany(companyId);
+        qc.clear();
+      } catch {
+        return;
+      }
+    }
+    router.push(to as never);
   };
 
   useEffect(() => {

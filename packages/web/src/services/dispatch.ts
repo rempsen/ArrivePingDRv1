@@ -658,6 +658,9 @@ async function deliver(
           type: meta.notifType,
           event,
           bookingId: b.id,
+          // Office users can be on several companies; the app switches to
+          // this one before opening the job.
+          companyId,
         }).catch(() => {});
         await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "in_app", target: t.userId, status: "sent" });
       }

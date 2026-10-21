@@ -193,6 +193,9 @@ export const messagesRoutes = new Hono<AppEnv>()
       sendPush(admin.id, `Message from ${u.name || "Technician"}`, body, {
         type: "tech_message",
         techId: rider.id,
+        // The thread lives at this company; a dispatcher on two rosters
+        // may have the other one open.
+        companyId: co,
       }).catch(() => {});
     }
 
