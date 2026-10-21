@@ -5,7 +5,7 @@ import { House, ClipboardText, ChatCircleDots, UsersThree } from "phosphor-react
 import { C } from "../../lib/theme";
 import { useAccess } from "../../lib/use-access";
 import { useDispatchStream } from "../../lib/use-dispatch-stream";
-import { usePushNotifications, setAppBadgeCount } from "../../lib/push";
+import { usePushNotifications, setAppBadgeCount, setPushRouting } from "../../lib/push";
 import { useDispatchThreads } from "../../lib/use-threads";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
 import { UndoToastHost } from "../../components/office/undo-toast";
@@ -30,6 +30,8 @@ export default function OfficeLayout() {
   // Live Activity on the Lock Screen; office mode has no job in progress.
   useEffect(() => {
     endAllLiveActivities().catch(() => {});
+    setPushRouting("office");
+    return () => setPushRouting("field");
   }, []);
 
   // Unread from technicians, across every thread. The rider summary endpoint
