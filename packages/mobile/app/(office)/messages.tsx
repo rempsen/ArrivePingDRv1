@@ -148,7 +148,6 @@ function BroadcastSheet({ open, onClose }: { open: boolean; onClose: () => void 
         placeholder="Heads up: the shop closes at 4 today…"
         placeholderTextColor={C.muted}
         multiline
-        autoFocus
         style={s.castInput}
         accessibilityLabel="Broadcast message"
       />
