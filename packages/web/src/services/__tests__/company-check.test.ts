@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { digits, normText, serviceCovered, slugKey } from "../company-check";
+
+// company-check imports the database module, which picks its client when it
+// first loads. Set the test sentinel before that happens, or a run that loads
+// this file first binds every later test to a real Postgres connection.
+process.env.DATABASE_URL = ":memory:";
+const { digits, normText, serviceCovered, slugKey } = await import("../company-check");
 
 describe("company-check normalisers", () => {
   test("digits strips formatting and a leading country 1", () => {
