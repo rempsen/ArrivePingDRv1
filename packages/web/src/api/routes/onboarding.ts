@@ -23,7 +23,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { db } from "../database";
 import { tdb } from "../database/tenant";
@@ -538,12 +538,15 @@ export const onboardingRoutes = new Hono<AppEnv>()
             }),
           )
           .max(60),
+        // Random id the client keeps for one sitting; groups the turns saved
+        // for staff review. Absent from an older open tab: one chat per admin.
+        chatKey: z.string().min(1).max(64).optional(),
       }),
     ),
     async (c) => {
       const cid = tenantId(c);
       const t = tdb(cid);
-      const { messages } = c.req.valid("json");
+      const { messages, chatKey } = c.req.valid("json");
       const snap = await buildOnboardingSnapshot(cid);
       const adminUserId = (c.get("user") as { id: string } | null)?.id ?? null;
 
@@ -1237,6 +1240,10 @@ correction like that — it reads like you weren't listening.`;
         // ones after a tool call) is buffered to its text-end and dropped if
         // it repeats a question already shown this turn.
         let textSegments = 0;
+        // What the admin actually saw, kept for the staff-review record below.
+        let reply = "";
+        let streamError = "";
+        const toolLog: { name: string; input: unknown; output: unknown }[] = [];
         const shown: string[] = [];
         let buffer: string | null = null;
         const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -1261,6 +1268,7 @@ correction like that — it reads like you weren't listening.`;
             } else if (part.type === "text-delta") {
               if (buffer === null) {
                 shown[shown.length - 1] += part.text;
+                reply += part.text;
                 await stream.writeSSE({ event: "delta", data: part.text });
               } else {
                 buffer += part.text;
@@ -1271,11 +1279,13 @@ correction like that — it reads like you weren't listening.`;
               } else {
                 if (!isRepeat(buffer)) {
                   shown.push(norm(buffer));
+                  reply += "\n\n" + buffer.trim();
                   await stream.writeSSE({ event: "delta", data: "\n\n" + buffer.trim() });
                 }
                 buffer = null;
               }
             } else if (part.type === "tool-result") {
+              toolLog.push({ name: (part as any).toolName, input: (part as any).input, output: (part as any).output });
               await stream.writeSSE({
                 event: "tool",
                 data: JSON.stringify({
@@ -1285,11 +1295,43 @@ correction like that — it reads like you weren't listening.`;
                 }),
               });
             } else if (part.type === "error") {
-              await stream.writeSSE({ event: "error", data: String((part as any).error ?? "error") });
+              streamError = String((part as any).error ?? "error");
+              await stream.writeSSE({ event: "error", data: streamError });
             }
           }
         } catch (e: any) {
-          await stream.writeSSE({ event: "error", data: e?.message ?? "stream failed" });
+          streamError = e?.message ?? "stream failed";
+          await stream.writeSSE({ event: "error", data: streamError });
+        }
+        // Keep the exchange for staff review (Control Hub → company → Activity).
+        // Best-effort and after the reply is out, so it can never hold up or
+        // break the conversation.
+        try {
+          const lastUser = messages[messages.length - 1];
+          const turn = {
+            userMessage: lastUser?.role === "user" ? lastUser.content : "",
+            assistantMessage: reply.trim(),
+            tools: toolLog,
+            error: streamError,
+            finished,
+          };
+          await t.transaction(async (tx) => {
+            const [chat] = await tx
+              .insert(schema.onboardingChats)
+              .values({ companyId: cid, userId: adminUserId ?? "", clientKey: chatKey ?? `user:${adminUserId ?? ""}`, finished })
+              .onConflictDoUpdate({
+                target: [schema.onboardingChats.companyId, schema.onboardingChats.clientKey],
+                set: { updatedAt: new Date(), finished: sql`${schema.onboardingChats.finished} OR ${finished}` },
+              })
+              .returning({ id: schema.onboardingChats.id });
+            // A retry or edited resend of the same message replaces its turn.
+            await tx
+              .insert(schema.onboardingChatTurns)
+              .values({ chatId: chat.id, companyId: cid, seq: messages.length - 1, ...turn })
+              .onConflictDoUpdate({ target: [schema.onboardingChatTurns.chatId, schema.onboardingChatTurns.seq], set: { ...turn, createdAt: new Date() } });
+          });
+        } catch (e) {
+          console.error("[onboarding] chat turn record failed", e);
         }
         await stream.writeSSE({ event: "done", data: "1" });
         if (finished) await stream.writeSSE({ event: "complete", data: "1" });

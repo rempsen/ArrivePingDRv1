@@ -1,8 +1,16 @@
-import { pgTable, text, integer, real, doublePrecision, boolean, timestamp, index, uniqueIndex, bigserial } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, doublePrecision, boolean, timestamp, index, uniqueIndex, bigserial, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
+
+// TODO: JSON is stored as `text` (JSON.stringify/parse at the edges) almost
+// everywhere here, e.g. siteCrawls.pages/structured/proposal, auditLog.meta,
+// companySettings.qualifyingProfile, platformAudit.meta. onboardingChatTurns.tools
+// is the first `jsonb` column. Convert the others where it earns its keep
+// (queried or indexed by key, or parsed in many places), each with a migration
+// that casts the existing text (`USING col::jsonb`) and drops the parse code.
+// Leave blobs that are only ever read back whole as text.
 
 const now = () =>
   timestamp("created_at", { mode: "date", withTimezone: true })
@@ -904,6 +912,66 @@ export const siteCrawls = pgTable("site_crawls", {
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("site_crawls_company_idx").on(t.companyId),
+}));
+
+/**
+ * One post-signup onboarding conversation (api/routes/onboarding.ts `/chat`).
+ * The client names its conversation with a random `clientKey` it sends on every
+ * request, so every exchange of one sitting lands on the same row, and a
+ * reload (which starts a fresh conversation client-side) makes a new one. The
+ * key is only unique per company, so one tenant can't touch another's chat.
+ * Staff read these in Control Hub; nothing in the chat reads them back.
+ */
+export const onboardingChats = pgTable("onboarding_chats", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").notNull().default("default"),
+  // The admin who held the conversation.
+  userId: text("user_id").notNull().default(""),
+  clientKey: text("client_key").notNull(),
+  // `finish_onboarding` ended the conversation on one of its turns.
+  finished: boolean("finished").notNull().default(false),
+  // Last exchange recorded; createdAt is the first.
+  updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull().default(sql`now()`),
+  createdAt: now(),
+}, (t) => ({
+  keyIdx: uniqueIndex("onboarding_chats_company_key_idx").on(t.companyId, t.clientKey),
+  recentIdx: index("onboarding_chats_updated_idx").on(t.updatedAt),
+}));
+
+/**
+ * One exchange in an onboarding chat: what the admin typed, what the concierge
+ * replied, and the tool calls it made along the way. `seq` is the admin
+ * message's position in the history the client sent (0 = the first), so a
+ * retry or an edited resend of the same message replaces its turn instead of
+ * adding a duplicate, and turns read in order by `seq`. Written once the reply
+ * stream ends. Best-effort: a failed write never breaks the conversation.
+ */
+export const onboardingChatTurns = pgTable("onboarding_chat_turns", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  chatId: text("chat_id")
+    .notNull()
+    .references(() => onboardingChats.id, { onDelete: "cascade" }),
+  // Denormalised from the chat so row-level security can scope this table too.
+  companyId: text("company_id").notNull().default("default"),
+  seq: integer("seq").notNull(),
+  // The admin's message that started the exchange (the last in the request).
+  userMessage: text("user_message").notNull().default(""),
+  // Everything the concierge showed in reply, as streamed to the client.
+  assistantMessage: text("assistant_message").notNull().default(""),
+  // [{name, input, output}] for each tool the model called.
+  tools: jsonb("tools").$type<{ name: string; input: unknown; output: unknown }[]>().notNull().default([]),
+  // Non-empty when the stream errored (the message the client was sent).
+  error: text("error").notNull().default(""),
+  // The tool-driven `finish_onboarding` ended the conversation on this turn.
+  finished: boolean("finished").notNull().default(false),
+  createdAt: now(),
+}, (t) => ({
+  seqIdx: uniqueIndex("onboarding_chat_turns_chat_seq_idx").on(t.chatId, t.seq),
+  companyIdx: index("onboarding_chat_turns_company_idx").on(t.companyId),
 }));
 
 /** Reusable colored tags, scoped to clients/techs/both */

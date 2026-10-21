@@ -262,6 +262,7 @@ function AssistantText({ text }: { text: string }) {
  * installed here. */
 async function streamChat(
   history: ChatMsg[],
+  chatKey: string,
   onDelta: (text: string) => void,
   onTool: (t: ToolEvent) => void,
   onDone: () => void,
@@ -271,7 +272,7 @@ async function streamChat(
   const res = await fetch("/api/onboarding/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...apiHeaders() },
-    body: JSON.stringify({ messages: history }),
+    body: JSON.stringify({ messages: history, chatKey }),
   });
   if (!res.ok || !res.body) {
     let msg = `Chat failed (${res.status})`;
@@ -341,6 +342,7 @@ export function OnboardingChat() {
   const [streaming, setStreaming] = useState(false);
   const [err, setErr] = useState("");
   const historyRef = useRef<ChatMsg[]>([]); // full role/content log sent to the API
+  const chatKeyRef = useRef(crypto.randomUUID()); // names this sitting's chat for staff review
   const kickedOffRef = useRef(false);
   const toolKeyRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -405,6 +407,7 @@ export function OnboardingChat() {
 
     await streamChat(
       newHistory,
+      chatKeyRef.current,
       (chunk) => {
         assistantText += chunk;
         setLines((l) => {

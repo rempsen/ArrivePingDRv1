@@ -109,6 +109,24 @@ export interface Session {
   companyId: string;
 }
 
+export interface OnboardingChatTurn {
+  id: string;
+  userMessage: string;
+  assistantMessage: string;
+  tools: { name: string; input: unknown; output: unknown }[];
+  error: string;
+  finished: boolean;
+  createdAt: string;
+}
+
+export interface OnboardingChat {
+  id: string;
+  finished: boolean;
+  createdAt: string;
+  updatedAt: string;
+  turns: OnboardingChatTurn[];
+}
+
 export interface TenantDetail {
   company: {
     id: string;
@@ -147,6 +165,8 @@ export interface TenantDetail {
   tenantAudit: { id: string; actorName: string; action: string; entityType: string; summary: string; createdAt: string; supportActorName?: string }[];
   hubAudit: AuditEntry[];
   sessions: Session[];
+  /** Post-signup onboarding chats, newest first, each with its turns in order. */
+  onboardingChats: OnboardingChat[];
   plans: { id: string; label: string }[];
   readOnly: boolean;
 }

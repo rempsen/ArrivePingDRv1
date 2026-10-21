@@ -137,7 +137,7 @@ export const hubRoutes = new Hono<AppEnv>()
     const role = c.get("platformRole");
     // Sales see a customer's summary, not its people or history.
     if (role === "sales" && d.company.kind === "customer") {
-      return c.json({ ...d, people: [], tenantAudit: [], hubAudit: [], sessions: [], readOnly: true });
+      return c.json({ ...d, people: [], tenantAudit: [], hubAudit: [], sessions: [], onboardingChats: [], readOnly: true });
     }
     if (!atLeast(role, "staff")) return c.json({ ...d, hubAudit: [], readOnly: false });
     return c.json({ ...d, readOnly: false });

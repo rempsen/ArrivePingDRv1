@@ -218,6 +218,13 @@
       "when": 1792445062584,
       "tag": "0030_email_theme",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792601555649,
+      "tag": "0031_onboarding_chats",
+      "breakpoints": true
     }
   ]
 }
