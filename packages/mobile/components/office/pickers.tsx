@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ScrollView } from "react-native";
 import { MagnifyingGlass, UserPlus, Check, MapPin } from "phosphor-react-native";
 import { Sheet } from "./sheet";
@@ -84,7 +84,7 @@ export function ClientSheet({ open, onClose, onPick }: { open: boolean; onClose:
               keyExtractor={(r) => r.id}
               style={{ maxHeight: 360 }}
               keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => <ClientRowView row={item} onPress={() => onPick({ kind: "existing", id: item.id, name: item.name, phone: item.phone || undefined, lastAddress: item.address || undefined })} />}
+              renderItem={({ item }) => <ClientRowView row={item} onPress={() => onPick({ kind: "existing", id: item.id, name: item.name, phone: item.phone || undefined, lastAddress: clientAddress(item) })} />}
               ListEmptyComponent={<Empty text={q ? "No clients match" : "No clients yet"} sub="Add one below." />}
             />
           )}
@@ -92,6 +92,13 @@ export function ClientSheet({ open, onClose, onPick }: { open: boolean; onClose:
       )}
     </Sheet>
   );
+}
+
+/** The place we'd send a tech: the client's own address, else their property (with unit). */
+function clientAddress(row: ClientRow): string | undefined {
+  if (row.address) return row.address;
+  const prop = [row.propertyAddress, row.unit ? `Unit ${row.unit}` : ""].filter(Boolean).join(", ");
+  return prop || undefined;
 }
 
 function ClientRowView({ row, onPress }: { row: ClientRow; onPress: () => void }) {
@@ -167,6 +174,10 @@ export function AddressSheet({
   onPick: (a: { address: string; lat: number | null; lng: number | null }) => void;
 }) {
   const [q, setQ] = useState(initial);
+  // The sheet stays mounted between opens; show whatever the job has now.
+  useEffect(() => {
+    if (open) setQ(initial);
+  }, [open, initial]);
   const [token] = useState(() => Math.random().toString(36).slice(2));
   const [resolving, setResolving] = useState(false);
   const preds = useAddressSearch(q, token, open);

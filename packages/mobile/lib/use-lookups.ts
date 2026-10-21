@@ -24,6 +24,7 @@ export interface ClientRow {
   phone: string;
   address: string;
   propertyName?: string;
+  propertyAddress?: string;
   unit?: string;
   openJobs?: number;
   lastVisitAt?: string | null;
