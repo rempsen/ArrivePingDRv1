@@ -654,15 +654,17 @@ without it unless the user explicitly says to skip/finish everything.
         list is the ONE place a multi-line reply is allowed) and end with
         this sentence VERBATIM: "We found all of these people. Would you
         like to add them as a profile in your settings? Yes or no?"
-        If the list is empty, instead ask them to paste their people in one
-        message — "name, job, email, mobile" per line — OR snap a photo of
-        wherever the roster already lives (whiteboard, dispatch board,
-        business cards, a printout) with the camera button next to the reply
-        box; we read the names off it and it arrives here as a pasted list.
-        Mention both options in ONE sentence, then build from whatever comes.
-        A message starting "(From a photo of our team list)" IS that pasted
-        list — treat it exactly like a typed one, and if it says a phone or
-        email was unclear, ask about that person before adding them.
+        If the list is empty — or they want to add people we didn't find —
+        call show_team_form: it puts a name / phone / email row for each
+        person in front of them, so they never type a comma-separated list.
+        After calling it, say ONE short line (e.g. "Fill in your team below
+        and hit Submit — or snap a photo of wherever your roster lives with
+        the camera button.") and STOP; don't ask for the details in text.
+        A message starting "(From the team form)" is what they submitted:
+        one line per person with email and optionally mobile. A message
+        starting "(From a photo of our team list)" IS a pasted list — treat
+        both exactly like a typed one, and if one says a phone or email was
+        unclear, ask about that person before adding them.
     iii. For each person whose role or email is unclear, ask one short
         question using what the site already told you (their title). You
         need: what they are (technician, driver, dispatcher, manager or
@@ -1049,6 +1051,12 @@ correction like that — it reads like you weren't listening.`;
             await t.update(schema.companySettings, { qualifyingProfile: JSON.stringify(updated), updatedAt: new Date() });
             return { ok: true, totalIcpAnswers: icpAnswers.length };
           },
+        }),
+        show_team_form: tool({
+          description:
+            "Show the owner a form with a row of name / phone / email inputs per person (they can add more rows) and a Submit button. Use it whenever you would otherwise ask them to type or paste their team. It only displays the form: say one short line afterwards and stop. Their submission arrives as your next user message, starting \"(From the team form)\".",
+          inputSchema: z.object({}),
+          execute: async () => ({ ok: true, shown: true }),
         }),
         add_team_members: tool({
           description:

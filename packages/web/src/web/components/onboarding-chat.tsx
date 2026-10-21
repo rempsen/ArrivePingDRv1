@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "r
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../lib/api";
 import { useAuth } from "../hooks/use-auth";
+import { TeamForm } from "./onboarding-team-form";
 import {
   Sparkles,
   Send,
@@ -339,6 +340,9 @@ export function OnboardingChat() {
   // finish_onboarding ran: show the "all set" state for a beat before closing.
   const [allSet, setAllSet] = useState(false);
   const [input, setInput] = useState("");
+  // The concierge called show_team_form: name/phone/email rows replace the
+  // composer until they submit, or choose to type / send a photo instead.
+  const [teamFormOpen, setTeamFormOpen] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [err, setErr] = useState("");
   const historyRef = useRef<ChatMsg[]>([]); // full role/content log sent to the API
@@ -387,6 +391,7 @@ export function OnboardingChat() {
 
   async function runTurn(newHistory: ChatMsg[], showUserBubble = true) {
     setErr("");
+    setTeamFormOpen(false);
     historyRef.current = newHistory;
     const lastMsg = newHistory[newHistory.length - 1];
     if (showUserBubble && lastMsg) {
@@ -423,6 +428,11 @@ export function OnboardingChat() {
         });
       },
       (t) => {
+        // UI-only tool: it just asks for the form, nothing was changed, so no pill.
+        if (t.name === "show_team_form") {
+          setTeamFormOpen(true);
+          return;
+        }
         toolKeyRef.current += 1;
         setLines((l) => [...l, { kind: "tool", tool: t, key: toolKeyRef.current }]);
         // Fact panel — upsert by id so a correction (tenant changes their
@@ -694,7 +704,15 @@ export function OnboardingChat() {
 
         {/* The wrap-up choice above is forced: no free typing or "finish later"
             until they pick one ("add more" brings the composer back). */}
-        {!(offerFinish && !streaming) && !allSet && (
+        {teamFormOpen && !allSet && (
+          <TeamForm
+            busy={streaming}
+            onSubmit={(message) => runTurn([...historyRef.current, { role: "user", content: message }])}
+            onCancel={() => setTeamFormOpen(false)}
+          />
+        )}
+
+        {!(offerFinish && !streaming) && !allSet && !teamFormOpen && (
           <>
           {/* composer */}
           <div className="flex items-center gap-2 border-t border-white/5 p-3">
