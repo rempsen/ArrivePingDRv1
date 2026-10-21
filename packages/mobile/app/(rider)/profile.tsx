@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Signpost } from "phosphor-react-native";
+import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Signpost, SquaresFour } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { authClient, clearToken, authHeaders } from "../../lib/auth";
 import { unregisterPushToken } from "../../lib/push";
@@ -22,6 +22,8 @@ import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../../componen
 import { DeleteAccountSheet } from "../../components/delete-account-sheet";
 import { CoachAnchor, useCoach } from "../../components/coach-tour";
 import { useShift } from "../../lib/shift";
+import { resolveMode } from "../../lib/app-mode";
+import { getSavedMode, setSavedMode } from "../../lib/app-mode-store";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
@@ -63,6 +65,27 @@ export default function Profile() {
   // Per-company pending work, so the switcher shows WHICH employer is waiting
   // instead of making the tech switch into each one to find out.
   const notify = useNotifySummary();
+
+  // An owner who dispatches AND runs calls can go back to office mode from
+  // here; the office Profile has the matching switch (lib/app-mode.ts).
+  const thisCompany = companies.data?.find((co) => co.id === activeCompany) ?? (companies.data?.length === 1 ? companies.data[0] : undefined);
+  const canSwitchToOffice = thisCompany
+    ? resolveMode({ role: thisCompany.role, staffType: thisCompany.staffType, saved: getSavedMode() }).canSwitch
+    : false;
+  const toOffice = useMutation({
+    mutationFn: async () => {
+      // Same as a company switch: dispatch must not keep offering work to a
+      // phone that is no longer showing the technician screens.
+      await api.riders.me.$patch({ json: { status: "offline" } }).catch(() => {});
+      await stopLocationSharing().catch(() => {});
+      await setSavedMode("office");
+    },
+    onSuccess: () => {
+      qc.clear();
+      router.replace("/(office)");
+    },
+    onError: () => Alert.alert("Couldn't switch", "Check your connection and try again."),
+  });
 
   const switching = useMutation({
     mutationFn: async (companyId: string) => {
@@ -254,6 +277,21 @@ export default function Profile() {
           </View>
         </Card>
         </CoachAnchor>
+
+        {canSwitchToOffice && (
+          <Card>
+            <Text style={s.cardTitle}>Office mode</Text>
+            <Text style={s.availSub}>Dispatch board, jobs and team messaging. You'll go off shift when you switch.</Text>
+            <Button
+              title="Switch to office mode"
+              variant="outline"
+              icon={<SquaresFour color={C.text} size={18} />}
+              loading={toOffice.isPending}
+              onPress={() => toOffice.mutate()}
+              style={{ marginTop: 12 }}
+            />
+          </Card>
+        )}
 
         {biometric.data?.available && (
           <Card>
