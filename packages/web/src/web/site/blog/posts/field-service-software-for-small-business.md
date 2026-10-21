@@ -62,7 +62,7 @@ If a product nails the first four rows at a price that fits, it's on your short 
 
 Yes, but read the limits against your job count before you rely on one.
 
-- **Zoho FSM** has a free plan where "you can create up to 30 appointments per month," with up to 20 users ([Zoho FSM pricing](https://www.zoho.com/fsm/pricing.html)). Maps and location tracking sit in the paid Professional edition, not the free plan ([Zoho FSM pricing](https://www.zoho.com/fsm/pricing.html)).
+- **Zoho FSM** has a free plan where "you can create up to 30 appointments per month," with up to 20 users ([Zoho FSM pricing](https://www.zoho.com/fsm/pricing.html)). Live tracking of technicians' locations starts at the paid Standard edition; it isn't in the free plan ([Zoho FSM help](https://help.zoho.com/portal/en/kb/fsm/mobilize-your-workforce/articles/live-tracking-of-technician-location)).
 - **Connecteam's** Small Business plan is "completely FREE for small businesses with up to 10 employees" and includes time tracking, scheduling, forms and tasks ([Connecteam](https://connecteam.com/small-business-plan/)). It's a general workforce app: it doesn't describe customer tracking links or dispatch by location.
 - **Jobber and Housecall Pro** have no free plans; both offer a 14-day free trial with no card required ([Jobber](https://www.getjobber.com/pricing/); [Housecall Pro](https://housecallpro.com/pricing/)).
 
@@ -74,16 +74,16 @@ At list price on October 21, 2026, a shop with 1 office user and 4 technicians p
 
 ![What a 5-person shop (1 office user and 4 technicians) pays a month at list price, month-to-month, before tax, checked October 21, 2026: Zoho FSM Free $0 but capped at 30 appointments a month; ArrivePing $109, the $49 Starter with 1 dispatcher and 2 techs plus 2 techs at $30; Housecall Pro Essentials $189 with 5 users included; Jobber Connect $199 for the 5-user tier; Service Fusion Starter $245 with unlimited users; ServiceTitan not published, pricing on request](/blog/img/field-service-software-for-small-business-price.webp)
 
-| Monthly list price, 1 office + 4 technicians | Price | Pricing model | Free trial or plan | How customers see the tech coming |
+| Monthly list price, 1 office + 4 technicians | Price | Pricing model | Free trial or plan | Live tech location: who sees it |
 |---|---|---|---|---|
-| Zoho FSM Free | $0 | Free tier; paid tiers by appointment volume | Free plan, 30 appointments a month | Location tracking is a paid upgrade |
-| ArrivePing | $109 | $49 Starter (1 dispatcher + 2 techs), then $30 a tech | 30-day free trial | Live tracking page and ETA text from the tech's phone, every plan |
-| Housecall Pro Essentials | $189 | Plan with 5 users included | 14-day trial | Employee GPS locates techs on the office map from their phones, no hardware |
-| Jobber Connect | $199 | Tiers by number of users, $29 per extra user | 14-day trial | GPS tracking, "or in real time with tracking device from our fleet partners" |
-| Service Fusion Starter | $245 | Flat price, unlimited users | Demo, no trial stated | GPS fleet tracking listed as an add-on |
+| Zoho FSM Free | $0 | Free tier; paid tiers by appointment volume | Free plan, 30 appointments a month | Not in Free; starts at the paid Standard edition |
+| ArrivePing | $109 | $49 Starter (1 dispatcher + 2 techs), then $30 a tech | 30-day free trial | Office map and the customer's tracking page with ETA, from the tech's phone, every plan |
+| Housecall Pro Essentials | $189 | Plan with 5 users included | 14-day trial | Office map from techs' phones; the customer's live-map link needs the Vehicle GPS add-on, $20 per vehicle a month |
+| Jobber Connect | $199 | Tiers by number of users, $29 per extra user | 14-day trial | Your team's activity in Jobber, "or in real time with tracking device from our fleet partners" |
+| Service Fusion Starter | $245 | Flat price, unlimited users | Demo, no trial stated | GPS fleet tracking is an add-on |
 | ServiceTitan | Not published | Per technician, on request | Demo | Not compared here |
 
-Sources: [Zoho FSM](https://www.zoho.com/fsm/pricing.html); [ArrivePing](/pricing); [Housecall Pro](https://housecallpro.com/pricing/); [Jobber](https://www.getjobber.com/pricing/); [Service Fusion](https://www.servicefusion.com/pricing); [ServiceTitan](https://www.servicetitan.com/products). Month-to-month U.S. dollar list prices before tax, promotions and payment fees.
+Sources: [Zoho FSM](https://www.zoho.com/fsm/pricing.html) and [help](https://help.zoho.com/portal/en/kb/fsm/mobilize-your-workforce/articles/live-tracking-of-technician-location); [ArrivePing](/pricing); [Housecall Pro](https://housecallpro.com/pricing/) and [Vehicle GPS Tracking](https://www.housecallpro.com/features/vehicle-gps-tracking/); [Jobber](https://www.getjobber.com/pricing/); [Service Fusion](https://www.servicefusion.com/pricing); [ServiceTitan](https://www.servicetitan.com/products). Month-to-month U.S. dollar list prices before tax, promotions and payment fees.
 
 Three things move these numbers. Office staff usually count as users, annual billing is cheaper if you can pay up front (Service Fusion's annual price is "charged as one annual payment at sign-up" ([Service Fusion](https://www.servicefusion.com/pricing))), and tracking hardware is often extra. For the same comparison at 4, 12 and 28 people, and the fees that only show up after you sign, see [How much does field service software cost?](/blog/field-service-software-cost)
 
@@ -140,8 +140,10 @@ Not necessarily. Several products, including Housecall Pro's Essentials plan and
 2. Salesforce. "Right Tech, Right Tools, Right Time: How to Fix Your Field Service Scheduling." April 15, 2025. https://www.salesforce.com/blog/field-service-scheduling/
 3. Housecall Pro. "Home Service Customer Service Report: Trends & Statistics" (survey of 1,040 U.S. homeowners, October 23, 2025). https://www.housecallpro.com/resources/home-service-customer-service-report-trends-statistics/
 4. Zoho. "Zoho FSM Editions and Pricing." Checked October 21, 2026. https://www.zoho.com/fsm/pricing.html
-5. Connecteam. "Small Business Plan." Checked October 21, 2026. https://connecteam.com/small-business-plan/
-6. Jobber. "Pricing." Checked October 21, 2026. https://www.getjobber.com/pricing/
-7. Housecall Pro. "Pricing." Checked October 21, 2026. https://housecallpro.com/pricing/
-8. Service Fusion. "Pricing." Checked October 21, 2026. https://www.servicefusion.com/pricing
-9. ServiceTitan. "ServiceTitan Product Offerings." Checked October 21, 2026. https://www.servicetitan.com/products
+5. Zoho. "Live Tracking of Agent Location" (Zoho FSM help; available in Standard, Professional and Premium). Checked October 21, 2026. https://help.zoho.com/portal/en/kb/fsm/mobilize-your-workforce/articles/live-tracking-of-technician-location
+6. Connecteam. "Small Business Plan." Checked October 21, 2026. https://connecteam.com/small-business-plan/
+7. Jobber. "Pricing." Checked October 21, 2026. https://www.getjobber.com/pricing/
+8. Housecall Pro. "Pricing." Checked October 21, 2026. https://housecallpro.com/pricing/
+9. Housecall Pro. "Vehicle GPS Tracking." Checked October 21, 2026. https://www.housecallpro.com/features/vehicle-gps-tracking/
+10. Service Fusion. "Pricing." Checked October 21, 2026. https://www.servicefusion.com/pricing
+11. ServiceTitan. "ServiceTitan Product Offerings." Checked October 21, 2026. https://www.servicetitan.com/products
