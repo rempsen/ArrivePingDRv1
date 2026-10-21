@@ -9,7 +9,7 @@ import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
-import { needsAttention, nextUp, tallies } from "../../lib/board";
+import { needsAttention, nextUp, tallies, NO_JOBS, NO_TECHS } from "../../lib/board";
 
 /**
  * Today: the first thing a dispatcher looks at between calls. Who is where,
@@ -22,8 +22,8 @@ export default function Today() {
   const board = useBoard(null);
   const [now, setNow] = useState(() => new Date());
 
-  const techs = board.data?.techs ?? [];
-  const jobs = board.data?.jobs ?? [];
+  const techs = board.data?.techs ?? NO_TECHS;
+  const jobs = board.data?.jobs ?? NO_JOBS;
   const t = useMemo(() => tallies(techs), [techs]);
   const attention = useMemo(() => needsAttention(jobs), [jobs]);
   const upcoming = useMemo(() => nextUp(jobs, now), [jobs, now]);
