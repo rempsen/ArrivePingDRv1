@@ -15,6 +15,7 @@ import { useLiveMessageSignal } from "../../../lib/live-messages";
 import { threadsKey } from "../../../lib/use-threads";
 import { useBoard } from "../../../lib/use-board";
 import { STATUS_LABEL } from "../../../lib/board";
+import { useAccess } from "../../../lib/use-access";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -33,6 +34,9 @@ export default function OfficeThread() {
   const qc = useQueryClient();
   const { techId } = useLocalSearchParams<{ techId: string }>();
   const company = getActiveCompany();
+  // Sending is a POST on /api/messages → work_orders:edit; reading only needs view.
+  const { can } = useAccess();
+  const canSend = can("work_orders:edit");
   const board = useBoard(null);
   const tech = board.data?.techs.find((t) => t.id === techId);
 
@@ -109,6 +113,7 @@ export default function OfficeThread() {
       ) : (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={70}>
           <MessageThread
+            readOnly={!canSend}
             messages={thread.data?.messages ?? []}
             mine={(m) => m.senderRole === "dispatch"}
             theirName={name}

@@ -31,14 +31,17 @@ function ago(iso: string | null): string {
 export default function Messages() {
   const router = useRouter();
   const inbox = useDispatchThreads();
-  const { access } = useAccess();
+  // Reading threads needs work_orders:view; sending (broadcast, replies)
+  // is a POST on /api/messages and needs work_orders:edit (office-access.ts).
+  const { can } = useAccess();
+  const canSend = can("work_orders:edit");
   const [cast, setCast] = useState(false);
   return (
     <View style={s.screen}>
       <OfficeHeader
         title="Messages"
         right={
-          access?.office ? (
+          canSend ? (
             <Pressable onPress={() => setCast(true)} accessibilityRole="button" accessibilityLabel="Broadcast to the team" style={({ pressed }) => [s.cast, { opacity: pressed ? 0.8 : 1 }]}>
               <Megaphone color={C.brand} size={20} weight="fill" />
             </Pressable>

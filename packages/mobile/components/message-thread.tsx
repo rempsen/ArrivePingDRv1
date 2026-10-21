@@ -26,6 +26,7 @@ export function MessageThread({
   onRefresh,
   onSend,
   empty,
+  readOnly,
 }: {
   messages: ThreadMessage[];
   /** Is this message from the person holding the phone? */
@@ -38,6 +39,8 @@ export function MessageThread({
   onRefresh?: () => void;
   onSend: (body: string) => Promise<boolean> | boolean;
   empty?: React.ReactNode;
+  /** Show the conversation without a composer (no permission to send). */
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<ScrollView>(null);
@@ -78,6 +81,11 @@ export function MessageThread({
               );
             })}
       </ScrollView>
+      {readOnly ? (
+        <View style={s.composer}>
+          <Text style={[s.readOnly, WIDE]}>Your role can read this thread but not send. Ask an admin on your account.</Text>
+        </View>
+      ) : (
       <View style={s.composer}>
         <View style={[s.composerInner, WIDE]}>
           <TextInput
@@ -100,6 +108,7 @@ export function MessageThread({
           </Pressable>
         </View>
       </View>
+      )}
     </>
   );
 }
@@ -115,5 +124,6 @@ const s = StyleSheet.create({
   composer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 28, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg2 },
   composerInner: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
   input: { flex: 1, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.border, borderRadius: R.card, paddingHorizontal: 16, paddingVertical: 12, color: C.text, fontSize: 15, maxHeight: 120 },
+  readOnly: { color: C.muted, fontSize: 12, textAlign: "center" },
   sendBtn: { width: 48, height: 48, borderRadius: R.card, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
 });
