@@ -29,6 +29,10 @@ export function useStreamHealthy(): boolean {
 
 type Changed = { techs: string[]; jobs: string[]; all?: boolean };
 
+/** How often a stream of location pings may refresh the board. */
+const LOCATION_REFRESH_MS = 15_000;
+let lastLocationRefresh = 0;
+
 /**
  * Keep the dispatch board fresh while office screens are open.
  *
@@ -86,9 +90,14 @@ export function useDispatchStream(enabled: boolean) {
         }
       });
       src.addEventListener("locations", () => {
-        // Location batches arrive every second while techs move; the board
-        // query is cheap but not that cheap. Techs' positions refresh with the
-        // next `changed` or the 10 s staleTime, which is fine for a phone list.
+        // Location batches can arrive every second while techs drive. The
+        // Team list shows where people are and how old that is, so a moving
+        // tech must refresh the board — but not once a second: at most once
+        // per LOCATION_REFRESH_MS, which is plenty for a phone list.
+        const now = Date.now();
+        if (now - lastLocationRefresh < LOCATION_REFRESH_MS) return;
+        lastLocationRefresh = now;
+        invalidate();
       });
       src.addEventListener("error", () => {
         src.close();
