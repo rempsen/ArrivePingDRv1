@@ -8,6 +8,7 @@ import { useDispatchStream } from "../../lib/use-dispatch-stream";
 import { usePushNotifications, setAppBadgeCount } from "../../lib/push";
 import { useDispatchThreads } from "../../lib/use-threads";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
+import { UndoToastHost } from "../../components/office/undo-toast";
 
 /**
  * Office mode: the dispatcher's, manager's and owner's side of the app.
@@ -42,57 +43,60 @@ export default function OfficeLayout() {
   const seesTeam = isLoading || can("techs:view");
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: C.brand,
-        tabBarInactiveTintColor: C.muted,
-        tabBarStyle: {
-          backgroundColor: C.bg2,
-          borderTopColor: C.border,
-          borderTopWidth: 1,
-          height: 84,
-          paddingTop: 8,
-          paddingBottom: 28,
-        },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Today",
-          tabBarIcon: ({ color, focused }) => <House color={color} size={24} weight={focused ? "fill" : "regular"} />,
+    <>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: C.brand,
+          tabBarInactiveTintColor: C.muted,
+          tabBarStyle: {
+            backgroundColor: C.bg2,
+            borderTopColor: C.border,
+            borderTopWidth: 1,
+            height: 84,
+            paddingTop: 8,
+            paddingBottom: 28,
+          },
+          tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
         }}
-      />
-      <Tabs.Screen
-        name="jobs"
-        options={{
-          title: "Jobs",
-          href: seesJobs ? undefined : null,
-          tabBarIcon: ({ color, focused }) => <ClipboardText color={color} size={24} weight={focused ? "fill" : "regular"} />,
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: "Messages",
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon count={msgBadge} label={msgBadge === 1 ? "1 unread message" : `${msgBadge} unread messages`}>
-              <ChatCircleDots color={color} size={24} weight={focused ? "fill" : "regular"} />
-            </TabIcon>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="team"
-        options={{
-          title: "Team",
-          href: seesTeam ? undefined : null,
-          tabBarIcon: ({ color, focused }) => <UsersThree color={color} size={24} weight={focused ? "fill" : "regular"} />,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Today",
+            tabBarIcon: ({ color, focused }) => <House color={color} size={24} weight={focused ? "fill" : "regular"} />,
+          }}
+        />
+        <Tabs.Screen
+          name="jobs"
+          options={{
+            title: "Jobs",
+            href: seesJobs ? undefined : null,
+            tabBarIcon: ({ color, focused }) => <ClipboardText color={color} size={24} weight={focused ? "fill" : "regular"} />,
+          }}
+        />
+        <Tabs.Screen
+          name="messages"
+          options={{
+            title: "Messages",
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon count={msgBadge} label={msgBadge === 1 ? "1 unread message" : `${msgBadge} unread messages`}>
+                <ChatCircleDots color={color} size={24} weight={focused ? "fill" : "regular"} />
+              </TabIcon>
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="team"
+          options={{
+            title: "Team",
+            href: seesTeam ? undefined : null,
+            tabBarIcon: ({ color, focused }) => <UsersThree color={color} size={24} weight={focused ? "fill" : "regular"} />,
+          }}
+        />
+      </Tabs>
+      <UndoToastHost />
+    </>
   );
 }
 
