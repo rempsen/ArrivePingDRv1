@@ -31,15 +31,18 @@ export default function OfficeLayout() {
     endAllLiveActivities().catch(() => {});
   }, []);
 
-  // Unread from technicians, across every thread. The rider summary endpoint
-  // counts the other direction, so office mode reads the dispatcher inbox.
-  const { unread: msgBadge } = useDispatchThreads();
-  useEffect(() => {
-    setAppBadgeCount(msgBadge);
-  }, [msgBadge]);
-
   const seesJobs = isLoading || can("work_orders:view") || can("scheduler:view");
   const seesTeam = isLoading || can("techs:view");
+  // /api/messages/* needs work_orders:view (api/lib/office-access.ts), so a
+  // scheduler-only member gets no Messages tab rather than a tab of 403s.
+  const seesMessages = !isLoading && can("work_orders:view");
+
+  // Unread from technicians, across every thread. The rider summary endpoint
+  // counts the other direction, so office mode reads the dispatcher inbox.
+  const { unread: msgBadge } = useDispatchThreads(seesMessages);
+  useEffect(() => {
+    setAppBadgeCount(seesMessages ? msgBadge : 0);
+  }, [msgBadge, seesMessages]);
 
   return (
     <Tabs
@@ -77,6 +80,7 @@ export default function OfficeLayout() {
         name="messages"
         options={{
           title: "Messages",
+          href: seesMessages ? undefined : null,
           tabBarIcon: ({ color, focused }) => (
             <TabIcon count={msgBadge} label={msgBadge === 1 ? "1 unread message" : `${msgBadge} unread messages`}>
               <ChatCircleDots color={color} size={24} weight={focused ? "fill" : "regular"} />
