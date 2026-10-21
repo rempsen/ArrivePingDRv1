@@ -49,13 +49,14 @@ export default function OfficeJob() {
   const techName = b?.rider?.name ?? tech?.name ?? "";
   const label = b ? b.customer?.name || b.title || b.service?.name || "Job" : "Job";
 
-  async function reschedule(iso: string) {
+  async function reschedule(iso: string, force = false) {
     if (!b) return;
     setMoving(true);
-    const r = await actions.schedule(b.id, iso);
+    const r = await actions.schedule(b.id, iso, { force });
     setMoving(false);
     if (r.ok) {
       setWhenOpen(false);
+      // Forced or not, the server grants the same undo window.
       const token = r.undo;
       showToast(`Moved to ${fmtDate(iso)}`, {
         onUndo: token
@@ -67,22 +68,10 @@ export default function OfficeJob() {
       });
       return;
     }
-    if (r.forceable) {
+    if (r.forceable && !force) {
       Alert.alert("Move it anyway?", r.message, [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Move anyway",
-          style: "destructive",
-          onPress: async () => {
-            setMoving(true);
-            const f = await actions.schedule(b.id, iso, { force: true });
-            setMoving(false);
-            if (f.ok) {
-              setWhenOpen(false);
-              showToast(`Moved to ${fmtDate(iso)}`);
-            } else Alert.alert("Couldn't move", f.message);
-          },
-        },
+        { text: "Move anyway", style: "destructive", onPress: () => reschedule(iso, true) },
       ]);
       return;
     }
@@ -274,7 +263,7 @@ export default function OfficeJob() {
       {b ? (
         <>
           <AssignSheet open={assignOpen} bookingId={b.id} currentRiderId={b.riderId} jobLabel={label} onClose={() => setAssignOpen(false)} />
-          <DatetimeSheet open={whenOpen} title="Move to" tz={tz} initial={b.scheduledAt} allowAsap={false} busy={moving} onClose={() => setWhenOpen(false)} onPick={reschedule} />
+          <DatetimeSheet open={whenOpen} title="Move to" tz={tz} initial={b.scheduledAt} allowAsap={false} busy={moving} onClose={() => setWhenOpen(false)} onPick={(iso) => reschedule(iso)} />
         </>
       ) : null}
     </SafeAreaView>
