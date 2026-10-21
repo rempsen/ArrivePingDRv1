@@ -55,6 +55,8 @@ beforeAll(async () => {
     schema.auditLog,
     schema.integrations,
     schema.contactRequests,
+    schema.onboardingChats,
+    schema.onboardingChatTurns,
   );
   await db.insert(schema.companies).values([
     { id: "hub-cust", name: "Acme HVAC", kind: "customer", plan: "starter" },
@@ -99,6 +101,26 @@ describe("access", () => {
     expect(d.people).toEqual([]);
     const s = (await (await req("GET", "/tenants/hub-cust", "staff")).json()) as { people: { email: string }[] };
     expect(s.people.map((p) => p.email)).toContain("alex@acme.test");
+  });
+  it("shows staff each onboarding chat with its turns in order, and sales none of it", async () => {
+    const [chat, other, demo] = await sdb.insert(schema.onboardingChats).values([
+      { companyId: "hub-cust", clientKey: "k1", updatedAt: new Date("2026-01-02T00:00:00Z") },
+      { companyId: "hub-cust", clientKey: "k0", updatedAt: new Date("2026-01-01T00:00:00Z") },
+      { companyId: "hub-demo", clientKey: "k1" },
+    ]).returning();
+    await sdb.insert(schema.onboardingChatTurns).values([
+      { chatId: chat.id, companyId: "hub-cust", seq: 2, userMessage: "second", tools: [{ name: "update_brand_profile", input: { tagline: "x" }, output: { ok: true } }] },
+      { chatId: chat.id, companyId: "hub-cust", seq: 0, userMessage: "first", assistantMessage: "hi" },
+      { chatId: other.id, companyId: "hub-cust", seq: 0, userMessage: "older chat" },
+      { chatId: demo.id, companyId: "hub-demo", seq: 0, userMessage: "other tenant" },
+    ]);
+    type Chats = { onboardingChats: { id: string; turns: { userMessage: string; tools: { name: string }[] }[] }[] };
+    const staff = (await (await req("GET", "/tenants/hub-cust", "staff")).json()) as Chats;
+    expect(staff.onboardingChats.map((c) => c.id)).toEqual([chat.id, other.id]);
+    expect(staff.onboardingChats[0].turns.map((t) => t.userMessage)).toEqual(["first", "second"]);
+    expect(staff.onboardingChats[0].turns[1].tools[0].name).toBe("update_brand_profile");
+    const sales = (await (await req("GET", "/tenants/hub-cust", "sales")).json()) as Chats;
+    expect(sales.onboardingChats).toEqual([]);
   });
   it("keeps the audit feed off the overview for sales", async () => {
     await sdb.insert(schema.platformAudit).values({ actorId: "x", actorName: "X", action: "actas.start", summary: "secret reason" });

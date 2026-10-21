@@ -4,7 +4,7 @@
  * crosses tenants, so it runs on the system connection; the routes in
  * api/routes/hub.ts decide who may see it.
  */
-import { and, desc, eq, gte, inArray, isNotNull, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne } from "drizzle-orm";
 import { sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { asTenantKind, FEATURES, type FeatureKey, type TenantKind } from "../shared/features";
@@ -231,6 +231,43 @@ export async function hubOverview(now = new Date()) {
 }
 
 /** Everything the tenant page shows, or null when there is no such tenant. */
+/** A company's onboarding chats, newest first, each with its turns in order. */
+async function hubOnboardingChats(companyId: string) {
+  try {
+    const chats = await sdb
+      .select()
+      .from(schema.onboardingChats)
+      .where(eq(schema.onboardingChats.companyId, companyId))
+      .orderBy(desc(schema.onboardingChats.updatedAt))
+      .limit(10);
+    if (!chats.length) return [];
+    const turns = await sdb
+      .select()
+      .from(schema.onboardingChatTurns)
+      .where(inArray(schema.onboardingChatTurns.chatId, chats.map((c) => c.id)))
+      .orderBy(asc(schema.onboardingChatTurns.seq));
+    return chats.map((c) => ({
+      id: c.id,
+      finished: c.finished,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      turns: turns
+        .filter((t) => t.chatId === c.id)
+        .map((t) => ({
+          id: t.id,
+          userMessage: t.userMessage,
+          assistantMessage: t.assistantMessage,
+          tools: t.tools ?? [],
+          error: t.error,
+          finished: t.finished,
+          createdAt: t.createdAt,
+        })),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function hubTenantDetail(companyId: string) {
   const [co] = await sdb.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   if (!co) return null;
@@ -239,7 +276,7 @@ export async function hubTenantDetail(companyId: string) {
   const settings: Record<string, unknown> = {};
   if (settingsRow) for (const k of settingKeys) settings[k] = (settingsRow as Record<string, unknown>)[k];
 
-  const [features, people, integrations, tenantAudit, hubAudit, sessions, list] = await Promise.all([
+  const [features, people, integrations, tenantAudit, hubAudit, sessions, list, onboardingChats] = await Promise.all([
     getTenantFeatures(companyId),
     hubPeople(companyId),
     sdb
@@ -251,6 +288,7 @@ export async function hubTenantDetail(companyId: string) {
     sdb.select().from(schema.platformAudit).where(eq(schema.platformAudit.companyId, companyId)).orderBy(desc(schema.platformAudit.createdAt)).limit(40).catch(() => []),
     sdb.select().from(schema.actAsSessions).where(eq(schema.actAsSessions.companyId, companyId)).orderBy(desc(schema.actAsSessions.startedAt)).limit(20).catch(() => []),
     listHubTenants(),
+    hubOnboardingChats(companyId),
   ]);
   const summary = list.find((t) => t.id === companyId) ?? null;
   // Setup check: does the logo read on the plate it will be shown on? Staff
@@ -290,6 +328,7 @@ export async function hubTenantDetail(companyId: string) {
     tenantAudit,
     hubAudit,
     sessions,
+    onboardingChats,
     plans: Object.values(PLANS).map((p) => ({ id: p.id, label: p.label })),
   };
 }

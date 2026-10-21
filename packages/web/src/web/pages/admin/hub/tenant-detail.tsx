@@ -17,7 +17,7 @@ import { HUB_SETTINGS, type HubSettingDef } from "../../../../shared/hub-setting
 import { TenantLogo } from "../../../components/brand";
 import { ACT_AS_DENY, ACT_AS_MINUTES, ACT_AS_MIN_REASON } from "../../../../shared/act-as";
 import { HubLayout, KindBadge, StatusText, EmptyNote, sourceText, useHubMe } from "./hub-ui";
-import { hub, KIND_LABEL, OFFICE_ROLE_LABEL, PLAN_LABEL, type FeatureRow, type Person, type TenantDetail, type TenantKind } from "./hub-data";
+import { hub, KIND_LABEL, OFFICE_ROLE_LABEL, PLAN_LABEL, type FeatureRow, type OnboardingChat, type Person, type TenantDetail, type TenantKind } from "./hub-data";
 
 type Tab = "overview" | "features" | "people" | "settings" | "activity" | "manage";
 
@@ -522,6 +522,9 @@ function SettingControl({ def, value, disabled, onChange }: { def: HubSettingDef
 function ActivityTab({ d }: { d: TenantDetail }) {
   return (
     <div className="grid gap-6 xl:grid-cols-2">
+      <div className="xl:col-span-2">
+        <OnboardingChatCard chats={d.onboardingChats} />
+      </div>
       <Card title="Their audit log" caption="What happened in the company, as they see it." pad={false}>
         {d.tenantAudit.length === 0 ? (
           <div className="px-5 pb-5">
@@ -584,6 +587,45 @@ function ActivityTab({ d }: { d: TenantDetail }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+function OnboardingChatCard({ chats }: { chats: OnboardingChat[] }) {
+  return (
+    <Card title="Onboarding chat" caption="The conversation with the setup concierge, as the admin saw it, with the changes it made. A new sitting (or a reload) is a new chat." pad={false}>
+      {chats.length === 0 ? (
+        <div className="px-5 pb-5">
+          <EmptyNote>No onboarding chat recorded. Conversations before this was added aren't kept.</EmptyNote>
+        </div>
+      ) : (
+        <div className="divide-y divide-white/[0.08]">
+          {chats.map((chat) => (
+            <section key={chat.id}>
+              <p className="bg-white/[0.03] px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Started {fmt.ago(chat.createdAt)} · {chat.turns.length} {chat.turns.length === 1 ? "exchange" : "exchanges"}
+                {chat.finished ? <span className="ml-2 normal-case tracking-normal text-emerald-300">finished onboarding</span> : null}
+              </p>
+              <ol className="divide-y divide-white/[0.05]">
+                {chat.turns.map((t) => (
+                  <li key={t.id} className="space-y-2 px-5 py-3 text-[13px]">
+                    {t.userMessage ? <p className="whitespace-pre-wrap text-white">{t.userMessage}</p> : null}
+                    {t.assistantMessage ? <p className="whitespace-pre-wrap text-slate-300">{t.assistantMessage}</p> : null}
+                    {t.tools.map((tool, i) => (
+                      <details key={i} className="rounded-lg bg-white/[0.04] px-3 py-1.5 text-[12px] text-slate-400">
+                        <summary className="cursor-pointer select-none text-slate-300">{tool.name}</summary>
+                        <pre className="mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap break-words text-[11px]">{JSON.stringify({ input: tool.input, output: tool.output }, null, 2)}</pre>
+                      </details>
+                    ))}
+                    {t.error ? <p className="text-[12px] text-red-300">Error: {t.error}</p> : null}
+                    <p className="text-[11px] text-slate-500">{fmt.ago(t.createdAt)}</p>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
