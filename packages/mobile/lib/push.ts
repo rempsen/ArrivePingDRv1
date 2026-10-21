@@ -6,6 +6,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { api } from "./api";
 import { getToken } from "./auth";
+import { routeForNotification as routeFor } from "./push-route";
 
 /**
  * Expo push notifications for the technician app.
@@ -114,6 +115,16 @@ export async function unregisterPushToken(): Promise<void> {
 }
 
 /**
+ * Which half of the app is open, for routing a tapped notification. The
+ * office layout sets "office" while mounted; everything else is field, so
+ * the technician flow is unchanged.
+ */
+let routing: "field" | "office" = "field";
+export function setPushRouting(mode: "field" | "office") {
+  routing = mode;
+}
+
+/**
  * Hook: registers the push token once the user is authenticated and wires up
  * tap handling so a job notification routes straight to that job screen (or
  * a message notification routes to the Messages tab).
@@ -123,12 +134,8 @@ export function usePushNotifications() {
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
   const routeFromNotification = (data: Record<string, any> | undefined) => {
-    if (!data) return;
-    const bookingId = data.bookingId;
-    if (bookingId) { router.push(`/job/${bookingId}`); return; }
-    if (data.type === "direct_message" || data.type === "broadcast_message") {
-      router.push("/(rider)/messages");
-    }
+    const to = routeFor(data, routing);
+    if (to) router.push(to as never);
   };
 
   useEffect(() => {

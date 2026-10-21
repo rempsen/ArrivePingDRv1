@@ -202,3 +202,30 @@ export async function usersForCompany(companyId: string) {
       };
     });
 }
+
+const OFFICE_NOTIFY_ROLES: ReadonlySet<string> = new Set(["superadmin", "admin", "manager", "dispatcher", "project_manager"]);
+
+/**
+ * Everyone who runs the office at this company — the people a "new work
+ * order", "tech declined" or "message from a tech" alert must reach.
+ *
+ * Membership roles first (a dispatcher is a dispatcher by membership), with
+ * the tenant-scoped `user.role` as the fallback for home-company admins who
+ * predate membership rows. Disabled memberships are left out. Used by the
+ * notification fan-out in services/dispatch.ts and routes/messages.ts, which
+ * previously reached `admin` only, so managers and dispatchers heard nothing.
+ */
+export async function officeUsersAt(companyId: string): Promise<Array<{ id: string; name: string; email: string; phone?: string | null }>> {
+  const t = tdb(companyId);
+  const [members, users] = await Promise.all([t.select(schema.memberships), t.select(schema.user)]);
+  const membership = new Map(members.map((m) => [m.userId, m]));
+  const out = new Map<string, { id: string; name: string; email: string; phone?: string | null }>();
+  for (const u of users) {
+    const m = membership.get(u.id);
+    const role = m?.role ?? (u as { role?: string }).role ?? "";
+    if (m && m.status !== "active") continue;
+    if (!OFFICE_NOTIFY_ROLES.has(role)) continue;
+    out.set(u.id, { id: u.id, name: u.name, email: u.email, phone: (u as { phone?: string | null }).phone ?? null });
+  }
+  return [...out.values()];
+}
