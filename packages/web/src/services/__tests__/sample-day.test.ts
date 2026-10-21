@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -259,8 +259,10 @@ describe("clearSampleDay", () => {
     expect(r).toEqual({ jobs: 8, people: 9, linkedJobs: 1, unassigned: 2 });
 
     expect(await count(schema.bookings, and(eq(schema.bookings.companyId, CO), eq(schema.bookings.isSample, true)))).toBe(0);
-    expect(await count(schema.user, eq(schema.user.isSample, true))).toBe(0);
-    expect(await count(schema.riders, eq(schema.riders.isSample, true))).toBe(0);
+    // Only this company's sample rows: other test files in the same run seed their own.
+    const ours = `${sd.sampleId(CO, "")}%`;
+    expect(await count(schema.user, and(eq(schema.user.isSample, true), like(schema.user.id, ours)))).toBe(0);
+    expect(await count(schema.riders, and(eq(schema.riders.isSample, true), like(schema.riders.id, ours)))).toBe(0);
     expect(await count(schema.memberships, eq(schema.memberships.companyId, CO))).toBe(0);
     const [own1] = await db.select().from(schema.bookings).where(eq(schema.bookings.id, "own-1"));
     expect(own1).toMatchObject({ riderId: null, status: "pending" });
