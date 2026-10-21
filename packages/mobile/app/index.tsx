@@ -7,7 +7,6 @@ import { C, R } from "../lib/theme";
 import { Button } from "../components/ui";
 import { shouldPromptBiometric, markUnlockedNow, LocalAuthentication } from "../lib/biometric-lock";
 import { endAllLiveActivities } from "../lib/useLiveActivity";
-import { isOfficeRole } from "../lib/app-mode";
 
 export default function Index() {
   const router = useRouter();
@@ -43,7 +42,6 @@ export default function Index() {
 
   useEffect(() => {
     if (isPending) return;
-    const role = (session?.user as any)?.role;
     if (!session) {
       // Safety net: a Live Activity outlives the app process, so if we ever
       // reach a cold start with no session (session expired, sign-out that
@@ -52,12 +50,10 @@ export default function Index() {
       router.replace("/sign-in");
       return;
     }
-    if (role !== "rider" && !isOfficeRole(role)) {
-      // customers aren't part of the app; office roles get office mode after
-      // the company pick (lib/app-mode.ts)
-      router.replace("/sign-in");
-      return;
-    }
+    // No role gate here: the global `role` is the person's home-company role,
+    // and a customer account later invited as a dispatcher (or technician)
+    // keeps it. The company picker reads the per-company membership roles
+    // from /api/me/companies and only offers rosters this app serves.
     if (attempted.current) return;
     attempted.current = true;
     (async () => {
