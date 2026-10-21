@@ -27,3 +27,11 @@ describe("when", () => {
     expect(slotLabel(17, 15)).toBe("5:15 PM");
   });
 });
+
+import { fmtInTz } from "../when";
+describe("fmtInTz", () => {
+  test("renders on the company's clock, not the device's", () => {
+    expect(fmtInTz("2026-10-21T14:30:00.000Z", "America/Winnipeg")).toBe("Wed, Oct 21, 9:30 AM");
+    expect(fmtInTz("2026-10-21T14:30:00.000Z", "America/Toronto")).toBe("Wed, Oct 21, 10:30 AM");
+  });
+});
