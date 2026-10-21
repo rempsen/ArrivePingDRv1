@@ -28,7 +28,10 @@ async function post<T = unknown>(path: string, json: unknown): Promise<DispatchR
 }
 
 export interface AssignOpts {
+  /** Interrupt an in-field job / re-offer an accepted one. */
   force?: boolean;
+  /** Double-book over a clash or time off (checked separately by the server). */
+  forceBusy?: boolean;
   expectRiderId?: string | null;
   scheduledAt?: string;
 }

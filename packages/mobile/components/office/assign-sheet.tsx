@@ -43,11 +43,24 @@ export function AssignSheet({
 
   const techs = new Map<string, OfficeTech>((board.data?.techs ?? []).map((t) => [t.id, t]));
 
-  async function pick(c: Candidate, force = false) {
+  /**
+   * The server keeps two overrides apart: `force` interrupts a job that is
+   * already in the field (or re-offers one the tech accepted); `forceBusy`
+   * double-books over a clash or time off. A refusal with a `reason` is the
+   * availability kind; one without is the in-flight kind. Each confirm adds
+   * only the override the server asked about, so saying yes to "interrupt the
+   * current visit" never silently double-books the same person as well.
+   */
+  async function pick(c: Candidate, overrides: { force?: boolean; forceBusy?: boolean } = {}) {
     const tech = techs.get(c.techId);
     const name = tech?.name ?? "that technician";
     setBusyId(c.techId);
-    const r = await assign(bookingId, c.techId, { force, expectRiderId: currentRiderId });
+    const r = await assign(bookingId, c.techId, {
+      force: !!overrides.force,
+      // Explicit false keeps the availability check on while `force` is set.
+      forceBusy: !!overrides.forceBusy,
+      expectRiderId: currentRiderId,
+    });
     setBusyId(null);
     if (r.ok) {
       onClose();
@@ -64,9 +77,10 @@ export function AssignSheet({
       return;
     }
     if (r.forceable) {
+      const next = r.reason ? { ...overrides, forceBusy: true } : { ...overrides, force: true };
       Alert.alert(`Send ${name} anyway?`, r.message, [
         { text: "Cancel", style: "cancel" },
-        { text: "Assign anyway", style: "destructive", onPress: () => pick(c, true) },
+        { text: "Assign anyway", style: "destructive", onPress: () => pick(c, next) },
       ]);
       return;
     }
