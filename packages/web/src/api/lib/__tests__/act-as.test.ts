@@ -63,6 +63,9 @@ beforeAll(async () => {
     { id: "aa-demo", name: "Demo Co", kind: "demo", isInternal: true },
     { id: "aa-shy", name: "Private Co", kind: "customer" },
   ] as never);
+  // Our own account. Other test files in the same run may already have
+  // created it (hub.test.ts does), so seed it the same way they do.
+  await db.insert(schema.companies).values({ id: "default", name: "ArrivePing", kind: "internal" } as never).onConflictDoNothing();
   await db.insert(schema.companySettings).values([
     { id: "aa-s1", companyId: "aa-cust" },
     { id: "aa-s2", companyId: "aa-demo" },
@@ -155,7 +158,7 @@ describe("during a session", () => {
 
 describe("review fixes", () => {
   it("keeps sales out of our own account's people", async () => {
-    await expect(start({ actor: { id: sales.id, name: sales.name }, role: "sales", companyId: "default", targetUserId: "aa-tom" })).rejects.toMatchObject({ code: "no_company" });
+    await expect(start({ actor: { id: sales.id, name: sales.name }, role: "sales", companyId: "default", targetUserId: "aa-tom" })).rejects.toMatchObject({ code: "not_allowed" });
     await db.insert(schema.companies).values({ id: "default", name: "ArrivePing", kind: "internal" } as never).catch(() => {});
     await expect(start({ actor: { id: sales.id, name: sales.name }, role: "sales", companyId: "default", targetUserId: "aa-tom" })).rejects.toMatchObject({ code: "not_allowed" });
   });
