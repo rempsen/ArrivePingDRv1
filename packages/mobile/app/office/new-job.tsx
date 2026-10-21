@@ -9,14 +9,14 @@ import { Button, Card } from "../../components/ui";
 import { ClientSheet, ServiceSheet, AddressSheet, TechSheet, Field } from "../../components/office/pickers";
 import { DatetimeSheet } from "../../components/office/datetime-sheet";
 import { showToast } from "../../components/office/undo-toast";
-import { C, R, S, WIDE, fmtDate } from "../../lib/theme";
+import { C, R, S, WIDE } from "../../lib/theme";
 import { authHeaders } from "../../lib/auth";
 import { getActiveCompany } from "../../lib/active-company";
 import { useBoard } from "../../lib/use-board";
 import { useServices, type ServiceRow } from "../../lib/use-lookups";
 import { classifyResponse } from "../../lib/dispatch-result";
 import { buildAdminBooking, EMPTY_DRAFT, type DraftErrors, type NewJobDraft, type Priority } from "../../lib/new-job";
-import { asap } from "../../lib/when";
+import { asap, fmtInTz } from "../../lib/when";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const PRIORITIES: Array<{ key: Priority; label: string; color: string }> = [
@@ -100,7 +100,8 @@ export default function NewJob() {
     Alert.alert("Couldn't create the job", r.message);
   }
 
-  const whenLabel = d.when ? (d.when.kind === "asap" ? `ASAP · ~${fmtDate(asap(new Date()).toISOString())}` : fmtDate(d.when.iso)) : "Pick a time";
+  // Shown on the company's clock, the same one the picker used.
+  const whenLabel = d.when ? (d.when.kind === "asap" ? `ASAP · ~${fmtInTz(asap(new Date()).toISOString(), tz)}` : fmtInTz(d.when.iso, tz)) : "Pick a time";
 
   return (
     <SafeAreaView style={s.screen} edges={["top"]}>
@@ -186,7 +187,11 @@ export default function NewJob() {
         open={sheet === "client"}
         onClose={() => setSheet(null)}
         onPick={(c) => {
-          patch({ client: c, address: d.address || (c.kind === "existing" ? (c.lastAddress ?? "") : "") });
+          // A different client means a different place: replace the address
+          // (and drop the old coordinates) rather than keep the previous one.
+          const changed = !d.client || d.client.kind !== c.kind || (c.kind === "existing" && d.client.kind === "existing" && d.client.id !== c.id);
+          const prefill = c.kind === "existing" ? (c.lastAddress ?? "") : "";
+          patch(changed ? { client: c, address: prefill, lat: null, lng: null } : { client: c });
           setSheet(null);
         }}
       />
