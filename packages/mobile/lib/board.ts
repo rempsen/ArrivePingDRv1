@@ -49,6 +49,10 @@ export interface OfficeJob {
   isSample: boolean;
 }
 
+/** Stable empties so `board.data?.techs ?? NO_TECHS` keeps memo deps steady. */
+export const NO_TECHS: readonly OfficeTech[] = Object.freeze([]) as readonly OfficeTech[];
+export const NO_JOBS: readonly OfficeJob[] = Object.freeze([]) as readonly OfficeJob[];
+
 export interface Tallies {
   enroute: number;
   onsite: number;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
+import { Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Lightning } from "phosphor-react-native";
 import { Sheet } from "./sheet";
 import { Button } from "../ui";

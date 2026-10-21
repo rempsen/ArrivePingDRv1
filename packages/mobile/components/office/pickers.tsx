@@ -65,7 +65,7 @@ export function ClientSheet({ open, onClose, onPick }: { open: boolean; onClose:
     >
       {adding ? (
         <View style={{ gap: S.sm }}>
-          <Field label="Name" value={name} onChange={setName} autoFocus placeholder="Full name" />
+          <Field label="Name" value={name} onChange={setName} placeholder="Full name" />
           <Field label="Email" value={email} onChange={setEmail} keyboardType="email-address" placeholder="name@example.com" />
           <Field label="Phone (optional)" value={phone} onChange={setPhone} keyboardType="phone-pad" placeholder="204 555 0100" />
           <Text style={s.hint}>They get the usual booking texts and emails, the same as a client added on the web.</Text>
@@ -74,7 +74,7 @@ export function ClientSheet({ open, onClose, onPick }: { open: boolean; onClose:
         <>
           <View style={s.search}>
             <MagnifyingGlass color={C.muted} size={16} />
-            <TextInput value={q} onChangeText={setQ} placeholder="Name, phone, address or email" placeholderTextColor={C.muted} style={s.input} autoFocus autoCorrect={false} />
+            <TextInput value={q} onChangeText={setQ} placeholder="Name, phone, address or email" placeholderTextColor={C.muted} style={s.input} autoCorrect={false} />
           </View>
           {search.isLoading ? (
             <ListSkeleton rows={4} height={60} />
@@ -179,7 +179,7 @@ export function AddressSheet({
     >
       <View style={s.search}>
         <MapPin color={C.muted} size={16} />
-        <TextInput value={q} onChangeText={setQ} placeholder="Street address" placeholderTextColor={C.muted} style={s.input} autoFocus autoCorrect={false} />
+        <TextInput value={q} onChangeText={setQ} placeholder="Street address" placeholderTextColor={C.muted} style={s.input} autoCorrect={false} />
       </View>
       <FlatList
         data={preds.data ?? []}
@@ -272,7 +272,6 @@ export function Field({
   onChange,
   placeholder,
   multiline,
-  autoFocus,
   keyboardType,
 }: {
   label: string;
@@ -280,7 +279,6 @@ export function Field({
   onChange: (v: string) => void;
   placeholder?: string;
   multiline?: boolean;
-  autoFocus?: boolean;
   keyboardType?: "default" | "email-address" | "phone-pad";
 }) {
   return (
@@ -292,7 +290,6 @@ export function Field({
         placeholder={placeholder}
         placeholderTextColor={C.muted}
         multiline={multiline}
-        autoFocus={autoFocus}
         keyboardType={keyboardType}
         autoCapitalize={keyboardType === "email-address" ? "none" : "sentences"}
         autoCorrect={keyboardType !== "email-address"}
