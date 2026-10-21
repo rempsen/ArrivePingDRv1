@@ -159,9 +159,10 @@ export default function NewJob() {
             icon={<Clock color={C.brand} size={20} weight="fill" />}
             label="When"
             value={d.when ? whenLabel : undefined}
-            placeholder="Pick a time"
+            placeholder={board.data ? "Pick a time" : "Loading the company's clock…"}
             error={errors.when}
-            onPress={() => setSheet("when")}
+            // The slot picker works on the company's clock, which comes with the board.
+            onPress={() => board.data && setSheet("when")}
           >
             {!d.when ? (
               <Button title="ASAP" small variant="outline" icon={<Lightning color={C.amber} size={16} weight="fill" />} onPress={() => patch({ when: { kind: "asap" } })} />
