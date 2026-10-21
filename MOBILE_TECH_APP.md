@@ -1,4 +1,4 @@
-# NVC360 Technician Mobile App (Expo)
+# ArrivePing Mobile App (Expo) — technician and office modes
 
 Dark NVC brand theme (ink bg, cyan/sky brand, emerald live). Expo Go for review/testing.
 
@@ -6,8 +6,26 @@ Dark NVC brand theme (ink bg, cyan/sky brand, emerald live). Expo Go for review/
 - `POST /riders/me/photo` — tech uploads own headshot (multipart `file`). Self-serve version of admin `/riders/:id/photo`.
 - `POST /bookings/:id/photos` — upload a job photo (multipart `file`, optional `caption`). Lists via `GET /bookings/:id/photos`.
 
+## Office mode (added 2026-10-21)
+Superadmin, admin, manager, dispatcher and project_manager sign in to the same
+app and land in `app/(office)` after the company pick; `lib/app-mode.ts`
+decides field vs office per company (membership `staffType` marks a dual-role
+owner, who gets a switch in Profile). Office mode never calls `/riders/me`
+and never mounts the location heartbeat.
+
+- `(office)/index.tsx` Today — status tiles, needs attention (late / unassigned), next up, live via `GET /dispatch/stream` (`lib/use-dispatch-stream.ts`; polls when the stream is down).
+- `(office)/jobs.tsx` — one day at a time (`GET /dispatch/board`, `GET /dispatch/load` for the day strip), Unassigned / Scheduled / In progress / Done, search, + New job.
+- `office/job/[id].tsx` — detail; Assign/Reassign (`GET /dispatch/candidates` → `POST /dispatch/assign`, forceable 409 → "Assign anyway"), Reschedule (`POST /dispatch/schedule`), Cancel (`POST /bookings/:id/cancel`), Undo (`POST /dispatch/undo`) via `components/office/undo-toast.tsx`.
+- `office/new-job.tsx` — quick create → `POST /bookings/admin` (`lib/new-job.ts` builds the body; pickers in `components/office/pickers.tsx` use `/directory`, `/services`, `/geo/*`).
+- `(office)/messages.tsx` + `office/thread/[techId].tsx` — dispatcher inbox (`/messages/dispatch/threads`, `/dispatch/:techId`, mark-read on focus, `/broadcast`), live via `/messages/inbox/stream`.
+- `(office)/team.tsx` — techs by status, call / text / map / message.
+- `office/profile.tsx` — company switch, field-mode switch, Face ID lock, sign out.
+- Permissions: `GET /me/access` → `lib/use-access.ts` `can()`; tabs/buttons hide, server enforces.
+- Push: `lib/push-route.ts` routes taps by mode (`tech_message` → thread, `bookingId` → office job). Backend: `officeUsersAt()` (api/lib/memberships.ts) now notifies managers/dispatchers too, and a tech's message pushes office devices.
+- Tests: `bun test packages/mobile/lib/__tests__` (pure modules only; react-native can't load under bun).
+
 ## Screens (packages/mobile/app)
-- `index.tsx` — boot: route to sign-in or (rider) based on session/role.
+- `index.tsx` — boot: route to sign-in, then the company pick, then (rider) or (office) by role.
 - `sign-in.tsx` — email/password login (invite-based, same accounts as web).
 - `(rider)/_layout.tsx` — tab nav: Jobs, Earnings, Profile.
 - `(rider)/index.tsx` — Today's jobs list (assigned/offered), accept/decline inline.

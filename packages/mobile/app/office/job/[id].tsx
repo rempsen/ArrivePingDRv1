@@ -15,6 +15,7 @@ import { useAccess } from "../../../lib/use-access";
 import { useDispatchActions } from "../../../lib/use-dispatch-actions";
 import { webUrl } from "../../../lib/office-nav";
 import { STATUS_LABEL, TERMINAL } from "../../../lib/board";
+import { fmtInTz } from "../../../lib/when";
 
 const PRIORITY_LABEL: Record<string, string> = { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" };
 const PRIORITY_COLOR: Record<string, string> = { urgent: C.red, high: C.amber };
@@ -58,7 +59,7 @@ export default function OfficeJob() {
       setWhenOpen(false);
       // Forced or not, the server grants the same undo window.
       const token = r.undo;
-      showToast(`Moved to ${fmtDate(iso)}`, {
+      showToast(`Moved to ${fmtInTz(iso, tz)}`, {
         onUndo: token
           ? async () => {
               const u = await actions.undo(token, b.id);
@@ -132,7 +133,7 @@ export default function OfficeJob() {
               ) : null}
               {b.isSample ? <Text style={s.sample}>Sample</Text> : null}
             </View>
-            <Text style={s.when}>{fmtDate(b.scheduledAt)}</Text>
+            <Text style={s.when}>{fmtInTz(b.scheduledAt, tz)}</Text>
             <Text style={s.service}>
               {b.service?.name ?? b.title}
               {b.service?.durationMins ? ` · ${b.service.durationMins} min` : ""}

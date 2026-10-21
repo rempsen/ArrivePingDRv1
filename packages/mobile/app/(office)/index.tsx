@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { Warning, CalendarCheck, ClipboardText } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { StatusTiles } from "../../components/office/status-tiles";
+import { OfficeIntroCard } from "../../components/office/intro-card";
 import { JobRow } from "../../components/office/job-row";
 import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
@@ -49,6 +50,7 @@ export default function Today() {
           <Empty icon={<Warning color={C.red} size={28} />} text="Couldn't load the board" sub={(board.error as Error)?.message} />
         ) : (
           <>
+            <OfficeIntroCard />
             <StatusTiles t={t} workerNoun={noun} onPick={(status) => router.push({ pathname: "/(office)/team", params: { status } })} />
 
             <Section

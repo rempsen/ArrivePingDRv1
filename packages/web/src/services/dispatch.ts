@@ -18,6 +18,7 @@ import { verifiedDomainsForCompany } from "./email-domains";
 import { pickSender } from "./sender";
 import { sendSms, trackingUrl } from "./sms";
 import { sendPush } from "./push";
+import { officeUsersAt } from "../api/lib/memberships";
 import { applyNotificationOverrides } from "./notification-presets";
 import { logJobEvent, type JobEventKind } from "./job-events";
 import { propertyUrl } from "./properties";
@@ -435,10 +436,8 @@ async function context(bookingId: string) {
   return { b, companyId, svc, cust, rider, riderUser, co, vars };
 }
 
-/** Find admin/office users to notify within a company. */
-async function officeUsers(companyId: string) {
-  return tdb(companyId).select(schema.user, eq(schema.user.role, "admin"));
-}
+/** Everyone running the office here: admins, managers, dispatchers, PMs (api/lib/memberships.ts). */
+const officeUsers = officeUsersAt;
 
 async function activeWebhooks(companyId: string, event: string) {
   const eps = await tdb(companyId).select(schema.webhookEndpoints, eq(schema.webhookEndpoints.active, true));
@@ -659,6 +658,9 @@ async function deliver(
           type: meta.notifType,
           event,
           bookingId: b.id,
+          // Office users can be on several companies; the app switches to
+          // this one before opening the job.
+          companyId,
         }).catch(() => {});
         await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "in_app", target: t.userId, status: "sent" });
       }

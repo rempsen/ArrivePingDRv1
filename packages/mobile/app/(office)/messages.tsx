@@ -1,11 +1,19 @@
-import { View, Text, FlatList, RefreshControl, StyleSheet, Pressable } from "react-native";
+import { useState } from "react";
+import { View, Text, FlatList, RefreshControl, StyleSheet, Pressable, TextInput, Alert } from "react-native";
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { ChatCircleDots, Warning } from "phosphor-react-native";
+import { ChatCircleDots, Warning, Megaphone } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
-import { Avatar, Empty, ListSkeleton } from "../../components/ui";
+import { Avatar, Button, Empty, ListSkeleton } from "../../components/ui";
+import { Sheet } from "../../components/office/sheet";
+import { showToast } from "../../components/office/undo-toast";
+import { authHeaders } from "../../lib/auth";
+import { useAccess } from "../../lib/use-access";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useDispatchThreads } from "../../lib/use-threads";
 import { statusColor } from "../../components/office/tech-row";
+
+const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
 function ago(iso: string | null): string {
   if (!iso) return "";
@@ -23,9 +31,24 @@ function ago(iso: string | null): string {
 export default function Messages() {
   const router = useRouter();
   const inbox = useDispatchThreads();
+  // Reading threads needs work_orders:view; sending (broadcast, replies)
+  // is a POST on /api/messages and needs work_orders:edit (office-access.ts).
+  const { can } = useAccess();
+  const canSend = can("work_orders:edit");
+  const [cast, setCast] = useState(false);
   return (
     <View style={s.screen}>
-      <OfficeHeader title="Messages" />
+      <OfficeHeader
+        title="Messages"
+        right={
+          canSend ? (
+            <Pressable onPress={() => setCast(true)} accessibilityRole="button" accessibilityLabel="Broadcast to the team" style={({ pressed }) => [s.cast, { opacity: pressed ? 0.8 : 1 }]}>
+              <Megaphone color={C.brand} size={20} weight="fill" />
+            </Pressable>
+          ) : undefined
+        }
+      />
+      <BroadcastSheet open={cast} onClose={() => setCast(false)} />
       {inbox.isLoading ? (
         <View style={[s.pad, WIDE]}>
           <ListSkeleton rows={5} height={72} />
@@ -74,8 +97,75 @@ export default function Messages() {
   );
 }
 
+/**
+ * One message to everyone on shift, or everyone on the roster. The server
+ * fans it out as individual direct messages (`POST /messages/broadcast`),
+ * so each tech sees it in their normal thread and gets a push.
+ */
+function BroadcastSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [body, setBody] = useState("");
+  const [target, setTarget] = useState<"available" | "all">("available");
+  const [sending, setSending] = useState(false);
+  async function send() {
+    const text = body.trim();
+    if (!text) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${API}/api/messages/broadcast`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ body: text, target: { type: target } }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { sent?: number; count?: number; message?: string };
+      if (!res.ok) throw new Error(j.message || `Couldn't send (${res.status})`);
+      const n = j.sent ?? j.count;
+      showToast(n != null ? `Sent to ${n} ${n === 1 ? "technician" : "technicians"}` : "Broadcast sent");
+      setBody("");
+      onClose();
+    } catch (e) {
+      Alert.alert("Not sent", (e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
+  return (
+    <Sheet open={open} title="Broadcast" onClose={onClose} footer={<Button title="Send to team" loading={sending} disabled={!body.trim()} icon={<Megaphone color="#04121c" size={18} weight="fill" />} onPress={send} />}>
+      <View style={s.targets}>
+        {(
+          [
+            ["available", "On shift & available"],
+            ["all", "Everyone on the roster"],
+          ] as const
+        ).map(([k, label]) => {
+          const on = target === k;
+          return (
+            <Pressable key={k} onPress={() => setTarget(k)} accessibilityRole="button" accessibilityState={{ selected: on }} style={[s.target, on && s.targetOn]}>
+              <Text style={[s.targetTxt, on && { color: C.brand }]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <TextInput
+        value={body}
+        onChangeText={setBody}
+        placeholder="Heads up: the shop closes at 4 today…"
+        placeholderTextColor={C.muted}
+        multiline
+        style={s.castInput}
+        accessibilityLabel="Broadcast message"
+      />
+    </Sheet>
+  );
+}
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
+  cast: { width: 36, height: 36, borderRadius: R.control, backgroundColor: "rgba(14,165,233,0.12)", alignItems: "center", justifyContent: "center" },
+  targets: { flexDirection: "row", gap: S.sm, marginBottom: S.md },
+  target: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: R.control, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg3 },
+  targetOn: { borderColor: C.brand, backgroundColor: "rgba(14,165,233,0.16)" },
+  targetTxt: { color: C.sub, fontSize: 12, fontWeight: "800" },
+  castInput: { minHeight: 110, textAlignVertical: "top", color: C.text, fontSize: 15, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.border, borderRadius: R.card, paddingHorizontal: S.md, paddingVertical: 12 },
   pad: { paddingHorizontal: S.lg },
   row: { flexDirection: "row", alignItems: "center", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
   dot: { position: "absolute", right: -1, bottom: -1, width: 14, height: 14, borderRadius: R.pill, borderWidth: 2, borderColor: C.bg },

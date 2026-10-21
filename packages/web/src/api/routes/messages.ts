@@ -5,7 +5,7 @@ import * as schema from "../database/schema";
 import { eq, and, or, isNull, inArray, notInArray } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { isOfficeRole } from "../lib/office-access";
-import { usersForCompany } from "../lib/memberships";
+import { officeUsersAt, usersForCompany } from "../lib/memberships";
 import { sendSms, trackingUrl } from "../../services/sms";
 import { sendPush } from "../../services/push";
 import { publishMsg, subscribeMsg } from "../../services/realtime";
@@ -46,9 +46,8 @@ async function unreadDirectCountForRider(companyId: string, riderId: string): Pr
  * message in ANY tenant was notifying admins/superadmins across ALL
  * tenants).
  */
-async function officeUsersForNotify(companyId: string) {
-  return tdb(companyId).select(schema.user, inArray(schema.user.role, ["admin", "superadmin"]));
-}
+/** Admins, managers, dispatchers and PMs at this company (api/lib/memberships.ts). */
+const officeUsersForNotify = officeUsersAt;
 
 /* -------------------------------------------------------------------------- */
 /*  Request bodies                                                            */
@@ -189,6 +188,15 @@ export const messagesRoutes = new Hono<AppEnv>()
         title: `Message from ${u.name || "Technician"}`,
         body,
       });
+      // A dispatcher on a phone finds out the same way a tech does: a push
+      // that opens the thread (office mode routes `tech_message` to it).
+      sendPush(admin.id, `Message from ${u.name || "Technician"}`, body, {
+        type: "tech_message",
+        techId: rider.id,
+        // The thread lives at this company; a dispatcher on two rosters
+        // may have the other one open.
+        companyId: co,
+      }).catch(() => {});
     }
 
     publishMsg("direct", rider.id).catch(() => {});

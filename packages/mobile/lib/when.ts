@@ -59,3 +59,12 @@ export function daySlots(): Array<{ hour: number; minute: number }> {
   for (let h = 6; h < 22; h++) for (let m = 0; m < 60; m += STEP_MIN) out.push({ hour: h, minute: m });
   return out;
 }
+
+/** "Wed, Oct 21, 9:00 AM" on the company's clock, for labels next to the picker. */
+export function fmtInTz(iso: string, tz: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  } catch {
+    return new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+}
