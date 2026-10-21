@@ -250,7 +250,14 @@ export default function OfficeJob() {
           {!done ? (
             <View style={s.bottomActions}>
               {can("scheduler:edit") ? (
-                <Button title="Reschedule" variant="outline" icon={<CalendarBlank color={C.text} size={18} />} onPress={() => setWhenOpen(true)} />
+                <Button
+                  title="Reschedule"
+                  variant="outline"
+                  icon={<CalendarBlank color={C.text} size={18} />}
+                  // The picker works on the company's clock, which comes with the board.
+                  disabled={!board.data}
+                  onPress={() => setWhenOpen(true)}
+                />
               ) : null}
               {can("work_orders:edit") ? (
                 <Button title="Cancel job" variant="ghost" icon={<Prohibit color={C.red} size={18} />} onPress={cancelJob} style={{ marginTop: S.sm }} />
@@ -260,7 +267,7 @@ export default function OfficeJob() {
         </ScrollView>
       )}
 
-      {b ? (
+      {b && board.data ? (
         <>
           <AssignSheet open={assignOpen} bookingId={b.id} currentRiderId={b.riderId} jobLabel={label} onClose={() => setAssignOpen(false)} />
           <DatetimeSheet open={whenOpen} title="Move to" tz={tz} initial={b.scheduledAt} allowAsap={false} busy={moving} onClose={() => setWhenOpen(false)} onPick={(iso) => reschedule(iso)} />

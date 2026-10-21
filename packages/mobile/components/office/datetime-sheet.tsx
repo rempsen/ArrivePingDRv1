@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Lightning } from "phosphor-react-native";
 import { Sheet } from "./sheet";
@@ -38,6 +38,14 @@ export function DatetimeSheet({
   const today = partsIn(now, tz).day;
   const [day, setDay] = useState(start.day);
   const [slot, setSlot] = useState<{ hour: number; minute: number }>({ hour: start.hour, minute: Math.floor(start.minute / 15) * 15 });
+  // The sheet can mount before the company's timezone is known, or stay
+  // mounted while the job's time changes. Re-derive the selection every time
+  // it opens, or the inputs change, so a 9 AM job never shows as 2 PM.
+  useEffect(() => {
+    if (!open) return;
+    setDay(start.day);
+    setSlot({ hour: start.hour, minute: Math.floor(start.minute / 15) * 15 });
+  }, [open, start.day, start.hour, start.minute]);
 
   const days = useMemo(() => Array.from({ length: 14 }, (_, i) => addDays(today, i)), [today]);
   const slots = useMemo(() => daySlots(), []);
