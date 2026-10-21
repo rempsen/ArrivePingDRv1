@@ -20,7 +20,7 @@ import {
   type CompanyOption,
 } from "../lib/active-company";
 import { hasSeenOnboarding } from "../lib/onboarding";
-import { resolveMode } from "../lib/app-mode";
+import { isOfficeRole, resolveMode } from "../lib/app-mode";
 import { getSavedMode } from "../lib/app-mode-store";
 import {
   fetchNotifySummary,
@@ -112,7 +112,9 @@ export default function PickCompany() {
       }
       if (!res.ok) throw new Error(`Couldn't load your companies (${res.status})`);
       const json = (await res.json()) as { companies?: CompanyOption[] };
-      const list = json.companies ?? [];
+      // Only rosters this app serves: field staff and office roles. A
+      // customer membership is a web-portal login, not a place to work.
+      const list = (json.companies ?? []).filter((co) => co.role === "rider" || isOfficeRole(co.role));
 
       // Pending invites are fetched too, so a tech can accept a new company's
       // invite right here instead of hunting for the email. Failure to load
