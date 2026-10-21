@@ -9,7 +9,7 @@ import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard, useDayLoad } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
-import { addDays, bucketOf, type JobBucket } from "../../lib/board";
+import { addDays, bucketOf, NO_JOBS, NO_TECHS, type JobBucket } from "../../lib/board";
 
 const BUCKETS: Array<{ key: JobBucket; label: string }> = [
   { key: "unassigned", label: "Unassigned" },
@@ -46,8 +46,8 @@ export default function Jobs() {
     return m;
   }, [load.data]);
 
-  const techs = board.data?.techs ?? [];
-  const jobs = board.data?.jobs ?? [];
+  const techs = board.data?.techs ?? NO_TECHS;
+  const jobs = board.data?.jobs ?? NO_JOBS;
   const techName = (riderId: string | null) => (riderId ? (techs.find((x) => x.id === riderId)?.name ?? "") : "");
 
   const perBucket = useMemo(() => {

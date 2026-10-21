@@ -7,7 +7,7 @@ import { TechRow, statusColor } from "../../components/office/tech-row";
 import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
-import { STATUS_LABEL, STATUS_ORDER, type OfficeTech } from "../../lib/board";
+import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "../../lib/board";
 
 /**
  * Team: every technician grouped by what they're doing right now. Opened
@@ -21,8 +21,8 @@ export default function Team() {
   const board = useBoard(null);
   const now = new Date();
 
-  const techs = board.data?.techs ?? [];
-  const jobs = board.data?.jobs ?? [];
+  const techs = board.data?.techs ?? NO_TECHS;
+  const jobs = board.data?.jobs ?? NO_JOBS;
   const jobTitle = (id: string | null) => (id ? jobs.find((j) => j.id === id) : undefined);
 
   const sections = useMemo(() => {
