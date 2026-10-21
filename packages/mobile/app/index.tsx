@@ -7,6 +7,7 @@ import { C, R } from "../lib/theme";
 import { Button } from "../components/ui";
 import { shouldPromptBiometric, markUnlockedNow, LocalAuthentication } from "../lib/biometric-lock";
 import { endAllLiveActivities } from "../lib/useLiveActivity";
+import { isOfficeRole } from "../lib/app-mode";
 
 export default function Index() {
   const router = useRouter();
@@ -51,8 +52,9 @@ export default function Index() {
       router.replace("/sign-in");
       return;
     }
-    if (role !== "rider" && role !== "admin") {
-      // customers aren't part of the tech app
+    if (role !== "rider" && !isOfficeRole(role)) {
+      // customers aren't part of the app; office roles get office mode after
+      // the company pick (lib/app-mode.ts)
       router.replace("/sign-in");
       return;
     }

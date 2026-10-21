@@ -20,6 +20,8 @@ import {
   type CompanyOption,
 } from "../lib/active-company";
 import { hasSeenOnboarding } from "../lib/onboarding";
+import { resolveMode } from "../lib/app-mode";
+import { getSavedMode } from "../lib/app-mode-store";
 import {
   fetchNotifySummary,
   NOTIFY_SUMMARY_KEY,
@@ -76,13 +78,20 @@ export default function PickCompany() {
   });
 
   const proceed = useCallback(
-    async (companyId: string) => {
-      setChoosing(companyId);
-      await setActiveCompany(companyId);
+    async (co: CompanyOption) => {
+      setChoosing(co.id);
+      await setActiveCompany(co.id);
       // Any data already cached was fetched under the PREVIOUS company. Not
       // clearing it is what leaves company A's jobs on screen under company B
       // until each query happens to refetch.
       qc.clear();
+      // Field or office? Decided per company: the same person can be a
+      // dispatcher at one and a technician at another (lib/app-mode.ts).
+      const { mode } = resolveMode({ role: co.role, staffType: co.staffType, saved: getSavedMode() });
+      if (mode === "office") {
+        router.replace("/(office)");
+        return;
+      }
       const seen = await hasSeenOnboarding();
       router.replace(seen ? "/(rider)" : "/onboarding");
     },
@@ -129,7 +138,7 @@ export default function PickCompany() {
       // must stay up — silently forwarding would hide the invite completely,
       // which is the whole problem this screen is fixing.
       if (list.length === 1 && pending.length === 0) {
-        await proceed(list[0]!.id);
+        await proceed(list[0]!);
         return;
       }
       setCompanies(list);
@@ -337,7 +346,7 @@ export default function PickCompany() {
             return (
               <Pressable
                 key={co.id}
-                onPress={() => proceed(co.id)}
+                onPress={() => proceed(co)}
                 accessibilityRole="button"
                 accessibilityLabel={
                   alert
