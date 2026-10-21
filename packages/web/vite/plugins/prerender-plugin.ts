@@ -55,7 +55,9 @@ const AGENTS = [
 ];
 
 function robotsTxt(): string {
-  const rules = ["Allow: /", ...PRIVATE.map((p) => `Disallow: ${p}`)];
+  // /api/health/demo is public counts only (no customer data); allowing it lets the
+  // daily demo health check read it. The longer Allow wins over "Disallow: /api/".
+  const rules = ["Allow: /", "Allow: /api/health/demo", ...PRIVATE.map((p) => `Disallow: ${p}`)];
   return [
     "# ArrivePing by NVC360 — https://arriveping.com",
     "# Public marketing pages are open to search engines and AI assistants.",

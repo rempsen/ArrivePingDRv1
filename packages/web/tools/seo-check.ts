@@ -120,7 +120,8 @@ for (const { loc } of entries) {
   const p = loc.slice(SITE.length) || "/";
   if (!robotsAllows(p, googleGroup)) fail(`${loc}: blocked for Googlebot by robots.txt (group rules: ${googleGroup.disallow.join(", ") || "none"})`);
 }
-for (const must of ["/admin", "/app", "/api/x", "/t/abc"]) {
+if (!robotsAllows("/api/health/demo", googleGroup)) fail("robots.txt: /api/health/demo must stay readable for the demo health check");
+for (const must of ["/admin", "/app", "/api/x", "/api/health", "/t/abc"]) {
   if (robotsAllows(must, googleGroup)) fail(`robots.txt: private path ${must} is NOT disallowed for Googlebot`);
 }
 
