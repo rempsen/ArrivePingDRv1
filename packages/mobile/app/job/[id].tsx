@@ -62,6 +62,7 @@ import { C, R, money, fmtDate, assetUrl, WIDE } from "../../lib/theme";
 import { StatusBadge, Button, FullLoader } from "../../components/ui";
 import { SignaturePad } from "../../components/signature-pad";
 import { isVoiceNoteSupported, startVoiceNote, uploadVoiceNote, type Recording } from "../../lib/voice-note";
+import { MyVoiceNotes } from "../../components/my-voice-notes";
 import { CoachAnchor } from "../../components/coach-tour";
 import { isPracticeJob, isSampleJob } from "../../lib/practice";
 import { JobForm, type JobFormHandle } from "../../components/job-form";
@@ -725,6 +726,7 @@ export default function JobDetail() {
         });
         if (!up.ok) throw new Error(up.error);
         await qc.invalidateQueries({ queryKey: ["job", id] });
+        await qc.invalidateQueries({ queryKey: ["voice-notes", id] });
         Alert.alert(
           "Voice note sent",
           up.transcript ? `Transcribed: "${up.transcript.slice(0, 140)}"` : "Sent to the office.",
@@ -1607,6 +1609,7 @@ export default function JobDetail() {
                   ? "Recording… tap Stop & send when you're done."
                   : "Dictate instead of typing — it's transcribed into your field notes."}
               </Text>
+              <MyVoiceNotes bookingId={id!} />
             </View>
           )}
 

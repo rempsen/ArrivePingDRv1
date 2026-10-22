@@ -14,7 +14,8 @@ import { techPayModelJson } from "./templates";
 import { reconcileRiderStatus } from "../../services/presence";
 import { assignJob } from "../../services/assign";
 import { applyBookingStatus, resumeClock, StatusTransitionError } from "../../services/booking-status";
-import { putObject } from "../lib/storage";
+import { putObject, deleteObject } from "../lib/storage";
+import { isOwnVoiceNote, parseMeta, removeVoiceNoteLine, voiceNoteKey } from "../../services/voice-notes";
 import { capture } from "../lib/analytics";
 import { incr } from "../lib/metrics";
 import { publishTrack, publishDispatch } from "../../services/realtime";
@@ -1656,8 +1657,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
       { dateStyle: "medium", timeStyle: "short" },
       "en-CA",
     );
-    if (transcript) {
-      const line = `[Voice note — ${me?.name || "Tech"}, ${stamp}] ${transcript}`;
+    // The exact line added to driverNotes, kept so deleting the note can take
+    // it back out again.
+    const line = transcript ? `[Voice note — ${me?.name || "Tech"}, ${stamp}] ${transcript}` : "";
+    if (line) {
       const next = b.driverNotes ? `${b.driverNotes}\n${line}` : line;
       await t.update(schema.bookings, { driverNotes: next }, eq(schema.bookings.id, id));
     }
@@ -1669,9 +1672,59 @@ export const bookingsRoutes = new Hono<AppEnv>()
       actorName: me?.name || "",
       label: transcript ? `Voice note: ${transcript.slice(0, 120)}` : "Voice note recorded",
       detail: transcript,
-      meta: { url: stored.url, durationSecs: secs, transcribed: !!transcript },
+      // userId says whose note it is; key and line are what deleting it has to
+      // clean up (services/voice-notes.ts).
+      meta: { url: stored.url, key: stored.key, durationSecs: secs, transcribed: !!transcript, userId: me?.id ?? "", line },
     });
     return c.json({ url: stored.url, transcript, durationSecs: secs }, 201);
+  })
+  // ── The caller's own voice notes on a job (listen back, delete) ──────────
+  // GET /api/bookings/:id/voice-notes
+  .get("/:id/voice-notes", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    const t = tx(c);
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!b) return c.json({ message: "Not found" }, 404);
+    const me = c.get("user") as SessionUser;
+    const rows = await t.select(schema.jobEvents, and(eq(schema.jobEvents.bookingId, id), eq(schema.jobEvents.kind, "voice_note")));
+    const notes = rows
+      .map((r) => ({ row: r, meta: parseMeta(r.meta) }))
+      .filter(({ meta }) => isOwnVoiceNote(meta, me))
+      .sort((a, z) => +new Date(a.row.createdAt) - +new Date(z.row.createdAt))
+      .map(({ row, meta }) => ({
+        id: row.id,
+        url: typeof meta.url === "string" ? meta.url : "",
+        durationSecs: Number(meta.durationSecs) || 0,
+        transcript: row.detail,
+        createdAt: row.createdAt,
+      }));
+    return c.json({ notes }, 200);
+  })
+  // DELETE /api/bookings/:id/voice-notes/:eventId — your own note only. Removes
+  // the recording, the timeline entry and the transcript line it added to the
+  // job's field notes.
+  .delete("/:id/voice-notes/:eventId", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    const eventId = c.req.param("eventId");
+    const t = tx(c);
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!b) return c.json({ message: "Not found" }, 404);
+    const me = c.get("user") as SessionUser;
+    const ev = await t.selectOne(
+      schema.jobEvents,
+      and(eq(schema.jobEvents.id, eventId), eq(schema.jobEvents.bookingId, id), eq(schema.jobEvents.kind, "voice_note")),
+    );
+    if (!ev) return c.json({ message: "Not found" }, 404);
+    const meta = parseMeta(ev.meta);
+    if (!isOwnVoiceNote(meta, me)) return c.json({ message: "You can only delete your own voice notes" }, 403);
+
+    // Only ever delete under this job's voice-note folder, whatever the row says.
+    const key = voiceNoteKey(meta, id);
+    if (key) await deleteObject(key).catch((e) => console.error("[voice-note] delete object failed", key, e));
+    const notes = removeVoiceNoteLine(b.driverNotes, meta);
+    if (notes !== b.driverNotes) await t.update(schema.bookings, { driverNotes: notes }, eq(schema.bookings.id, id));
+    await t.delete(schema.jobEvents, eq(schema.jobEvents.id, eventId));
+    return c.json({ ok: true }, 200);
   })
   // ── Checklist toggle (tech) ──────────────────────────────────────────────
   // PATCH /api/bookings/:id/checklist { index: number, done: boolean }
