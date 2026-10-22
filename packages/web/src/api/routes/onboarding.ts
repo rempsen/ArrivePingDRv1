@@ -669,9 +669,19 @@ without it unless the user explicitly says to skip/finish everything.
         question using what the site already told you (their title). You
         need: what they are (technician, driver, dispatcher, manager or
         owner) and a login email. Phone is nice-to-have. For technicians
-        and drivers also ask for their vehicle (make/model, colour, plate)
-        when vehicleCount > 0 — one question per person, skip if they
-        don't know, it can be filled in later under Settings.
+        and drivers also get their vehicle (make/model, colour, plate) when
+        vehicleCount > 0: once you know who the technicians and drivers are,
+        call show_vehicle_form with their names — it shows a make & model /
+        colour / license plate row for each of them, plus a + for any extra vehicle —
+        say ONE short line and STOP; don't ask for vehicle details in text.
+        A message starting "(From the vehicle form)" is what they submitted,
+        one line per vehicle ("- Name: Make Model | colour: white | plate: XYZ", colour and plate
+        optional; a line with
+        "(not assigned to anyone)" is a spare you can't attach to a person,
+        so mention it can be assigned later under Settings). If it says to
+        skip, skip. Pass each person's vehicle as the vehicle field in
+        add_team_members. Anyone they don't have a vehicle for can be filled
+        in later under Settings.
         Don't interrogate: if they say "they're all techs" or "skip the
         vehicles", take it and go.
     iv. Call add_team_members ONCE with everyone who has at least a name,
@@ -1057,6 +1067,14 @@ correction like that — it reads like you weren't listening.`;
             "Show the owner a form with a row of name / phone / email inputs per person (they can add more rows) and a Submit button. Use it whenever you would otherwise ask them to type or paste their team. It only displays the form: say one short line afterwards and stop. Their submission arrives as your next user message, starting \"(From the team form)\".",
           inputSchema: z.object({}),
           execute: async () => ({ ok: true, shown: true }),
+        }),
+        show_vehicle_form: tool({
+          description:
+            "Show the owner a form with a make & model / colour / license plate row for each technician and driver you name (plus a + to add more vehicles) and a Submit button. Use it instead of asking for vehicle details in text, once you know who the field staff are and before add_team_members. It only displays the form: say one short line afterwards and stop. Their submission arrives as your next user message, starting \"(From the vehicle form)\".",
+          inputSchema: z.object({
+            people: z.array(z.string().max(120)).max(40).describe("Names of the technicians and drivers who need a vehicle, one row each. Empty for a blank form."),
+          }),
+          execute: async ({ people }) => ({ ok: true, shown: true, people }),
         }),
         add_team_members: tool({
           description:
