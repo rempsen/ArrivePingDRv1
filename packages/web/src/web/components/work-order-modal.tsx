@@ -147,7 +147,10 @@ function templateFieldsToCustomFields(rawFields: string | null | undefined): Cus
 }
 
 // ─── Pill for the type picker ────────────────────────────────────────────────
-function TypePicker({ onPick }: { onPick: (t: CfType) => void }) {
+// `align` is which edge of the button the menu lines up with: the one in the
+// header sits at the modal's right edge, so its menu has to grow leftwards or
+// it runs off the modal and gets clipped.
+function TypePicker({ onPick, align = "left" }: { onPick: (t: CfType) => void; align?: "left" | "right" }) {
   const { noun } = useWorkerNoun();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -172,7 +175,7 @@ function TypePicker({ onPick }: { onPick: (t: CfType) => void }) {
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-[#0d1b2a] shadow-2xl py-1.5">
+        <div className={`absolute ${align === "right" ? "right-0" : "left-0"} top-full z-50 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/10 bg-[#0d1b2a] shadow-2xl py-1.5`}>
           {CF_TYPES.map((t) => (
             <button
               key={t.type}
@@ -1627,7 +1630,7 @@ export function WorkOrderModal({
               <p className="text-sm font-semibold text-white">Custom fields</p>
               <p className="text-xs text-slate-500">Add extra data collection, instructions, or pricing rules to this job.</p>
             </div>
-            <TypePicker onPick={addField} />
+            <TypePicker onPick={addField} align="right" />
           </div>
 
           {customFields.length === 0 ? (
