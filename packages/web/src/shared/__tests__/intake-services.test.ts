@@ -4,6 +4,7 @@
  * customer asked for on the company's clock.
  */
 import { describe, it, expect } from "bun:test";
+import { localInstant } from "../../test-support/zone-rules";
 import {
   cleanServiceIds,
   formServiceIds,
@@ -118,12 +119,17 @@ describe("intakePriority", () => {
 
 describe("preferredStart", () => {
   it("reads a picked day on the company's clock, at the start of the morning", () => {
-    // Winnipeg in summer is UTC-5: 9:00 AM local is 14:00 UTC, on the same day.
+    // 9:00 AM on the company's clock, whatever the zone's offset is on that
+    // day: read from the zone's rules rather than hardcoded, since tzdata can
+    // change them (Winnipeg is UTC-5 in July; December depends on the data).
     const summer = preferredStart("2026-07-15", "America/Winnipeg");
     expect(summer?.dateOnly).toBe(true);
-    expect(summer?.at.toISOString()).toBe("2026-07-15T14:00:00.000Z");
-    // In winter it is UTC-6.
-    expect(preferredStart("2026-12-01", "America/Winnipeg")?.at.toISOString()).toBe("2026-12-01T15:00:00.000Z");
+    expect(summer?.at.toISOString()).toBe(localInstant("America/Winnipeg", 2026, 7, 15, 9).toISOString());
+    expect(preferredStart("2026-12-01", "America/Winnipeg")?.at.toISOString()).toBe(localInstant("America/Winnipeg", 2026, 12, 1, 9).toISOString());
+    // A zone whose winter and summer offsets differ shows it really tracks the day.
+    const ny = (d: string) => preferredStart(d, "America/New_York")!.at.toISOString();
+    expect(ny("2026-07-15")).toBe(localInstant("America/New_York", 2026, 7, 15, 9).toISOString());
+    expect(ny("2026-12-01")).toBe(localInstant("America/New_York", 2026, 12, 1, 9).toISOString());
     // Before, the bare date became UTC midnight: 7 PM the evening before.
     expect(new Date("2026-07-15").toISOString()).toBe("2026-07-15T00:00:00.000Z");
   });
