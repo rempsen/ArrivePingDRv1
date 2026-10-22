@@ -125,3 +125,5 @@ shot.png
 
 # Rendered by the dockercompose provider; contains the Vercel AI Gateway key
 infra/terraform/envs/local/nvc360-v4/
+
+supabase/.temp
