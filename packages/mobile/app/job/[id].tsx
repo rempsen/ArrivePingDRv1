@@ -20,7 +20,6 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
 import Constants from "expo-constants";
 import {
   CaretLeft,
@@ -69,6 +68,7 @@ import { JobForm, type JobFormHandle } from "../../components/job-form";
 import { jobFormKey, jobFormScope, useJobForm } from "../../lib/forms/use-job-form";
 import { formIncomplete, missingSummary, type MissingQuestion } from "../../lib/forms/job-form-data";
 import { uploadJobPhoto } from "../../lib/job-photos";
+import { choosePhotoSource, pickPhoto, type PhotoSource } from "../../lib/pick-photo";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -285,15 +285,13 @@ export default function JobDetail() {
     onError: (e: any) => Alert.alert("Couldn't update", e?.message || "Try again"),
   });
 
-  async function captureAfterPhoto(defId: string) {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Camera needed", "Allow camera to attach a photo.");
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
+  function addAfterPhoto(defId: string) {
+    choosePhotoSource((source) => uploadAfterPhoto(defId, source));
+  }
+
+  async function uploadAfterPhoto(defId: string, source: PhotoSource) {
+    const asset = await pickPhoto(source, "attach a photo");
+    if (!asset) return;
     setDefUploading(defId);
     try {
       const form = new FormData();
@@ -661,15 +659,13 @@ export default function JobDetail() {
     [job.data],
   );
 
-  async function capturePhoto(phase: "before" | "during" | "after" = photoPhase) {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Camera needed", "Allow camera to attach job photos.");
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
+  function addPhoto(phase: "before" | "during" | "after" = photoPhase) {
+    choosePhotoSource((source) => uploadPhoto(phase, source));
+  }
+
+  async function uploadPhoto(phase: "before" | "during" | "after", source: PhotoSource) {
+    const asset = await pickPhoto(source, "attach job photos");
+    if (!asset) return;
     setUploading(true);
     try {
       // Tag the stage this shot documents — before/after is what makes the
@@ -1455,7 +1451,7 @@ export default function JobDetail() {
                         />
 
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                          <Pressable onPress={() => captureAfterPhoto(d.id)} style={s.photoBtn} disabled={defUploading === d.id}>
+                          <Pressable onPress={() => addAfterPhoto(d.id)} style={s.photoBtn} disabled={defUploading === d.id}>
                             {defUploading === d.id
                               ? <ActivityIndicator color={C.brand} size="small" />
                               : <Camera color={C.brand} size={16} weight="fill" />}
@@ -1493,7 +1489,7 @@ export default function JobDetail() {
           <View style={s.block}>
             <View style={s.photoHead}>
               <Text style={s.blockTitle}>Photos</Text>
-              <Pressable onPress={() => capturePhoto()} style={s.photoBtn} disabled={uploading} accessibilityRole="button" accessibilityLabel={`Take ${photoPhase} photo`}>
+              <Pressable onPress={() => addPhoto()} style={s.photoBtn} disabled={uploading} accessibilityRole="button" accessibilityLabel={`Add ${photoPhase} photo`}>
                 {uploading ? <ActivityIndicator color={C.brand} size="small" /> : <Camera color={C.brand} size={18} weight="fill" />}
                 <Text style={s.photoBtnTxt}>{uploading ? "Uploading…" : `Add ${photoPhase} photo`}</Text>
               </Pressable>
