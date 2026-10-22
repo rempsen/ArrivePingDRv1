@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../lib/api";
 import { useAuth } from "../hooks/use-auth";
 import { TeamForm } from "./onboarding-team-form";
+import { VehicleForm } from "./onboarding-vehicle-form";
 import {
   Sparkles,
   Send,
@@ -343,6 +344,8 @@ export function OnboardingChat() {
   // The concierge called show_team_form: name/phone/email rows replace the
   // composer until they submit, or choose to type / send a photo instead.
   const [teamFormOpen, setTeamFormOpen] = useState(false);
+  // Same for show_vehicle_form: the field staff it names get a row each.
+  const [vehicleForm, setVehicleForm] = useState<{ people: string[] } | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [err, setErr] = useState("");
   const historyRef = useRef<ChatMsg[]>([]); // full role/content log sent to the API
@@ -392,6 +395,7 @@ export function OnboardingChat() {
   async function runTurn(newHistory: ChatMsg[], showUserBubble = true) {
     setErr("");
     setTeamFormOpen(false);
+    setVehicleForm(null);
     historyRef.current = newHistory;
     const lastMsg = newHistory[newHistory.length - 1];
     if (showUserBubble && lastMsg) {
@@ -428,9 +432,14 @@ export function OnboardingChat() {
         });
       },
       (t) => {
-        // UI-only tool: it just asks for the form, nothing was changed, so no pill.
+        // UI-only tools: they just ask for a form, nothing was changed, so no pill.
         if (t.name === "show_team_form") {
           setTeamFormOpen(true);
+          return;
+        }
+        if (t.name === "show_vehicle_form") {
+          const people: unknown = t.input?.people;
+          setVehicleForm({ people: Array.isArray(people) ? people.filter((p): p is string => typeof p === "string" && !!p.trim()) : [] });
           return;
         }
         toolKeyRef.current += 1;
@@ -712,7 +721,16 @@ export function OnboardingChat() {
           />
         )}
 
-        {!(offerFinish && !streaming) && !allSet && !teamFormOpen && (
+        {vehicleForm && !allSet && (
+          <VehicleForm
+            people={vehicleForm.people}
+            busy={streaming}
+            onSubmit={(message) => runTurn([...historyRef.current, { role: "user", content: message }])}
+            onCancel={() => setVehicleForm(null)}
+          />
+        )}
+
+        {!(offerFinish && !streaming) && !allSet && !teamFormOpen && !vehicleForm && (
           <>
           {/* composer */}
           <div className="flex items-center gap-2 border-t border-white/5 p-3">
