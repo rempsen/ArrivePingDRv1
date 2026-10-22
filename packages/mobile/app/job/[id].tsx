@@ -50,6 +50,7 @@ import {
   Stop,
   HandPalm,
   ClipboardText,
+  Trash,
 } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { useCustomerNoun, useDistanceUnit, useJobNoun } from "../../lib/use-brand";
@@ -138,6 +139,7 @@ export default function JobDetail() {
   const [photoPhase, setPhotoPhase] = useState<"before" | "during" | "after">("before");
   const [sigExpanded, setSigExpanded] = useState(false);
   const [savingSig, setSavingSig] = useState(false);
+  const [deletingSig, setDeletingSig] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
   const [releaseReason, setReleaseReason] = useState<string | null>(null);
   const [releaseNote, setReleaseNote] = useState("");
@@ -703,6 +705,31 @@ export default function JobDetail() {
       Alert.alert("Couldn't save signature", e?.message || "Try again");
     } finally {
       setSavingSig(false);
+    }
+  }
+
+  // A signed job has no capture controls until its signature is deleted.
+  function confirmDeleteSignature() {
+    Alert.alert(
+      "Delete this signature?",
+      "The customer's sign-off is removed from the job. You'll be able to capture a new one.",
+      [
+        { text: "Keep", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: deleteSignature },
+      ],
+    );
+  }
+
+  async function deleteSignature() {
+    setDeletingSig(true);
+    try {
+      const res = await fetch(`${API}/api/bookings/${id}/signature`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Couldn't delete it");
+      await qc.invalidateQueries({ queryKey: ["job", id] });
+    } catch (e: any) {
+      Alert.alert("Couldn't delete the signature", e?.message || "Try again");
+    } finally {
+      setDeletingSig(false);
     }
   }
 
@@ -1543,7 +1570,8 @@ export default function JobDetail() {
             <Pressable
               style={s.collapsibleHeader}
               onPress={() => setSigExpanded((v) => !v)}
-              accessibilityRole="button"
+              disabled={!!j.signedAt}
+              accessibilityRole={j.signedAt ? "header" : "button"}
               accessibilityLabel="Customer sign-off"
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -1555,16 +1583,28 @@ export default function JobDetail() {
                   </View>
                 )}
               </View>
-              {sigExpanded ? <CaretUp color={C.muted} size={14} /> : <CaretDown color={C.muted} size={14} />}
+              {!j.signedAt && (sigExpanded ? <CaretUp color={C.muted} size={14} /> : <CaretDown color={C.muted} size={14} />)}
             </Pressable>
 
             {!!j.signedAt && (
-              <Text style={s.sigMeta}>
-                Signed by {j.signatureName || "customer"} · {fmtDate(j.signedAt)}
-              </Text>
+              <View style={{ marginTop: 6, gap: 10 }}>
+                <Text style={s.sigMeta}>
+                  Signed by {j.signatureName || "customer"} · {fmtDate(j.signedAt)}
+                </Text>
+                <Pressable
+                  onPress={confirmDeleteSignature}
+                  disabled={deletingSig}
+                  style={s.photoBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete signature"
+                >
+                  {deletingSig ? <ActivityIndicator color={C.red} size="small" /> : <Trash color={C.red} size={16} />}
+                  <Text style={[s.photoBtnTxt, { color: C.red }]}>{deletingSig ? "Deleting…" : "Delete signature"}</Text>
+                </Pressable>
+              </View>
             )}
 
-            {sigExpanded && (
+            {!j.signedAt && sigExpanded && (
               <View style={{ marginTop: 10 }}>
                 <SignaturePad
                   submitting={savingSig}
