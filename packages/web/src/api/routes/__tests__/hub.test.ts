@@ -233,7 +233,9 @@ describe("staff list", () => {
   });
   it("records hub actions in the audit trail staff can read", async () => {
     const a = (await (await req("GET", "/audit?action=team", "staff")).json()) as { entries: { action: string }[] };
-    expect(a.entries.map((e) => e.action)).toEqual(["team.remove", "team.upsert"]);
+    // Both rows can land in the same millisecond, where newest-first has no
+    // defined order between them, so compare as a set.
+    expect(a.entries.map((e) => e.action).sort()).toEqual(["team.remove", "team.upsert"]);
     expect((await req("GET", "/audit", "sales")).status).toBe(403);
   });
 });
