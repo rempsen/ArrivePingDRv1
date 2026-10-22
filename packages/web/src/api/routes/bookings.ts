@@ -1,58 +1,86 @@
-import type { AppEnv } from "../env";
+import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { Hono } from "hono";
-import { sdb } from "../database";
-import { tdb } from "../database/tenant";
-import * as schema from "../database/schema";
-import { eq, isNull, and, inArray, desc, sql, type SQL } from "drizzle-orm";
-import { officeCan, requireAuth, tenantId, tx } from "../middleware/auth";
-import { Err } from "../lib/errors";
-import { publicFieldData, mergeInternalFieldData } from "../lib/field-data";
-import { isMember, findUserByEmail, findCompanyUserByEmail, attachMembership } from "../lib/memberships";
-import { fireEvent } from "../../services/dispatch";
-import { accrueTechPay, recomputeBooking } from "../../services/billing";
-import { techPayModelJson } from "./templates";
-import { reconcileRiderStatus } from "../../services/presence";
+import { z } from "zod";
 import { assignJob } from "../../services/assign";
-import { applyBookingStatus, resumeClock, StatusTransitionError } from "../../services/booking-status";
-import { putObject, deleteObject } from "../lib/storage";
-import { isOwnVoiceNote, parseMeta, removeVoiceNoteLine, voiceNoteKey } from "../../services/voice-notes";
-import { capture } from "../lib/analytics";
-import { incr } from "../lib/metrics";
-import { publishTrack, publishDispatch } from "../../services/realtime";
-import { checkServiceZone, OUTSIDE_ZONE_MESSAGE, OUTSIDE_ZONE_MESSAGE_ADMIN } from "../../services/zones";
-import { forwardGeocode } from "../../services/geocode";
-import { linkBookingToProperty } from "../../services/properties";
-import { logJobEvent, jobTimeline } from "../../services/job-events";
+import { findAvailabilityBlock } from "../../services/availability";
+import { accrueTechPay, recomputeBooking } from "../../services/billing";
+import {
+  applyBookingStatus,
+  resumeClock,
+  StatusTransitionError,
+} from "../../services/booking-status";
 import {
   changeStateFor,
-  serializeState,
-  requestReschedule,
   requestCancel,
+  requestReschedule,
+  serializeState,
 } from "../../services/change-requests";
 import { companyTimeZone } from "../../services/company-tz";
-import { findAvailabilityBlock } from "../../services/availability";
-import { zonedDayBounds, fmtInZone } from "../../shared/tz";
-import { isTerminalStatus } from "../../shared/job-status";
 import { onChecklistTicked } from "../../services/custom-milestones";
-import { answeredCountFor, closeJobForm, currentVersion, isInternalItem, missingForJob, reopenJobForm, versionFormFor } from "../../services/job-forms";
-import { sendFormCopy } from "../../services/form-copy";
+import { fireEvent } from "../../services/dispatch";
 import { isFeatureOn } from "../../services/features";
-import { z } from "zod";
-import { jsonBody,
+import { sendFormCopy } from "../../services/form-copy";
+import { forwardGeocode } from "../../services/geocode";
+import { jobTimeline, logJobEvent } from "../../services/job-events";
+import {
+  answeredCountFor,
+  closeJobForm,
+  currentVersion,
+  isInternalItem,
+  missingForJob,
+  reopenJobForm,
+  versionFormFor,
+} from "../../services/job-forms";
+import { reconcileRiderStatus } from "../../services/presence";
+import { linkBookingToProperty } from "../../services/properties";
+import { publishDispatch, publishTrack } from "../../services/realtime";
+import { deleteSignatureObject } from "../../services/signatures";
+import {
+  isOwnVoiceNote,
+  parseMeta,
+  removeVoiceNoteLine,
+  voiceNoteKey,
+} from "../../services/voice-notes";
+import {
+  checkServiceZone,
+  OUTSIDE_ZONE_MESSAGE,
+  OUTSIDE_ZONE_MESSAGE_ADMIN,
+} from "../../services/zones";
+import { isTerminalStatus } from "../../shared/job-status";
+import { fmtInZone, zonedDayBounds } from "../../shared/tz";
+import { sdb } from "../database";
+import * as schema from "../database/schema";
+import { tdb } from "../database/tenant";
+import type { AppEnv } from "../env";
+import { capture } from "../lib/analytics";
+import { Err } from "../lib/errors";
+import { mergeInternalFieldData, publicFieldData } from "../lib/field-data";
+import {
+  attachMembership,
+  findCompanyUserByEmail,
+  findUserByEmail,
+  isMember,
+} from "../lib/memberships";
+import { incr } from "../lib/metrics";
+import { deleteObject, putObject } from "../lib/storage";
+import {
+  bookingStatus,
+  email,
   id as idField,
   isoDate,
+  jsonBlob,
+  jsonBody,
+  jsonObject,
   latitude,
   longitude,
-  rating as ratingField,
-  bookingStatus,
-  priority as priorityField,
-  shortText,
   longText,
-  jsonBlob,
-  jsonObject,
   phone,
-  email,
+  priority as priorityField,
+  rating as ratingField,
+  shortText,
 } from "../lib/validate";
+import { officeCan, requireAuth, tenantId, tx } from "../middleware/auth";
+import { techPayModelJson } from "./templates";
 
 type SessionUser = { id: string; role?: string; email: string; name: string };
 
@@ -71,7 +99,11 @@ async function transcribeAudio(
   if (!base || !key) return "";
   try {
     const fd = new FormData();
-    fd.append("file", new Blob([new Uint8Array(bytes)], { type: mime || "audio/m4a" }), filename);
+    fd.append(
+      "file",
+      new Blob([new Uint8Array(bytes)], { type: mime || "audio/m4a" }),
+      filename,
+    );
     fd.append("model", process.env.AI_TRANSCRIBE_MODEL || "openai/whisper-1");
     const res = await fetch(`${base.replace(/\/$/, "")}/audio/transcriptions`, {
       method: "POST",
@@ -97,13 +129,24 @@ async function transcribeAudio(
  * "photo" and "signature" both map to "file" (the existing attach-a-file
  * type); there's no dedicated signature capture yet, tracked separately.
  */
-function templateFieldsToCustomFields(rawFields: string | null | undefined): any[] {
+function templateFieldsToCustomFields(
+  rawFields: string | null | undefined,
+): any[] {
   let parsed: any[] = [];
-  try { parsed = JSON.parse(rawFields || "[]"); } catch { parsed = []; }
+  try {
+    parsed = JSON.parse(rawFields || "[]");
+  } catch {
+    parsed = [];
+  }
   if (!Array.isArray(parsed)) return [];
   const TYPE_MAP: Record<string, string> = {
-    text: "text", number: "number", checkbox: "checkbox", select: "select",
-    date: "date", photo: "file", signature: "file",
+    text: "text",
+    number: "number",
+    checkbox: "checkbox",
+    select: "select",
+    date: "date",
+    photo: "file",
+    signature: "file",
   };
   return parsed
     .filter((f) => f && f.type && TYPE_MAP[f.type])
@@ -114,12 +157,13 @@ function templateFieldsToCustomFields(rawFields: string | null | undefined): any
       required: !!f.required,
       // checkbox fields carry their list of items too (dropping them left a
       // "Checklist" with nothing to tick on the job)
-      ...(f.type === "select" || f.type === "checkbox" ? { options: Array.isArray(f.options) ? f.options : [] } : {}),
+      ...(f.type === "select" || f.type === "checkbox"
+        ? { options: Array.isArray(f.options) ? f.options : [] }
+        : {}),
     }));
 }
 
 // status -> notification mapping
-
 
 /** The shape every booking endpoint returns. Unchanged from the original
  *  per-row `enrich()` — batching must not alter the contract, because 10
@@ -154,16 +198,30 @@ async function enrichMany(
 
   // Fallback used if the batch fails — never let enrichment crash a whole list.
   const bare = (): EnrichedBooking[] =>
-    rows.map((b) => ({ ...b, fieldData: publicFieldData(b.fieldData), service: null, rider: null, customer: null }));
+    rows.map((b) => ({
+      ...b,
+      fieldData: publicFieldData(b.fieldData),
+      service: null,
+      rider: null,
+      customer: null,
+    }));
 
   try {
     // Rows can span companies only via system paths; group defensively so the
     // tenant-scoped lookups stay correct either way.
-    const companyIds = [...new Set(rows.map((r) => r.companyId).filter(Boolean))];
+    const companyIds = [
+      ...new Set(rows.map((r) => r.companyId).filter(Boolean)),
+    ];
 
-    const svcIds = [...new Set(rows.map((r) => r.serviceId).filter((v): v is string => !!v))];
-    const riderIds = [...new Set(rows.map((r) => r.riderId).filter((v): v is string => !!v))];
-    const custIds = [...new Set(rows.map((r) => r.customerId).filter((v): v is string => !!v))];
+    const svcIds = [
+      ...new Set(rows.map((r) => r.serviceId).filter((v): v is string => !!v)),
+    ];
+    const riderIds = [
+      ...new Set(rows.map((r) => r.riderId).filter((v): v is string => !!v)),
+    ];
+    const custIds = [
+      ...new Set(rows.map((r) => r.customerId).filter((v): v is string => !!v)),
+    ];
 
     // 1) services — tenant-scoped, one query per company (normally exactly one)
     const svcMap = new Map<string, any>();
@@ -193,7 +251,10 @@ async function enrichMany(
 
     // 3) users — GLOBAL table; one query covers both rider users and customers
     const userIds = [
-      ...new Set([...riderRows.map((r) => r.userId).filter(Boolean), ...custIds]),
+      ...new Set([
+        ...riderRows.map((r) => r.userId).filter(Boolean),
+        ...custIds,
+      ]),
     ] as string[];
     const userMap = new Map<string, any>();
     if (userIds.length) {
@@ -220,7 +281,12 @@ async function enrichMany(
         service: (b.serviceId ? svcMap.get(b.serviceId) : null) ?? null,
         rider: b.riderId ? (riderMap.get(b.riderId) ?? null) : null,
         customer: cust
-          ? { id: cust.id, name: cust.name, phone: cust.phone, email: cust.email }
+          ? {
+              id: cust.id,
+              name: cust.name,
+              phone: cust.phone,
+              email: cust.email,
+            }
           : null,
       };
     });
@@ -233,15 +299,25 @@ async function enrichMany(
 /** Single-row convenience wrapper. Same contract as before. */
 async function enrich(b: typeof schema.bookings.$inferSelect) {
   const [one] = await enrichMany([b]);
-  return one ?? { ...b, fieldData: publicFieldData(b.fieldData), service: null, rider: null, customer: null };
+  return (
+    one ?? {
+      ...b,
+      fieldData: publicFieldData(b.fieldData),
+      service: null,
+      rider: null,
+      customer: null,
+    }
+  );
 }
 
 async function enrichById(companyId: string, id: string) {
-  const fresh = await tdb(companyId).selectOne(schema.bookings, eq(schema.bookings.id, id));
+  const fresh = await tdb(companyId).selectOne(
+    schema.bookings,
+    eq(schema.bookings.id, id),
+  );
   if (!fresh) throw new Error(`Booking ${id} not found`);
   return enrich(fresh);
 }
-
 
 /* -------------------------------------------------------------------------- */
 /*  Request schemas                                                            */
@@ -279,8 +355,12 @@ const BookingCore = {
   fieldData: jsonObject().optional(),
   rateModel: jsonBlob().optional(),
   lineItems: z.array(z.unknown()).max(500, "Too many line items").optional(),
-  requiredSkillClass: shortText("Skill class", 120).optional().or(z.literal("")),
-  requiredSkills: z.union([z.string().max(2_000), z.array(z.string().max(120)).max(50)]).optional(),
+  requiredSkillClass: shortText("Skill class", 120)
+    .optional()
+    .or(z.literal("")),
+  requiredSkills: z
+    .union([z.string().max(2_000), z.array(z.string().max(120)).max(50)])
+    .optional(),
 };
 
 const BookingCreate = z.object(BookingCore);
@@ -303,10 +383,14 @@ const BookingAdminCreate = z
     /** Book it anyway: the tech is already out on a job then, or has time off. */
     force: z.boolean().optional(),
   })
-  .refine((d) => !!d.customerId || (!!d.customerName?.trim() && !!d.customerEmail), {
-    message: "Select an existing client, or enter a name and email to add a new one",
-    path: ["customerId"],
-  });
+  .refine(
+    (d) => !!d.customerId || (!!d.customerName?.trim() && !!d.customerEmail),
+    {
+      message:
+        "Select an existing client, or enter a name and email to add a new one",
+      path: ["customerId"],
+    },
+  );
 
 /** Every field is optional, but a present field must still be the right shape. */
 const BookingPatch = z
@@ -332,7 +416,10 @@ const BookingPatch = z
     rateModel: jsonBlob(),
     lineItems: z.array(z.unknown()).max(500, "Too many line items"),
     requiredSkillClass: shortText("Skill class", 120).or(z.literal("")),
-    requiredSkills: z.union([z.string().max(2_000), z.array(z.string().max(120)).max(50)]),
+    requiredSkills: z.union([
+      z.string().max(2_000),
+      z.array(z.string().max(120)).max(50),
+    ]),
     fieldData: jsonObject(),
     riderId: idField("Technician").nullable().or(z.literal("")),
     techPayModel: z.unknown(),
@@ -354,9 +441,15 @@ const AssignBody = z.object({
   force: z.boolean().optional(),
 });
 const StatusBody = z.object({ status: bookingStatus });
-const ReviewBody = z.object({ rating: ratingField, comment: longText(4_000).optional() });
+const ReviewBody = z.object({
+  rating: ratingField,
+  comment: longText(4_000).optional(),
+});
 const ChecklistBody = z.object({
-  index: z.number({ message: "Index must be a number" }).int("Index must be a whole number").min(0, "Index must be 0 or greater"),
+  index: z
+    .number({ message: "Index must be a number" })
+    .int("Index must be a whole number")
+    .min(0, "Index must be 0 or greater"),
   done: z.boolean({ message: "Done must be true or false" }),
 });
 const DriverNotesBody = z.object({ notes: longText(10_000).default("") });
@@ -368,21 +461,27 @@ const DriverNotesBody = z.object({ notes: longText(10_000).default("") });
  */
 const SignatureBody = z.object({
   strokes: z
-    .array(z.array(z.tuple([z.number().finite(), z.number().finite()])).max(20_000))
+    .array(
+      z.array(z.tuple([z.number().finite(), z.number().finite()])).max(20_000),
+    )
     .min(1, "Signature is empty")
     .max(500, "Too many strokes"),
   width: z.number().finite().min(1).max(10_000).optional(),
   height: z.number().finite().min(1).max(10_000).optional(),
   name: shortText("Printed name", 120),
 });
-const DeclineBody = z.object({ reason: longText(2_000).optional().default("") });
+const DeclineBody = z.object({
+  reason: longText(2_000).optional().default(""),
+});
 
 /** Customer-initiated appointment changes (see shared/change-policy.ts). */
 const RescheduleRequestBody = z.object({
   scheduledAt: isoDate("New appointment time"),
   reason: longText(2_000).optional().default(""),
 });
-const CancelRequestBody = z.object({ reason: longText(2_000).optional().default("") });
+const CancelRequestBody = z.object({
+  reason: longText(2_000).optional().default(""),
+});
 
 /**
  * Why a tech is dropping a job they already ACCEPTED. Fixed list (so the office
@@ -398,7 +497,10 @@ export const RELEASE_REASONS = [
   "wrong_skills",
   "other",
 ] as const;
-export const RELEASE_REASON_LABELS: Record<(typeof RELEASE_REASONS)[number], string> = {
+export const RELEASE_REASON_LABELS: Record<
+  (typeof RELEASE_REASONS)[number],
+  string
+> = {
   emergency: "Personal emergency",
   vehicle: "Vehicle breakdown",
   running_late: "Running too late to make it",
@@ -408,7 +510,9 @@ export const RELEASE_REASON_LABELS: Record<(typeof RELEASE_REASONS)[number], str
   other: "Other",
 };
 const ReleaseBody = z.object({
-  reason: z.enum(RELEASE_REASONS, { error: "Pick a reason for releasing this job" }),
+  reason: z.enum(RELEASE_REASONS, {
+    error: "Pick a reason for releasing this job",
+  }),
   note: longText(2_000).optional().default(""),
 });
 
@@ -459,7 +563,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const paginated = Number.isFinite(rawPage) && rawPage >= 1;
     const page = paginated ? Math.floor(rawPage) : 1;
     const pageSize = Math.min(
-      Math.max(Number.isFinite(rawSize) && rawSize >= 1 ? Math.floor(rawSize) : 50, 1),
+      Math.max(
+        Number.isFinite(rawSize) && rawSize >= 1 ? Math.floor(rawSize) : 50,
+        1,
+      ),
       200,
     );
 
@@ -468,11 +575,21 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (await officeCan(u, "work_orders:view")) {
       where = isNull(schema.bookings.deletedAt);
     } else if (u.role === "rider") {
-      const rp = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
+      const rp = await t.selectOne(
+        schema.riders,
+        eq(schema.riders.userId, u.id),
+      );
       // No rider profile → no jobs. Preserves the previous `[]` behaviour.
       if (!rp) {
         return c.json(
-          { bookings: [], total: 0, page, pageSize, pages: 0, truncated: false },
+          {
+            bookings: [],
+            total: 0,
+            page,
+            pageSize,
+            pages: 0,
+            truncated: false,
+          },
           200,
         );
       }
@@ -480,9 +597,15 @@ export const bookingsRoutes = new Hono<AppEnv>()
       // it a soft-deleted work order stayed in the tech's list forever and was
       // counted in their Earnings history (found live — one deleted job was
       // padding a driver's completed-jobs list).
-      where = and(eq(schema.bookings.riderId, rp.id), isNull(schema.bookings.deletedAt));
+      where = and(
+        eq(schema.bookings.riderId, rp.id),
+        isNull(schema.bookings.deletedAt),
+      );
     } else {
-      where = and(eq(schema.bookings.customerId, u.id), isNull(schema.bookings.deletedAt));
+      where = and(
+        eq(schema.bookings.customerId, u.id),
+        isNull(schema.bookings.deletedAt),
+      );
     }
 
     const scoped = t.scope(schema.bookings, where);
@@ -507,8 +630,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
 
       const limit = paginated ? pageSize : MAX_LIST;
       const offset = paginated ? (page - 1) * pageSize : 0;
-      const r = (await withWhere.limit(limit).offset(offset)) as
-        (typeof schema.bookings.$inferSelect)[];
+      const r = (await withWhere
+        .limit(limit)
+        .offset(offset)) as (typeof schema.bookings.$inferSelect)[];
       return { total: n, rows: r };
     });
 
@@ -547,10 +671,19 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const u = c.get("user") as SessionUser;
     const t = tx(c);
     // find rider record for this user
-    const rider = await t.selectOne(schema.riders, eq(schema.riders.userId, u.id));
+    const rider = await t.selectOne(
+      schema.riders,
+      eq(schema.riders.userId, u.id),
+    );
     if (!rider) return c.json({ jobsDone: 0, earnings: 0, activeJobs: 0 }, 200);
     // Practice and sample jobs are pretend work: they don't count toward the day.
-    const all = await t.select(schema.bookings, and(eq(schema.bookings.riderId, rider.id), eq(schema.bookings.isSample, false)));
+    const all = await t.select(
+      schema.bookings,
+      and(
+        eq(schema.bookings.riderId, rider.id),
+        eq(schema.bookings.isSample, false),
+      ),
+    );
     // "Today" is the tenant's local day, not the server's. setHours() here ran
     // in the process time zone (UTC in production), so for a Winnipeg tenant
     // the window rolled over at 19:00 local: the tech's completed jobs and
@@ -558,22 +691,30 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // evening job counted toward tomorrow.
     const tz = await companyTimeZone(tenantId(c));
     const { start: todayStart, end: todayEnd } = zonedDayBounds(new Date(), tz);
-    const todayJobs = all.filter(b => {
+    const todayJobs = all.filter((b) => {
       const d = b.scheduledAt ? new Date(b.scheduledAt) : null;
       return d && d >= todayStart && d <= todayEnd;
     });
-    const jobsDone = todayJobs.filter(b => b.status === "completed").length;
+    const jobsDone = todayJobs.filter((b) => b.status === "completed").length;
     // "Earnings" is what the TECH takes home — the job's tech pay — not the
     // customer-facing price (Dan, 2026-10-06). Shows $0 until dispatch fills
     // tech pay in on the job.
     const earnings = todayJobs
-      .filter(b => b.status === "completed")
+      .filter((b) => b.status === "completed")
       .reduce((sum, b) => sum + (Number((b as any).techPay) || 0), 0);
-    const activeJobs = todayJobs.filter(b => ["assigned","enroute","arrived","in_progress"].includes(b.status)).length;
-    return c.json({ jobsDone, earnings, activeJobs, totalToday: todayJobs.length }, 200);
+    const activeJobs = todayJobs.filter((b) =>
+      ["assigned", "enroute", "arrived", "in_progress"].includes(b.status),
+    ).length;
+    return c.json(
+      { jobsDone, earnings, activeJobs, totalToday: todayJobs.length },
+      200,
+    );
   })
   .get("/:id", requireAuth, async (c) => {
-    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, c.req.param("id")));
+    const b = await tx(c).selectOne(
+      schema.bookings,
+      eq(schema.bookings.id, c.req.param("id")),
+    );
     if (!b) return c.json({ message: "Not found" }, 404);
     return c.json({ booking: await enrich(b) }, 200);
   })
@@ -583,7 +724,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const co = tenantId(c);
     const t = tx(c);
     const body = c.req.valid("json");
-    const svc = await t.selectOne(schema.services, eq(schema.services.id, body.serviceId));
+    const svc = await t.selectOne(
+      schema.services,
+      eq(schema.services.id, body.serviceId),
+    );
     if (!svc) return c.json({ message: "Service not found" }, 404);
 
     const cu = await t.selectOne(schema.user, eq(schema.user.id, u.id));
@@ -593,9 +737,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // record the job at 43.6532,-79.3832 — visible on the fleet map, feeding
     // distance/ETA, and skipping the zone check below. If we still can't resolve
     // them we do NOT invent a location and we do NOT zone-check on a guess.
-    const geo = body.lat != null && body.lng != null
-      ? { lat: body.lat, lng: body.lng }
-      : await forwardGeocode(body.address);
+    const geo =
+      body.lat != null && body.lng != null
+        ? { lat: body.lat, lng: body.lng }
+        : await forwardGeocode(body.address);
 
     // Zone enforcement — the customer path had NONE, so a customer far outside
     // every active zone got a confirmed booking, an invoice and a dispatch.
@@ -621,7 +766,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
       customerPhone: body.phone ?? cu?.phone ?? "",
       region: body.region ?? "",
       rateModel: body.rateModel ? JSON.stringify(body.rateModel) : "",
-      lineItems: Array.isArray(body.lineItems) ? JSON.stringify(body.lineItems) : "",
+      lineItems: Array.isArray(body.lineItems)
+        ? JSON.stringify(body.lineItems)
+        : "",
       requiredSkillClass: (body as any).requiredSkillClass ?? "",
       requiredSkills: (body as any).requiredSkills ?? "",
       price: svc.basePrice,
@@ -656,19 +803,27 @@ export const bookingsRoutes = new Hono<AppEnv>()
     await fireEvent("created", b.id);
 
     incr("bookings_created_total");
-    capture("booking.created", co, { bookingId: b.id, serviceId: body.serviceId, source: "customer" });
+    capture("booking.created", co, {
+      bookingId: b.id,
+      serviceId: body.serviceId,
+      source: "customer",
+    });
 
     return c.json({ booking: await enrichById(co, b.id) }, 201);
   })
   // admin creates a work order on behalf of a client
   .post("/admin", requireAuth, jsonBody(BookingAdminCreate), async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!(await officeCan(u, "work_orders:create"))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "work_orders:create")))
+      return c.json({ message: "Forbidden" }, 403);
     const body = c.req.valid("json");
 
     const co = tenantId(c);
     const t = tx(c);
-    const svc = await t.selectOne(schema.services, eq(schema.services.id, body.serviceId));
+    const svc = await t.selectOne(
+      schema.services,
+      eq(schema.services.id, body.serviceId),
+    );
     if (!svc) return c.json({ message: "Service not found" }, 404);
 
     // Resolve the client: either an existing one picked from the combobox, or
@@ -689,7 +844,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
       // selected. Best-effort — never blocks the booking on a collision.
       if (body.customerEmail && body.customerEmail !== cu.email) {
         const updated = await t
-          .update(schema.user, { email: body.customerEmail }, eq(schema.user.id, cu.id))
+          .update(
+            schema.user,
+            { email: body.customerEmail },
+            eq(schema.user.id, cu.id),
+          )
           .catch(() => [] as (typeof schema.user.$inferSelect)[]);
         if (updated[0]) cu = updated[0];
       }
@@ -700,7 +859,12 @@ export const bookingsRoutes = new Hono<AppEnv>()
       if (!cu) {
         const globalMatch = await findUserByEmail(newEmail);
         if (globalMatch) {
-          await attachMembership({ userId: globalMatch.id, companyId: co, role: "customer", status: "active" });
+          await attachMembership({
+            userId: globalMatch.id,
+            companyId: co,
+            role: "customer",
+            status: "active",
+          });
           cu = globalMatch;
         } else {
           const created = await t
@@ -714,8 +878,20 @@ export const bookingsRoutes = new Hono<AppEnv>()
             })
             .catch(() => [] as (typeof schema.user.$inferSelect)[]);
           cu = created[0];
-          if (!cu) return c.json({ message: "Couldn't create that customer — check the email address" }, 422);
-          await attachMembership({ userId: cu.id, companyId: co, role: "customer", status: "active" });
+          if (!cu)
+            return c.json(
+              {
+                message:
+                  "Couldn't create that customer — check the email address",
+              },
+              422,
+            );
+          await attachMembership({
+            userId: cu.id,
+            companyId: co,
+            role: "customer",
+            status: "active",
+          });
         }
       }
     }
@@ -723,7 +899,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // riderId is a foreign key too, and unlike serviceId/customerId it was
     // never resolved — a bogus technician id was a bare 500 on the FK.
     if (body.riderId) {
-      const rd = await t.selectOne(schema.riders, eq(schema.riders.id, body.riderId));
+      const rd = await t.selectOne(
+        schema.riders,
+        eq(schema.riders.id, body.riderId),
+      );
       if (!rd) return c.json({ message: "Technician not found" }, 404);
     }
 
@@ -735,15 +914,20 @@ export const bookingsRoutes = new Hono<AppEnv>()
         scheduledAt: new Date(body.scheduledAt),
         serviceId: body.serviceId,
       });
-      if (busy) return c.json({ message: busy.message, reason: busy.kind, forceable: true }, 409);
+      if (busy)
+        return c.json(
+          { message: busy.message, reason: busy.kind, forceable: true },
+          409,
+        );
     }
 
     // Coordinates + zone enforcement, identical logic to the customer path
     // (services/zones.ts) so the two can't drift. Geocode when the office typed
     // an address without picking a suggestion, instead of defaulting to Toronto.
-    const geo = body.lat != null && body.lng != null
-      ? { lat: body.lat, lng: body.lng }
-      : await forwardGeocode(body.address);
+    const geo =
+      body.lat != null && body.lng != null
+        ? { lat: body.lat, lng: body.lng }
+        : await forwardGeocode(body.address);
     if (geo) {
       const zone = await checkServiceZone(co, geo.lat, geo.lng);
       if (!zone.ok) return c.json({ message: OUTSIDE_ZONE_MESSAGE_ADMIN }, 422);
@@ -758,32 +942,57 @@ export const bookingsRoutes = new Hono<AppEnv>()
     let fieldData = body.fieldData ? JSON.stringify(body.fieldData) : "{}";
     let checklistState = "[]";
     // Tech pay + field payment: what the office set on this work order, else the template's.
-    let techPayModel = body.techPayModel !== undefined ? techPayModelJson(body.techPayModel) : "";
+    let techPayModel =
+      body.techPayModel !== undefined
+        ? techPayModelJson(body.techPayModel)
+        : "";
     let collectPayment: string = body.collectPayment ?? "";
     // Job forms v2: book the job against the template's current version, so
     // it keeps these questions, prices and pay whatever happens to the
     // template later. The form replaces the separate checklist.
     let templateVersionId: string | null = null;
     if (body.templateId) {
-      const tpl = await t.selectOne(schema.taskTemplates, eq(schema.taskTemplates.id, body.templateId));
-      const ver = tpl && (await isFeatureOn(co, "forms.v2")) ? await currentVersion(co, tpl.id) : null;
+      const tpl = await t.selectOne(
+        schema.taskTemplates,
+        eq(schema.taskTemplates.id, body.templateId),
+      );
+      const ver =
+        tpl && (await isFeatureOn(co, "forms.v2"))
+          ? await currentVersion(co, tpl.id)
+          : null;
       if (tpl && ver) {
         templateVersionId = ver.id;
-        if (body.techPayModel === undefined) techPayModel = ver.techPayModel || "";
-        if (body.collectPayment === undefined) collectPayment = ver.collectPayment || "";
-        const hasOwnFields = Array.isArray(body.fieldData?._customFields) && body.fieldData._customFields.length > 0;
+        if (body.techPayModel === undefined)
+          techPayModel = ver.techPayModel || "";
+        if (body.collectPayment === undefined)
+          collectPayment = ver.collectPayment || "";
+        const hasOwnFields =
+          Array.isArray(body.fieldData?._customFields) &&
+          body.fieldData._customFields.length > 0;
         // Older phone builds still read _customFields (read-only labels).
         if (!hasOwnFields) {
           const seeded = templateFieldsToCustomFields(tpl.fields);
-          if (seeded.length) fieldData = JSON.stringify({ ...body.fieldData, _customFields: seeded });
+          if (seeded.length)
+            fieldData = JSON.stringify({
+              ...body.fieldData,
+              _customFields: seeded,
+            });
         }
       } else if (tpl) {
-        if (body.techPayModel === undefined) techPayModel = tpl.techPayModel || "";
-        if (body.collectPayment === undefined) collectPayment = tpl.collectPayment || "";
-        const hasOwnFields = Array.isArray(body.fieldData?._customFields) && body.fieldData._customFields.length > 0;
+        if (body.techPayModel === undefined)
+          techPayModel = tpl.techPayModel || "";
+        if (body.collectPayment === undefined)
+          collectPayment = tpl.collectPayment || "";
+        const hasOwnFields =
+          Array.isArray(body.fieldData?._customFields) &&
+          body.fieldData._customFields.length > 0;
         if (!hasOwnFields) {
           const seeded = templateFieldsToCustomFields(tpl.fields);
-          if (seeded.length) fieldData = JSON.stringify({ ...body.fieldData, _customFields: seeded });
+          if (seeded.length)
+            fieldData = JSON.stringify({
+              ...body.fieldData,
+              _customFields: seeded,
+            });
         }
         try {
           const checklist = JSON.parse(tpl.checklist || "[]");
@@ -792,13 +1001,17 @@ export const bookingsRoutes = new Hono<AppEnv>()
             // compliance/quality gate (e.g. a documented reading, a
             // mandated sign-off) that the mobile app blocks job completion
             // on if left unchecked — not just a cosmetic label.
-            checklistState = JSON.stringify(checklist.map((item: any) => ({
-              label: typeof item === "string" ? item : item.label,
-              done: false,
-              required: typeof item === "object" && item.required === true,
-            })));
+            checklistState = JSON.stringify(
+              checklist.map((item: any) => ({
+                label: typeof item === "string" ? item : item.label,
+                done: false,
+                required: typeof item === "object" && item.required === true,
+              })),
+            );
           }
-        } catch { /* leave as "[]" */ }
+        } catch {
+          /* leave as "[]" */
+        }
       }
     }
 
@@ -825,7 +1038,9 @@ export const bookingsRoutes = new Hono<AppEnv>()
       customerPhone: body.phone ?? cu!.phone ?? "",
       region: body.region ?? "",
       rateModel: body.rateModel ? JSON.stringify(body.rateModel) : "",
-      lineItems: Array.isArray(body.lineItems) ? JSON.stringify(body.lineItems) : "",
+      lineItems: Array.isArray(body.lineItems)
+        ? JSON.stringify(body.lineItems)
+        : "",
       requiredSkillClass: (body as any).requiredSkillClass ?? "",
       requiredSkills: (body as any).requiredSkills ?? "",
       price: svc.basePrice,
@@ -853,7 +1068,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
     await linkBookingToProperty(b.id);
     await fireEvent("created", b.id);
     incr("bookings_created_total");
-    capture("booking.created", co, { bookingId: b.id, serviceId: body.serviceId, source: "admin" });
+    capture("booking.created", co, {
+      bookingId: b.id,
+      serviceId: body.serviceId,
+      source: "admin",
+    });
     if (assignedRider) {
       await t.update(
         schema.bookings,
@@ -862,7 +1081,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
       );
       await fireEvent("assigned", b.id);
       incr("dispatch_assigned_total");
-      capture("dispatch.assigned", co, { bookingId: b.id, riderId: assignedRider });
+      capture("dispatch.assigned", co, {
+        bookingId: b.id,
+        riderId: assignedRider,
+      });
     }
 
     return c.json({ booking: await enrichById(co, b.id) }, 201);
@@ -870,7 +1092,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // reschedule a work order (admin) -> set scheduledAt (drag onto a calendar day)
   .post("/:id/schedule", requireAuth, jsonBody(ScheduleBody), async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!(await officeCan(u, "scheduler:edit"))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "scheduler:edit")))
+      return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const { scheduledAt, force } = c.req.valid("json");
     const t = tx(c);
@@ -900,10 +1123,22 @@ export const bookingsRoutes = new Hono<AppEnv>()
         serviceId: prev.serviceId,
       });
       if (busy)
-        return c.json({ message: busy.message, reason: busy.kind, status: prev.status, forceable: true }, 409);
+        return c.json(
+          {
+            message: busy.message,
+            reason: busy.kind,
+            status: prev.status,
+            forceable: true,
+          },
+          409,
+        );
     }
     const set: Record<string, unknown> = { scheduledAt };
-    const [b] = await t.update(schema.bookings, set, eq(schema.bookings.id, id));
+    const [b] = await t.update(
+      schema.bookings,
+      set,
+      eq(schema.bookings.id, id),
+    );
     if (!b) return c.json({ message: "Not found" }, 404);
     // A `rescheduled` notification exists and is on by default for the client
     // (email) and the tech (SMS) — but only the customer-initiated change-request
@@ -916,7 +1151,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // admin edits any field on a work order (address, schedule, service, pricing, etc.)
   .patch("/:id", requireAuth, jsonBody(BookingPatch), async (c) => {
     const u = c.get("user") as SessionUser;
-    if (!(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "work_orders:edit")))
+      return c.json({ message: "Forbidden" }, 403);
     const id = c.req.param("id");
     const co = tenantId(c);
     const t = tx(c);
@@ -932,14 +1168,21 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // inside the caller's tenant instead of pointing a work order at another
     // company's row.
     if (body.serviceId !== undefined) {
-      const svc = await t.selectOne(schema.services, eq(schema.services.id, body.serviceId));
+      const svc = await t.selectOne(
+        schema.services,
+        eq(schema.services.id, body.serviceId),
+      );
       if (!svc) return c.json({ message: "Service not found" }, 404);
     }
     if (body.customerId !== undefined) {
-      const cu = await t.selectOne(schema.user, eq(schema.user.id, body.customerId));
+      const cu = await t.selectOne(
+        schema.user,
+        eq(schema.user.id, body.customerId),
+      );
       // Membership, not user.companyId: a client shared with another company is
       // still this company's client, and comparing home companies rejected them.
-      if (!cu || !(await isMember(cu.id, co))) return c.json({ message: "Client not found" }, 404);
+      if (!cu || !(await isMember(cu.id, co)))
+        return c.json({ message: "Client not found" }, 404);
     }
     // Best-effort correction to the client's own CRM email — fixes a typo or
     // fills one in that was missing. Never blocks the save on a collision
@@ -947,29 +1190,47 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (body.customerEmail !== undefined) {
       const targetCustomerId = body.customerId ?? prev.customerId;
       if (targetCustomerId) {
-        const targetCu = await t.selectOne(schema.user, eq(schema.user.id, targetCustomerId));
+        const targetCu = await t.selectOne(
+          schema.user,
+          eq(schema.user.id, targetCustomerId),
+        );
         if (targetCu && targetCu.email !== body.customerEmail) {
           await t
-            .update(schema.user, { email: body.customerEmail }, eq(schema.user.id, targetCustomerId))
+            .update(
+              schema.user,
+              { email: body.customerEmail },
+              eq(schema.user.id, targetCustomerId),
+            )
             .catch(() => {});
         }
       }
     }
     if (body.riderId) {
-      const rd = await t.selectOne(schema.riders, eq(schema.riders.id, body.riderId));
+      const rd = await t.selectOne(
+        schema.riders,
+        eq(schema.riders.id, body.riderId),
+      );
       if (!rd) return c.json({ message: "Technician not found" }, 404);
     }
     if (body.templateId) {
-      const tpl = await t.selectOne(schema.taskTemplates, eq(schema.taskTemplates.id, body.templateId));
+      const tpl = await t.selectOne(
+        schema.taskTemplates,
+        eq(schema.taskTemplates.id, body.templateId),
+      );
       if (!tpl) return c.json({ message: "Template not found" }, 404);
     }
 
     // A save from the work-order modal can change the tech, the time, or both —
     // the same double-booking as a drag or an assign, just through a different
     // door. Only checked when one of those two actually changed.
-    const nextRider = body.riderId === undefined ? (prev.riderId ?? "") : (body.riderId || "");
-    const nextAt = body.scheduledAt ? new Date(body.scheduledAt) : prev.scheduledAt;
-    const movedInTime = Boolean(body.scheduledAt) && Number(nextAt) !== Number(prev.scheduledAt ?? 0);
+    const nextRider =
+      body.riderId === undefined ? (prev.riderId ?? "") : body.riderId || "";
+    const nextAt = body.scheduledAt
+      ? new Date(body.scheduledAt)
+      : prev.scheduledAt;
+    const movedInTime =
+      Boolean(body.scheduledAt) &&
+      Number(nextAt) !== Number(prev.scheduledAt ?? 0);
     if (
       nextRider &&
       !body.force &&
@@ -982,7 +1243,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
         bookingId: id,
         serviceId: body.serviceId ?? prev.serviceId,
       });
-      if (busy) return c.json({ message: busy.message, reason: busy.kind, forceable: true }, 409);
+      if (busy)
+        return c.json(
+          { message: busy.message, reason: busy.kind, forceable: true },
+          409,
+        );
     }
 
     const set: Record<string, unknown> = {};
@@ -990,7 +1255,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (body.priority !== undefined) set.priority = body.priority;
     if (body.address !== undefined) set.address = body.address;
     if (body.notes !== undefined) set.notes = body.notes;
-    if ((body as any).staffNotes !== undefined) set.staffNotes = (body as any).staffNotes;
+    if ((body as any).staffNotes !== undefined)
+      set.staffNotes = (body as any).staffNotes;
     if (body.customerId !== undefined) set.customerId = body.customerId;
     if (body.serviceId !== undefined) set.serviceId = body.serviceId;
     if (body.templateId !== undefined) {
@@ -1001,9 +1267,19 @@ export const bookingsRoutes = new Hono<AppEnv>()
         // Answers already given belong to this job's form: changing the
         // template would hide them. A finished job keeps its form as the record.
         if (prev.templateVersionId && (await answeredCountFor(co, prev)) > 0)
-          return c.json({ message: "This job's form already has answers, so its template can't be changed. Create a new job instead.", reason: "form_has_answers" }, 409);
+          return c.json(
+            {
+              message:
+                "This job's form already has answers, so its template can't be changed. Create a new job instead.",
+              reason: "form_has_answers",
+            },
+            409,
+          );
         if (!isTerminalStatus(prev.status)) {
-          const ver = body.templateId && (await isFeatureOn(co, "forms.v2")) ? await currentVersion(co, body.templateId) : null;
+          const ver =
+            body.templateId && (await isFeatureOn(co, "forms.v2"))
+              ? await currentVersion(co, body.templateId)
+              : null;
           set.templateVersionId = ver?.id ?? null;
         }
       }
@@ -1011,14 +1287,19 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (body.region !== undefined) set.region = body.region ?? "";
     if (body.lat !== undefined) set.lat = body.lat;
     if (body.lng !== undefined) set.lng = body.lng;
-    if (body.customerPhone !== undefined) set.customerPhone = body.customerPhone;
+    if (body.customerPhone !== undefined)
+      set.customerPhone = body.customerPhone;
     if (body.scheduledAt) set.scheduledAt = body.scheduledAt;
     if (body.rateModel !== undefined)
       set.rateModel = body.rateModel ? JSON.stringify(body.rateModel) : "";
-    if (body.techPayModel !== undefined) set.techPayModel = techPayModelJson(body.techPayModel);
-    if (body.collectPayment !== undefined) set.collectPayment = body.collectPayment;
+    if (body.techPayModel !== undefined)
+      set.techPayModel = techPayModelJson(body.techPayModel);
+    if (body.collectPayment !== undefined)
+      set.collectPayment = body.collectPayment;
     if (body.lineItems !== undefined)
-      set.lineItems = Array.isArray(body.lineItems) ? JSON.stringify(body.lineItems) : "";
+      set.lineItems = Array.isArray(body.lineItems)
+        ? JSON.stringify(body.lineItems)
+        : "";
     if ((body as any).requiredSkillClass !== undefined)
       set.requiredSkillClass = (body as any).requiredSkillClass ?? "";
     if ((body as any).requiredSkills !== undefined)
@@ -1031,7 +1312,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // Internal `__`-prefixed keys (iOS Live Activity push tokens written by
     // tracking.ts) are never sent to clients, so they're merged back in here
     // instead of being wiped by the overwrite.
-    if (body.fieldData !== undefined) set.fieldData = mergeInternalFieldData(prev.fieldData, body.fieldData as any);
+    if (body.fieldData !== undefined)
+      set.fieldData = mergeInternalFieldData(
+        prev.fieldData,
+        body.fieldData as any,
+      );
 
     // handle (re)assignment if the rider changed
     const newRider = body.riderId;
@@ -1090,7 +1375,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
       await recomputeBooking(co, id);
     }
     // A finished job's tech pay follows its pay rules until a payout locks it in.
-    if ((body.techPayModel !== undefined || body.lineItems !== undefined) && prev.status === "completed" && !prev.payoutId) {
+    if (
+      (body.techPayModel !== undefined || body.lineItems !== undefined) &&
+      prev.status === "completed" &&
+      !prev.payoutId
+    ) {
       await accrueTechPay(co, id);
     }
 
@@ -1103,13 +1392,17 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // Dispatching work is an office action. This route was open to any signed-in
     // user in the tenant, so a technician could hand themselves (or a coworker)
     // any job on the board.
-    if (!(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
+    if (!(await officeCan(u, "work_orders:edit")))
+      return c.json({ message: "Forbidden" }, 403);
     const { riderId, force } = c.req.valid("json");
     const id = c.req.param("id");
     // Every guard (tenant check on the tech, terminal/in-flight protection,
     // double-booking + time off, compare-and-set, presence, "assigned" event)
     // lives in services/assign.ts so automation rules and dispatchers share it.
-    const r = await assignJob(co, id, riderId, { force, by: { kind: "dispatcher", name: u.name } });
+    const r = await assignJob(co, id, riderId, {
+      force,
+      by: { kind: "dispatcher", name: u.name },
+    });
     if (!r.ok) {
       if (r.code === "tech_not_found" || r.code === "job_not_found")
         return c.json({ message: r.message }, 404);
@@ -1135,7 +1428,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const [b] = await tx(c).update(
       schema.bookings,
       { assignStatus: "accepted", acceptedAt: new Date() },
-      and(eq(schema.bookings.id, id), eq(schema.bookings.assignStatus, "offered")),
+      and(
+        eq(schema.bookings.id, id),
+        eq(schema.bookings.assignStatus, "offered"),
+      ),
     );
     if (!b) throw Err.conflict("This job is no longer available to accept.");
     await fireEvent("accepted", id);
@@ -1155,14 +1451,28 @@ export const bookingsRoutes = new Hono<AppEnv>()
     }
     // free the tech, return to queue (unassigned + confirmed)
     if (cur.riderId) {
-      await t.update(schema.riders, { status: "available" }, eq(schema.riders.id, cur.riderId));
+      await t.update(
+        schema.riders,
+        { status: "available" },
+        eq(schema.riders.id, cur.riderId),
+      );
     }
     // fire declined first (while riderId still resolves to the tech who declined)
     await fireEvent("declined", id);
     const [b] = await t.update(
       schema.bookings,
-      { riderId: null, status: "confirmed", assignStatus: "declined", declineReason: reason || "", autoAssignedRuleId: "", autoAssignedAt: null },
-      and(eq(schema.bookings.id, id), eq(schema.bookings.assignStatus, "offered")),
+      {
+        riderId: null,
+        status: "confirmed",
+        assignStatus: "declined",
+        declineReason: reason || "",
+        autoAssignedRuleId: "",
+        autoAssignedAt: null,
+      },
+      and(
+        eq(schema.bookings.id, id),
+        eq(schema.bookings.assignStatus, "offered"),
+      ),
     );
     if (!b) throw Err.conflict("This job is no longer pending your response.");
     return c.json({ booking: await enrich(b) }, 200);
@@ -1183,13 +1493,21 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // builds can't fill the form, so they aren't blocked (the office sees the
     // form as unfinished instead); the office can always complete.
     if (status === "completed" && !office && c.req.header("X-Forms") === "2") {
-      const cur = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
+      const cur = await tx(c).selectOne(
+        schema.bookings,
+        eq(schema.bookings.id, id),
+      );
       if (cur?.templateVersionId) {
         const missing = await missingForJob(co, cur);
         if (missing.length)
           return c.json(
             {
-              message: `Answer the required questions first: ${missing.slice(0, 3).map((m) => m.label).join(", ")}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}.`,
+              message: `Answer the required questions first: ${missing
+                .slice(0, 3)
+                .map((m) => m.label)
+                .join(
+                  ", ",
+                )}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}.`,
               reason: "form_incomplete",
               missing: missing.map((m) => ({ id: m.id, label: m.label })),
             },
@@ -1207,13 +1525,19 @@ export const bookingsRoutes = new Hono<AppEnv>()
     }
     if (!b) return c.json({ error: "not found" }, 404);
     if (status !== "completed" && b.templateVersionId) {
-      await reopenJobForm(co, b).catch((e) => console.error("[bookings] reopen form failed", id, e));
+      await reopenJobForm(co, b).catch((e) =>
+        console.error("[bookings] reopen form failed", id, e),
+      );
     }
     if (status === "completed" && b.templateVersionId) {
-      await closeJobForm(co, b, u.name || u.email || "").catch((e) => console.error("[bookings] close form failed", id, e));
+      await closeJobForm(co, b, u.name || u.email || "").catch((e) =>
+        console.error("[bookings] close form failed", id, e),
+      );
       // The customer's copy of the form, when the template asks for one.
       // Fire-and-forget: never holds up or fails the status change.
-      void sendFormCopy(co, b.id).catch((e) => console.error("[bookings] form copy failed", id, e));
+      void sendFormCopy(co, b.id).catch((e) =>
+        console.error("[bookings] form copy failed", id, e),
+      );
     }
     return c.json({ booking: await enrich(b) }, 200);
   })
@@ -1237,7 +1561,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
       ? await t.selectOne(schema.riders, eq(schema.riders.id, cur.riderId))
       : null;
     const isHolder = !!holder && holder.userId === u.id;
-    if (!isHolder && !(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
+    if (!isHolder && !(await officeCan(u, "work_orders:edit")))
+      return c.json({ message: "Forbidden" }, 403);
     if (cur.status !== "arrived" && cur.status !== "in_progress")
       throw Err.conflict("This job's clock can't be resumed right now.");
     if (cur.clockState !== "paused")
@@ -1266,11 +1591,18 @@ export const bookingsRoutes = new Hono<AppEnv>()
       ? await t.selectOne(schema.riders, eq(schema.riders.id, cur.riderId))
       : null;
     const isHolder = !!holder && holder.userId === u.id;
-    if (!isHolder && !(await officeCan(u, "work_orders:edit"))) return c.json({ message: "Forbidden" }, 403);
+    if (!isHolder && !(await officeCan(u, "work_orders:edit")))
+      return c.json({ message: "Forbidden" }, 403);
     if (!cur.riderId) throw Err.conflict("This job isn't assigned to anyone.");
     if (cur.assignStatus === "offered")
-      throw Err.conflict("You haven't accepted this job yet — decline it instead.");
-    if (!RELEASABLE_STATUSES.includes(cur.status as (typeof RELEASABLE_STATUSES)[number]))
+      throw Err.conflict(
+        "You haven't accepted this job yet — decline it instead.",
+      );
+    if (
+      !RELEASABLE_STATUSES.includes(
+        cur.status as (typeof RELEASABLE_STATUSES)[number],
+      )
+    )
       throw Err.conflict("This job can no longer be released.");
     const detail = `${RELEASE_REASON_LABELS[reason]}${note ? ` — ${note}` : ""}`;
     const releasedRider = cur.riderId;
@@ -1289,7 +1621,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
         eq(schema.bookings.status, cur.status),
       ),
     );
-    if (!claimed) throw Err.conflict("This job just changed — pull it up again.");
+    if (!claimed)
+      throw Err.conflict("This job just changed — pull it up again.");
     await fireEvent("released", id);
     const [b] = await t.update(
       schema.bookings,
@@ -1348,7 +1681,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
         },
         409,
       );
-    const [b] = await t.update(schema.bookings, { status: "cancelled" }, eq(schema.bookings.id, id));
+    const [b] = await t.update(
+      schema.bookings,
+      { status: "cancelled" },
+      eq(schema.bookings.id, id),
+    );
     if (!b) return c.json({ message: "Not found" }, 404);
     await fireEvent("cancelled", id);
     // free the assigned tech so they don't stay stuck "busy" after a cancel
@@ -1365,7 +1702,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const co = tenantId(c);
     const u = c.get("user") as SessionUser;
     const id = c.req.param("id");
-    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
+    const b = await tx(c).selectOne(
+      schema.bookings,
+      eq(schema.bookings.id, id),
+    );
     if (!b) return c.json({ message: "Not found" }, 404);
     if (b.customerId !== u.id && !(await officeCan(u, "work_orders:view")))
       return c.json({ message: "Forbidden" }, 403);
@@ -1377,59 +1717,78 @@ export const bookingsRoutes = new Hono<AppEnv>()
    * applied immediately; inside it, it becomes a request the office approves.
    * services/change-requests.ts owns both paths so the audit trail is identical.
    */
-  .post("/:id/reschedule", requireAuth, jsonBody(RescheduleRequestBody), async (c) => {
-    const co = tenantId(c);
-    const u = c.get("user") as SessionUser;
-    const id = c.req.param("id");
-    const body = c.req.valid("json");
-    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
-    if (!b) return c.json({ message: "Not found" }, 404);
-    if (b.customerId !== u.id && !(await officeCan(u, "work_orders:edit")))
-      return c.json({ message: "Forbidden" }, 403);
-    const r = await requestReschedule({
-      companyId: co,
-      booking: b,
-      proposedAt: body.scheduledAt,
-      reason: body.reason ?? "",
-      actorId: u.id,
-      actorName: u.name ?? "",
-    });
-    if (!r.ok)
-      return c.json(
-        { message: r.message },
-        r.code === "invalid" ? 422 : r.code === "conflict" ? 409 : 403,
+  .post(
+    "/:id/reschedule",
+    requireAuth,
+    jsonBody(RescheduleRequestBody),
+    async (c) => {
+      const co = tenantId(c);
+      const u = c.get("user") as SessionUser;
+      const id = c.req.param("id");
+      const body = c.req.valid("json");
+      const b = await tx(c).selectOne(
+        schema.bookings,
+        eq(schema.bookings.id, id),
       );
-    return c.json(
-      r.mode === "applied"
-        ? { mode: "applied", scheduledAt: r.scheduledAt, request: r.request }
-        : { mode: "requested", request: r.request },
-      200,
-    );
-  })
+      if (!b) return c.json({ message: "Not found" }, 404);
+      if (b.customerId !== u.id && !(await officeCan(u, "work_orders:edit")))
+        return c.json({ message: "Forbidden" }, 403);
+      const r = await requestReschedule({
+        companyId: co,
+        booking: b,
+        proposedAt: body.scheduledAt,
+        reason: body.reason ?? "",
+        actorId: u.id,
+        actorName: u.name ?? "",
+      });
+      if (!r.ok)
+        return c.json(
+          { message: r.message },
+          r.code === "invalid" ? 422 : r.code === "conflict" ? 409 : 403,
+        );
+      return c.json(
+        r.mode === "applied"
+          ? { mode: "applied", scheduledAt: r.scheduledAt, request: r.request }
+          : { mode: "requested", request: r.request },
+        200,
+      );
+    },
+  )
   /**
    * Customer ASKS to cancel. Never cancels anything — it files a pending request
    * for the office. See the /:id/cancel guard above for why.
    */
-  .post("/:id/cancel-request", requireAuth, jsonBody(CancelRequestBody), async (c) => {
-    const co = tenantId(c);
-    const u = c.get("user") as SessionUser;
-    const id = c.req.param("id");
-    const body = c.req.valid("json");
-    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
-    if (!b) return c.json({ message: "Not found" }, 404);
-    if (b.customerId !== u.id && !(await officeCan(u, "work_orders:edit")))
-      return c.json({ message: "Forbidden" }, 403);
-    const r = await requestCancel({
-      companyId: co,
-      booking: b,
-      reason: body.reason ?? "",
-      actorId: u.id,
-      actorName: u.name ?? "",
-    });
-    if (!r.ok)
-      return c.json({ message: r.message }, r.code === "conflict" ? 409 : 403);
-    return c.json({ mode: "requested", request: r.request }, 201);
-  })
+  .post(
+    "/:id/cancel-request",
+    requireAuth,
+    jsonBody(CancelRequestBody),
+    async (c) => {
+      const co = tenantId(c);
+      const u = c.get("user") as SessionUser;
+      const id = c.req.param("id");
+      const body = c.req.valid("json");
+      const b = await tx(c).selectOne(
+        schema.bookings,
+        eq(schema.bookings.id, id),
+      );
+      if (!b) return c.json({ message: "Not found" }, 404);
+      if (b.customerId !== u.id && !(await officeCan(u, "work_orders:edit")))
+        return c.json({ message: "Forbidden" }, 403);
+      const r = await requestCancel({
+        companyId: co,
+        booking: b,
+        reason: body.reason ?? "",
+        actorId: u.id,
+        actorName: u.name ?? "",
+      });
+      if (!r.ok)
+        return c.json(
+          { message: r.message },
+          r.code === "conflict" ? 409 : 403,
+        );
+      return c.json({ mode: "requested", request: r.request }, 201);
+    },
+  )
   // review
   .post("/:id/review", requireAuth, jsonBody(ReviewBody), async (c) => {
     const u = c.get("user") as SessionUser;
@@ -1467,12 +1826,17 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const caption = String(form.get("caption") || "");
     // before | during | after — what stage of the job this shot documents.
     const rawPhase = String(form.get("phase") || "during").toLowerCase();
-    const phase = ["before", "during", "after"].includes(rawPhase) ? rawPhase : "during";
+    const phase = ["before", "during", "after"].includes(rawPhase)
+      ? rawPhase
+      : "during";
     // techs can mark a shot office-only (default: the homeowner sees it)
-    const customerVisible = String(form.get("customerVisible") ?? "true") !== "false";
+    const customerVisible =
+      String(form.get("customerVisible") ?? "true") !== "false";
     // Job forms v2: the question this photo answers (tags the photo only; the
     // answer itself is saved through /api/job-forms with the returned id).
-    const formItemId = String(form.get("formItemId") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+    const formItemId = String(form.get("formItemId") || "")
+      .replace(/[^A-Za-z0-9_-]/g, "")
+      .slice(0, 64);
     // A photo for an office-only question (or one in an office-only section)
     // is office-only, whatever the client sent, and carries no caption onto
     // the customer's timeline.
@@ -1486,7 +1850,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
       }
     }
     if (!(file instanceof File)) return c.json({ message: "No file" }, 400);
-    if (file.size > 15 * 1024 * 1024) return c.json({ message: "Image too large (max 15MB)" }, 400);
+    if (file.size > 15 * 1024 * 1024)
+      return c.json({ message: "Image too large (max 15MB)" }, 400);
     const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
     if (file.type && !ALLOWED.includes(file.type))
       return c.json({ message: `Unsupported type ${file.type}` }, 400);
@@ -1538,9 +1903,14 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // GET /api/bookings/:id/events
   .get("/:id/events", requireAuth, async (c) => {
     const id = c.req.param("id");
-    const b = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
+    const b = await tx(c).selectOne(
+      schema.bookings,
+      eq(schema.bookings.id, id),
+    );
     if (!b) return c.json({ message: "Not found" }, 404);
-    const events = await jobTimeline(b.companyId, id, { onlyCustomerVisible: false });
+    const events = await jobTimeline(b.companyId, id, {
+      onlyCustomerVisible: false,
+    });
     return c.json(
       {
         events,
@@ -1562,6 +1932,11 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const t = tx(c);
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
+    // One sign-off per job: a second capture means deleting the first.
+    if (b.signedAt)
+      throw Err.conflict(
+        "This job is already signed. Delete the signature first to capture a new one.",
+      );
 
     const body = c.req.valid("json");
     const strokes = body.strokes;
@@ -1618,7 +1993,52 @@ export const bookingsRoutes = new Hono<AppEnv>()
         data: { event: "signature_captured", bookingId: id },
       });
     }
-    return c.json({ signatureUrl: stored.url, signatureName: name, signedAt }, 201);
+    return c.json(
+      { signatureUrl: stored.url, signatureName: name, signedAt },
+      201,
+    );
+  })
+  // DELETE /api/bookings/:id/signature — take the sign-off back (the job's
+  // technician, or the office), so a new one can be captured. Removes the
+  // stored image and the customer-facing "Sign-off captured" entry, and leaves
+  // an office-only record of who removed whose.
+  .delete("/:id/signature", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    const u = c.get("user") as SessionUser;
+    const t = tx(c);
+    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!b) return c.json({ message: "Not found" }, 404);
+    const holder = b.riderId
+      ? await t.selectOne(schema.riders, eq(schema.riders.id, b.riderId))
+      : null;
+    const isHolder = !!holder && holder.userId === u.id;
+    const office = await officeCan(u, "work_orders:edit");
+    if (!isHolder && !office) return c.json({ message: "Forbidden" }, 403);
+    if (!b.signedAt)
+      return c.json({ message: "This job has no signature" }, 404);
+
+    await t.update(
+      schema.bookings,
+      { signatureUrl: "", signatureName: "", signedAt: null },
+      eq(schema.bookings.id, id),
+    );
+    await t.delete(
+      schema.jobEvents,
+      and(
+        eq(schema.jobEvents.bookingId, id),
+        eq(schema.jobEvents.kind, "signature_captured"),
+      ),
+    );
+    await logJobEvent({
+      companyId: b.companyId,
+      bookingId: id,
+      kind: "signature_removed",
+      actorRole: office && !isHolder ? "dispatch" : "tech",
+      actorName: u?.name || "",
+      label: `Sign-off by ${b.signatureName || "customer"} removed`,
+    });
+    await deleteSignatureObject(b.signatureUrl, id);
+    return c.json({ ok: true }, 200);
   })
   // ── Voice note (tech dictates, office reads) ─────────────────────────────
   // POST /api/bookings/:id/voice-note   multipart: file, optional transcript
@@ -1633,7 +2053,8 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const form = await c.req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) return c.json({ message: "No file" }, 400);
-    if (file.size > 25 * 1024 * 1024) return c.json({ message: "Recording too long (max 25MB)" }, 400);
+    if (file.size > 25 * 1024 * 1024)
+      return c.json({ message: "Recording too long (max 25MB)" }, 400);
     const secs = Math.max(0, Math.round(Number(form.get("durationSecs")) || 0));
     const bytes = Buffer.from(await file.arrayBuffer());
     const ext = (file.name.split(".").pop() || "m4a").toLowerCase().slice(0, 8);
@@ -1646,7 +2067,12 @@ export const bookingsRoutes = new Hono<AppEnv>()
     // Client may transcribe on-device; otherwise try the gateway. Both are
     // best-effort — a failed transcript must never lose the recording.
     let transcript = String(form.get("transcript") || "").trim();
-    if (!transcript) transcript = await transcribeAudio(bytes, file.name || `note.${ext}`, file.type);
+    if (!transcript)
+      transcript = await transcribeAudio(
+        bytes,
+        file.name || `note.${ext}`,
+        file.type,
+      );
 
     const me = c.get("user") as SessionUser;
     // Stamped on the tenant's clock: an office reader seeing "2:14 AM" on a
@@ -1659,10 +2085,16 @@ export const bookingsRoutes = new Hono<AppEnv>()
     );
     // The exact line added to driverNotes, kept so deleting the note can take
     // it back out again.
-    const line = transcript ? `[Voice note — ${me?.name || "Tech"}, ${stamp}] ${transcript}` : "";
+    const line = transcript
+      ? `[Voice note — ${me?.name || "Tech"}, ${stamp}] ${transcript}`
+      : "";
     if (line) {
       const next = b.driverNotes ? `${b.driverNotes}\n${line}` : line;
-      await t.update(schema.bookings, { driverNotes: next }, eq(schema.bookings.id, id));
+      await t.update(
+        schema.bookings,
+        { driverNotes: next },
+        eq(schema.bookings.id, id),
+      );
     }
     await logJobEvent({
       companyId: b.companyId,
@@ -1670,11 +2102,20 @@ export const bookingsRoutes = new Hono<AppEnv>()
       kind: "voice_note",
       actorRole: "tech",
       actorName: me?.name || "",
-      label: transcript ? `Voice note: ${transcript.slice(0, 120)}` : "Voice note recorded",
+      label: transcript
+        ? `Voice note: ${transcript.slice(0, 120)}`
+        : "Voice note recorded",
       detail: transcript,
       // userId says whose note it is; key and line are what deleting it has to
       // clean up (services/voice-notes.ts).
-      meta: { url: stored.url, key: stored.key, durationSecs: secs, transcribed: !!transcript, userId: me?.id ?? "", line },
+      meta: {
+        url: stored.url,
+        key: stored.key,
+        durationSecs: secs,
+        transcribed: !!transcript,
+        userId: me?.id ?? "",
+        line,
+      },
     });
     return c.json({ url: stored.url, transcript, durationSecs: secs }, 201);
   })
@@ -1686,7 +2127,13 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
     const me = c.get("user") as SessionUser;
-    const rows = await t.select(schema.jobEvents, and(eq(schema.jobEvents.bookingId, id), eq(schema.jobEvents.kind, "voice_note")));
+    const rows = await t.select(
+      schema.jobEvents,
+      and(
+        eq(schema.jobEvents.bookingId, id),
+        eq(schema.jobEvents.kind, "voice_note"),
+      ),
+    );
     const notes = rows
       .map((r) => ({ row: r, meta: parseMeta(r.meta) }))
       .filter(({ meta }) => isOwnVoiceNote(meta, me))
@@ -1712,17 +2159,33 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const me = c.get("user") as SessionUser;
     const ev = await t.selectOne(
       schema.jobEvents,
-      and(eq(schema.jobEvents.id, eventId), eq(schema.jobEvents.bookingId, id), eq(schema.jobEvents.kind, "voice_note")),
+      and(
+        eq(schema.jobEvents.id, eventId),
+        eq(schema.jobEvents.bookingId, id),
+        eq(schema.jobEvents.kind, "voice_note"),
+      ),
     );
     if (!ev) return c.json({ message: "Not found" }, 404);
     const meta = parseMeta(ev.meta);
-    if (!isOwnVoiceNote(meta, me)) return c.json({ message: "You can only delete your own voice notes" }, 403);
+    if (!isOwnVoiceNote(meta, me))
+      return c.json(
+        { message: "You can only delete your own voice notes" },
+        403,
+      );
 
     // Only ever delete under this job's voice-note folder, whatever the row says.
     const key = voiceNoteKey(meta, id);
-    if (key) await deleteObject(key).catch((e) => console.error("[voice-note] delete object failed", key, e));
+    if (key)
+      await deleteObject(key).catch((e) =>
+        console.error("[voice-note] delete object failed", key, e),
+      );
     const notes = removeVoiceNoteLine(b.driverNotes, meta);
-    if (notes !== b.driverNotes) await t.update(schema.bookings, { driverNotes: notes }, eq(schema.bookings.id, id));
+    if (notes !== b.driverNotes)
+      await t.update(
+        schema.bookings,
+        { driverNotes: notes },
+        eq(schema.bookings.id, id),
+      );
     await t.delete(schema.jobEvents, eq(schema.jobEvents.id, eventId));
     return c.json({ ok: true }, 200);
   })
@@ -1736,12 +2199,22 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
     let checklist: any[] = [];
-    try { checklist = JSON.parse(b.checklistState || "[]"); } catch {}
-    if (index < 0 || index >= checklist.length) return c.json({ message: "Invalid index" }, 400);
+    try {
+      checklist = JSON.parse(b.checklistState || "[]");
+    } catch {}
+    if (index < 0 || index >= checklist.length)
+      return c.json({ message: "Invalid index" }, 400);
     const item = checklist[index];
     const wasDone = typeof item === "object" && item !== null && !!item.done;
-    checklist[index] = typeof item === "object" ? { ...item, done } : { label: String(item), done };
-    await t.update(schema.bookings, { checklistState: JSON.stringify(checklist) }, eq(schema.bookings.id, id));
+    checklist[index] =
+      typeof item === "object"
+        ? { ...item, done }
+        : { label: String(item), done };
+    await t.update(
+      schema.bookings,
+      { checklistState: JSON.stringify(checklist) },
+      eq(schema.bookings.id, id),
+    );
     // A custom milestone waiting on this item ("Water restored") goes off the
     // first time it's ticked. Unticking and re-ticking never sends it again.
     if (done && !wasDone) {
@@ -1753,13 +2226,21 @@ export const bookingsRoutes = new Hono<AppEnv>()
     return c.json({ checklist }, 200);
   })
   // Tech saves a field note to the booking record (visible to office/dispatch)
-  .patch("/:id/driver-notes", requireAuth, jsonBody(DriverNotesBody), async (c) => {
-    const id = c.req.param("id");
-    const t = tx(c);
-    const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
-    if (!b) return c.json({ message: "Not found" }, 404);
-    const { notes } = c.req.valid("json");
-    await t.update(schema.bookings, { driverNotes: notes ?? "" }, eq(schema.bookings.id, id));
-    return c.json({ ok: true }, 200);
-  });
-
+  .patch(
+    "/:id/driver-notes",
+    requireAuth,
+    jsonBody(DriverNotesBody),
+    async (c) => {
+      const id = c.req.param("id");
+      const t = tx(c);
+      const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+      if (!b) return c.json({ message: "Not found" }, 404);
+      const { notes } = c.req.valid("json");
+      await t.update(
+        schema.bookings,
+        { driverNotes: notes ?? "" },
+        eq(schema.bookings.id, id),
+      );
+      return c.json({ ok: true }, 200);
+    },
+  );

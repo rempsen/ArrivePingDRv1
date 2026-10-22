@@ -34,6 +34,7 @@ export type JobEventKind =
   // activity
   | "photo_added"
   | "signature_captured"
+  | "signature_removed"
   | "note_added"
   | "voice_note"
   | "checklist_completed"
@@ -72,6 +73,8 @@ const EVENT_POLICY: Record<JobEventKind, { visible: boolean; label: string }> = 
   delayed: { visible: true, label: "Running late — customer notified" },
   photo_added: { visible: true, label: "Photo added" },
   signature_captured: { visible: true, label: "Sign-off captured" },
+  // taking a sign-off back is an office matter; the customer just stops seeing one
+  signature_removed: { visible: false, label: "Sign-off removed" },
   // field notes are written for the office, not the client
   note_added: { visible: false, label: "Note added" },
   // voice notes are the tech dictating for the office — never customer-facing
