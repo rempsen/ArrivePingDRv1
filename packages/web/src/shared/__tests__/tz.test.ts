@@ -8,6 +8,7 @@
  * regression to `getHours()` / `setHours()` fails here.
  */
 import { describe, it, expect } from "bun:test";
+import { dstDays, hoursInLocalDay } from "../../test-support/zone-rules";
 import {
   DEFAULT_TZ,
   isValidTimeZone,
@@ -100,12 +101,16 @@ describe("a technician's 'today' is the tenant's local day", () => {
     expect(tomorrowMorning >= start && tomorrowMorning <= end).toBe(false);
   });
 
-  it("the local day is 24h across a DST spring-forward (23h) and fall-back (25h)", () => {
-    const spring = zonedDayBounds(zonedTimeToInstant(WPG, 2026, 3, 8, 12), WPG);
-    const fall = zonedDayBounds(zonedTimeToInstant(WPG, 2026, 11, 1, 12), WPG);
+  // The expected lengths come from the zone's own rules (test-support/zone-rules),
+  // not from hardcoded dates: Winnipeg's DST has been dropped by newer tzdata, so
+  // a second zone with long-standing rules keeps a real 23h and 25h day covered.
+  it.each([WPG, "America/New_York"])("%s: the local day is as long as the zone's rules say, 23h or 25h across a DST change", (zone) => {
     const hours = (b: { start: Date; end: Date }) => (b.end.getTime() + 1 - b.start.getTime()) / 3_600_000;
-    expect(hours(spring)).toBe(23);
-    expect(hours(fall)).toBe(25);
+    const days = [{ month: 8, day: 11, hours: 24 }, ...dstDays(zone, 2026)];
+    for (const { month, day } of days) {
+      const bounds = zonedDayBounds(zonedTimeToInstant(zone, 2026, month, day, 12), zone);
+      expect(hours(bounds)).toBe(hoursInLocalDay(zone, 2026, month, day));
+    }
   });
 });
 
