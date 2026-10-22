@@ -176,3 +176,40 @@ export async function uploadVoiceNote(opts: {
     return { ok: false, error: e?.message || "Upload failed" };
   }
 }
+
+export type Playback = { stop: () => void };
+
+/**
+ * Plays a recording through the speaker (also with the silent switch on, like
+ * a voice memo). `onEnd` fires when it finishes on its own. Returns null if
+ * this binary has no expo-audio or the player can't be made; call `stop()` to
+ * cut it short or when leaving the screen.
+ */
+export async function playVoiceNote(url: string, onEnd: () => void): Promise<Playback | null> {
+  const m = load();
+  const create = m?.createAudioPlayer;
+  if (!create) return null;
+  try {
+    const setMode = m.setAudioModeAsync ?? m.AudioModule?.setAudioModeAsync;
+    await setMode?.({ allowsRecording: false, playsInSilentMode: true });
+    const player = create(url);
+    let done = false;
+    const sub = player.addListener?.("playbackStatusUpdate", (st: any) => {
+      if (st?.didJustFinish) finish(true);
+    });
+    function finish(natural: boolean) {
+      if (done) return;
+      done = true;
+      try {
+        sub?.remove?.();
+        player.pause?.();
+        player.remove?.();
+      } catch {}
+      if (natural) onEnd();
+    }
+    player.play();
+    return { stop: () => finish(false) };
+  } catch {
+    return null;
+  }
+}
