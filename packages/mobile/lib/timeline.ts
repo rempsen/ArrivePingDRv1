@@ -6,6 +6,7 @@
  * load it. Every time is minutes since midnight on the COMPANY's clock.
  */
 import { partsIn, toIso } from "./when";
+import { addDays } from "./board";
 
 export type Span = { id: string; startMin: number; endMin: number };
 export type Range = { startMin: number; endMin: number };
@@ -126,4 +127,59 @@ export function minLabel(min: number): string {
   const ampm = h < 12 ? "AM" : "PM";
   const hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+/** The Monday of the week a company-time day falls in. */
+export function mondayOf(day: string): string {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  return addDays(day, -((dow + 6) % 7));
+}
+
+export interface WeekCell {
+  day: string;
+  bookedMin: number;
+  count: number;
+  off: boolean;
+}
+
+/**
+ * The week grid: for each technician, seven cells from `from` with the
+ * minutes booked, the job count and whether it's a day off. Unassigned jobs
+ * are counted per day separately, for the row above the grid.
+ */
+export function weekCells(
+  board: {
+    techs: ReadonlyArray<{ id: string }>;
+    jobs: ReadonlyArray<{ riderId: string | null; status: string; scheduledAt: string; durationMins?: number | null }>;
+    timeOff: ReadonlyArray<{ techId: string; day: string }>;
+    tz: string;
+  },
+  from: string,
+): { days: string[]; byTech: Map<string, WeekCell[]>; unassigned: Record<string, number> } {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
+  const idx = new Map(days.map((d, i) => [d, i]));
+  const byTech = new Map<string, WeekCell[]>();
+  for (const t of board.techs) byTech.set(t.id, days.map((day) => ({ day, bookedMin: 0, count: 0, off: false })));
+  for (const o of board.timeOff) {
+    const i = idx.get(o.day);
+    const cells = byTech.get(o.techId);
+    if (i != null && cells) cells[i]!.off = true;
+  }
+  const unassigned: Record<string, number> = Object.fromEntries(days.map((d) => [d, 0]));
+  for (const job of board.jobs) {
+    if (job.status === "cancelled") continue;
+    const { day } = jobMinutes(job.scheduledAt, board.tz);
+    const i = idx.get(day);
+    if (i == null) continue;
+    if (!job.riderId) {
+      if (job.status !== "completed") unassigned[day] = (unassigned[day] ?? 0) + 1;
+      continue;
+    }
+    const cells = byTech.get(job.riderId);
+    if (!cells) continue;
+    cells[i]!.bookedMin += durationOf(job);
+    cells[i]!.count += 1;
+  }
+  return { days, byTech, unassigned };
 }

@@ -6,6 +6,7 @@ import { OfficeHeader } from "../../components/office/header";
 import { DayStrip } from "../../components/office/day-strip";
 import { Timeline } from "../../components/office/timeline";
 import { QueueColumn } from "../../components/office/queue-column";
+import { WeekGrid } from "../../components/office/week-grid";
 import { showToast } from "../../components/office/undo-toast";
 import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S } from "../../lib/theme";
@@ -14,7 +15,7 @@ import { useAccess } from "../../lib/use-access";
 import { useDispatchActions } from "../../lib/use-dispatch-actions";
 import { addDays, isUnassigned, NO_JOBS, NO_TECHS } from "../../lib/board";
 import { IDLE, placeReducer, placedStart, placementRequest } from "../../lib/board-place";
-import { jobMinutes, minLabel, type Range } from "../../lib/timeline";
+import { jobMinutes, minLabel, mondayOf, type Range } from "../../lib/timeline";
 import { fmtInTz } from "../../lib/when";
 
 /**
@@ -30,6 +31,7 @@ export default function Board() {
   const canEdit = can("work_orders:edit");
   const actions = useDispatchActions();
   const [day, setDay] = useState<string | null>(null);
+  const [view, setView] = useState<"day" | "week">("day");
   const board = useBoard(day);
   const [place, dispatch] = useReducer(placeReducer, IDLE);
   const [busy, setBusy] = useState(false);
@@ -42,6 +44,9 @@ export default function Board() {
     if (day === null && serverDay) setAnchor(serverDay);
   }, [day, serverDay]);
   const load = useDayLoad(anchor ? addDays(anchor, -1) : null, 9);
+  // The week holding the shown day, Monday first; fetched only while the Week view is up.
+  const weekFrom = anchor ? mondayOf(day ?? anchor) : null;
+  const week = useBoard(weekFrom, view === "week" && !!weekFrom, 7);
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const d of load.data?.days ?? []) m[d.day] = d.jobs;
@@ -67,6 +72,11 @@ export default function Board() {
   useEffect(() => {
     if (place.kind !== "idle" && board.data && !board.data.jobs.some((j) => j.id === place.jobId)) dispatch({ type: "cancel" });
   }, [place, board.data]);
+
+  // Switching to the week drops a half-done placement.
+  useEffect(() => {
+    if (view === "week") dispatch({ type: "cancel" });
+  }, [view]);
 
   const armedJob = place.kind === "idle" ? undefined : jobs.find((j) => j.id === place.jobId);
   const targetTech = place.kind === "confirm" ? techs.find((t) => t.id === place.techId) : undefined;
@@ -112,12 +122,48 @@ export default function Board() {
     Alert.alert("Couldn't place", r.message);
   }
 
+  const segment = (
+    <View style={s.segments}>
+      {(["day", "week"] as const).map((v) => {
+        const on = view === v;
+        return (
+          <Pressable key={v} onPress={() => setView(v)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={[s.seg, on && s.segOn]}>
+            <Text style={[s.segTxt, on && s.segTxtOn]}>{v === "day" ? "Day" : "Week"}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
   return (
     <View style={s.screen}>
-      <OfficeHeader title="Board" />
+      <OfficeHeader title="Board" right={segment} />
       {anchor ? <DayStrip today={anchor} day={day ?? anchor} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} /> : null}
 
-      {board.isLoading ? (
+      {view === "week" ? (
+        week.isLoading || !weekFrom ? (
+          <View style={{ padding: S.lg }}>
+            <ListSkeleton rows={4} height={72} />
+          </View>
+        ) : week.isError ? (
+          <Empty icon={<Warning color={C.red} size={28} />} text="Couldn't load the week" sub={(week.error as Error)?.message} />
+        ) : (
+          <View style={s.body}>
+            <WeekGrid
+              techs={week.data?.techs ?? NO_TECHS}
+              jobs={week.data?.jobs ?? NO_JOBS}
+              timeOff={week.data?.timeOff ?? []}
+              tz={week.data?.tz ?? tz}
+              from={weekFrom}
+              today={anchor ?? ""}
+              onPickDay={(d) => {
+                setDay(d === anchor ? null : d);
+                setView("day");
+              }}
+            />
+          </View>
+        )
+      ) : board.isLoading ? (
         <View style={{ padding: S.lg }}>
           <ListSkeleton rows={4} height={72} />
         </View>
@@ -180,6 +226,11 @@ export default function Board() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   body: { flex: 1, flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border },
+  segments: { flexDirection: "row", backgroundColor: C.bg3, borderRadius: R.pill, padding: 3, borderWidth: 1, borderColor: C.border },
+  seg: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: R.pill },
+  segOn: { backgroundColor: C.brand },
+  segTxt: { color: C.sub, fontSize: 12, fontWeight: "800" },
+  segTxtOn: { color: "#04121c" },
   banner: { position: "absolute", left: S.lg, right: S.lg, bottom: S.lg, flexDirection: "row", alignItems: "center", gap: S.md, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.brand, borderRadius: R.card, paddingHorizontal: S.lg, paddingVertical: S.md },
   bannerTxt: { color: C.text, fontSize: 14, flex: 1 },
   bold: { fontWeight: "800", color: C.text },

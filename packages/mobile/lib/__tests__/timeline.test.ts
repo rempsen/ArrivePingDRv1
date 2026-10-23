@@ -109,3 +109,33 @@ describe("company-clock conversions", () => {
     expect(minLabel(18 * 60 + 30)).toBe("6:30 PM");
   });
 });
+
+import { mondayOf, weekCells } from "../timeline";
+describe("week", () => {
+  test("mondayOf", () => {
+    expect(mondayOf("2026-10-23")).toBe("2026-10-19"); // a Friday
+    expect(mondayOf("2026-10-19")).toBe("2026-10-19");
+    expect(mondayOf("2026-10-25")).toBe("2026-10-19"); // Sunday belongs to the week before
+  });
+  test("weekCells books minutes per technician per day and counts the unassigned", () => {
+    const tz = "America/Winnipeg";
+    const board = {
+      tz,
+      techs: [{ id: "t1" }, { id: "t2" }],
+      timeOff: [{ techId: "t2", day: "2026-10-21" }],
+      jobs: [
+        { riderId: "t1", status: "confirmed", scheduledAt: "2026-10-19T14:00:00.000Z", durationMins: 90 },
+        { riderId: "t1", status: "completed", scheduledAt: "2026-10-19T17:00:00.000Z", durationMins: null },
+        { riderId: "t1", status: "cancelled", scheduledAt: "2026-10-19T19:00:00.000Z", durationMins: 60 },
+        { riderId: null, status: "pending", scheduledAt: "2026-10-20T14:00:00.000Z", durationMins: 60 },
+        { riderId: null, status: "pending", scheduledAt: "2026-10-27T14:00:00.000Z", durationMins: 60 }, // next week
+      ],
+    };
+    const w = weekCells(board, "2026-10-19");
+    expect(w.days).toEqual(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"]);
+    expect(w.byTech.get("t1")![0]).toEqual({ day: "2026-10-19", bookedMin: 150, count: 2, off: false });
+    expect(w.byTech.get("t2")![2]).toEqual({ day: "2026-10-21", bookedMin: 0, count: 0, off: true });
+    expect(w.unassigned["2026-10-20"]).toBe(1);
+    expect(w.unassigned["2026-10-19"]).toBe(0);
+  });
+});
