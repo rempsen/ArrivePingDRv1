@@ -116,6 +116,11 @@ export function nextUp<J extends Pick<OfficeJob, "status" | "scheduledAt">>(jobs
     .slice(0, limit);
 }
 
+/** One technician's day: their jobs in time order, cancelled ones left out. */
+export function jobsForTech<J extends Pick<OfficeJob, "riderId" | "status" | "scheduledAt">>(jobs: readonly J[], techId: string): J[] {
+  return jobs.filter((j) => j.riderId === techId && j.status !== "cancelled").sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+}
+
 export type JobBucket = "unassigned" | "scheduled" | "in_progress" | "done";
 
 export function bucketOf(job: Pick<OfficeJob, "riderId" | "status">): JobBucket {

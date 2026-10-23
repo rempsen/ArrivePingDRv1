@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addDays, ageLabel, bucketOf, dayKey, needsAttention, nextUp, tallies } from "../board";
+import { addDays, ageLabel, bucketOf, dayKey, jobsForTech, needsAttention, nextUp, tallies } from "../board";
 
 const job = (p: Partial<{ id: string; late: boolean; riderId: string | null; status: string; scheduledAt: string }>) => ({
   id: "j",
@@ -80,5 +80,21 @@ describe("dates", () => {
     expect(ageLabel("2026-10-21T14:48:00.000Z", now)).toBe("12 min ago");
     expect(ageLabel("2026-10-21T12:00:00.000Z", now)).toBe("3 h ago");
     expect(ageLabel("2026-10-20T10:00:00.000Z", now)).toBe("yesterday");
+  });
+});
+
+describe("jobsForTech", () => {
+  const jobs = [
+    { id: "late", riderId: "t1", status: "confirmed", scheduledAt: "2026-10-23T20:00:00.000Z" },
+    { id: "early", riderId: "t1", status: "completed", scheduledAt: "2026-10-23T14:00:00.000Z" },
+    { id: "gone", riderId: "t1", status: "cancelled", scheduledAt: "2026-10-23T16:00:00.000Z" },
+    { id: "other", riderId: "t2", status: "confirmed", scheduledAt: "2026-10-23T15:00:00.000Z" },
+    { id: "open", riderId: null, status: "pending", scheduledAt: "2026-10-23T15:30:00.000Z" },
+  ];
+  test("only that technician's jobs, soonest first, cancelled left out", () => {
+    expect(jobsForTech(jobs, "t1").map((j) => j.id)).toEqual(["early", "late"]);
+  });
+  test("a technician with nothing gets an empty list", () => {
+    expect(jobsForTech(jobs, "t9")).toEqual([]);
   });
 });

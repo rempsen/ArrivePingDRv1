@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, FlatList, RefreshControl, StyleSheet, Pressable, TextInput, Alert } from "react-native";
 import Constants from "expo-constants";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChatCircleDots, Warning, Megaphone } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { Avatar, Button, Empty, ListSkeleton } from "../../components/ui";
@@ -12,6 +12,9 @@ import { useAccess } from "../../lib/use-access";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useDispatchThreads } from "../../lib/use-threads";
 import { statusColor } from "../../components/office/tech-row";
+import { ThreadView } from "../../components/office/thread-view";
+import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
+import { useLayout } from "../../lib/use-layout";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -25,18 +28,30 @@ function ago(iso: string | null): string {
 }
 
 /**
- * The dispatcher's inbox: one thread per technician, unread first. Opening
- * a thread is wired in the messaging phase; until then rows are read-only.
+ * The dispatcher's inbox: one thread per technician, unread first. On a phone
+ * a row opens the thread screen; on an iPad it opens beside the list. Other
+ * tabs ("Message" on a job or a technician) land here with `?techId=`.
  */
 export default function Messages() {
   const router = useRouter();
   const inbox = useDispatchThreads();
+  const { wide } = useLayout();
+  const { techId: wanted } = useLocalSearchParams<{ techId?: string }>();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!wanted) return;
+    if (wide) setSelectedId(wanted);
+    else router.push(`/office/thread/${wanted}`);
+    // The param is a one-shot request; clear it so a later tab tap doesn't replay it.
+    router.setParams({ techId: undefined });
+  }, [wanted, wide, router]);
+  const open = (techId: string) => (wide ? setSelectedId(techId) : router.push(`/office/thread/${techId}`));
   // Reading threads needs work_orders:view; sending (broadcast, replies)
   // is a POST on /api/messages and needs work_orders:edit (office-access.ts).
   const { can } = useAccess();
   const canSend = can("work_orders:edit");
   const [cast, setCast] = useState(false);
-  return (
+  const list = (
     <View style={s.screen}>
       <OfficeHeader
         title="Messages"
@@ -63,10 +78,11 @@ export default function Messages() {
           refreshControl={<RefreshControl refreshing={inbox.isFetching && !inbox.isLoading} onRefresh={() => inbox.refetch()} tintColor={C.brand} />}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => router.push(`/office/thread/${item.techId}`)}
+              onPress={() => open(item.techId)}
               accessibilityRole="button"
               accessibilityLabel={`${item.name}${item.unread ? `, ${item.unread} unread` : ""}`}
-              style={({ pressed }) => [s.row, { opacity: pressed ? 0.8 : 1 }]}
+              accessibilityState={wide && item.techId === selectedId ? { selected: true } : undefined}
+              style={({ pressed }) => [s.row, wide && item.techId === selectedId && s.selected, { opacity: pressed ? 0.8 : 1 }]}
             >
               <View>
                 <Avatar name={item.name} photoUrl={item.photoUrl} color={item.color} size={44} />
@@ -94,6 +110,14 @@ export default function Messages() {
         />
       )}
     </View>
+  );
+
+  return (
+    <SplitScreen
+      list={list}
+      detail={selectedId ? <ThreadView key={selectedId} techId={selectedId} embedded /> : null}
+      empty={<EmptyPane icon={<ChatCircleDots color={C.muted} size={32} />} text="Pick a conversation" sub="Messages with that technician open here." />}
+    />
   );
 }
 
@@ -168,6 +192,7 @@ const s = StyleSheet.create({
   castInput: { minHeight: 110, textAlignVertical: "top", color: C.text, fontSize: 15, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.border, borderRadius: R.card, paddingHorizontal: S.md, paddingVertical: 12 },
   pad: { paddingHorizontal: S.lg },
   row: { flexDirection: "row", alignItems: "center", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
+  selected: { backgroundColor: C.bg3, borderRadius: R.card, marginHorizontal: -S.sm, paddingHorizontal: S.sm, borderBottomColor: "transparent" },
   dot: { position: "absolute", right: -1, bottom: -1, width: 14, height: 14, borderRadius: R.pill, borderWidth: 2, borderColor: C.bg },
   top: { flexDirection: "row", alignItems: "center", gap: S.sm },
   name: { color: C.text, fontSize: 15, fontWeight: "600", flex: 1 },
