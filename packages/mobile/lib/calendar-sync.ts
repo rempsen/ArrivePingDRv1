@@ -78,6 +78,12 @@ export interface CalendarSyncSettings {
   lastSyncAt?: string;
   lastResult?: SyncResult;
   lastError?: string | null;
+  /**
+   * Start of the earliest job this app has written to the calendar. Past jobs
+   * stay on the phone as history after they leave the sync window, so turning
+   * sync off has to reach back this far to remove all of them.
+   */
+  oldestWrittenAt?: string;
 }
 
 // ---------------------------------------------------------------- settings --
@@ -356,9 +362,12 @@ async function runSync(userId?: string): Promise<SyncResult | null> {
     }
   }
 
+  const written = [...plan.create, ...plan.update.map((u) => u.event)].map((e) => e.start.getTime());
+  const oldest = Math.min(parseTime(s.oldestWrittenAt) ?? Infinity, ...written);
   await save({
     ...s,
     calendarId,
+    oldestWrittenAt: Number.isFinite(oldest) ? new Date(oldest).toISOString() : s.oldestWrittenAt,
     lastSyncAt: new Date().toISOString(),
     lastResult: result,
     lastError: result.failed ? `${result.failed} job${result.failed === 1 ? "" : "s"} couldn't be written. It will try again next sync.` : null,
@@ -386,11 +395,25 @@ export async function connectCalendar(userId: string, target: { mode: "own" } | 
   // Moving to a different calendar: take the jobs out of the old one first so
   // they don't end up in both.
   if (previous && previous.calendarId !== next.id) await removeOurEvents(previous).catch(() => {});
-  await save({ userId, calendarId: next.id, mode: next.mode, label: next.label, lastError: null });
+  const sameCalendar = previous?.calendarId === next.id;
+  await save({
+    userId,
+    calendarId: next.id,
+    mode: next.mode,
+    label: next.label,
+    lastError: null,
+    // Reconnecting the same calendar: its old jobs are still there to clean up later.
+    ...(sameCalendar && previous?.oldestWrittenAt ? { oldestWrittenAt: previous.oldestWrittenAt } : {}),
+  });
   return syncCalendarNow(userId);
 }
 
-/** Every ArrivePing-tagged event in this calendar, in a wide window. */
+function parseTime(iso?: string): number | null {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Every ArrivePing-tagged event in this calendar, back to the oldest one the app wrote. */
 async function removeOurEvents(s: CalendarSyncSettings): Promise<void> {
   const C = cal();
   if (!C || (await calendarPermission()) !== "granted") return;
@@ -400,9 +423,23 @@ async function removeOurEvents(s: CalendarSyncSettings): Promise<void> {
     return;
   }
   const DAY = 86_400_000;
+  const YEAR = 365 * DAY;
   const now = Date.now();
-  const events = await C.getEventsAsync([s.calendarId], new Date(now - 400 * DAY), new Date(now + 400 * DAY));
-  for (const e of events) if (refOf(e.notes)) await C.deleteEventAsync(e.id).catch(() => {});
+  const start = Math.min(now - 400 * DAY, (parseTime(s.oldestWrittenAt) ?? Infinity) - DAY);
+  // Sync never writes past the server's 90-day window; 400 days is margin.
+  const end = now + 400 * DAY;
+  // A year at a time: iOS only searches the first four years of a longer
+  // range. Chunks overlap by a day so a job crossing a boundary is still found
+  // (Android only returns events that end inside the range asked for).
+  const seen = new Set<string>();
+  for (let a = start; a < end; a += YEAR) {
+    const events = await C.getEventsAsync([s.calendarId], new Date(a - DAY), new Date(Math.min(a + YEAR, end) + DAY));
+    for (const e of events) {
+      if (seen.has(e.id) || !refOf(e.notes)) continue;
+      seen.add(e.id);
+      await C.deleteEventAsync(e.id).catch(() => {});
+    }
+  }
 }
 
 /**

@@ -70,8 +70,11 @@ mock.module("expo-calendar", () => ({
     phone.calendars = phone.calendars.filter((c) => c.id !== id);
     phone.events = phone.events.filter((e) => e.calendarId !== id);
   },
-  getEventsAsync: async (ids: string[], from: Date, to: Date) =>
-    phone.events.filter((e) => ids.includes(e.calendarId) && new Date(e.startDate) >= from && new Date(e.startDate) <= to),
+  // Like EventKit: a range longer than four years is cut to its first four.
+  getEventsAsync: async (ids: string[], from: Date, to: Date) => {
+    const end = Math.min(to.getTime(), from.getTime() + 4 * 365 * day);
+    return phone.events.filter((e) => ids.includes(e.calendarId) && new Date(e.startDate) >= from && new Date(e.startDate).getTime() <= end);
+  },
   createEventAsync: async (calendarId: string, d: any) => {
     const id = `ev-${phone.nextId++}`;
     phone.events.push({ id, calendarId, ...d, startDate: d.startDate.toISOString(), endDate: d.endDate.toISOString() });
@@ -211,6 +214,18 @@ describe("turning it off", () => {
     await sync.disconnectCalendar({ removeEvents: true });
     expect(phone.events.map((e) => e.id)).toEqual(["dentist"]);
     expect(sync.getCalendarSync()).toBeNull();
+  });
+
+  test("from a picked calendar: years-old history is removed too, along with upcoming jobs", async () => {
+    await sync.connectCalendar("tech-1", { mode: "existing", calendar: (await sync.listWritableCalendars())[0]! });
+    // A job written long ago, now far outside the sync window and kept as history.
+    serverEvents = [job("old", -1700), job("j1", 1)];
+    await sync.syncCalendarNow("tech-1");
+    serverEvents = [job("j1", 1)];
+    await sync.syncCalendarNow("tech-1");
+    expect(ours().some((e) => e.notes.includes("booking-old@"))).toBe(true); // history survives normal syncs
+    await sync.disconnectCalendar({ removeEvents: true });
+    expect(phone.events.map((e) => e.id)).toEqual(["dentist"]);
   });
 
   test("own calendar: the calendar itself is removed", async () => {
