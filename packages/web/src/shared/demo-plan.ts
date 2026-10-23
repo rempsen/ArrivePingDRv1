@@ -153,6 +153,9 @@ type Role = "lead" | "gas" | "hvac" | "apprentice";
 /* ─────────────────────────── helpers ─────────────────────────── */
 
 /** FNV-1a — small, fast, stable across runtimes. */
+/** How far ahead regular work is booked. Must be more than the refresh's DAYS_AHEAD. */
+export const PREBOOK_DAYS = 14;
+
 export function hash(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
@@ -274,7 +277,9 @@ export function planDay(day: string, opts: PlanOptions): DemoSlot[] {
       durationMins: dur,
       leadMins,
       techId: extra.techId !== undefined ? extra.techId : tech?.id ?? null,
-      appearAt: extra.appearAt ?? new Date(start.getTime() - 10 * 86_400_000), // pre-booked well ahead
+      // Pre-booked well ahead: longer than the refresh fills (DAYS_AHEAD in
+      // services/demo-refresh.ts), so a newly reached day arrives whole.
+      appearAt: extra.appearAt ?? new Date(start.getTime() - PREBOOK_DAYS * 86_400_000),
       assignAt: extra.assignAt ?? null,
       offerUntil: extra.offerUntil ?? null,
       templateTitle,
