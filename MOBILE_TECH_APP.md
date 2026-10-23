@@ -26,6 +26,7 @@ and never mounts the location heartbeat.
 
 ### iPad (added 2026-10-23)
 `lib/layout.ts` `isWideLayout(width, device)` — a tablet at ≥ 768 pt — switches each tab to `components/office/split-screen.tsx` (list 380 pt | detail). `JobDetail`, `ThreadView` and `TechDetail` (`components/office/*`) render embedded in the pane or full-screen from the phone routes and push taps. Today goes two-column at ≥ 1000 pt. iPad rotates (`UISupportedInterfaceOrientations~ipad` in `app.json`; iPhone stays portrait) — a plist change, so it needs a new EAS build to see. Spec: `docs/superpowers/specs/2026-10-23-mobile-ipad-office-design.md`.
+- `office/edit-job/[id].tsx` (phone and iPad, `work_orders:edit`) — title, priority, status (`pending`/`confirmed`/`completed`/`cancelled` via `POST /bookings/:id/status`; field statuses stay with the tech), service, client, address, phone, time, notes, template custom fields (`fieldData._customFields`, values at `fieldData[id]`, sent whole), line items (qty / unit price / add custom / remove, totals via `lib/line-items.ts`). `lib/edit-job.ts` builds a `PATCH /bookings/:id` of only the changed keys; a forceable 409 offers "Save anyway".
 
 ## Screens (packages/mobile/app)
 - `index.tsx` — boot: route to sign-in, then the company pick, then (rider) or (office) by role.
