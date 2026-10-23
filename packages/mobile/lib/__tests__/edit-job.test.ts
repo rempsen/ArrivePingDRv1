@@ -58,6 +58,17 @@ describe("validateEdit", () => {
     expect(e.lineItems).toBeDefined();
     expect(e.fields).toContain("Model");
   });
+  test("the common North American phone form passes; a bad one only matters when it changed", () => {
+    expect(validateEdit({ ...base, customerPhone: "(204) 632-9434" }, base).customerPhone).toBeUndefined();
+    expect(validateEdit({ ...base, customerPhone: "abc" }, base).customerPhone).toBeDefined();
+    const odd = { ...base, customerPhone: "abc" };
+    expect(validateEdit({ ...odd, notes: "changed" }, odd).customerPhone).toBeUndefined();
+  });
+  test("a title the job had can't be cleared", () => {
+    expect(validateEdit({ ...base, title: " " }, base).title).toBeDefined();
+    const untitled = { ...base, title: "" };
+    expect(validateEdit(untitled, untitled).title).toBeUndefined();
+  });
   test("a required photo field isn't the editor's problem", () => {
     const d = { ...base, fields: [{ id: "f2", type: "file", label: "Photo", required: true }] };
     expect(validateEdit(d)).toEqual({});

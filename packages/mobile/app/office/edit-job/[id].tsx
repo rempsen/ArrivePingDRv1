@@ -22,7 +22,7 @@ import { buildPatch, draftFromBooking, isEmptyPatch, OFFICE_STATUSES, PRIORITIES
 import { customLine, sumLineItems, withTotals } from "../../../lib/line-items";
 import { fmtInTz } from "../../../lib/when";
 import { geocodeAddress } from "../../../lib/use-lookups";
-import { STATUS_LABEL } from "../../../lib/board";
+import { IN_FIELD, STATUS_LABEL } from "../../../lib/board";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const PRIO_COLOR: Record<string, string> = { low: C.sub, normal: C.brand, high: C.amber, urgent: C.red };
@@ -78,7 +78,7 @@ export default function EditJob() {
 
   async function save(force = false) {
     if (!d || !original) return;
-    const errs = validateEdit(d);
+    const errs = validateEdit(d, original);
     setErrors(errs);
     if (Object.keys(errs).length) return;
     // An address typed or taken from the client's record has no coordinates
@@ -139,6 +139,8 @@ export default function EditJob() {
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { message?: string };
           setSaving(false);
+          // The fields are saved; only the status is still outstanding.
+          setOriginal({ ...draft, status: original.status });
           Alert.alert("Saved, but the status didn't change", j.message || `The server said ${res.status}.`);
           qc.invalidateQueries({ queryKey: bookingKey(getActiveCompany(), id!) });
           qc.invalidateQueries({ queryKey: ["board", getActiveCompany()] });
@@ -227,11 +229,15 @@ export default function EditJob() {
                 })}
                 {!(OFFICE_STATUSES as readonly string[]).includes(d.status) ? (
                   <View style={[s.chip, s.chipOn]}>
-                    <Text style={[s.chipTxt, { color: C.brand }]}>{STATUS_LABEL[d.status] ?? d.status} (in the field)</Text>
+                    <Text style={[s.chipTxt, { color: C.brand }]}>
+                      {STATUS_LABEL[d.status] ?? d.status[0]!.toUpperCase() + d.status.slice(1)}
+                      {IN_FIELD.has(d.status) ? " (in the field)" : ""}
+                    </Text>
                   </View>
                 ) : null}
               </View>
-              {!(OFFICE_STATUSES as readonly string[]).includes(original!.status) ? <Text style={s.hint}>The technician's clock owns this status; pick one here only to override it.</Text> : null}
+              {IN_FIELD.has(original!.status) ? <Text style={s.hint}>The technician's clock owns this status; pick one here only to override it.</Text> : null}
+              {original!.status === "assigned" ? <Text style={s.hint}>Assigned by dispatch. Confirmed sends the client their booking confirmation again.</Text> : null}
             </Card>
 
             <PickCard icon={<Wrench color={C.brand} size={20} weight="fill" />} label="Service" value={d.serviceName || undefined} placeholder="Pick a service" onPress={() => setSheet("service")} />

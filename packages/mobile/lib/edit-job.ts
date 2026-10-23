@@ -122,11 +122,19 @@ function fieldEmpty(v: unknown): boolean {
   return v == null || v === "" || v === false;
 }
 
-export function validateEdit(d: EditDraft): EditErrors {
+/** The server's rule (api/lib/validate.ts `phone`): "(204) 632-9434" is the common form. */
+const PHONE = /^[+(\d][\d\s()\-.]{5,}$/;
+
+export function validateEdit(d: EditDraft, original?: EditDraft): EditErrors {
   const e: EditErrors = {};
   if (d.title.length > 200) e.title = "Keep the title under 200 characters.";
+  // The API won't take an empty title; a job that had one keeps needing one.
+  if (!d.title.trim() && original && original.title.trim()) e.title = "A title is needed — or put the service name back.";
   if (!d.address.trim()) e.address = "An address is needed.";
-  if (d.customerPhone.trim() && !/^[+\d][\d\s().-]{5,}$/.test(d.customerPhone.trim())) e.customerPhone = "That doesn't look like a phone number.";
+  // Only a phone this edit changed is checked: an older record the server
+  // accepted stays saveable when only the notes change.
+  const phoneChanged = !original || d.customerPhone !== original.customerPhone;
+  if (phoneChanged && d.customerPhone.trim() && !PHONE.test(d.customerPhone.trim())) e.customerPhone = "That doesn't look like a phone number.";
   if (d.lineItems.some((li) => !(li.qty > 0) || li.unitPrice < 0 || !li.name.trim())) e.lineItems = "Every line needs a name, a quantity above zero and a price of zero or more.";
   const missing = d.fields.filter((f) => f.required && isEditableField(f) && fieldEmpty(d.fieldData[f.id]));
   if (missing.length) e.fields = `${missing.map((f) => f.label || "A field").join(", ")} ${missing.length === 1 ? "is" : "are"} required.`;

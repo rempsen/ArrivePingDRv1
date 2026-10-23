@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { partsIn, toIso } from "../../lib/when";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { CheckSquare, Square, CalendarBlank, Paperclip, Info } from "phosphor-react-native";
 import { DatetimeSheet } from "./datetime-sheet";
@@ -6,12 +7,24 @@ import { C, R, S } from "../../lib/theme";
 import type { CustomFieldDef } from "../../lib/edit-job";
 
 /**
- * One custom field on the work-order editor, by type. Photos, signatures and
- * instructions show but don't take input here: capture stays on the
- * technician's app and the web.
+ * One custom field on the work-order editor, by type. Values are stored the
+ * way the web console's editor stores them (components/custom-fields.tsx):
+ * checkboxes as "true" / "false", dates as YYYY-MM-DD, numbers as typed.
+ * Photos, signatures and instructions show but don't take input here:
+ * capture stays on the technician's app and the web.
  */
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** "Oct 24, 2026" for a YYYY-MM-DD, read as a plain date (no zone shift). */
+function dayLabel(day: string): string {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+}
 export function CustomFieldInput({ def, value, tz, onChange }: { def: CustomFieldDef; value: unknown; tz: string; onChange: (v: unknown) => void }) {
   const [dateOpen, setDateOpen] = useState(false);
+  // Numbers keep what's typed so "1." survives; the stored value is the text,
+  // which is what the web's <input type="number"> stores too.
+  const [numText, setNumText] = useState<string | null>(null);
   const label = (
     <Text style={s.label}>
       {def.label || "Field"}
@@ -25,8 +38,15 @@ export function CustomFieldInput({ def, value, tz, onChange }: { def: CustomFiel
         <View>
           {label}
           <TextInput
-            value={value == null ? "" : String(value)}
-            onChangeText={(t) => onChange(def.type === "number" ? (t.trim() === "" ? "" : Number.isFinite(Number(t)) ? Number(t) : t) : t)}
+            value={def.type === "number" && numText != null ? numText : value == null ? "" : String(value)}
+            onChangeText={(t) => {
+              if (def.type === "number") {
+                setNumText(t);
+                const n = t.trim();
+                if (n === "" || /^-?\d*\.?\d*$/.test(n)) onChange(n);
+              } else onChange(t);
+            }}
+            onBlur={() => setNumText(null)}
             keyboardType={def.type === "number" ? "decimal-pad" : "default"}
             placeholder={def.type === "number" ? "0" : "—"}
             placeholderTextColor={C.muted}
@@ -38,7 +58,7 @@ export function CustomFieldInput({ def, value, tz, onChange }: { def: CustomFiel
     case "checkbox": {
       const on = value === true || value === "true";
       return (
-        <Pressable onPress={() => onChange(!on)} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={def.label} style={s.check}>
+        <Pressable onPress={() => onChange(on ? "false" : "true")} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={def.label} style={s.check}>
           {on ? <CheckSquare color={C.green} size={22} weight="fill" /> : <Square color={C.muted} size={22} />}
           <Text style={s.checkTxt}>{def.label}</Text>
           {def.required ? <Text style={{ color: C.red }}> *</Text> : null}
@@ -63,21 +83,31 @@ export function CustomFieldInput({ def, value, tz, onChange }: { def: CustomFiel
         </View>
       );
     case "date": {
-      const iso = typeof value === "string" && value ? value : null;
+      // Stored as YYYY-MM-DD; an older ISO instant is read on the company clock.
+      const raw = typeof value === "string" && value ? value : null;
+      const day = raw ? (DAY_RE.test(raw) ? raw : partsIn(new Date(raw), tz).day) : null;
+      const shown = day ? dayLabel(day) : null;
       return (
         <View>
           {label}
-          <Pressable onPress={() => setDateOpen(true)} accessibilityRole="button" accessibilityLabel={`${def.label}: ${iso ? new Date(iso).toLocaleDateString() : "not set"}`} style={s.dateBtn}>
+          <Pressable onPress={() => setDateOpen(true)} accessibilityRole="button" accessibilityLabel={`${def.label}: ${shown ?? "not set"}`} style={s.dateBtn}>
             <CalendarBlank color={C.brand} size={18} />
-            <Text style={[s.dateTxt, !iso && { color: C.muted }]}>{iso ? new Date(iso).toLocaleDateString(undefined, { timeZone: tz }) : "Pick a date"}</Text>
-            {iso ? (
+            <Text style={[s.dateTxt, !shown && { color: C.muted }]}>{shown ?? "Pick a date"}</Text>
+            {shown ? (
               <Pressable onPress={() => onChange("")} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Clear ${def.label}`}>
                 <Text style={s.clear}>Clear</Text>
               </Pressable>
             ) : null}
           </Pressable>
-          <DatetimeSheet open={dateOpen} title={def.label || "Date"} tz={tz} initial={iso} allowAsap={false} onClose={() => setDateOpen(false)} onPick={(v) => {
-              onChange(v);
+          <DatetimeSheet
+            open={dateOpen}
+            title={def.label || "Date"}
+            tz={tz}
+            initial={day ? toIso(day, 12, 0, tz) : null}
+            allowAsap={false}
+            onClose={() => setDateOpen(false)}
+            onPick={(v) => {
+              onChange(partsIn(new Date(v), tz).day);
               setDateOpen(false);
             }} />
         </View>
