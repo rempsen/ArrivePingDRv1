@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -6,18 +6,21 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, CaretRight, Clock, CurrencyDollar, CheckCircle, Buildings } from "phosphor-react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { MapPin, CaretRight, Clock, CurrencyDollar, CheckCircle, Buildings, Info } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { authClient } from "../../lib/auth";
 import { C, R, fmtDate, money, WIDE } from "../../lib/theme";
 import { StatusBadge, Card, Button, ListSkeleton, Empty } from "../../components/ui";
 import Constants from "expo-constants";
 import { authHeaders } from "../../lib/auth";
-import { useCustomerNoun } from "../../lib/use-brand";
+import { useCustomerNoun, useJobNoun } from "../../lib/use-brand";
+import { DeclineSheet, OfferError, useOfferActions } from "../../components/offer-actions";
+import { offerPath } from "../../lib/offer";
 import { useNotifySummary, NOTIFY_SUMMARY_KEY } from "../../lib/notify-summary";
 import { companyAlertText } from "../../components/company-alert";
 import { CoachAnchor } from "../../components/coach-tour";
@@ -59,31 +62,18 @@ export default function Jobs() {
     refetchInterval: 30000,
   });
 
-  // Accepting or declining is the action that CLEARS a pending-work-order
-  // badge, so both refresh the notification summary immediately instead of
-  // leaving a red number on a job the tech just dealt with for up to one poll.
-  const clearBadges = () => {
-    qc.invalidateQueries({ queryKey: ["bookings"] });
-    qc.invalidateQueries({ queryKey: NOTIFY_SUMMARY_KEY });
-  };
-
-  const accept = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.bookings[":id"].accept.$post({ param: { id } });
-      if (!res.ok) throw new Error("Failed");
-    },
-    onSuccess: clearBadges,
-  });
-  const decline = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.bookings[":id"].decline.$post({
-        param: { id },
-        json: { reason: "Declined from app" },
-      } as any);
-      if (!res.ok) throw new Error("Failed");
-    },
-    onSuccess: clearBadges,
-  });
+  // Accept / decline (they also clear the pending-offer badge), and which
+  // offer the decline-reason sheet is open for.
+  const { accept, decline, pendingId } = useOfferActions();
+  const [declineFor, setDeclineFor] = useState<string | null>(null);
+  const { noun: jobNoun } = useJobNoun();
+  const offerError = (e: unknown) =>
+    Alert.alert(
+      e instanceof OfferError && e.status === 409 ? "Offer no longer open" : "Something went wrong",
+      e instanceof OfferError && e.status === 409
+        ? `This ${jobNoun.toLowerCase()} was changed or taken by dispatch.`
+        : e instanceof Error ? e.message : "Try again.",
+    );
 
   // Work waiting at the tech's OTHER employer(s). The job list itself is
   // tenant-scoped, so without this the only hint would be a number on the
@@ -231,29 +221,49 @@ export default function Jobs() {
         {offered.length > 0 && (
           <Anchored on={tipAt === "offers"}>
           <Section title="New offers" accent>
-            {offered.map((b) => (
-              <Card key={b.id} style={{ borderColor: C.brand, borderWidth: 1.5 }}>
-                <JobHead b={b} />
-                <View style={s.actions}>
-                  <Button
-                    title="Accept"
-                    variant="success"
-                    small
-                    loading={accept.isPending}
-                    onPress={() => accept.mutate(b.id)}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Decline"
-                    variant="outline"
-                    small
-                    loading={decline.isPending}
-                    onPress={() => decline.mutate(b.id)}
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </Card>
-            ))}
+            {offered.map((b) => {
+              const busy = pendingId === b.id;
+              return (
+                <Card
+                  key={b.id}
+                  style={{ borderColor: C.brand, borderWidth: 1.5 }}
+                  onPress={() => router.push(offerPath(b.id) as never)}
+                  accessibilityLabel={`New offer: ${jobTitle(b)} for ${b.customer?.name || "customer"}. Opens the details.`}
+                >
+                  <JobHead b={b} />
+                  <View style={s.actions}>
+                    <Button
+                      title="Accept"
+                      variant="success"
+                      small
+                      loading={busy && accept.isPending}
+                      disabled={busy}
+                      onPress={() => accept.mutate(b.id, { onError: offerError })}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      title="Details"
+                      variant="outline"
+                      small
+                      icon={<Info color={C.text} size={15} />}
+                      disabled={busy}
+                      onPress={() => router.push(offerPath(b.id) as never)}
+                      accessibilityLabel={`Details for this offer: drive, pay and the work`}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      title="Decline"
+                      variant="outline"
+                      small
+                      loading={busy && decline.isPending}
+                      disabled={busy}
+                      onPress={() => setDeclineFor(b.id)}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                </Card>
+              );
+            })}
           </Section>
           </Anchored>
         )}
@@ -306,6 +316,17 @@ export default function Jobs() {
           </Anchored>
         )}
       </ScrollView>
+
+      <DeclineSheet
+        visible={!!declineFor}
+        jobNoun={jobNoun}
+        loading={!!declineFor && pendingId === declineFor && decline.isPending}
+        onClose={() => setDeclineFor(null)}
+        onSubmit={(code, note) => {
+          if (!declineFor) return;
+          decline.mutate({ id: declineFor, code, note }, { onSettled: () => setDeclineFor(null), onError: offerError });
+        }}
+      />
 
       {/* Sign in / Sign out for the shift, always in reach above the tab bar. */}
       <View style={s.shiftDock} pointerEvents="box-none">
@@ -450,5 +471,5 @@ const s = StyleSheet.create({
   meta: { color: C.sub, fontSize: 13, flex: 1 },
   price: { color: C.green, fontSize: 14, fontWeight: "800" },
   practiceTag: { color: C.amber, fontSize: 11, fontWeight: "800", letterSpacing: 0.8, marginBottom: 8 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 16 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 16 },
 });

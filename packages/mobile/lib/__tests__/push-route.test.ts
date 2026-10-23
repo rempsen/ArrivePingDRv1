@@ -16,3 +16,11 @@ describe("routeForNotification", () => {
     expect(routeForNotification({ type: "unknown" }, "office")).toBeNull();
   });
 });
+
+describe("offer pushes", () => {
+  test("a new offer opens its details in the field app", () => {
+    expect(routeForNotification({ bookingId: "b1", event: "assigned", type: "reminder" }, "field")).toBe("/offer/b1");
+    // Office users still land on the office job screen.
+    expect(routeForNotification({ bookingId: "b1", event: "assigned" }, "office")).toBe("/office/job/b1");
+  });
+});

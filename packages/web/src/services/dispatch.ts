@@ -27,6 +27,7 @@ import { zonedMinutesOfDay } from "../shared/tz";
 import { runAutomations, EVENT_TO_TRIGGER } from "./automation";
 import { scheduleReviewRequest } from "./reviews";
 import { publishDispatch } from "./realtime";
+import { JOB_OFFER_CATEGORY } from "../shared/offer";
 
 export type NvcEvent =
   | "created"
@@ -94,7 +95,7 @@ function defaultMessage(event: NvcEvent, recipient: Recipient, v: Vars): string 
       if (recipient === "client") return `${co}: ${v.techName} accepted your ${v.service} job and is scheduled for ${v.when}.`;
       return `${co}: ${v.techName} accepted ${v.jobNoun.toLowerCase()} #${v.shortId}.`;
     case "declined":
-      return `${co}: ${v.techName} declined ${v.jobNoun.toLowerCase()} #${v.shortId}. It's back in the dispatch queue.`;
+      return `${co}: ${v.techName} declined ${v.jobNoun.toLowerCase()} #${v.shortId}${v.reason ? ` (${v.reason})` : ""}. It's back in the dispatch queue.`;
     case "released":
       return `${co}: ${v.techName} can no longer do ${v.jobNoun.toLowerCase()} #${v.shortId} (${v.service} at ${v.address}). It's unassigned and back in the dispatch queue — needs a new tech.`;
     case "enroute":
@@ -178,6 +179,8 @@ interface Vars {
   delayMins: number;
   /** Revised arrival time in the company's timezone, e.g. "2:45 PM". */
   newWhen: string;
+  /** Why a tech declined or released the job, "" otherwise. */
+  reason: string;
 }
 
 function interpolate(tpl: string, v: Vars): string {
@@ -205,6 +208,7 @@ export const TEMPLATE_VARS: { key: keyof Vars; label: string }[] = [
   { key: "customerNoun", label: "Tenant's word for a customer (e.g. \"Member\")" },
   { key: "delayMins", label: "Minutes late (running-late notice)" },
   { key: "newWhen", label: "Revised arrival time (running-late notice)" },
+  { key: "reason", label: "Why the technician declined or released the job (those notices only)" },
 ];
 
 /** Sample values used for live preview in the template editor. */
@@ -432,6 +436,7 @@ async function context(bookingId: string) {
     propertyUrl: propToken ? propertyUrl(propToken) : "",
     delayMins,
     newWhen,
+    reason: b.declineReason || "",
   };
   return { b, companyId, svc, cust, rider, riderUser, co, vars };
 }
@@ -609,7 +614,11 @@ async function deliver(
   /** Set at the first message actually created or handed to a provider (see fireCustomEvent). */
   progress?: { sending: boolean },
 ) {
-  const { b, companyId, cust, rider, riderUser, vars } = ctx;
+  const { b, companyId, cust, rider, riderUser } = ctx;
+  // A tech's decline/release reason (which can carry their own note) is only
+  // for the declined and released notices, never for any later notice that
+  // happens to read {{reason}} off the job.
+  const vars: Vars = event === "declined" || event === "released" ? ctx.vars : { ...ctx.vars, reason: "" };
   const rules = await tdb(companyId).select(
     schema.notificationRules,
     and(
@@ -654,14 +663,23 @@ async function deliver(
         if (progress) progress.sending = true;
         // Push to the recipient's devices (fire-and-forget). The tech app
         // relies on this for job assignment / enroute alerts when backgrounded.
-        sendPush(t.userId, meta.defaultTitle, msg, {
-          type: meta.notifType,
-          event,
-          bookingId: b.id,
-          // Office users can be on several companies; the app switches to
-          // this one before opening the job.
-          companyId,
-        }).catch(() => {});
+        sendPush(
+          t.userId,
+          meta.defaultTitle,
+          msg,
+          {
+            type: meta.notifType,
+            event,
+            bookingId: b.id,
+            // Office users can be on several companies; the app switches to
+            // this one before opening the job.
+            companyId,
+          },
+          undefined,
+          // A new offer to the tech carries Accept / Details / Decline
+          // buttons (the "job_offer" category registered by the mobile app).
+          event === "assigned" && recipient === "tech" ? { categoryId: JOB_OFFER_CATEGORY } : {},
+        ).catch(() => {});
         await logDelivery({ companyId, event, bookingId: b.id, recipient, channel: "in_app", target: t.userId, status: "sent" });
       }
       // email — use the rich block design when present, else the legacy text template
