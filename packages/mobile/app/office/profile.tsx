@@ -18,6 +18,7 @@ import { useAccess } from "../../lib/use-access";
 import { resolveMode } from "../../lib/app-mode";
 import { getSavedMode, setSavedMode } from "../../lib/app-mode-store";
 import { webUrl } from "../../lib/office-nav";
+import { disconnectCalendar } from "../../lib/calendar-sync";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
@@ -84,6 +85,9 @@ export default function OfficeProfile() {
   async function leaveDevice() {
     await unregisterPushToken().catch(() => {});
     await endAllLiveActivities().catch(() => {});
+    // A dual-role tech may have turned on calendar sync in field mode; their
+    // synced jobs (customer names, addresses) leave the phone with them.
+    await disconnectCalendar({ removeEvents: true }).catch(() => {});
     await clearUnlockStamp().catch(() => {});
     await clearActiveCompany().catch(() => {});
     await authClient.signOut().catch(() => {});

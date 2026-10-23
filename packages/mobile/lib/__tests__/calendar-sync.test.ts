@@ -149,6 +149,26 @@ describe("connecting", () => {
     expect(phone.events.find((e) => e.id === "dentist")).toBeTruthy();
   });
 
+  test("a calendar of the tech's own that's also called ArrivePing Jobs is never adopted or deleted", async () => {
+    phone.calendars.push({ id: "theirs", title: "ArrivePing Jobs", allowsModifications: true, source: { name: "iCloud", type: "caldav" } });
+    phone.events.push({ id: "lunch", calendarId: "theirs", title: "Team lunch", notes: "", location: "", startDate: iso(now + day), endDate: iso(now + day + 3600_000) });
+    await sync.connectCalendar("tech-1", { mode: "own" });
+    expect(phone.created).toEqual(["ArrivePing Jobs@iCloud"]);
+    expect(sync.getCalendarSync()!.calendarId).not.toBe("theirs");
+    expect((await sync.listWritableCalendars()).map((c) => c.id)).toContain("theirs");
+    await sync.disconnectCalendar({ removeEvents: true });
+    expect(phone.calendars.map((c) => c.id).sort()).toEqual(["gmail-work", "theirs"]);
+    expect(phone.events.map((e) => e.id).sort()).toEqual(["dentist", "lunch"]);
+  });
+
+  test("turning it back on reuses the calendar it made rather than making another", async () => {
+    await sync.connectCalendar("tech-1", { mode: "own" });
+    await sync.disconnectCalendar({ removeEvents: false });
+    await sync.connectCalendar("tech-1", { mode: "own" });
+    expect(phone.created).toEqual(["ArrivePing Jobs@iCloud"]);
+    expect(ours()).toHaveLength(2);
+  });
+
   test("refused calendar access is reported as such, and nothing is saved", async () => {
     phone.granted = false;
     await expect(sync.connectCalendar("tech-1", { mode: "own" })).rejects.toBeInstanceOf(sync.CalendarPermissionError);

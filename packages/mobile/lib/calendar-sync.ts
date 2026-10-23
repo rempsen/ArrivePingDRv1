@@ -57,6 +57,12 @@ export function calendarSyncAvailable(): boolean {
 export const OWN_CALENDAR_TITLE = "ArrivePing Jobs";
 const OWN_CALENDAR_COLOR = "#0ea5e9";
 const KEY = "calendar_sync";
+/**
+ * Ids of the calendars this install created. Only these are ever reused as
+ * "ArrivePing Jobs" or deleted whole: a calendar the tech made themselves
+ * with the same name is just another calendar of theirs.
+ */
+const OWNED_KEY = "calendar_sync_owned";
 const AUTO_SYNC_EVERY_MS = 15 * 60_000;
 const MIN_GAP_MS = 60_000;
 
@@ -126,6 +132,24 @@ export function useCalendarSyncSettings(): CalendarSyncSettings | null {
   return s;
 }
 
+function ownedCalendarIds(): string[] {
+  try {
+    const raw = SecureStore.getItem(OWNED_KEY);
+    const v: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+async function setOwnedCalendarIds(ids: string[]): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(OWNED_KEY, JSON.stringify([...new Set(ids)]));
+  } catch {
+    // Not recorded means not deleted later: the safe way to fail.
+  }
+}
+
 // -------------------------------------------------------------- permission --
 
 export type PermissionState = "granted" | "ask" | "blocked" | "unavailable";
@@ -160,13 +184,14 @@ export interface CalendarTarget {
   isPrimary?: boolean;
 }
 
-/** Calendars on this phone the app can write to, grouped by account. ArrivePing's own calendar is left out (it has its own option). */
+/** Calendars on this phone the app can write to, grouped by account. The calendar the app made is left out (it has its own option). */
 export async function listWritableCalendars(): Promise<CalendarTarget[]> {
   const C = cal();
   if (!C) return [];
+  const owned = ownedCalendarIds();
   const all = await C.getCalendarsAsync(C.EntityTypes.EVENT);
   return all
-    .filter((c) => c.allowsModifications && c.title !== OWN_CALENDAR_TITLE)
+    .filter((c) => c.allowsModifications && !owned.includes(c.id))
     .filter((c) => {
       const t = String(c.source?.type ?? "").toLowerCase();
       return t !== "subscribed" && t !== "birthdays";
@@ -190,8 +215,15 @@ export async function listWritableCalendars(): Promise<CalendarTarget[]> {
  */
 async function ensureOwnCalendar(): Promise<{ id: string; label: string }> {
   const C = cal()!;
-  const existing = (await C.getCalendarsAsync(C.EntityTypes.EVENT)).find((c) => c.title === OWN_CALENDAR_TITLE && c.allowsModifications);
+  const owned = ownedCalendarIds();
+  // Only one this install made: matching by name could adopt (and later
+  // delete) a calendar of the tech's own that happens to share it.
+  const existing = (await C.getCalendarsAsync(C.EntityTypes.EVENT)).find((c) => owned.includes(c.id) && c.allowsModifications);
   if (existing) return { id: existing.id, label: `${OWN_CALENDAR_TITLE} · ${existing.source?.name || "This phone"}` };
+  const created = async (id: string, label: string) => {
+    await setOwnedCalendarIds([...owned, id]);
+    return { id, label };
+  };
 
   if (Platform.OS === "ios") {
     const sources = await C.getSourcesAsync();
@@ -211,7 +243,7 @@ async function ensureOwnCalendar(): Promise<{ id: string; label: string }> {
           ownerAccount: "personal",
           accessLevel: C.CalendarAccessLevel.OWNER,
         });
-        return { id, label: `${OWN_CALENDAR_TITLE} · ${source === icloud ? "iCloud" : "On My iPhone"}` };
+        return created(id, `${OWN_CALENDAR_TITLE} · ${source === icloud ? "iCloud" : "On My iPhone"}`);
       } catch (e) {
         lastErr = e;
       }
@@ -230,7 +262,7 @@ async function ensureOwnCalendar(): Promise<{ id: string; label: string }> {
     isVisible: true,
     isSynced: true,
   });
-  return { id, label: `${OWN_CALENDAR_TITLE} · This phone` };
+  return created(id, `${OWN_CALENDAR_TITLE} · This phone`);
 }
 
 // -------------------------------------------------------------------- sync --
@@ -417,11 +449,14 @@ function parseTime(iso?: string): number | null {
 async function removeOurEvents(s: CalendarSyncSettings): Promise<void> {
   const C = cal();
   if (!C || (await calendarPermission()) !== "granted") return;
-  if (s.mode === "own") {
-    // Our own calendar holds nothing else: deleting it takes every job with it.
+  if (s.mode === "own" && ownedCalendarIds().includes(s.calendarId)) {
+    // The calendar this install made: deleting it takes every job with it.
     await C.deleteCalendarAsync(s.calendarId).catch(() => {});
+    await setOwnedCalendarIds(ownedCalendarIds().filter((id) => id !== s.calendarId));
     return;
   }
+  // Anything else (a calendar the tech picked, or one we can't prove we made):
+  // only the jobs ArrivePing tagged.
   const DAY = 86_400_000;
   const YEAR = 365 * DAY;
   const now = Date.now();
