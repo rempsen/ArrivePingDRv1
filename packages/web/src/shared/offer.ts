@@ -64,6 +64,13 @@ export interface OfferPayEstimate {
   paidKm: number;
   /** True when neither the tech nor the job has any pay rate set. */
   unrated: boolean;
+  /**
+   * Parts the estimate leaves out because an input is unknown: "time" when
+   * there's no expected duration but the tech is paid by the hour, "mileage"
+   * when there's no drive distance but they're paid per km. The total is
+   * then a floor, and the screen says so.
+   */
+  missing: ("time" | "mileage")[];
 }
 
 /**
@@ -75,7 +82,7 @@ export interface OfferPayEstimate {
 export function estimateOfferPay(
   job: Pick<JobPayFacts, "lineItems" | "techPayModel">,
   rider: RiderPayRates,
-  expected: { onSiteMinutes: number; driveKm: number | null },
+  expected: { onSiteMinutes: number | null; driveKm: number | null },
 ): OfferPayEstimate {
   const km = Math.max(0, Number(expected.driveKm) || 0);
   const pay = jobTechPay(
@@ -96,6 +103,10 @@ export function estimateOfferPay(
     hours: pay.hours,
     paidKm: pay.paidKm,
     unrated: pay.unrated,
+    missing: [
+      ...(expected.onSiteMinutes == null && pay.payRatePerHour > 0 ? (["time"] as const) : []),
+      ...(expected.driveKm == null && pay.payRatePerKm > 0 ? (["mileage"] as const) : []),
+    ],
   };
 }
 

@@ -51,6 +51,14 @@ describe("estimated pay", () => {
     const p = estimateOfferPay({ lineItems: null, techPayModel: null }, {}, { onSiteMinutes: 90, driveKm: null });
     expect(p.estimate).toBe(0);
     expect(p.unrated).toBe(true);
+    expect(p.missing).toEqual([]);
+  });
+
+  it("names what it couldn't price, so the total reads as a floor", () => {
+    const p = estimateOfferPay({ lineItems: "[]", techPayModel: "" }, { payRatePerHour: 30, payRatePerKm: 0.6 }, { onSiteMinutes: null, driveKm: null });
+    expect(p.missing).toEqual(["time", "mileage"]);
+    const q = estimateOfferPay({ lineItems: "[]", techPayModel: "" }, { payRatePerHour: 30, payRatePerKm: 0 }, { onSiteMinutes: 60, driveKm: null });
+    expect(q.missing).toEqual([]);
   });
 });
 

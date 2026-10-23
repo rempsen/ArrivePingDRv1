@@ -400,6 +400,7 @@ export const EMAIL_TOKENS: { key: string; label: string }[] = [
   { key: "eta", label: "ETA (minutes)" },
   { key: "newWhen", label: "Revised arrival time" },
   { key: "delayMins", label: "Minutes late" },
+  { key: "reason", label: "Decline or release reason" },
   { key: "price", label: "Price" },
   { key: "trackUrl", label: "Tracking link" },
   { key: "propertyUrl", label: "Property history link" },

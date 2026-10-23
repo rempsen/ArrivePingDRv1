@@ -67,3 +67,14 @@ export function fmtMinsShort(mins: number | null | undefined): string {
   const r = m % 60;
   return r ? `${h}h ${r}m` : `${h}h`;
 }
+
+/**
+ * How old a push is. Expo reports `notification.date` in seconds on iOS and
+ * in milliseconds on Android; anything below 1e12 is taken as seconds.
+ */
+export function pushAgeMs(date: number | null | undefined, now = Date.now()): number {
+  const d = Number(date);
+  if (!Number.isFinite(d) || d <= 0) return 0;
+  const ms = d < 1e12 ? d * 1000 : d;
+  return Math.max(0, now - ms);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fmtMins, fmtMinsShort, offerPath, offerPushStep } from "../offer";
+import { fmtMins, fmtMinsShort, offerPath, offerPushStep, pushAgeMs } from "../offer";
 
 describe("offer push buttons", () => {
   const offer = { event: "assigned", bookingId: "b1" };
@@ -25,5 +25,15 @@ describe("offer push buttons", () => {
     expect(fmtMins(null)).toBe("0 min");
     expect(fmtMinsShort(95)).toBe("1h 35m");
     expect(fmtMinsShort(21)).toBe("21 min");
+  });
+});
+
+describe("push age", () => {
+  const now = 1_800_000_000_000;
+  test("reads iOS seconds and Android milliseconds alike", () => {
+    expect(pushAgeMs(1_800_000_000 - 60, now)).toBe(60_000);
+    expect(pushAgeMs(now - 60_000, now)).toBe(60_000);
+    expect(pushAgeMs(0, now)).toBe(0);
+    expect(pushAgeMs(undefined, now)).toBe(0);
   });
 });

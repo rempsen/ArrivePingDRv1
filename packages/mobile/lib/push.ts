@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 import { api } from "./api";
 import { getToken } from "./auth";
 import { routeForNotification as routeFor } from "./push-route";
-import { JOB_OFFER_CATEGORY, OFFER_ACTION, offerPath, offerPushStep } from "./offer";
+import { JOB_OFFER_CATEGORY, OFFER_ACTION, offerPath, offerPushStep, pushAgeMs } from "./offer";
 import { acceptOffer } from "../components/offer-actions";
 import { getActiveCompany, setActiveCompany } from "./active-company";
 import { useQueryClient } from "@tanstack/react-query";
@@ -180,7 +180,11 @@ export function usePushNotifications() {
     // it now so an old Accept can never accept a later offer of that job.
     if (Platform.OS !== "web") Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
     const step = offerPushStep(data, response.actionIdentifier);
-    const ageMs = Date.now() - (response.notification.date || Date.now());
+    // An offer from a company other than the active one: act on that company.
+    // The tech chose to answer its offer, so switch to it (as office mode does
+    // for any alert); otherwise every request would go to the wrong company.
+    if (step.kind !== "none" && !(await switchToCompanyOf(data))) return;
+    const ageMs = pushAgeMs(response.notification.date);
     if (step.kind === "accept" && ageMs < 30 * 60_000) {
       try {
         const booking = await acceptOffer(step.bookingId);
@@ -204,6 +208,19 @@ export function usePushNotifications() {
       return;
     }
     await routeFromNotification(data);
+  };
+
+  /** Make the push's company the active one. False when switching failed. */
+  const switchToCompanyOf = async (data: Record<string, any> | undefined): Promise<boolean> => {
+    const companyId = typeof data?.companyId === "string" ? data.companyId : "";
+    if (!companyId || companyId === getActiveCompany()) return true;
+    try {
+      await setActiveCompany(companyId);
+      qc.clear();
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const routeFromNotification = async (data: Record<string, any> | undefined) => {

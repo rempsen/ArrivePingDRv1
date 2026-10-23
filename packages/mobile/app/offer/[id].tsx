@@ -60,6 +60,8 @@ interface Offer {
     hours: number;
     paidKm: number;
     unrated: boolean;
+    /** Parts left out because an input is unknown (older servers omit it). */
+    missing?: ("time" | "mileage")[];
   } | null;
   scope: {
     serviceName: string;
@@ -250,7 +252,7 @@ export default function OfferDetails() {
                 icon={<CurrencyDollar color={C.green} size={18} />}
                 label="Your pay"
                 value={o.pay.unrated && o.pay.estimate === 0 ? "Not set" : money(o.pay.estimate)}
-                sub={o.pay.unrated && o.pay.estimate === 0 ? "ask the office" : "estimated"}
+                sub={o.pay.unrated && o.pay.estimate === 0 ? "ask the office" : o.pay.missing?.length ? "at least" : "estimated"}
                 valueColor={C.green}
               />
             )}
@@ -282,9 +284,14 @@ export default function OfferDetails() {
             {o.pay.unitPay > 0 && <PayRow label="Per-unit work" value={o.pay.unitPay} />}
             {o.pay.flatPay > 0 && <PayRow label="Flat pay" value={o.pay.flatPay} />}
             <View style={s.payTotal}>
-              <Text style={s.payTotalLabel}>Estimated total</Text>
+              <Text style={s.payTotalLabel}>{o.pay.missing?.length ? "Estimated, at least" : "Estimated total"}</Text>
               <Text style={s.payTotalValue}>{money(o.pay.estimate)}</Text>
             </View>
+            {!!o.pay.missing?.length && (
+              <Text style={[s.fine, { color: C.amber }]}>
+                Not included: {o.pay.missing.map((m) => (m === "time" ? "time on site (no duration estimate)" : "mileage (drive unknown)")).join(" and ")}. Your pay will be more.
+              </Text>
+            )}
             <Text style={s.fine}>Final pay is worked out from your actual time and distance when the job is done.</Text>
           </Card>
         )}
