@@ -16,9 +16,9 @@ delete process.env.DEMO_REFRESH;
 
 const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
-const { demoTick, demoHealth, resetDemoCaches, stableId } = await import("../demo-refresh");
+const { demoTick, demoHealth, resetDemoCaches, stableId, DAYS_AHEAD } = await import("../demo-refresh");
 const { zonedDayKey, zonedParts, zonedTimeToInstant } = await import("../../shared/tz");
-const { addDays, dayOfWeek } = await import("../../shared/demo-plan");
+const { addDays, dayOfWeek, PREBOOK_DAYS } = await import("../../shared/demo-plan");
 
 const CO = "prairie-comfort-hvac";
 const OTHER = "someone-else";
@@ -157,16 +157,27 @@ describe("demo refresh — first run on a stale demo", () => {
     expect(report.created).toBeGreaterThan(100);
   });
 
-  it("books today and every one of the next seven days, weekends included", async () => {
+  it("books today and every one of the next ten days, weekends included", async () => {
     const rows = await managed();
     const days = new Set(rows.map((b) => zonedDayKey(new Date(b.scheduledAt), TZ)));
     const today = zonedDayKey(NOW, TZ);
-    for (let i = 0; i <= 7; i++) expect(days.has(addDays(today, i))).toBe(true);
+    expect(DAYS_AHEAD).toBe(10);
+    for (let i = 0; i <= DAYS_AHEAD; i++) expect(days.has(addDays(today, i))).toBe(true);
     const weekendJobs = rows.filter((b) => {
       const d = zonedDayKey(new Date(b.scheduledAt), TZ);
       return [0, 6].includes(dayOfWeek(d)) && !b.title.startsWith("Emergency");
     });
     expect(weekendJobs.length).toBeGreaterThan(4);
+  });
+
+  it("fills the furthest day whole, not just the slots already past this time of day", async () => {
+    expect(PREBOOK_DAYS).toBeGreaterThan(DAYS_AHEAD);
+    const rows = (await managed()).filter((b) => b.priority !== "urgent");
+    const today = zonedDayKey(NOW, TZ);
+    const on = (d: string) => rows.filter((b) => zonedDayKey(new Date(b.scheduledAt), TZ) === d).length;
+    // The last day and the same weekday a week earlier have the same plan.
+    expect(on(addDays(today, DAYS_AHEAD))).toBe(on(addDays(today, DAYS_AHEAD - 7)));
+    expect(on(addDays(today, DAYS_AHEAD))).toBeGreaterThan(0);
   });
 
   it("keeps regular work between 8:00 a.m. and 6:30 p.m.", async () => {
@@ -279,12 +290,12 @@ describe("demo refresh — later ticks", () => {
     expect(b!.status).toBe("assigned");
   });
 
-  it("rolls forward: a day later, a new eighth day appears", async () => {
+  it("rolls forward: a day later, a new last day appears", async () => {
     const tomorrow = new Date(NOW.getTime() + 24 * 3_600_000);
     const r = await demoTick({ now: tomorrow });
     expect(r.created).toBeGreaterThan(0);
     const days = new Set((await managed()).map((b) => zonedDayKey(new Date(b.scheduledAt), TZ)));
-    expect(days.has(addDays(zonedDayKey(tomorrow, TZ), 7))).toBe(true);
+    expect(days.has(addDays(zonedDayKey(tomorrow, TZ), DAYS_AHEAD))).toBe(true);
     const h = await demoHealth(tomorrow);
     if (h.enabled) expect(h.late).toBe(0);
   });
