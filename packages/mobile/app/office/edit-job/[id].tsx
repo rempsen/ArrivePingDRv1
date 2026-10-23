@@ -21,6 +21,7 @@ import { classifyResponse } from "../../../lib/dispatch-result";
 import { buildPatch, draftFromBooking, isEmptyPatch, OFFICE_STATUSES, PRIORITIES, setFieldValue, validateEdit, isEditableField, type EditDraft, type EditErrors } from "../../../lib/edit-job";
 import { customLine, sumLineItems, withTotals } from "../../../lib/line-items";
 import { fmtInTz } from "../../../lib/when";
+import { geocodeAddress } from "../../../lib/use-lookups";
 import { STATUS_LABEL } from "../../../lib/board";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
@@ -52,6 +53,15 @@ export default function EditJob() {
   const [saving, setSaving] = useState(false);
   const [sheet, setSheet] = useState<"client" | "service" | "address" | "when" | null>(null);
   const [newLine, setNewLine] = useState<{ name: string; qty: string; price: string } | null>(null);
+  // What's typed in a line's qty / price box, kept as text so "10." survives
+  // the keystroke; the draft gets the parsed number.
+  const [lineText, setLineText] = useState<Record<string, string>>({});
+  const lineField = (i: number, key: "qty" | "unitPrice", fallback: number) => lineText[`${i}:${key}`] ?? String(fallback);
+  const setLineField = (i: number, key: "qty" | "unitPrice", t: string) => {
+    setLineText((m) => ({ ...m, [`${i}:${key}`]: t }));
+    const n = Number(t);
+    if (t.trim() !== "" && Number.isFinite(n)) update({ lineItems: d!.lineItems.map((x, j) => (j === i ? withTotals({ ...x, [key]: n }) : x)) });
+  };
 
   // Seed the draft once from the loaded job; later refetches don't clobber edits.
   useEffect(() => {
@@ -71,8 +81,23 @@ export default function EditJob() {
     const errs = validateEdit(d);
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    const patch = buildPatch(d, original, { force });
-    const statusChanged = d.status !== original.status;
+    // An address typed or taken from the client's record has no coordinates
+    // yet; PATCH only writes what it's sent, so the old pin would survive the
+    // new street. Resolve it first, or stop.
+    let draft = d;
+    if (d.address !== original.address && (d.lat == null || d.lng == null)) {
+      setSaving(true);
+      const hit = await geocodeAddress(d.address).catch(() => null);
+      setSaving(false);
+      if (!hit) {
+        Alert.alert("Couldn't place that address", "Pick it from the suggestions so the technician gets the right pin.");
+        return;
+      }
+      draft = { ...d, lat: hit.lat, lng: hit.lng };
+      setD(draft);
+    }
+    const patch = buildPatch(draft, original, { force });
+    const statusChanged = draft.status !== original.status;
     if (isEmptyPatch(patch) && !statusChanged) {
       router.back();
       return;
@@ -109,7 +134,7 @@ export default function EditJob() {
         const res = await fetch(`${API}/api/bookings/${encodeURIComponent(id!)}/status`, {
           method: "POST",
           headers: authHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ status: d.status }),
+          body: JSON.stringify({ status: draft.status }),
         });
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { message?: string };
@@ -255,16 +280,16 @@ export default function EditJob() {
                     </Text>
                   </View>
                   <TextInput
-                    value={String(li.qty)}
-                    onChangeText={(t) => update({ lineItems: d.lineItems.map((x, j) => (j === i ? withTotals({ ...x, qty: Number(t) || 0 }) : x)) })}
+                    value={lineField(i, "qty", li.qty)}
+                    onChangeText={(t) => setLineField(i, "qty", t)}
                     keyboardType="decimal-pad"
                     style={[s.lineInput, { width: 56 }]}
                     accessibilityLabel={`Quantity for ${li.name}`}
                   />
                   <Text style={s.times}>×</Text>
                   <TextInput
-                    value={String(li.unitPrice)}
-                    onChangeText={(t) => update({ lineItems: d.lineItems.map((x, j) => (j === i ? withTotals({ ...x, unitPrice: Number(t) || 0 }) : x)) })}
+                    value={lineField(i, "unitPrice", li.unitPrice)}
+                    onChangeText={(t) => setLineField(i, "unitPrice", t)}
                     keyboardType="decimal-pad"
                     style={[s.lineInput, { width: 80 }]}
                     accessibilityLabel={`Unit price for ${li.name}`}
@@ -272,7 +297,12 @@ export default function EditJob() {
                   <Text style={s.lineTotal} allowFontScaling={false}>
                     ${withTotals(li).price.toFixed(2)}
                   </Text>
-                  <Pressable onPress={() => update({ lineItems: d.lineItems.filter((_, j) => j !== i) })} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove ${li.name}`}>
+                  <Pressable
+                    onPress={() => {
+                      setLineText({});
+                      update({ lineItems: d.lineItems.filter((_, j) => j !== i) });
+                    }}
+                    hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remove ${li.name}`}>
                     <Trash color={C.muted} size={18} />
                   </Pressable>
                 </View>
@@ -311,8 +341,9 @@ export default function EditJob() {
                 Alert.alert("New clients are created from New job", "Pick an existing client here, or create the client first.");
                 return;
               }
-              // A new client means a new place and number, unless the job already has its own.
-              update({ customerId: c.id, customerName: c.name, customerPhone: c.phone ?? d.customerPhone, ...(c.lastAddress ? { address: c.lastAddress, lat: null, lng: null } : {}) });
+              // A different client means their number and their place; the old
+              // client's phone must never ride along (it's where texts go).
+              update({ customerId: c.id, customerName: c.name, customerPhone: c.phone ?? "", ...(c.lastAddress ? { address: c.lastAddress, lat: null, lng: null } : {}) });
               setSheet(null);
             }}
           />

@@ -102,3 +102,12 @@ export async function resolvePlace(placeId: string, description: string, session
   const j = (await res.json()) as { lat?: number | null; lng?: number | null; address?: string };
   return { lat: j.lat ?? null, lng: j.lng ?? null, address: j.address || description };
 }
+
+/** `GET /api/geo/geocode` — coordinates for an address typed or picked without a place id. */
+export async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const p = new URLSearchParams({ address });
+  const res = await fetch(`${API}/api/geo/geocode?${p}`, { headers: authHeaders() });
+  if (!res.ok) return null;
+  const j = (await res.json()) as { lat?: number | null; lng?: number | null };
+  return j.lat != null && j.lng != null ? { lat: j.lat, lng: j.lng } : null;
+}
