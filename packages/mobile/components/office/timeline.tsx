@@ -30,6 +30,8 @@ export interface TimelineProps {
   nowMin: number | null;
   place: PlaceState;
   perms: PlacePerms;
+  /** Extra room under the last row, so the placement card doesn't cover it. */
+  bottomPad?: number;
   onArm: (job: OfficeJob) => void;
   onTapCell: (techId: string, rawMin: number, range: Range) => void;
   onOpenJob: (jobId: string) => void;
@@ -41,7 +43,7 @@ export interface TimelineProps {
  * scrolls sideways. Tapping a block arms it, tapping a row places it (see
  * lib/board-place.ts); a long press opens the job.
  */
-export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, onArm, onTapCell, onOpenJob }: TimelineProps) {
+export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, bottomPad = 0, onArm, onTapCell, onOpenJob }: TimelineProps) {
   const spans = useMemo(() => spansFor(jobs, day, tz), [jobs, day, tz]);
   const range = useMemo(() => timelineRange(spans), [spans]);
   const hours = hoursIn(range);
@@ -61,7 +63,7 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, 
   const targetJob = target ? jobs.find((j) => j.id === target.jobId) : undefined;
 
   return (
-    <ScrollView style={s.vertical} contentContainerStyle={{ paddingBottom: S.xxl }}>
+    <ScrollView style={s.vertical} contentContainerStyle={{ paddingBottom: S.xxl + bottomPad }}>
       <View style={s.row}>
         {/* Gutter: who, how their day is going, how full it is. */}
         <View style={s.gutter}>

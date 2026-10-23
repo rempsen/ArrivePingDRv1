@@ -12,6 +12,7 @@ import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S } from "../../lib/theme";
 import { useBoard, useDayLoad } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
+import { useLayout } from "../../lib/use-layout";
 import { useDispatchActions } from "../../lib/use-dispatch-actions";
 import { addDays, isUnassigned, NO_JOBS, NO_TECHS } from "../../lib/board";
 import { IDLE, placeReducer, placedStart, placementRequest } from "../../lib/board-place";
@@ -36,6 +37,12 @@ export default function Board() {
   const [view, setView] = useState<"day" | "week">("day");
   const board = useBoard(day);
   const [place, dispatch] = useReducer(placeReducer, IDLE);
+  // The tab hides at phone width (Split View narrowed mid-session); the
+  // screen itself goes with it.
+  const { wide } = useLayout();
+  useEffect(() => {
+    if (!wide) router.replace("/(office)/jobs");
+  }, [wide, router]);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
@@ -183,6 +190,7 @@ export default function Board() {
             nowMin={nowMin}
             place={place}
             perms={perms}
+            bottomPad={place.kind === "idle" ? 0 : 140}
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
             onTapCell={tapCell}
             onOpenJob={(id) => router.push(`/office/job/${id}`)}
