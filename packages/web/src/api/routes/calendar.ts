@@ -76,20 +76,70 @@ async function eventFor(
     b.notes ? `Notes: ${b.notes}` : "",
     b.publicToken ? `Track: ${base}/t/${b.publicToken}` : "",
   ].filter(Boolean);
+  const cancelled = b.status === "cancelled";
+  const title = b.title || svc?.name || "Job";
   return {
     uid: `booking-${b.id}@nvc360`,
-    title: b.title || svc?.name || "Job",
+    title: cancelled ? `Cancelled: ${title}` : title,
     description: descLines.join("\n"),
     location: b.address,
     start,
     end,
-    status: b.status === "cancelled" ? "CANCELLED" : "CONFIRMED",
+    status: cancelled ? "CANCELLED" : "CONFIRMED",
     url: b.publicToken ? `${base}/t/${b.publicToken}` : undefined,
     alarmMinutesBefore: 60,
     lat: b.lat,
     lng: b.lng,
   };
 }
+
+type FeedUser = typeof schema.user.$inferSelect;
+
+/**
+ * Every job this person should see in a calendar, across every company they
+ * work for, each read with the role they hold THERE (a technician at one
+ * company can be office staff at another). Shared by the subscription feed
+ * (/api/calendar/<token>.ics) and the phone's calendar sync (/events), so the
+ * two can never disagree about which jobs are someone's.
+ */
+async function eventsForUser(u: FeedUser, base: string, from: Date, to: Date): Promise<CalEvent[]> {
+  const memberships = await loadMemberships(u.id);
+  const userPerms = (u as { permissions?: string | null }).permissions;
+  const scopes = memberships.length
+    ? memberships.map((m) => ({
+        companyId: m.companyId,
+        role: m.role,
+        // Same rule as authMiddleware, so the feed never shows more than the
+        // dashboard would (lib/permissions.ts overrideAt).
+        permissions: overrideAt({ membership: m.permissions, user: userPerms, companyId: m.companyId, homeCompany: u.companyId }),
+      }))
+    : [{ companyId: (u as any).companyId || "default", role: u.role, permissions: userPerms ?? null }];
+
+  const perCompany = await Promise.all(
+    scopes.map(async (s) => {
+      const rows = await bookingsForUser({ id: u.id, role: s.role, permissions: s.permissions, companyId: s.companyId });
+      return rows
+        .filter((b) => {
+          const t = new Date(b.scheduledAt).getTime();
+          return t >= from.getTime() && t <= to.getTime();
+        })
+        .map((b) => ({ booking: b, companyId: s.companyId }));
+    }),
+  );
+  const events = await Promise.all(perCompany.flat().map((x) => eventFor(x.booking, base, x.companyId)));
+  return events.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** The calendar's name in Apple Calendar, Google and Outlook. */
+function calendarName(u: FeedUser): string {
+  if (isOfficeRole(u.role)) return "ArrivePing — Dispatch Schedule";
+  if (u.role === "rider") return `ArrivePing — ${u.name}'s Jobs`;
+  return "ArrivePing — My Appointments";
+}
+
+/** The phone sync's window: recent history plus what's coming up. */
+export const SYNC_DAYS_BACK = 14;
+export const SYNC_DAYS_AHEAD = 90;
 
 export const calendarRoutes = new Hono<AppEnv>()
   // Return (creating if needed) the current user's personal feed URLs.
@@ -107,13 +157,51 @@ export const calendarRoutes = new Hono<AppEnv>()
     const base = baseUrl(c);
     const httpsUrl = `${base}/api/calendar/${token}.ics`;
     const webcal = httpsUrl.replace(/^https?:\/\//, "webcal://");
+    const name = encodeURIComponent("ArrivePing Schedule");
     return c.json(
       {
         token,
         url: httpsUrl,
         webcal,
         google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`,
-        outlook: `https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(httpsUrl)}&name=${encodeURIComponent("ArrivePing Schedule")}`,
+        // Outlook for work or school (Microsoft 365). Kept as `outlook` for
+        // the web settings card, which already links to it.
+        outlook: `https://outlook.office.com/calendar/0/addfromweb?url=${encodeURIComponent(httpsUrl)}&name=${name}`,
+        // Outlook.com / Hotmail personal accounts live on a different host.
+        outlookPersonal: `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(httpsUrl)}&name=${name}`,
+      },
+      200,
+    );
+  })
+  // The signed-in person's jobs as JSON, for the mobile app to write into the
+  // phone's own calendar (Apple Calendar, or a Google / Outlook account on the
+  // phone). Google's and Outlook's apps can't subscribe to a feed from a phone,
+  // and techs don't sign in to the web app, so the phone syncs these itself.
+  // Same people, same jobs and same event text as the .ics feed.
+  .get("/events", requireAuth, async (c) => {
+    const me = c.get("user") as SessionUser;
+    const [u] = await sdb.select().from(schema.user).where(eq(schema.user.id, me.id));
+    if (!u) return c.json({ message: "Not found" }, 404);
+    const now = Date.now();
+    const from = new Date(now - SYNC_DAYS_BACK * 86_400_000);
+    const to = new Date(now + SYNC_DAYS_AHEAD * 86_400_000);
+    const events = await eventsForUser(u, baseUrl(c), from, to);
+    return c.json(
+      {
+        calendarName: calendarName(u),
+        from: from.toISOString(),
+        to: to.toISOString(),
+        events: events.map((e) => ({
+          uid: e.uid,
+          title: e.title,
+          description: e.description ?? "",
+          location: e.location ?? "",
+          start: e.start.toISOString(),
+          end: e.end.toISOString(),
+          status: e.status ?? "CONFIRMED",
+          url: e.url ?? null,
+          alarmMinutesBefore: e.alarmMinutesBefore ?? null,
+        })),
       },
       200,
     );
@@ -144,44 +232,8 @@ export const calendarRoutes = new Hono<AppEnv>()
     const now = Date.now();
     const from = new Date(now - 60 * 86_400_000);
     const to = new Date(now + 180 * 86_400_000);
-
-    // A person can work for several companies, and this feed is the single
-    // calendar they subscribe to — so it has to be the union of their jobs at
-    // every company, each read with the role they hold THERE. Reading only
-    // u.companyId hid every job from their non-home companies.
-    const memberships = await loadMemberships(u.id);
-    const userPerms = (u as { permissions?: string | null }).permissions;
-    const scopes = memberships.length
-      ? memberships.map((m) => ({
-          companyId: m.companyId,
-          role: m.role,
-          // Same rule as authMiddleware, so the feed never shows more than the
-          // dashboard would (lib/permissions.ts overrideAt).
-          permissions: overrideAt({ membership: m.permissions, user: userPerms, companyId: m.companyId, homeCompany: u.companyId }),
-        }))
-      : [{ companyId: (u as any).companyId || "default", role: u.role, permissions: (u as { permissions?: string | null }).permissions ?? null }];
-
-    const perCompany = await Promise.all(
-      scopes.map(async (s) => {
-        const rows = await bookingsForUser({ id: u.id, role: s.role, permissions: s.permissions, companyId: s.companyId });
-        return rows
-          .filter((b) => {
-            const t = new Date(b.scheduledAt).getTime();
-            return t >= from.getTime() && t <= to.getTime();
-          })
-          .map((b) => ({ booking: b, companyId: s.companyId }));
-      }),
-    );
-    const scoped = perCompany.flat();
-
-    const base = baseUrl(c);
-    const events = await Promise.all(scoped.map((x) => eventFor(x.booking, base, x.companyId)));
-    const calName =
-      isOfficeRole(u.role)
-        ? "ArrivePing — Dispatch Schedule"
-        : u.role === "rider"
-          ? `ArrivePing — ${u.name}'s Jobs`
-          : "ArrivePing — My Appointments";
+    const events = await eventsForUser(u, baseUrl(c), from, to);
+    const calName = calendarName(u);
     const ics = buildCalendar(events, { name: calName, refreshMinutes: 30 });
     return new Response(ics, {
       status: 200,

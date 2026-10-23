@@ -12,7 +12,9 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -60,7 +62,7 @@
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": [
       "arriveping",
       "homeserve"
@@ -104,6 +106,13 @@
       ],
       "expo-secure-store",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "ArrivePing adds the jobs you're assigned to your calendar and keeps their times and addresses up to date.",
+          "remindersPermission": false
+        }
+      ],
+      [
         "expo-live-activity",
         {
           "enablePushNotifications": true
@@ -112,7 +121,7 @@
       "@sentry/react-native",
       "expo-audio"
     ],
-    "runtimeVersion": "1.0.3",
+    "runtimeVersion": "1.0.4",
     "updates": {
       "url": "https://u.expo.dev/6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"
     }
