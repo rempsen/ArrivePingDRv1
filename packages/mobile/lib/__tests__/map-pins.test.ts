@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CONTINENT, fitRegion, pinKind, visibleJobs, visibleTechs } from "../map-pins";
+import { CONTINENT, fitRegion, onDay, pinKind, visibleJobs, visibleTechs } from "../map-pins";
 
 describe("pinKind", () => {
   test("by who has it and where it is", () => {
@@ -52,5 +52,16 @@ describe("fitRegion", () => {
     expect(r.longitude).toBeCloseTo(-97.2);
     expect(r.latitudeDelta).toBeCloseTo(0.28);
     expect(r.longitudeDelta).toBeCloseTo(0.28);
+  });
+});
+
+describe("onDay", () => {
+  test("keeps the board day's jobs on the company clock", () => {
+    const jobs = [
+      { id: "today", scheduledAt: "2026-10-23T14:00:00.000Z" },
+      { id: "late-night-yesterday", scheduledAt: "2026-10-23T03:30:00.000Z" }, // 10:30 PM Oct 22 in Winnipeg
+      { id: "next-week", scheduledAt: "2026-10-30T14:00:00.000Z" },
+    ];
+    expect(onDay(jobs, "2026-10-23", "America/Winnipeg").map((j) => j.id)).toEqual(["today"]);
   });
 });

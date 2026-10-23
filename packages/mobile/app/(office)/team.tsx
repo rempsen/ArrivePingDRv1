@@ -7,6 +7,7 @@ import { TechRow, statusColor } from "../../components/office/tech-row";
 import { TechDetail } from "../../components/office/tech-detail";
 import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
 import { LiveMap, type MapSelection } from "../../components/office/live-map";
+import { onDay } from "../../lib/map-pins";
 import { JobDetail } from "../../components/office/job-detail";
 import { JobRow } from "../../components/office/job-row";
 import { Sheet } from "../../components/office/sheet";
@@ -152,8 +153,18 @@ export default function Team() {
   if (mode === "map") {
     const selJob = sel?.kind === "job" ? jobs.find((j) => j.id === sel.id) : undefined;
     const selTech = sel?.kind === "tech" ? techs.find((t) => t.id === sel.id) : undefined;
-    const openJob = (id: string) => router.push(`/office/job/${id}`);
-    const assignJob = (id: string) => router.push({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
+    // The phone's sheet is a native Modal: close it before pushing, or the
+    // job screen opens underneath it.
+    const openJob = (id: string) => {
+      setSel(null);
+      router.push(`/office/job/${id}`);
+    };
+    const assignJob = (id: string) => {
+      setSel(null);
+      router.push({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
+    };
+    // Today's jobs only: the board also carries every waiting job whatever its date.
+    const dayJobs = board.data ? onDay(jobs, board.data.day, board.data.tz) : jobs;
     const picked =
       selJob ? (
         <>
@@ -179,7 +190,7 @@ export default function Team() {
           ) : board.isError ? (
             <Empty icon={<Warning color={C.red} size={28} />} text="Couldn't load the team" sub={(board.error as Error)?.message} />
           ) : (
-            <LiveMap techs={techs} jobs={jobs} office={board.data?.office ?? null} selected={sel} onSelect={setSel} />
+            <LiveMap techs={techs} jobs={dayJobs} office={board.data?.office ?? null} selected={sel} onSelect={setSel} />
           )}
           {wide && sel && (selJob || selTech) ? (
             <View style={s.mapCard}>

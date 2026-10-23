@@ -4,6 +4,7 @@
  * fits everything on screen.
  */
 import { IN_FIELD, TERMINAL } from "./board";
+import { partsIn } from "./when";
 
 export interface Point {
   lat: number | null | undefined;
@@ -41,6 +42,15 @@ export function visibleJobs<J extends Point & { riderId: string | null; assignSt
     if (kind) out.push({ ...j, kind });
   }
   return out;
+}
+
+/**
+ * The board carries every waiting job whatever its date (so nothing unassigned
+ * is ever lost); the map shows the day's work, so overdue and future ones
+ * stay off it rather than dragging Fit across the week.
+ */
+export function onDay<J extends { scheduledAt: string }>(jobs: readonly J[], day: string, tz: string): J[] {
+  return jobs.filter((j) => partsIn(new Date(j.scheduledAt), tz).day === day);
 }
 
 /** Somewhere to look when there is nothing to show: North America, zoomed out. */
