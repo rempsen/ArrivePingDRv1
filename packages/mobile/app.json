@@ -40,7 +40,13 @@
         "NSLocationWhenInUseUsageDescription": "ArrivePing shares your live location during active jobs.",
         "NSMicrophoneUsageDescription": "ArrivePing records short voice notes so you can dictate job details to the office instead of typing on site.",
         "NSFaceIDUsageDescription": "ArrivePing uses Face ID to quickly and securely unlock the app.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       },
       "entitlements": {
         "aps-environment": "production"
