@@ -5,10 +5,13 @@ import { ClipboardText, MagnifyingGlass, Plus, Warning } from "phosphor-react-na
 import { OfficeHeader } from "../../components/office/header";
 import { DayStrip } from "../../components/office/day-strip";
 import { JobRow } from "../../components/office/job-row";
+import { JobDetail } from "../../components/office/job-detail";
+import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
 import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard, useDayLoad } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
+import { useLayout } from "../../lib/use-layout";
 import { addDays, bucketOf, NO_JOBS, NO_TECHS, type JobBucket } from "../../lib/board";
 
 const BUCKETS: Array<{ key: JobBucket; label: string }> = [
@@ -29,6 +32,9 @@ export default function Jobs() {
   const [day, setDay] = useState<string | null>(null);
   const [bucket, setBucket] = useState<JobBucket>("unassigned");
   const [q, setQ] = useState("");
+  // On an iPad the tapped job opens beside the list instead of over it.
+  const { wide } = useLayout();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const board = useBoard(day);
   // "Today" on the company's clock, learned from the first (day-less) read and
@@ -66,7 +72,15 @@ export default function Jobs() {
 
   const jobNoun = board.data?.jobNoun ?? "jobs";
 
-  return (
+  // A selection that left the board (cancelled elsewhere, other day picked)
+  // clears to the empty pane rather than showing a stale job.
+  useEffect(() => {
+    if (selectedId && board.data && !board.data.jobs.some((j) => j.id === selectedId)) setSelectedId(null);
+  }, [selectedId, board.data]);
+
+  const open = (id: string) => (wide ? setSelectedId(id) : router.push(`/office/job/${id}`));
+
+  const list = (
     <View style={s.screen}>
       <OfficeHeader
         title="Jobs"
@@ -121,7 +135,7 @@ export default function Jobs() {
           keyExtractor={(j) => j.id}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
           refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => board.refetch()} tintColor={C.brand} />}
-          renderItem={({ item }) => <JobRow job={item} techName={techName(item.riderId)} onPress={() => router.push(`/office/job/${item.id}`)} />}
+          renderItem={({ item }) => <JobRow job={item} techName={techName(item.riderId)} selected={wide && item.id === selectedId} onPress={() => open(item.id)} />}
           ListEmptyComponent={
             <Empty
               icon={<ClipboardText color={C.muted} size={28} />}
@@ -134,6 +148,14 @@ export default function Jobs() {
         />
       )}
     </View>
+  );
+
+  return (
+    <SplitScreen
+      list={list}
+      detail={selectedId ? <JobDetail key={selectedId} id={selectedId} embedded onMessageTech={(techId) => router.push({ pathname: "/(office)/messages", params: { techId } })} /> : null}
+      empty={<EmptyPane icon={<ClipboardText color={C.muted} size={32} />} text={`Pick a ${jobNoun.replace(/s$/, "")}`} sub="Its details, technician and schedule open here." />}
+    />
   );
 }
 

@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, SectionList, RefreshControl, StyleSheet, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { UsersThree, Warning } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { TechRow, statusColor } from "../../components/office/tech-row";
+import { TechDetail } from "../../components/office/tech-detail";
+import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
 import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
+import { useLayout } from "../../lib/use-layout";
 import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "../../lib/board";
 
 /**
@@ -20,6 +23,12 @@ export default function Team() {
   const [filter, setFilter] = useState<string | null>(params.status ?? null);
   const board = useBoard(null);
   const now = new Date();
+  const { wide } = useLayout();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (selectedId && board.data && !board.data.techs.some((t) => t.id === selectedId)) setSelectedId(null);
+  }, [selectedId, board.data]);
+  const message = (techId: string) => router.push(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
 
   const techs = board.data?.techs ?? NO_TECHS;
   const jobs = board.data?.jobs ?? NO_JOBS;
@@ -50,7 +59,7 @@ export default function Team() {
     { key: "offline", label: "Off shift" },
   ];
 
-  return (
+  const list = (
     <View style={s.screen}>
       <OfficeHeader title="Team" />
       <View style={[s.chips, WIDE]}>
@@ -94,7 +103,9 @@ export default function Team() {
               tech={item}
               now={now}
               currentJob={jobTitle(item.currentJobId)?.customerName ?? jobTitle(item.currentJobId)?.title ?? null}
-              onMessage={(t) => router.push(`/office/thread/${t.id}`)}
+              onMessage={(t) => message(t.id)}
+              onPress={wide ? () => setSelectedId(item.id) : undefined}
+              selected={wide && item.id === selectedId}
             />
           )}
           ListEmptyComponent={
@@ -107,6 +118,14 @@ export default function Team() {
         />
       )}
     </View>
+  );
+
+  return (
+    <SplitScreen
+      list={list}
+      detail={selectedId ? <TechDetail techId={selectedId} onMessage={message} onOpenJob={(id) => router.push(`/office/job/${id}`)} /> : null}
+      empty={<EmptyPane icon={<UsersThree color={C.muted} size={32} />} text="Pick a technician" sub="Their day and the ways to reach them open here." />}
+    />
   );
 }
 

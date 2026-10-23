@@ -24,6 +24,9 @@ and never mounts the location heartbeat.
 - Push: `lib/push-route.ts` routes taps by mode (`tech_message` → thread, `bookingId` → office job). Backend: `officeUsersAt()` (api/lib/memberships.ts) now notifies managers/dispatchers too, and a tech's message pushes office devices.
 - Tests: `bun test packages/mobile/lib/__tests__` (pure modules only; react-native can't load under bun).
 
+### iPad (added 2026-10-23)
+`lib/layout.ts` `isWideLayout(width, device)` — a tablet at ≥ 768 pt — switches each tab to `components/office/split-screen.tsx` (list 380 pt | detail). `JobDetail`, `ThreadView` and `TechDetail` (`components/office/*`) render embedded in the pane or full-screen from the phone routes and push taps. Today goes two-column at ≥ 1000 pt. iPad rotates (`UISupportedInterfaceOrientations~ipad` in `app.json`; iPhone stays portrait) — a plist change, so it needs a new EAS build to see. Spec: `docs/superpowers/specs/2026-10-23-mobile-ipad-office-design.md`.
+
 ## Screens (packages/mobile/app)
 - `index.tsx` — boot: route to sign-in, then the company pick, then (rider) or (office) by role.
 - `sign-in.tsx` — email/password login (invite-based, same accounts as web).

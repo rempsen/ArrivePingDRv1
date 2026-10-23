@@ -1,16 +1,19 @@
 import { useMemo, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { Warning, CalendarCheck, ClipboardText } from "phosphor-react-native";
+import { Warning, CalendarCheck, ClipboardText, UsersThree } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { StatusTiles } from "../../components/office/status-tiles";
 import { OfficeIntroCard } from "../../components/office/intro-card";
 import { JobRow } from "../../components/office/job-row";
+import { TechRow } from "../../components/office/tech-row";
 import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
-import { needsAttention, nextUp, tallies, NO_JOBS, NO_TECHS } from "../../lib/board";
+import { useLayout } from "../../lib/use-layout";
+import { TWO_COLUMN_MIN } from "../../lib/layout";
+import { needsAttention, nextUp, tallies, NO_JOBS, NO_TECHS, STATUS_ORDER } from "../../lib/board";
 
 /**
  * Today: the first thing a dispatcher looks at between calls. Who is where,
@@ -22,6 +25,9 @@ export default function Today() {
   const { can } = useAccess();
   const board = useBoard(null);
   const [now, setNow] = useState(() => new Date());
+  // A wide iPad shows the dashboard in two columns; anything narrower stacks.
+  const { wide, width } = useLayout();
+  const twoCol = wide && width >= TWO_COLUMN_MIN;
 
   const techs = board.data?.techs ?? NO_TECHS;
   const jobs = board.data?.jobs ?? NO_JOBS;
@@ -36,6 +42,55 @@ export default function Today() {
     setNow(new Date());
     return board.refetch();
   };
+  // The crew at a glance, on-shift people first; the Team tab has the rest.
+  const crew = useMemo(
+    () => [...techs].sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.name.localeCompare(b.name)).slice(0, 8),
+    [techs],
+  );
+
+  const attentionSection = (
+    <Section title="Needs attention" count={attention.length} icon={<Warning color={attention.length ? C.red : C.muted} size={16} weight="fill" />}>
+      {attention.length === 0 ? (
+        <Text style={s.quiet}>
+          Nothing late and every {jobNoun.replace(/s$/, "")} has a {noun.replace(/s$/, "")}.
+        </Text>
+      ) : (
+        attention.slice(0, 8).map((job) => (
+          <JobRow
+            key={job.id}
+            job={job}
+            techName={techName(job.riderId)}
+            onPress={() => router.push(`/office/job/${job.id}`)}
+            actions={
+              can("work_orders:edit") ? (
+                <Button
+                  title={job.riderId ? "Reassign" : "Assign"}
+                  small
+                  variant="outline"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/office/job/[id]",
+                      params: { id: job.id, assign: "1" },
+                    })
+                  }
+                />
+              ) : undefined
+            }
+          />
+        ))
+      )}
+      {attention.length > 8 ? <Button title={`See all ${attention.length}`} variant="ghost" small onPress={() => router.push("/(office)/jobs")} /> : null}
+    </Section>
+  );
+  const upcomingSection = (
+    <Section title="Next up" count={upcoming.length} icon={<CalendarCheck color={C.brand} size={16} weight="fill" />}>
+      {upcoming.length === 0 ? (
+        <Text style={s.quiet}>No more {jobNoun} scheduled today.</Text>
+      ) : (
+        upcoming.map((job) => <JobRow key={job.id} job={job} techName={techName(job.riderId)} onPress={() => router.push(`/office/job/${job.id}`)} />)
+      )}
+    </Section>
+  );
 
   return (
     <View style={s.screen}>
@@ -53,50 +108,44 @@ export default function Today() {
             <OfficeIntroCard />
             <StatusTiles t={t} workerNoun={noun} onPick={(status) => router.push({ pathname: "/(office)/team", params: { status } })} />
 
-            <Section
-              title="Needs attention"
-              count={attention.length}
-              icon={<Warning color={attention.length ? C.red : C.muted} size={16} weight="fill" />}
-            >
-              {attention.length === 0 ? (
-                <Text style={s.quiet}>Nothing late and every {jobNoun.replace(/s$/, "")} has a {noun.replace(/s$/, "")}.</Text>
-              ) : (
-                attention.slice(0, 8).map((job) => (
-                  <JobRow
-                    key={job.id}
-                    job={job}
-                    techName={techName(job.riderId)}
-                    onPress={() => router.push(`/office/job/${job.id}`)}
-                    actions={
-                      can("work_orders:edit") ? (
-                        <Button
-                          title={job.riderId ? "Reassign" : "Assign"}
-                          small
-                          variant="outline"
-                          onPress={() => router.push({ pathname: "/office/job/[id]", params: { id: job.id, assign: "1" } })}
+            {twoCol ? (
+              <View style={s.columns}>
+                <View style={s.col}>{attentionSection}</View>
+                <View style={s.col}>
+                  {upcomingSection}
+                  <Section title="Crew" count={techs.length} icon={<UsersThree color={C.brand} size={16} weight="fill" />}>
+                    {crew.length === 0 ? (
+                      <Text style={s.quiet}>No {noun} yet.</Text>
+                    ) : (
+                      crew.map((t) => (
+                        <TechRow
+                          key={t.id}
+                          tech={t}
+                          now={now}
+                          currentJob={t.currentJobId ? (jobs.find((j) => j.id === t.currentJobId)?.customerName ?? null) : null}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/(office)/team",
+                              params: { status: t.status },
+                            })
+                          }
                         />
-                      ) : undefined
-                    }
-                  />
-                ))
-              )}
-              {attention.length > 8 ? (
-                <Button title={`See all ${attention.length}`} variant="ghost" small onPress={() => router.push("/(office)/jobs")} />
-              ) : null}
-            </Section>
-
-            <Section title="Next up" count={upcoming.length} icon={<CalendarCheck color={C.brand} size={16} weight="fill" />}>
-              {upcoming.length === 0 ? (
-                <Text style={s.quiet}>No more {jobNoun} scheduled today.</Text>
-              ) : (
-                upcoming.map((job) => (
-                  <JobRow key={job.id} job={job} techName={techName(job.riderId)} onPress={() => router.push(`/office/job/${job.id}`)} />
-                ))
-              )}
-            </Section>
+                      ))
+                    )}
+                  </Section>
+                </View>
+              </View>
+            ) : (
+              <>
+                {attentionSection}
+                {upcomingSection}
+              </>
+            )}
 
             {board.data?.truncated ? (
-              <Text style={s.note}>Showing the first {jobs.length} {jobNoun}. Open the web console for the full day.</Text>
+              <Text style={s.note}>
+                Showing the first {jobs.length} {jobNoun}. Open the web console for the full day.
+              </Text>
             ) : null}
 
             {can("work_orders:create") ? (
@@ -135,9 +184,21 @@ const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   content: { padding: S.lg, paddingBottom: S.xxl },
   section: { marginTop: S.xl },
-  sectionHead: { flexDirection: "row", alignItems: "center", gap: S.sm, marginBottom: S.xs },
+  columns: { flexDirection: "row", gap: S.xl, alignItems: "flex-start" },
+  col: { flex: 1, minWidth: 0 },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.sm,
+    marginBottom: S.xs,
+  },
   sectionTitle: { color: C.text, fontSize: 16, fontWeight: "800", flex: 1 },
-  count: { backgroundColor: C.bg3, borderRadius: R.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  count: {
+    backgroundColor: C.bg3,
+    borderRadius: R.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
   countTxt: { color: C.sub, fontSize: 12, fontWeight: "800" },
   quiet: { color: C.muted, fontSize: 13, paddingVertical: S.md },
   note: { color: C.muted, fontSize: 12, marginTop: S.lg, textAlign: "center" },
