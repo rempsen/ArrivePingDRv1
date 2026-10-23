@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Linking, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Phone, MapPin, ChatCircleDots, UserSwitch, CalendarBlank, Browser, Prohibit, Warning, Envelope } from "phosphor-react-native";
+import { ArrowLeft, Phone, MapPin, ChatCircleDots, UserSwitch, CalendarBlank, Browser, Prohibit, Warning, Envelope, PencilSimple } from "phosphor-react-native";
 import { Avatar, Button, Card, Empty, FullLoader, StatusBadge } from "../ui";
 import { AssignSheet } from "./assign-sheet";
 import { DatetimeSheet } from "./datetime-sheet";
@@ -24,7 +24,8 @@ const PRIORITY_COLOR: Record<string, string> = { urgent: C.red, high: C.amber };
  * One work order, the office view. Everything a dispatcher does from the
  * phone: call the client, send the address to Maps, assign or reassign
  * (with the server's conflict reason and Undo), move the time, message the
- * tech, cancel. The full editor stays on the web; "Open in web" goes there.
+ * tech, cancel, and Edit for the rest (title, client, address, time, notes,
+ * fields, line items). Rate models and form design stay on the web.
  *
  * Rendered two ways: as the full-screen route `app/office/job/[id].tsx` on a
  * phone (and from push taps and deep links on any device), and `embedded` as
@@ -125,6 +126,11 @@ export function JobDetail({
         <Text style={s.topTitle} numberOfLines={1}>
           {label}
         </Text>
+        {b && !done && can("work_orders:edit") ? (
+          <Pressable onPress={() => router.push(`/office/edit-job/${b.id}`)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Edit job" style={{ marginRight: S.sm }}>
+            <PencilSimple color={C.brand} size={22} weight="bold" />
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() => Linking.openURL(webUrl("/admin/work-orders")).catch(() => {})}
           hitSlop={10}

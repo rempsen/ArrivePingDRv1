@@ -32,6 +32,9 @@ export interface OfficeBooking {
   startedAt?: string | null;
   createdAt: string;
   isSample?: boolean;
+  /** JSON strings on the row; `lib/edit-job.ts` parses them. */
+  fieldData?: unknown;
+  lineItems?: unknown;
   service: { id: string; name: string; category?: string; durationMins?: number } | null;
   rider: { id: string; name?: string | null; phone?: string | null; photoUrl?: string | null; color?: string | null; status?: string } | null;
   customer: { id: string; name?: string | null; email?: string | null; phone?: string | null } | null;
