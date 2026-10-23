@@ -5,7 +5,7 @@
  * board was a wall of "running late". This runs inside the server every minute
  * and makes the demo tenant match the plan in shared/demo-plan.ts:
  *
- *   1. FILL — every job the plan has for yesterday … today + 7 days exists.
+ *   1. FILL — every job the plan has for yesterday … today + 10 days exists.
  *      Pre-booked work appears days ahead; emergency calls appear ~45 minutes
  *      before the tech is due, the way a real after-hours call comes in.
  *   2. ADVANCE — each job moves forward with the clock: assigned → en route →
@@ -51,7 +51,7 @@ import { publishDispatch } from "./realtime";
 export const DEMO_COMPANY_NAME = "Prairie Comfort HVAC";
 /** Days of history kept before today, and days filled after it. */
 export const DAYS_BACK = 1;
-export const DAYS_AHEAD = 7;
+export const DAYS_AHEAD = 10;
 const MARKER = "__demo";
 /** LIKE pattern for the marker — underscores escaped, they are LIKE wildcards. */
 const MARKER_LIKE = '%"\\_\\_demo"%';
