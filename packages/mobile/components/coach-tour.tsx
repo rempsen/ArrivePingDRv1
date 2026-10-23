@@ -64,7 +64,7 @@ function buildSteps(drive: DriveTarget): Step[] {
       anchor: "jobs.list",
       route: "/(rider)",
       title: "Your jobs land here",
-      body: "New offers show up at the top with Accept and Decline. Tap a job to open it.",
+      body: "New offers show up at the top. Tap Details to see the drive, your pay and the work before you accept or decline. Tap a job to open it.",
     },
     {
       id: "clock",

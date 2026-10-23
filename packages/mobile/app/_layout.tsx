@@ -72,6 +72,7 @@ function RootLayout() {
               <Stack.Screen name="onboarding" />
               <Stack.Screen name="(rider)" />
               <Stack.Screen name="job/[id]" options={{ animation: "slide_from_right" }} />
+              <Stack.Screen name="offer/[id]" options={{ animation: "slide_from_right" }} />
               <Stack.Screen name="(office)" />
               <Stack.Screen name="office/job/[id]" options={{ animation: "slide_from_right" }} />
               <Stack.Screen name="office/thread/[techId]" options={{ animation: "slide_from_right" }} />

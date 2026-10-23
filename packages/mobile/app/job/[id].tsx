@@ -66,6 +66,7 @@ import { isVoiceNoteSupported, startVoiceNote, uploadVoiceNote, type Recording }
 import { MyVoiceNotes } from "../../components/my-voice-notes";
 import { CoachAnchor } from "../../components/coach-tour";
 import { isPracticeJob, isSampleJob } from "../../lib/practice";
+import { offerPath } from "../../lib/offer";
 import { JobForm, type JobFormHandle } from "../../components/job-form";
 import { jobFormKey, jobFormScope, useJobForm } from "../../lib/forms/use-job-form";
 import { formIncomplete, missingSummary, type MissingQuestion } from "../../lib/forms/job-form-data";
@@ -174,6 +175,15 @@ export default function JobDetail() {
     },
     refetchInterval: 15000,
   });
+
+  // An offer the tech hasn't answered yet belongs on the offer screen, where
+  // they can see the drive, pay and scope and accept or decline. Without this
+  // a tapped push landed here and offered "Start Driving" on a job they had
+  // never accepted.
+  const offered = job.data?.assignStatus === "offered";
+  useEffect(() => {
+    if (offered && id) router.replace(offerPath(id) as never);
+  }, [offered, id, router]);
 
   // Job forms v2. `null` = this job wasn't booked on a v2 form, so the
   // read-only custom fields and the legacy checklist below stay as they were.
@@ -800,6 +810,7 @@ export default function JobDetail() {
   if (job.isLoading) return <FullLoader />;
   const j = job.data;
   if (!j) return <FullLoader label="Not found" />;
+  if (offered) return <FullLoader />;
 
   const action = FLOW[j.status];
   const practice = isPracticeJob(j);

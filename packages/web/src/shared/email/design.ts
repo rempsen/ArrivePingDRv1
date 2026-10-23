@@ -430,6 +430,7 @@ export const EMAIL_SAMPLE_VARS = {
   propertyUrl: "https://arriveping.com/p/abc123def456",
   delayMins: 20,
   newWhen: "2:50 PM",
+  reason: "Schedule conflict",
 };
 
 /* -------------------------------------------------------------- plain text -- */

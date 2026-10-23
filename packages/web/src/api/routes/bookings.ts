@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { assignJob } from "../../services/assign";
 import { findAvailabilityBlock } from "../../services/availability";
@@ -22,6 +22,7 @@ import { isFeatureOn } from "../../services/features";
 import { sendFormCopy } from "../../services/form-copy";
 import { forwardGeocode } from "../../services/geocode";
 import { jobTimeline, logJobEvent } from "../../services/job-events";
+import { buildOfferPreview } from "../../services/job-offer";
 import {
   answeredCountFor,
   closeJobForm,
@@ -47,6 +48,7 @@ import {
   OUTSIDE_ZONE_MESSAGE_ADMIN,
 } from "../../services/zones";
 import { isTerminalStatus } from "../../shared/job-status";
+import { DECLINE_REASONS, declineDetail } from "../../shared/offer";
 import { fmtInZone, zonedDayBounds } from "../../shared/tz";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
@@ -470,8 +472,15 @@ const SignatureBody = z.object({
   height: z.number().finite().min(1).max(10_000).optional(),
   name: shortText("Printed name", 120),
 });
+/**
+ * Declining an offer. Current apps send a fixed `code` (DECLINE_REASONS in
+ * shared/offer.ts) and an optional `note`; older apps and the web tech app
+ * send free text in `reason`, which is kept as written.
+ */
 const DeclineBody = z.object({
   reason: longText(2_000).optional().default(""),
+  code: z.enum(DECLINE_REASONS).optional(),
+  note: longText(2_000).optional().default(""),
 });
 
 /** Customer-initiated appointment changes (see shared/change-policy.ts). */
@@ -482,6 +491,22 @@ const RescheduleRequestBody = z.object({
 const CancelRequestBody = z.object({
   reason: longText(2_000).optional().default(""),
 });
+
+/**
+ * May the caller act on this job's offer? The tech it's offered to may, and so
+ * may the office (accepting or declining on a tech's behalf). Anyone else in
+ * the tenant may not: without this, any signed-in user could accept or
+ * decline someone else's offer.
+ */
+async function offerHolder(
+  c: Context<AppEnv>,
+  b: { riderId: string | null },
+): Promise<{ allowed: boolean; rider: typeof schema.riders.$inferSelect | null }> {
+  const u = c.get("user") as SessionUser;
+  const rider = (b.riderId ? await tx(c).selectOne(schema.riders, eq(schema.riders.id, b.riderId)) : null) ?? null;
+  if (rider && rider.userId === u.id) return { allowed: true, rider };
+  return { allowed: await officeCan(u, "work_orders:edit"), rider };
+}
 
 /**
  * Why a tech is dropping a job they already ACCEPTED. Fixed list (so the office
@@ -1423,14 +1448,32 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // office reassigned, cancelled, or another tech already grabbed it (or a
   // duplicate tap / multi-node race fires twice), 0 rows update and we return
   // 409 instead of silently clobbering a newer state.
+  // What a tech needs to decide on an offer: drive time and distance from
+  // where they are, estimated pay, and the scope. Only the tech it's offered
+  // to (or the office) can read it.
+  .get("/:id/offer", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    const t = tx(c);
+    const cur = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!cur) return c.json({ message: "Not found" }, 404);
+    const holder = await offerHolder(c, cur);
+    if (!holder.allowed) return c.json({ message: "Forbidden" }, 403);
+    const offer = await buildOfferPreview(tenantId(c), cur, holder.rider);
+    return c.json({ offer }, 200);
+  })
   .post("/:id/accept", requireAuth, async (c) => {
     const id = c.req.param("id");
+    const cur = await tx(c).selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!cur) return c.json({ message: "Not found" }, 404);
+    // Only the tech the job is offered to (or the office, on their behalf).
+    if (!(await offerHolder(c, cur)).allowed) return c.json({ message: "Forbidden" }, 403);
     const [b] = await tx(c).update(
       schema.bookings,
       { assignStatus: "accepted", acceptedAt: new Date() },
       and(
         eq(schema.bookings.id, id),
         eq(schema.bookings.assignStatus, "offered"),
+        cur.riderId ? eq(schema.bookings.riderId, cur.riderId) : isNull(schema.bookings.riderId),
       ),
     );
     if (!b) throw Err.conflict("This job is no longer available to accept.");
@@ -1440,15 +1483,33 @@ export const bookingsRoutes = new Hono<AppEnv>()
   // tech declines an offered job -> back to dispatch queue, notify office
   .post("/:id/decline", requireAuth, jsonBody(DeclineBody), async (c) => {
     const id = c.req.param("id");
-    const { reason } = c.req.valid("json");
+    const body = c.req.valid("json");
+    const detail = declineDetail(body);
     const t = tx(c);
     const cur = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+    if (!cur) return c.json({ message: "Not found" }, 404);
+    // Only the tech the job is offered to (or the office, on their behalf).
+    if (!(await offerHolder(c, cur)).allowed) return c.json({ message: "Forbidden" }, 403);
     // Only an OFFERED job can be declined. Guards against a stale tap after the
     // office already pulled/reassigned the job (would otherwise wrongly null
     // out a freshly-assigned rider).
-    if (!cur || cur.assignStatus !== "offered") {
+    if (cur.assignStatus !== "offered") {
       throw Err.conflict("This job is no longer pending your response.");
     }
+    // Write the reason while the job is still offered to this tech, so the
+    // "declined" notice and timeline entry (which read it off the row) say
+    // why, and riderId still names who declined. Compare-and-set: a job the
+    // office just moved changes 0 rows and answers 409.
+    const [claimed] = await t.update(
+      schema.bookings,
+      { declineReason: detail },
+      and(
+        eq(schema.bookings.id, id),
+        eq(schema.bookings.assignStatus, "offered"),
+        cur.riderId ? eq(schema.bookings.riderId, cur.riderId) : isNull(schema.bookings.riderId),
+      ),
+    );
+    if (!claimed) throw Err.conflict("This job is no longer pending your response.");
     // free the tech, return to queue (unassigned + confirmed)
     if (cur.riderId) {
       await t.update(
@@ -1465,7 +1526,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
         riderId: null,
         status: "confirmed",
         assignStatus: "declined",
-        declineReason: reason || "",
+        declineReason: detail,
         autoAssignedRuleId: "",
         autoAssignedAt: null,
       },
