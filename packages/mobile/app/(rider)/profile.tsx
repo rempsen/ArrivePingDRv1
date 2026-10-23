@@ -1,32 +1,70 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator, Linking } from "react-native";
-import * as Haptics from "expo-haptics";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import * as ImagePicker from "expo-image-picker";
-import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Signpost, SquaresFour, CalendarBlank } from "phosphor-react-native";
-import { api } from "../../lib/api";
-import { authClient, clearToken, authHeaders } from "../../lib/auth";
-import { unregisterPushToken } from "../../lib/push";
-import { stopLocationSharing } from "../../lib/use-location-heartbeat";
-import { endAllLiveActivities } from "../../lib/useLiveActivity";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
-import { C, R, WIDE } from "../../lib/theme";
-import { Avatar, Card, Button, FullLoader, Row } from "../../components/ui";
-import { isBiometricAvailable, getLockPreference, setLockPreference, clearUnlockStamp } from "../../lib/biometric-lock";
-import { clearActiveCompany, getActiveCompany, setActiveCompany } from "../../lib/active-company";
-import { useMyCompanies } from "../../lib/my-companies";
-import { useNotifySummary, companyCount } from "../../lib/notify-summary";
-import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../../components/company-alert";
-import { DeleteAccountSheet } from "../../components/delete-account-sheet";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import {
+  CalendarBlank,
+  Camera,
+  CaretRight,
+  FileText,
+  Lifebuoy,
+  ShieldCheck,
+  SignOut,
+  Signpost,
+  SquaresFour,
+} from "phosphor-react-native";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { CoachAnchor, useCoach } from "../../components/coach-tour";
-import { useShift } from "../../lib/shift";
+import {
+  CompanyAlertLine,
+  companyAlertText,
+  CompanyBadge,
+} from "../../components/company-alert";
+import { DeleteAccountSheet } from "../../components/delete-account-sheet";
+import { Avatar, Button, Card, FullLoader, Row } from "../../components/ui";
+import {
+  clearActiveCompany,
+  getActiveCompany,
+  setActiveCompany,
+} from "../../lib/active-company";
+import { api } from "../../lib/api";
 import { resolveMode } from "../../lib/app-mode";
 import { getSavedMode, setSavedMode } from "../../lib/app-mode-store";
-import { disconnectCalendar, useCalendarSyncSettings } from "../../lib/calendar-sync";
+import { authClient, authHeaders, clearToken } from "../../lib/auth";
+import {
+  clearUnlockStamp,
+  getLockPreference,
+  isBiometricAvailable,
+  setLockPreference,
+} from "../../lib/biometric-lock";
+import {
+  disconnectCalendar,
+  useCalendarSyncSettings,
+} from "../../lib/calendar-sync";
+import { useMyCompanies } from "../../lib/my-companies";
+import { companyCount, useNotifySummary } from "../../lib/notify-summary";
+import { pickPhoto } from "../../lib/pick-photo";
+import { unregisterPushToken } from "../../lib/push";
+import { useShift } from "../../lib/shift";
+import { C, R, WIDE } from "../../lib/theme";
+import { stopLocationSharing } from "../../lib/use-location-heartbeat";
+import { endAllLiveActivities } from "../../lib/useLiveActivity";
 
-const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
+const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(
+  /\/$/,
+  "",
+);
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
 
 export default function Profile() {
@@ -37,7 +75,8 @@ export default function Profile() {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const calendarSync = useCalendarSyncSettings();
-  const calendarOn = !!calendarSync && calendarSync.userId === session?.user?.id;
+  const calendarOn =
+    !!calendarSync && calendarSync.userId === session?.user?.id;
 
   const biometric = useQuery({
     queryKey: ["biometric-lock"],
@@ -71,15 +110,23 @@ export default function Profile() {
 
   // An owner who dispatches AND runs calls can go back to office mode from
   // here; the office Profile has the matching switch (lib/app-mode.ts).
-  const thisCompany = companies.data?.find((co) => co.id === activeCompany) ?? (companies.data?.length === 1 ? companies.data[0] : undefined);
+  const thisCompany =
+    companies.data?.find((co) => co.id === activeCompany) ??
+    (companies.data?.length === 1 ? companies.data[0] : undefined);
   const canSwitchToOffice = thisCompany
-    ? resolveMode({ role: thisCompany.role, staffType: thisCompany.staffType, saved: getSavedMode() }).canSwitch
+    ? resolveMode({
+        role: thisCompany.role,
+        staffType: thisCompany.staffType,
+        saved: getSavedMode(),
+      }).canSwitch
     : false;
   const toOffice = useMutation({
     mutationFn: async () => {
       // Same as a company switch: dispatch must not keep offering work to a
       // phone that is no longer showing the technician screens.
-      await api.riders.me.$patch({ json: { status: "offline" } }).catch(() => {});
+      await api.riders.me
+        .$patch({ json: { status: "offline" } })
+        .catch(() => {});
       await stopLocationSharing().catch(() => {});
       await setSavedMode("office");
     },
@@ -87,7 +134,8 @@ export default function Profile() {
       qc.clear();
       router.replace("/(office)");
     },
-    onError: () => Alert.alert("Couldn't switch", "Check your connection and try again."),
+    onError: () =>
+      Alert.alert("Couldn't switch", "Check your connection and try again."),
   });
 
   const switching = useMutation({
@@ -95,7 +143,9 @@ export default function Profile() {
       // Go offline first. Staying "available" under company A while the app
       // starts asking for company B's jobs would leave dispatch at A able to
       // assign work to a tech who is no longer looking at their board.
-      await api.riders.me.$patch({ json: { status: "offline" } }).catch(() => {});
+      await api.riders.me
+        .$patch({ json: { status: "offline" } })
+        .catch(() => {});
       await stopLocationSharing().catch(() => {});
       await setActiveCompany(companyId);
       return companyId;
@@ -107,7 +157,8 @@ export default function Profile() {
       qc.clear();
       router.replace("/(rider)");
     },
-    onError: () => Alert.alert("Couldn't switch", "Check your connection and try again."),
+    onError: () =>
+      Alert.alert("Couldn't switch", "Check your connection and try again."),
   });
 
   const me = useQuery({
@@ -122,20 +173,13 @@ export default function Profile() {
   // The same shift as the Sign in button on Jobs (lib/shift.ts).
   const shift = useShift();
 
-  async function pickPhoto() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Permission needed", "Allow photo access to update your headshot.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+  async function changeHeadshot() {
+    const asset = await pickPhoto("library", "update your headshot", {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
     });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
+    if (!asset) return;
     setUploading(true);
     try {
       const form = new FormData();
@@ -209,11 +253,16 @@ export default function Profile() {
       qc.clear();
       router.replace("/sign-in");
     }
-    Alert.alert("Account deleted", "Your ArrivePing account has been deleted. Thanks for riding with us.");
+    Alert.alert(
+      "Account deleted",
+      "Your ArrivePing account has been deleted. Thanks for riding with us.",
+    );
   }
 
   function openLink(path: string) {
-    Linking.openURL(`${API}${path}`).catch(() => Alert.alert("Couldn't open link", `${API}${path}`));
+    Linking.openURL(`${API}${path}`).catch(() =>
+      Alert.alert("Couldn't open link", `${API}${path}`),
+    );
   }
 
   if (me.isLoading) return <FullLoader />;
@@ -232,62 +281,85 @@ export default function Profile() {
       <View style={s.header}>
         <Text style={s.title}>Profile</Text>
       </View>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={s.idCard}>
           <Pressable
-            onPress={pickPhoto}
+            onPress={changeHeadshot}
             style={s.avatarWrap}
             accessibilityRole="button"
             accessibilityLabel="Change profile photo"
           >
-            <Avatar name={session?.user?.name} photoUrl={rider?.photoUrl} size={88} />
+            <Avatar
+              name={session?.user?.name}
+              photoUrl={rider?.photoUrl}
+              size={88}
+            />
             <View style={s.camBadge}>
-              {uploading ? <ActivityIndicator color="#fff" size="small" /> : <Camera color="#fff" size={16} weight="fill" />}
+              {uploading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Camera color="#fff" size={16} weight="fill" />
+              )}
             </View>
           </Pressable>
           <Text style={s.name}>{session?.user?.name || "Technician"}</Text>
           <Text style={s.email}>{session?.user?.email}</Text>
           <View style={[s.statusChip, onShift ? s.onChip : s.offChip]}>
             <View style={[s.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[s.statusTxt, { color: statusColor }]}>{statusLabel}</Text>
+            <Text style={[s.statusTxt, { color: statusColor }]}>
+              {statusLabel}
+            </Text>
           </View>
         </View>
 
         <CoachAnchor id="profile.clock">
-        <Card>
-          <View style={s.availRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.availTitle}>On the clock</Text>
-              <Text style={s.availSub}>
-                {busy
-                  ? "You have active jobs — you stay Busy until they're done or reassigned."
-                  : onShift
-                  ? "You're available to receive new job offers."
-                  : "You're offline and won't receive new offers."}
-              </Text>
+          <Card>
+            <View style={s.availRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.availTitle}>On the clock</Text>
+                <Text style={s.availSub}>
+                  {busy
+                    ? "You have active jobs — you stay Busy until they're done or reassigned."
+                    : onShift
+                      ? "You're available to receive new job offers."
+                      : "You're offline and won't receive new offers."}
+                </Text>
+              </View>
+              <Pressable
+                onPress={shift.toggle}
+                style={[s.toggle, onShift && s.toggleOn]}
+                accessibilityRole="switch"
+                accessibilityLabel="On the clock"
+                accessibilityState={{ checked: onShift, busy: shift.pending }}
+                accessibilityHint={
+                  onShift
+                    ? "Double tap to go off shift"
+                    : "Double tap to go on shift"
+                }
+              >
+                {shift.pending ? (
+                  <ActivityIndicator
+                    color={onShift ? "#03130d" : C.sub}
+                    size="small"
+                  />
+                ) : (
+                  <View style={[s.knob, onShift && s.knobOn]} />
+                )}
+              </Pressable>
             </View>
-            <Pressable
-              onPress={shift.toggle}
-              style={[s.toggle, onShift && s.toggleOn]}
-              accessibilityRole="switch"
-              accessibilityLabel="On the clock"
-              accessibilityState={{ checked: onShift, busy: shift.pending }}
-              accessibilityHint={onShift ? "Double tap to go off shift" : "Double tap to go on shift"}
-            >
-              {shift.pending ? (
-                <ActivityIndicator color={onShift ? "#03130d" : C.sub} size="small" />
-              ) : (
-                <View style={[s.knob, onShift && s.knobOn]} />
-              )}
-            </Pressable>
-          </View>
-        </Card>
+          </Card>
         </CoachAnchor>
 
         {canSwitchToOffice && (
           <Card>
             <Text style={s.cardTitle}>Office mode</Text>
-            <Text style={s.availSub}>Dispatch board, jobs and team messaging. You'll go off shift when you switch.</Text>
+            <Text style={s.availSub}>
+              Dispatch board, jobs and team messaging. You'll go off shift when
+              you switch.
+            </Text>
             <Button
               title="Switch to office mode"
               variant="outline"
@@ -312,17 +384,29 @@ export default function Profile() {
               </View>
               <Pressable
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+                    () => {},
+                  );
                   toggleBiometric.mutate(!biometric.data!.enabled);
                 }}
                 style={[s.toggle, biometric.data.enabled && s.toggleOn]}
                 accessibilityRole="switch"
                 accessibilityLabel="Face ID / Fingerprint Lock"
-                accessibilityState={{ checked: biometric.data.enabled, busy: toggleBiometric.isPending }}
-                accessibilityHint={biometric.data.enabled ? "Double tap to turn off" : "Double tap to turn on"}
+                accessibilityState={{
+                  checked: biometric.data.enabled,
+                  busy: toggleBiometric.isPending,
+                }}
+                accessibilityHint={
+                  biometric.data.enabled
+                    ? "Double tap to turn off"
+                    : "Double tap to turn on"
+                }
               >
                 {toggleBiometric.isPending ? (
-                  <ActivityIndicator color={biometric.data.enabled ? "#03130d" : C.sub} size="small" />
+                  <ActivityIndicator
+                    color={biometric.data.enabled ? "#03130d" : C.sub}
+                    size="small"
+                  />
                 ) : (
                   <View style={[s.knob, biometric.data.enabled && s.knobOn]} />
                 )}
@@ -335,8 +419,9 @@ export default function Profile() {
           <Card>
             <Text style={s.cardTitle}>Working for</Text>
             <Text style={s.availSub}>
-              You're on {companies.data!.length} rosters. Switching reloads your jobs for that
-              company — anything in progress stays with the company you started it under.
+              You're on {companies.data!.length} rosters. Switching reloads your
+              jobs for that company — anything in progress stays with the
+              company you started it under.
             </Text>
             <View style={{ gap: 8, marginTop: 12 }}>
               {companies.data!.map((co) => {
@@ -353,7 +438,9 @@ export default function Profile() {
                     key={co.id}
                     disabled={isActive || switching.isPending}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                      Haptics.impactAsync(
+                        Haptics.ImpactFeedbackStyle.Medium,
+                      ).catch(() => {});
                       Alert.alert(
                         `Switch to ${co.name}?`,
                         alert
@@ -361,24 +448,37 @@ export default function Profile() {
                           : "Your job list will reload to show only this company's work.",
                         [
                           { text: "Cancel", style: "cancel" },
-                          { text: "Switch", onPress: () => switching.mutate(co.id) },
+                          {
+                            text: "Switch",
+                            onPress: () => switching.mutate(co.id),
+                          },
                         ],
                       );
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={
-                      alert ? `Switch to ${co.name}. ${alert} waiting.` : `Switch to ${co.name}`
+                      alert
+                        ? `Switch to ${co.name}. ${alert} waiting.`
+                        : `Switch to ${co.name}`
                     }
                     accessibilityState={{ selected: isActive }}
-                    style={[s.coRow, isActive && s.coRowActive, waiting && s.coRowWaiting]}
+                    style={[
+                      s.coRow,
+                      isActive && s.coRowActive,
+                      waiting && s.coRowWaiting,
+                    ]}
                   >
                     <View style={[s.coAvatar, waiting && s.coAvatarWaiting]}>
-                      <Text style={[s.coAvatarTxt, waiting && { color: C.red }]}>
+                      <Text
+                        style={[s.coAvatarTxt, waiting && { color: C.red }]}
+                      >
                         {co.name?.[0]?.toUpperCase() ?? "?"}
                       </Text>
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={s.coName} numberOfLines={1}>{co.name}</Text>
+                      <Text style={s.coName} numberOfLines={1}>
+                        {co.name}
+                      </Text>
                       {waiting ? (
                         <CompanyAlertLine n={n} />
                       ) : (
@@ -405,8 +505,14 @@ export default function Profile() {
           <Text style={s.cardTitle}>Details</Text>
           <Row label="Skill class" value={rider?.skillClass} />
           <Row label="Vehicle" value={rider?.vehicle} />
-          <Row label="Phone" value={(session?.user as any)?.phone || rider?.phone} />
-          <Row label="Completed jobs" value={String(rider?.completedJobs ?? 0)} />
+          <Row
+            label="Phone"
+            value={(session?.user as any)?.phone || rider?.phone}
+          />
+          <Row
+            label="Completed jobs"
+            value={String(rider?.completedJobs ?? 0)}
+          />
           <Row label="License plate" value={rider?.licensePlate} />
         </Card>
 
@@ -420,7 +526,9 @@ export default function Profile() {
           >
             <CalendarBlank color={C.sub} size={18} />
             <Text style={s.linkTxt}>Calendar sync</Text>
-            <Text style={[s.linkState, calendarOn && { color: C.green }]}>{calendarOn ? "On" : "Off"}</Text>
+            <Text style={[s.linkState, calendarOn && { color: C.green }]}>
+              {calendarOn ? "On" : "Off"}
+            </Text>
             <CaretRight color={C.muted} size={16} />
           </Pressable>
           <Pressable
@@ -460,7 +568,12 @@ export default function Profile() {
           ))}
         </Card>
 
-        <Button title="Sign out" variant="danger" icon={<SignOut color="#fff" size={18} weight="bold" />} onPress={signOut} />
+        <Button
+          title="Sign out"
+          variant="danger"
+          icon={<SignOut color="#fff" size={18} weight="bold" />}
+          onPress={signOut}
+        />
         <Pressable
           onPress={() => setDeleting(true)}
           style={s.deleteLink}
@@ -472,7 +585,11 @@ export default function Profile() {
         </Pressable>
         <Text style={s.foot}>ArrivePing Technician · v{APP_VERSION}</Text>
       </ScrollView>
-      <DeleteAccountSheet open={deleting} onClose={() => setDeleting(false)} onDeleted={afterDeleted} />
+      <DeleteAccountSheet
+        open={deleting}
+        onClose={() => setDeleting(false)}
+        onDeleted={afterDeleted}
+      />
     </SafeAreaView>
   );
 }
@@ -488,7 +605,10 @@ const s = StyleSheet.create({
     borderColor: C.border,
     padding: 12,
   },
-  coRowActive: { borderColor: C.brand, backgroundColor: "rgba(14,165,233,0.10)" },
+  coRowActive: {
+    borderColor: C.brand,
+    backgroundColor: "rgba(14,165,233,0.10)",
+  },
   coRowWaiting: { borderColor: C.red, backgroundColor: "rgba(239,68,68,0.08)" },
   coAvatarWaiting: { backgroundColor: "rgba(239,68,68,0.16)" },
   coAvatar: {
@@ -562,11 +682,32 @@ const s = StyleSheet.create({
   toggleOn: { backgroundColor: C.green, borderColor: C.green },
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.muted },
   knobOn: { backgroundColor: "#03130d", alignSelf: "flex-end" },
-  cardTitle: { color: C.text, fontSize: 15, fontWeight: "700", marginBottom: 6 },
-  linkRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  cardTitle: {
+    color: C.text,
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 11,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+  },
   linkState: { color: C.muted, fontSize: 13, fontWeight: "700" },
   linkTxt: { color: C.text, fontSize: 14.5, flex: 1 },
-  deleteLink: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 16 },
-  deleteTxt: { color: C.muted, fontSize: 13.5, fontWeight: "600", textDecorationLine: "underline" },
+  deleteLink: {
+    alignSelf: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  deleteTxt: {
+    color: C.muted,
+    fontSize: 13.5,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
   foot: { color: C.muted, fontSize: 12, textAlign: "center", marginTop: 8 },
 });

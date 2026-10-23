@@ -41,7 +41,7 @@ import {
   type KeyboardTypeOptions,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
+import { choosePhotoSource, pickPhoto, type PhotoSource } from "../lib/pick-photo";
 import { useMutationState, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowClockwise,
@@ -870,19 +870,9 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
 
   const urlFor = (id: string) => localUrls[id] ?? photos?.find((p) => p.id === id)?.url;
 
-  async function take(source: "camera" | "library") {
-    const perm =
-      source === "camera" ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(source === "camera" ? "Camera needed" : "Photos access needed", "Allow access to attach photos to this question.");
-      return;
-    }
-    const result =
-      source === "camera"
-        ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
-        : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ["images"] });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
+  async function take(source: PhotoSource) {
+    const asset = await pickPhoto(source, "attach photos to this question");
+    if (!asset) return;
     const tappedAt = new Date();
     setBusy(true);
     try {
@@ -908,11 +898,7 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
   }
 
   function add() {
-    Alert.alert("Add photo", undefined, [
-      { text: "Take photo", onPress: () => take("camera") },
-      { text: "Choose from library", onPress: () => take("library") },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    choosePhotoSource(take);
   }
 
   function remove(id: string) {
