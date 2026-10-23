@@ -26,6 +26,7 @@ and never mounts the location heartbeat.
 
 ### iPad (added 2026-10-23)
 `lib/layout.ts` `isWideLayout(width, device)` — a tablet at ≥ 768 pt — switches each tab to `components/office/split-screen.tsx` (list 380 pt | detail). `JobDetail`, `ThreadView` and `TechDetail` (`components/office/*`) render embedded in the pane or full-screen from the phone routes and push taps. Today goes two-column at ≥ 1000 pt. iPad rotates (`UISupportedInterfaceOrientations~ipad` in `app.json`; iPhone stays portrait) — a plist change, so it needs a new EAS build to see. Spec: `docs/superpowers/specs/2026-10-23-mobile-ipad-office-design.md`.
+- Team → List | Map: `components/office/live-map.tsx` on `react-native-maps` (Apple Maps on iOS, no key; Android needs a Google Maps key in `app.json` before it ships there). Technicians as status-ringed initials, open jobs as pins by assign state (`lib/map-pins.ts`); positions come off the board, refreshed by the stream's `locations` event. New native module → new EAS build.
 
 ## Screens (packages/mobile/app)
 - `index.tsx` — boot: route to sign-in, then the company pick, then (rider) or (office) by role.
