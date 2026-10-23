@@ -48,7 +48,7 @@ import {
   OUTSIDE_ZONE_MESSAGE_ADMIN,
 } from "../../services/zones";
 import { isTerminalStatus } from "../../shared/job-status";
-import { DECLINE_REASONS, declineDetail } from "../../shared/offer";
+import { DECLINE_REASONS, declineDetail, type DeclineReason } from "../../shared/offer";
 import { fmtInZone, zonedDayBounds } from "../../shared/tz";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
@@ -479,7 +479,12 @@ const SignatureBody = z.object({
  */
 const DeclineBody = z.object({
   reason: longText(2_000).optional().default(""),
-  code: z.enum(DECLINE_REASONS).optional(),
+  // Unknown codes (an older app's list) read as "other" rather than failing.
+  code: z
+    .string()
+    .max(40)
+    .optional()
+    .transform((v) => (v === undefined ? undefined : (DECLINE_REASONS as readonly string[]).includes(v) ? (v as DeclineReason) : ("other" as const))),
   note: longText(2_000).optional().default(""),
 });
 
@@ -501,11 +506,11 @@ const CancelRequestBody = z.object({
 async function offerHolder(
   c: Context<AppEnv>,
   b: { riderId: string | null },
-): Promise<{ allowed: boolean; rider: typeof schema.riders.$inferSelect | null }> {
+): Promise<{ allowed: boolean; isHolder: boolean; rider: typeof schema.riders.$inferSelect | null }> {
   const u = c.get("user") as SessionUser;
   const rider = (b.riderId ? await tx(c).selectOne(schema.riders, eq(schema.riders.id, b.riderId)) : null) ?? null;
-  if (rider && rider.userId === u.id) return { allowed: true, rider };
-  return { allowed: await officeCan(u, "work_orders:edit"), rider };
+  if (rider && rider.userId === u.id) return { allowed: true, isHolder: true, rider };
+  return { allowed: await officeCan(u, "work_orders:edit"), isHolder: false, rider };
 }
 
 /**
@@ -1458,7 +1463,10 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (!cur) return c.json({ message: "Not found" }, 404);
     const holder = await offerHolder(c, cur);
     if (!holder.allowed) return c.json({ message: "Forbidden" }, 403);
-    const offer = await buildOfferPreview(tenantId(c), cur, holder.rider);
+    // The pay estimate reveals the tech's rates: the tech themselves, or
+    // office users who may see payouts.
+    const showPay = holder.isHolder || (await officeCan(c.get("user") as SessionUser, "payouts:view"));
+    const offer = await buildOfferPreview(tenantId(c), cur, holder.rider, { showPay });
     return c.json({ offer }, 200);
   })
   .post("/:id/accept", requireAuth, async (c) => {
@@ -1496,30 +1504,26 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (cur.assignStatus !== "offered") {
       throw Err.conflict("This job is no longer pending your response.");
     }
-    // Write the reason while the job is still offered to this tech, so the
-    // "declined" notice and timeline entry (which read it off the row) say
-    // why, and riderId still names who declined. Compare-and-set: a job the
-    // office just moved changes 0 rows and answers 409.
+    // Claim the decline by moving the job out of "offered" in one
+    // compare-and-set, with the reason on it, while riderId still names who
+    // declined (the "declined" notice and timeline read both off the row).
+    // A second tap, or the office moving the job meanwhile, changes 0 rows and
+    // answers 409, so the office is told once.
+    const holderRider = cur.riderId;
     const [claimed] = await t.update(
       schema.bookings,
-      { declineReason: detail },
+      { assignStatus: "declined", declineReason: detail },
       and(
         eq(schema.bookings.id, id),
         eq(schema.bookings.assignStatus, "offered"),
-        cur.riderId ? eq(schema.bookings.riderId, cur.riderId) : isNull(schema.bookings.riderId),
+        holderRider ? eq(schema.bookings.riderId, holderRider) : isNull(schema.bookings.riderId),
       ),
     );
     if (!claimed) throw Err.conflict("This job is no longer pending your response.");
-    // free the tech, return to queue (unassigned + confirmed)
-    if (cur.riderId) {
-      await t.update(
-        schema.riders,
-        { status: "available" },
-        eq(schema.riders.id, cur.riderId),
-      );
-    }
-    // fire declined first (while riderId still resolves to the tech who declined)
     await fireEvent("declined", id);
+    // Back to the queue. Compare-and-set on the claim: if the office already
+    // re-offered it (to anyone) while the notice went out, leave their
+    // assignment alone.
     const [b] = await t.update(
       schema.bookings,
       {
@@ -1532,10 +1536,16 @@ export const bookingsRoutes = new Hono<AppEnv>()
       },
       and(
         eq(schema.bookings.id, id),
-        eq(schema.bookings.assignStatus, "offered"),
+        eq(schema.bookings.assignStatus, "declined"),
+        holderRider ? eq(schema.bookings.riderId, holderRider) : isNull(schema.bookings.riderId),
       ),
     );
-    if (!b) throw Err.conflict("This job is no longer pending your response.");
+    // free the tech (presence works out on-a-job vs. available)
+    if (holderRider) await reconcileRiderStatus(tenantId(c), holderRider).catch(() => {});
+    if (!b) {
+      const now = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
+      return c.json({ booking: now ? await enrich(now) : null }, 200);
+    }
     return c.json({ booking: await enrich(b) }, 200);
   })
   // update status (rider/admin) -> triggers notifications + emails

@@ -184,6 +184,12 @@ describe("GET /bookings/:id/offer", () => {
       route: async () => ({ path: [], durationSec: 1260, staticDurationSec: null, distanceM: 14_250, provider: "osrm" }),
     });
     expect(offer.drive).toEqual({ km: 14.3, mins: 21, provider: "osrm", locationAgeMins: 2, fresh: true });
+    // Someone who may not see payouts gets everything but the pay.
+    const noPay = await buildOfferPreview(CO, booking!, rider, {
+      showPay: false,
+      route: async () => ({ path: [], durationSec: 1260, staticDurationSec: null, distanceM: 14_250, provider: "osrm" }),
+    });
+    expect(noPay.pay).toBeNull();
     if (offer.pay) {
       // 1.5 h at $40 + 20 ft at $2 + 14.3 km each way at $0.50
       expect(offer.pay.hourlyPay).toBe(60);
@@ -257,13 +263,32 @@ describe("POST /bookings/:id/decline", () => {
     expect((await row("ofr-dec-2")).decline_reason).toBe("Declined from app");
   });
 
-  it("refuses a tech the job isn't offered to, and an unknown reason", async () => {
+  it("refuses a tech the job isn't offered to", async () => {
     await seedOffer("ofr-dec-3");
     expect((await call("POST", "/ofr-dec-3/decline", OTHER_USER, { code: "too_far" })).status).toBe(403);
-    expect((await call("POST", "/ofr-dec-3/decline", HOLDER_USER, { code: "bored" })).status).toBe(400);
     const b = await row("ofr-dec-3");
     expect(b.assign_status).toBe("offered");
     expect(b.rider_id).toBe(HOLDER_RIDER);
+  });
+
+  it("reads a reason it doesn't know (an older app's list) as Other", async () => {
+    await seedOffer("ofr-dec-5");
+    expect((await call("POST", "/ofr-dec-5/decline", HOLDER_USER, { code: "bored", note: "x" })).status).toBe(200);
+    expect((await row("ofr-dec-5")).decline_reason).toBe("Other — x");
+  });
+
+  it("tells the office once when the tech taps Decline twice", async () => {
+    await seedOffer("ofr-dec-6");
+    const [a, b] = await Promise.all([
+      call("POST", "/ofr-dec-6/decline", HOLDER_USER, { code: "personal" }),
+      call("POST", "/ofr-dec-6/decline", HOLDER_USER, { code: "personal" }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const ev = await sqlClient().execute({
+      sql: "SELECT count(*) AS n FROM job_events WHERE booking_id = ? AND kind = 'declined'",
+      args: ["ofr-dec-6"],
+    });
+    expect(Number((ev.rows[0] as any).n)).toBe(1);
   });
 
   it("lets the office decline on a tech's behalf", async () => {

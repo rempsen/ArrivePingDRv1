@@ -23,7 +23,7 @@ export class OfferError extends Error {
   }
 }
 
-async function post(path: string, body?: unknown) {
+async function post(path: string, body?: unknown): Promise<any> {
   const res = await fetch(`${API}/api/bookings/${path}`, {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
@@ -33,9 +33,11 @@ async function post(path: string, body?: unknown) {
     const j = (await res.json().catch(() => null)) as any;
     throw new OfferError(j?.error?.message || j?.message || "Something went wrong. Try again.", res.status);
   }
+  return ((await res.json().catch(() => null)) as any)?.booking ?? null;
 }
 
-export function acceptOffer(id: string) {
+/** Accept an offer; resolves with the updated booking. */
+export function acceptOffer(id: string): Promise<any> {
   return post(`${encodeURIComponent(id)}/accept`);
 }
 
@@ -55,6 +57,11 @@ export function useOfferActions() {
   };
   const accept = useMutation({
     mutationFn: (id: string) => acceptOffer(id),
+    // Put the accepted job in the cache straight away: the job screen opens
+    // next, and a stale "offered" copy there would send the tech back here.
+    onSuccess: (booking, id) => {
+      if (booking) qc.setQueryData(["job", id], booking);
+    },
     onSettled: (_d, _e, id) => refresh(id),
   });
   const decline = useMutation({

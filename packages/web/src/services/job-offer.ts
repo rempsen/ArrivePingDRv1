@@ -82,7 +82,7 @@ export async function buildOfferPreview(
   companyId: string,
   b: Booking,
   rider: Rider | null,
-  opts: { route?: typeof computeRoute; now?: number } = {},
+  opts: { route?: typeof computeRoute; now?: number; showPay?: boolean } = {},
 ): Promise<OfferPreview> {
   const t = tdb(companyId);
   const now = opts.now ?? Date.now();
@@ -121,8 +121,9 @@ export async function buildOfferPreview(
     }
   } else driveUnavailable = "no_location";
 
+  // The estimate reveals the tech's own rates, so only when the caller may see it.
   const pay =
-    rider && (await isFeatureOn(companyId, "payouts.tech_pay"))
+    rider && opts.showPay !== false && (await isFeatureOn(companyId, "payouts.tech_pay"))
       ? estimateOfferPay(b, rider, { onSiteMinutes: duration?.mins ?? 0, driveKm: drive?.km ?? null })
       : null;
 

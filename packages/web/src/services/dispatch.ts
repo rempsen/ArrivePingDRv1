@@ -208,7 +208,7 @@ export const TEMPLATE_VARS: { key: keyof Vars; label: string }[] = [
   { key: "customerNoun", label: "Tenant's word for a customer (e.g. \"Member\")" },
   { key: "delayMins", label: "Minutes late (running-late notice)" },
   { key: "newWhen", label: "Revised arrival time (running-late notice)" },
-  { key: "reason", label: "Why the technician declined or released the job" },
+  { key: "reason", label: "Why the technician declined or released the job (those notices only)" },
 ];
 
 /** Sample values used for live preview in the template editor. */
@@ -614,7 +614,11 @@ async function deliver(
   /** Set at the first message actually created or handed to a provider (see fireCustomEvent). */
   progress?: { sending: boolean },
 ) {
-  const { b, companyId, cust, rider, riderUser, vars } = ctx;
+  const { b, companyId, cust, rider, riderUser } = ctx;
+  // A tech's decline/release reason (which can carry their own note) is only
+  // for the declined and released notices, never for any later notice that
+  // happens to read {{reason}} off the job.
+  const vars: Vars = event === "declined" || event === "released" ? ctx.vars : { ...ctx.vars, reason: "" };
   const rules = await tdb(companyId).select(
     schema.notificationRules,
     and(

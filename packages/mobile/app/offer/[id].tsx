@@ -178,7 +178,8 @@ export default function OfferDetails() {
   const driveNote = (() => {
     if (!o) return "";
     if (o.drive) {
-      const from = o.drive.fresh ? "From where you are now" : `From your last known location, ${ago(o.drive.locationAgeMins)}`;
+      const when = ago(o.drive.locationAgeMins);
+      const from = o.drive.fresh ? "From where you are now" : `From your last known location${when ? `, ${when}` : ""}`;
       return o.drive.provider === "estimate" ? `${from} · straight-line estimate` : from;
     }
     if (o.driveUnavailable === "no_location") return "Turn on location sharing to see the drive.";

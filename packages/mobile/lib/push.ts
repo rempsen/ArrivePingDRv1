@@ -176,19 +176,30 @@ export function usePushNotifications() {
     // Offer pushes in the field app: Accept is done here, then the job opens.
     // If it can't be accepted (taken, changed, offline) the offer opens so the
     // tech sees why. Details and Decline open the offer screen.
-    const step = routing === "field" ? offerPushStep(data, response.actionIdentifier) : { kind: "none" as const };
-    if (step.kind === "accept") {
+    // The OS can report the same tapped push again on a later launch; forget
+    // it now so an old Accept can never accept a later offer of that job.
+    if (Platform.OS !== "web") Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
+    const step = offerPushStep(data, response.actionIdentifier);
+    const ageMs = Date.now() - (response.notification.date || Date.now());
+    if (step.kind === "accept" && ageMs < 30 * 60_000) {
       try {
-        await acceptOffer(step.bookingId);
+        const booking = await acceptOffer(step.bookingId);
+        if (booking) qc.setQueryData(["job", step.bookingId], booking);
         qc.invalidateQueries({ queryKey: ["bookings"] });
-        qc.invalidateQueries({ queryKey: ["job", step.bookingId] });
-        router.push(`/job/${step.bookingId}` as never);
+        router.push((routing === "office" ? `/office/job/${step.bookingId}` : `/job/${step.bookingId}`) as never);
       } catch {
+        // Taken, changed, another company's job, or offline: the offer screen
+        // says which.
         router.push(offerPath(step.bookingId) as never);
       }
       return;
     }
-    if (step.kind === "open") {
+    if (step.kind === "accept") {
+      // A stale Accept (the push is old): show the offer instead of acting.
+      router.push(offerPath(step.bookingId) as never);
+      return;
+    }
+    if (step.kind === "open" && routing === "field") {
       router.push(step.path as never);
       return;
     }
