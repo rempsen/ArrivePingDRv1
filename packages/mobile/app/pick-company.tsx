@@ -31,6 +31,7 @@ import {
 import { C, R, FORM } from "../lib/theme";
 import { Button } from "../components/ui";
 import { CompanyBadge, CompanyAlertLine, companyAlertText } from "../components/company-alert";
+import { apiErrorMessage } from "../lib/api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -164,10 +165,7 @@ export default function PickCompany() {
           headers: authHeaders({ "Content-Type": "application/json" }),
         });
         if (!res.ok) {
-          const msg =
-            ((await res.json().catch(() => ({}))) as { message?: string })?.message ??
-            `Couldn't accept (${res.status})`;
-          Alert.alert("Couldn't join", msg);
+          Alert.alert("Couldn't join", await apiErrorMessage(res, `Couldn't accept (${res.status})`));
           return;
         }
         await load();

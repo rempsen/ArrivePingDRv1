@@ -6,6 +6,7 @@ import Constants from "expo-constants";
 import { authHeaders } from "../lib/auth";
 import { C, R, assetUrl } from "../lib/theme";
 import { playVoiceNote, type Playback } from "../lib/voice-note";
+import { throwIfNotOk } from "../lib/api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -59,7 +60,7 @@ export function MyVoiceNotes({ bookingId }: { bookingId: string }) {
   const del = useMutation({
     mutationFn: async (n: Note) => {
       const res = await fetch(`${API}/api/bookings/${bookingId}/voice-notes/${n.id}`, { method: "DELETE", headers: authHeaders() });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Couldn't delete it");
+      await throwIfNotOk(res, "Couldn't delete it");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: notesKey });

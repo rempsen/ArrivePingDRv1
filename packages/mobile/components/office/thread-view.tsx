@@ -16,6 +16,7 @@ import { threadsKey } from "../../lib/use-threads";
 import { useBoard } from "../../lib/use-board";
 import { STATUS_LABEL } from "../../lib/board";
 import { useAccess } from "../../lib/use-access";
+import { throwIfNotOk } from "../../lib/api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -74,10 +75,7 @@ export function ThreadView({ techId, embedded }: { techId: string; embedded?: bo
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ body }),
       });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(j.message || `Couldn't send (${res.status})`);
-      }
+      await throwIfNotOk(res, `Couldn't send (${res.status})`);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key });
