@@ -98,6 +98,7 @@ packages/mobile/scripts/*
 
 # local upload fallback (runtime artifacts, not source)
 packages/web/uploads
+/uploads
 
 # Terraform. The provider plugin cache under .terraform/ contains vendored
 # binaries — the AWS provider alone is 845 MB, which GitHub rejects outright.
