@@ -89,15 +89,19 @@ export async function reconcileRiderStatus(companyId: string, riderId: string): 
         isNull(schema.bookings.deletedAt),
       ),
     )
-  ).map((b) => ({ id: b.id, status: b.status, assignStatus: b.assignStatus, scheduledAt: b.scheduledAt }));
+  ).map((b) => ({ id: b.id, status: b.status, assignStatus: b.assignStatus, scheduledAt: b.scheduledAt, isSample: b.isSample }));
 
   // A job only makes the tech busy NOW if:
   //  - it's in the field (enroute/arrived/in_progress), OR
   //  - it's `assigned` and starting soon (within the lead window).
   // Future assigned jobs scheduled hours/days out do NOT lock the tech today.
+  // A sample job (the new technician's practice job, the sample day) that
+  // hasn't been started is pretend work: sitting there assigned it must not
+  // hold a real technician Busy, as it would long after its time had passed.
   const now = Date.now();
   const active = candidates.filter((j) => {
     if (IN_FIELD_STATUSES.has(j.status)) return true;
+    if (j.isSample) return false;
     // assigned: only "busy" once we're within the lead window of its start
     const start = j.scheduledAt ? new Date(j.scheduledAt).getTime() : 0;
     return start > 0 && now >= start - ASSIGNED_BUSY_LEAD_MS;
