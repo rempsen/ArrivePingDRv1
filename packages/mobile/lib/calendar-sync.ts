@@ -34,6 +34,13 @@ import { planSync, refOf, type DesiredEvent, type ServerEvent } from "./calendar
  * update must never reach a 1.0.3 binary that lacks it (runtimeVersion is
  * bumped with it), and even so every entry point checks the module is really
  * there and reports "not available" rather than crashing.
+ *
+ * The module's iOS side checks BOTH the Calendars and the Reminders usage
+ * strings the moment it loads, and aborts a release build (EXFatal →
+ * RCTFatal) if either is missing from Info.plist. The app never touches
+ * reminders, but the expo-calendar plugin entry in app.json must still carry
+ * a `remindersPermission` string: setting it to `false` deletes the key and
+ * crashed TestFlight build 45 on launch.
  */
 
 type CalendarModule = typeof import("expo-calendar");

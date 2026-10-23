@@ -115,7 +115,7 @@
         "expo-calendar",
         {
           "calendarPermission": "ArrivePing adds the jobs you're assigned to your calendar and keeps their times and addresses up to date.",
-          "remindersPermission": false
+          "remindersPermission": "ArrivePing does not read or change your reminders."
         }
       ],
       [
