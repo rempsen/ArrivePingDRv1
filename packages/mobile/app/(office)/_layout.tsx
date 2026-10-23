@@ -1,9 +1,10 @@
 import { Tabs } from "expo-router";
 import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { House, ClipboardText, ChatCircleDots, UsersThree } from "phosphor-react-native";
+import { House, ClipboardText, ChatCircleDots, UsersThree, CalendarBlank } from "phosphor-react-native";
 import { C } from "../../lib/theme";
 import { useAccess } from "../../lib/use-access";
+import { useLayout } from "../../lib/use-layout";
 import { useDispatchStream } from "../../lib/use-dispatch-stream";
 import { usePushNotifications, setAppBadgeCount, setPushRouting } from "../../lib/push";
 import { useDispatchThreads } from "../../lib/use-threads";
@@ -23,6 +24,7 @@ import { UndoToastHost } from "../../components/office/undo-toast";
  */
 export default function OfficeLayout() {
   const { can, isLoading } = useAccess();
+  const { wide } = useLayout();
   useDispatchStream(true);
   usePushNotifications();
 
@@ -35,6 +37,8 @@ export default function OfficeLayout() {
   }, []);
 
   const seesJobs = isLoading || can("work_orders:view") || can("scheduler:view");
+  // The timeline board needs the room an iPad has; a phone keeps Jobs.
+  const seesBoard = wide && (isLoading || can("work_orders:view") || can("scheduler:view"));
   const seesTeam = isLoading || can("techs:view");
   // /api/messages/* needs work_orders:view (api/lib/office-access.ts), so a
   // scheduler-only member gets no Messages tab rather than a tab of 403s.
@@ -78,6 +82,14 @@ export default function OfficeLayout() {
             title: "Jobs",
             href: seesJobs ? undefined : null,
             tabBarIcon: ({ color, focused }) => <ClipboardText color={color} size={24} weight={focused ? "fill" : "regular"} />,
+          }}
+        />
+        <Tabs.Screen
+          name="board"
+          options={{
+            title: "Board",
+            href: seesBoard ? undefined : null,
+            tabBarIcon: ({ color, focused }) => <CalendarBlank color={color} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
         <Tabs.Screen

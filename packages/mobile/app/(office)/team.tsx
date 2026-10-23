@@ -21,6 +21,16 @@ export default function Team() {
   const router = useRouter();
   const params = useLocalSearchParams<{ status?: string }>();
   const [filter, setFilter] = useState<string | null>(params.status ?? null);
+  // Tab screens stay mounted, so a later tap on a Today tile or Crew row
+  // arrives as a new param on the same screen. The param is consumed and
+  // cleared, so tapping the same tile twice (with a chip change in between)
+  // still lands on that status, and a plain tab tap keeps whatever chip was
+  // picked last.
+  useEffect(() => {
+    if (!params.status) return;
+    setFilter(params.status);
+    router.setParams({ status: undefined });
+  }, [params.status, router]);
   const board = useBoard(null);
   const now = new Date();
   const { wide } = useLayout();

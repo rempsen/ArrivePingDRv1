@@ -7,6 +7,8 @@ import { useRouter } from "expo-router";
 import { api } from "./api";
 import { getToken } from "./auth";
 import { routeForNotification as routeFor } from "./push-route";
+import { JOB_OFFER_CATEGORY, OFFER_ACTION, offerPath, offerPushStep, pushAgeMs } from "./offer";
+import { acceptOffer } from "../components/offer-actions";
 import { getActiveCompany, setActiveCompany } from "./active-company";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -43,6 +45,26 @@ function projectId(): string | undefined {
   );
 }
 
+/**
+ * Buttons on a new-offer push. The server tags offer pushes with this
+ * category (packages/web/src/shared/offer.ts). Every button opens the app:
+ * Accept needs the tech signed in, and Decline needs a reason.
+ */
+let categoryReady = false;
+async function ensureOfferCategory() {
+  if (categoryReady || Platform.OS === "web") return;
+  try {
+    await Notifications.setNotificationCategoryAsync(JOB_OFFER_CATEGORY, [
+      { identifier: OFFER_ACTION.accept, buttonTitle: "Accept", options: { opensAppToForeground: true } },
+      { identifier: OFFER_ACTION.details, buttonTitle: "Details", options: { opensAppToForeground: true } },
+      { identifier: OFFER_ACTION.decline, buttonTitle: "Decline", options: { opensAppToForeground: true, isDestructive: true } },
+    ]);
+    categoryReady = true;
+  } catch {
+    /* buttons are a nicety: the push still opens the offer when tapped */
+  }
+}
+
 async function ensureAndroidChannel() {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync("default", {
@@ -65,6 +87,7 @@ export async function getExpoPushToken(): Promise<string | null> {
   }
 
   await ensureAndroidChannel();
+  await ensureOfferCategory();
 
   const { status: existing } = await Notifications.getPermissionsAsync();
   let status = existing;
@@ -122,6 +145,13 @@ export async function unregisterPushToken(): Promise<void> {
  * the technician flow is unchanged.
  */
 let routing: "field" | "office" = "field";
+
+/**
+ * Pushes already acted on in this app session. The last tapped push is
+ * reported again whenever the hook mounts (sign-out and back in, switching
+ * app mode), and an Accept button must not accept twice.
+ */
+const handledResponses = new Set<string>();
 export function setPushRouting(mode: "field" | "office") {
   routing = mode;
 }
@@ -135,6 +165,63 @@ export function usePushNotifications() {
   const router = useRouter();
   const qc = useQueryClient();
   const responseListener = useRef<Notifications.Subscription | null>(null);
+
+
+  const respond = async (response: Notifications.NotificationResponse | null | undefined) => {
+    if (!response) return;
+    const key = `${response.notification.request.identifier}:${response.actionIdentifier}`;
+    if (handledResponses.has(key)) return;
+    handledResponses.add(key);
+    const data = response.notification.request.content.data as Record<string, any> | undefined;
+    // Offer pushes in the field app: Accept is done here, then the job opens.
+    // If it can't be accepted (taken, changed, offline) the offer opens so the
+    // tech sees why. Details and Decline open the offer screen.
+    // The OS can report the same tapped push again on a later launch; forget
+    // it now so an old Accept can never accept a later offer of that job.
+    if (Platform.OS !== "web") Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
+    const step = offerPushStep(data, response.actionIdentifier);
+    // An offer from a company other than the active one: act on that company.
+    // The tech chose to answer its offer, so switch to it (as office mode does
+    // for any alert); otherwise every request would go to the wrong company.
+    if (step.kind !== "none" && !(await switchToCompanyOf(data))) return;
+    const ageMs = pushAgeMs(response.notification.date);
+    if (step.kind === "accept" && ageMs < 30 * 60_000) {
+      try {
+        const booking = await acceptOffer(step.bookingId);
+        if (booking) qc.setQueryData(["job", step.bookingId], booking);
+        qc.invalidateQueries({ queryKey: ["bookings"] });
+        router.push((routing === "office" ? `/office/job/${step.bookingId}` : `/job/${step.bookingId}`) as never);
+      } catch {
+        // Taken, changed, another company's job, or offline: the offer screen
+        // says which.
+        router.push(offerPath(step.bookingId) as never);
+      }
+      return;
+    }
+    if (step.kind === "accept") {
+      // A stale Accept (the push is old): show the offer instead of acting.
+      router.push(offerPath(step.bookingId) as never);
+      return;
+    }
+    if (step.kind === "open" && routing === "field") {
+      router.push(step.path as never);
+      return;
+    }
+    await routeFromNotification(data);
+  };
+
+  /** Make the push's company the active one. False when switching failed. */
+  const switchToCompanyOf = async (data: Record<string, any> | undefined): Promise<boolean> => {
+    const companyId = typeof data?.companyId === "string" ? data.companyId : "";
+    if (!companyId || companyId === getActiveCompany()) return true;
+    try {
+      await setActiveCompany(companyId);
+      qc.clear();
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const routeFromNotification = async (data: Record<string, any> | undefined) => {
     const to = routeFor(data, routing);
@@ -163,15 +250,13 @@ export function usePushNotifications() {
     // implementation in Expo (native-only), so calling it unconditionally
     // throws on the web build — guard to native platforms only.
     if (Platform.OS !== "web") {
-      Notifications.getLastNotificationResponseAsync().then((response) => {
-        routeFromNotification(response?.notification.request.content.data as any);
-      });
+      Notifications.getLastNotificationResponseAsync().then(respond);
     }
 
     // Warm tap: user taps a notification while app is running/backgrounded.
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        routeFromNotification(response.notification.request.content.data as any);
+        respond(response);
       });
 
     return () => {
