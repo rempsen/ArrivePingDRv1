@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { IDLE, canArm, canPlace, placeReducer, placedStart, placementRequest, type PlaceState } from "../board-place";
+import { IDLE, canArm, canArmWith, canPlace, canPlaceOn, placeReducer, placedStart, placementRequest, type PlaceState } from "../board-place";
 import { DEFAULT_RANGE } from "../timeline";
 
 describe("placeReducer", () => {
@@ -57,5 +57,25 @@ describe("placementRequest", () => {
   test("an unassigned job → assign expecting nobody", () => {
     const r = placementRequest({ riderId: null }, "t2", 9 * 60, "2026-10-23", tz);
     expect(r).toMatchObject({ kind: "assign", riderId: "t2", expectRiderId: null });
+  });
+});
+
+describe("permissions", () => {
+  const schedOnly = { schedule: true, assign: false };
+  const both = { schedule: true, assign: true };
+  const woOnly = { schedule: false, assign: false }; // work_orders:edit alone can't set a time
+  test("a scheduler-only user moves assigned jobs on their own row and nothing else", () => {
+    expect(canArmWith({ status: "confirmed", riderId: "t1" }, schedOnly)).toBe(true);
+    expect(canArmWith({ status: "pending", riderId: null }, schedOnly)).toBe(false);
+    expect(canPlaceOn({ riderId: "t1" }, "t1", false, schedOnly)).toBe(true);
+    expect(canPlaceOn({ riderId: "t1" }, "t2", false, schedOnly)).toBe(false);
+  });
+  test("with both permissions anything open can go anywhere not on a day off", () => {
+    expect(canArmWith({ status: "pending", riderId: null }, both)).toBe(true);
+    expect(canPlaceOn({ riderId: null }, "t2", false, both)).toBe(true);
+    expect(canPlaceOn({ riderId: null }, "t2", true, both)).toBe(false);
+  });
+  test("work-orders-only can't arm: every placement sets a time", () => {
+    expect(canArmWith({ status: "confirmed", riderId: "t1" }, woOnly)).toBe(false);
   });
 });

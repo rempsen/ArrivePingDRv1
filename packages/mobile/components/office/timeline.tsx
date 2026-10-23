@@ -6,7 +6,7 @@ import { statusColor } from "./tech-row";
 import { C, R, S } from "../../lib/theme";
 import { STATUS_LABEL, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { GUTTER_W, HOUR_W, ROW_H, bookedMinutes, hoursIn, loadLevel, minLabel, minuteAtX, packLanes, spansFor, timelineRange, xOf, type Range } from "../../lib/timeline";
-import { canArm, canPlace, type PlaceState } from "../../lib/board-place";
+import { canArmWith, canPlaceOn, type PlacePerms, type PlaceState } from "../../lib/board-place";
 
 const HEADER_H = 36;
 const LOAD_COLOR = { ok: C.green, high: C.amber, over: C.red } as const;
@@ -29,7 +29,7 @@ export interface TimelineProps {
   /** Minute of the day right now on the company's clock, or null when `day` isn't today. */
   nowMin: number | null;
   place: PlaceState;
-  canEdit: boolean;
+  perms: PlacePerms;
   onArm: (job: OfficeJob) => void;
   onTapCell: (techId: string, rawMin: number, range: Range) => void;
   onOpenJob: (jobId: string) => void;
@@ -41,7 +41,7 @@ export interface TimelineProps {
  * scrolls sideways. Tapping a block arms it, tapping a row places it (see
  * lib/board-place.ts); a long press opens the job.
  */
-export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, canEdit, onArm, onTapCell, onOpenJob }: TimelineProps) {
+export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, onArm, onTapCell, onOpenJob }: TimelineProps) {
   const spans = useMemo(() => spansFor(jobs, day, tz), [jobs, day, tz]);
   const range = useMemo(() => timelineRange(spans), [spans]);
   const hours = hoursIn(range);
@@ -56,6 +56,7 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, canEdit
     return m;
   }, [spans]);
   const armedId = place.kind === "idle" ? null : place.jobId;
+  const armedJob = armedId ? jobs.find((j) => j.id === armedId) : undefined;
   const target = place.kind === "confirm" ? place : null;
   const targetJob = target ? jobs.find((j) => j.id === target.jobId) : undefined;
 
@@ -108,7 +109,7 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, canEdit
               const mine = byTech.get(t.id) ?? [];
               const lanes = new Map(packLanes(mine).map((l) => [l.id, l]));
               const dayOff = off.has(t.id);
-              const placeable = canEdit && place.kind !== "idle" && canPlace(dayOff);
+              const placeable = !!armedJob && canPlaceOn(armedJob, t.id, dayOff, perms);
               return (
                 <Pressable
                   key={t.id}
@@ -134,7 +135,7 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, canEdit
                     const top = 5 + lane.lane * ((ROW_H - 10) / 2);
                     const color = blockColor(sp.job);
                     const armed = sp.id === armedId;
-                    const movable = canEdit && canArm(sp.job);
+                    const movable = canArmWith(sp.job, perms);
                     return (
                       <Pressable
                         key={sp.id}

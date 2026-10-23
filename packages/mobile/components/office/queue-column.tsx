@@ -1,28 +1,37 @@
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Tray } from "phosphor-react-native";
 import { StatusBadge } from "../ui";
-import { C, R, S, fmtTime } from "../../lib/theme";
+import { C, R, S } from "../../lib/theme";
 import type { OfficeJob } from "../../lib/board";
-import { canArm } from "../../lib/board-place";
+import { canArmWith, type PlacePerms } from "../../lib/board-place";
+import { jobMinutes, minLabel } from "../../lib/timeline";
+import { fmtInTz } from "../../lib/when";
 
 export const QUEUE_W = 300;
 
 /**
- * The day's jobs with nobody on them, soonest first. Tapping one arms it for
- * placement on the timeline; a long press opens it.
+ * Every job with nobody on it, soonest first — the board carries waiting jobs
+ * whatever their date so none is lost, so an overdue or future one shows its
+ * day. Times are on the company's clock, like the grid. Tapping one arms it
+ * for placement on the timeline; a long press opens it.
  */
 export function QueueColumn({
   jobs,
   jobNoun,
+  day,
+  tz,
   armedId,
-  canEdit,
+  perms,
   onArm,
   onOpenJob,
 }: {
   jobs: readonly OfficeJob[];
   jobNoun: string;
+  /** The day on the grid; jobs on other days are labelled with theirs. */
+  day: string;
+  tz: string;
   armedId: string | null;
-  canEdit: boolean;
+  perms: PlacePerms;
   onArm: (job: OfficeJob) => void;
   onOpenJob: (jobId: string) => void;
 }) {
@@ -36,23 +45,26 @@ export function QueueColumn({
         </View>
       </View>
       <ScrollView contentContainerStyle={s.list}>
-        {jobs.length === 0 ? <Text style={s.quiet}>Every {jobNoun.replace(/s$/, "")} today has someone.</Text> : null}
+        {jobs.length === 0 ? <Text style={s.quiet}>Every open {jobNoun.replace(/s$/, "")} has someone.</Text> : null}
         {jobs.map((job) => {
           const armed = job.id === armedId;
-          const movable = canEdit && canArm(job);
+          const movable = canArmWith(job, perms);
+          const at = jobMinutes(job.scheduledAt, tz);
+          const otherDay = at.day !== day;
+          const when = otherDay ? fmtInTz(job.scheduledAt, tz) : minLabel(at.min);
           return (
             <Pressable
               key={job.id}
               onPress={() => (movable ? onArm(job) : onOpenJob(job.id))}
               onLongPress={() => onOpenJob(job.id)}
               accessibilityRole="button"
-              accessibilityLabel={`${job.customerName || job.title}, ${fmtTime(job.scheduledAt)}${movable ? ", tap to place, hold to open" : ""}`}
+              accessibilityLabel={`${job.customerName || job.title}, ${when}${otherDay ? ", not on this day" : ""}${movable ? ", tap to place, hold to open" : ""}`}
               accessibilityState={armed ? { selected: true } : undefined}
               style={({ pressed }) => [s.item, armed && s.armed, { opacity: pressed ? 0.8 : 1 }]}
             >
               <View style={s.itemTop}>
-                <Text style={s.time} allowFontScaling={false}>
-                  {fmtTime(job.scheduledAt)}
+                <Text style={[s.time, otherDay && { color: C.amber }]} allowFontScaling={false}>
+                  {when}
                 </Text>
                 {job.durationMins ? <Text style={s.dur}>{job.durationMins} min</Text> : null}
                 {job.late ? <Text style={s.late}>Late</Text> : null}

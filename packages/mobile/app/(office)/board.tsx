@@ -28,7 +28,9 @@ import { fmtInTz } from "../../lib/when";
 export default function Board() {
   const router = useRouter();
   const { can } = useAccess();
-  const canEdit = can("work_orders:edit");
+  // Every placement sets a time (scheduler:edit); landing on another
+  // technician is also an assignment (work_orders:edit). See lib/board-place.ts.
+  const perms = { schedule: can("scheduler:edit"), assign: can("scheduler:edit") && can("work_orders:edit") };
   const actions = useDispatchActions();
   const [day, setDay] = useState<string | null>(null);
   const [view, setView] = useState<"day" | "week">("day");
@@ -161,6 +163,7 @@ export default function Board() {
                 setView("day");
               }}
             />
+            {week.data?.truncated ? <TruncatedNote /> : null}
           </View>
         )
       ) : board.isLoading ? (
@@ -179,16 +182,19 @@ export default function Board() {
             tz={tz}
             nowMin={nowMin}
             place={place}
-            canEdit={canEdit}
+            perms={perms}
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
             onTapCell={tapCell}
             onOpenJob={(id) => router.push(`/office/job/${id}`)}
           />
+          {board.data?.truncated ? <TruncatedNote /> : null}
           <QueueColumn
             jobs={queue}
             jobNoun={jobNoun}
+            day={shownDay}
+            tz={tz}
             armedId={place.kind === "idle" ? null : place.jobId}
-            canEdit={canEdit}
+            perms={perms}
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
             onOpenJob={(id) => router.push(`/office/job/${id}`)}
           />
@@ -223,8 +229,20 @@ export default function Board() {
   );
 }
 
+/** The server caps a board read; counts and bars below it are partial. */
+function TruncatedNote() {
+  return (
+    <View style={s.truncated} accessibilityLiveRegion="polite">
+      <Warning color={C.amber} size={14} weight="fill" />
+      <Text style={s.truncatedTxt}>Too many jobs to show them all — these counts are partial. Use the web console for the full picture.</Text>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
+  truncated: { position: "absolute", top: S.sm, left: S.sm, right: S.sm, flexDirection: "row", alignItems: "center", gap: S.sm, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.amber, borderRadius: R.control, paddingHorizontal: S.md, paddingVertical: 6 },
+  truncatedTxt: { color: C.text, fontSize: 12, flex: 1 },
   body: { flex: 1, flexDirection: "row", borderTopWidth: 1, borderTopColor: C.border },
   segments: { flexDirection: "row", backgroundColor: C.bg3, borderRadius: R.pill, padding: 3, borderWidth: 1, borderColor: C.border },
   seg: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: R.pill },
