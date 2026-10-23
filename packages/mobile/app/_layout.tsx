@@ -77,6 +77,7 @@ function RootLayout() {
               <Stack.Screen name="office/thread/[techId]" options={{ animation: "slide_from_right" }} />
               <Stack.Screen name="office/new-job" options={{ animation: "slide_from_bottom" }} />
               <Stack.Screen name="office/profile" options={{ animation: "slide_from_right" }} />
+              <Stack.Screen name="calendar-sync" options={{ animation: "slide_from_right" }} />
             </Stack>
             </CoachProvider>
           </QueryClientProvider>

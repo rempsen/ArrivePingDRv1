@@ -34,18 +34,35 @@ function esc(s: string): string {
     .replace(/\r?\n/g, "\\n");
 }
 
-/** Fold long lines to <=75 octets per RFC 5545. */
-function fold(line: string): string {
-  if (line.length <= 73) return line;
-  const out: string[] = [];
-  let s = line;
-  out.push(s.slice(0, 73));
-  s = s.slice(73);
-  while (s.length > 0) {
-    out.push(" " + s.slice(0, 72));
-    s = s.slice(72);
+const utf8 = new TextEncoder();
+
+/**
+ * Fold one content line to at most 75 octets per RFC 5545 §3.1: CRLF plus a
+ * single space starts each continuation, and the space counts toward that
+ * line's 75. Counts UTF-8 bytes, not JavaScript characters, and only breaks
+ * between whole code points, so an em dash, an accented name or an emoji is
+ * never split into invalid bytes. Google Calendar and Outlook reject or
+ * garble feeds that get this wrong; Apple Calendar is more forgiving.
+ */
+export function fold(line: string): string {
+  if (utf8.encode(line).length <= 75) return line;
+  const parts: string[] = [];
+  let cur = "";
+  let bytes = 0;
+  let limit = 75;
+  for (const ch of line) {
+    const n = utf8.encode(ch).length;
+    if (bytes + n > limit) {
+      parts.push(cur);
+      cur = "";
+      bytes = 0;
+      limit = 74;
+    }
+    cur += ch;
+    bytes += n;
   }
-  return out.join("\r\n");
+  parts.push(cur);
+  return parts.join("\r\n ");
 }
 
 export interface CalEvent {
@@ -63,7 +80,8 @@ export interface CalEvent {
   lng?: number | null;
 }
 
-export function buildEvent(ev: CalEvent): string {
+/** One event's content lines, not yet folded. */
+function eventLines(ev: CalEvent): string[] {
   const lines: string[] = [
     "BEGIN:VEVENT",
     `UID:${ev.uid}`,
@@ -75,15 +93,18 @@ export function buildEvent(ev: CalEvent): string {
   if (ev.description) lines.push(`DESCRIPTION:${esc(ev.description)}`);
   if (ev.location) lines.push(`LOCATION:${esc(ev.location)}`);
   if (ev.lat != null && ev.lng != null) lines.push(`GEO:${ev.lat};${ev.lng}`);
-  if (ev.url) lines.push(`URL:${esc(ev.url)}`);
-  lines.push(`STATUS:${ev.status ?? "CONFIRMED"}`);
+  // A URI value is not TEXT: escaping would put backslashes into the link.
+  if (ev.url) lines.push(`URL:${ev.url}`);
+  const status = ev.status ?? "CONFIRMED";
+  lines.push(`STATUS:${status}`);
   if (ev.organizer?.email) {
     lines.push(
       `ORGANIZER;CN=${esc(ev.organizer.name ?? "ArrivePing")}:mailto:${ev.organizer.email}`,
     );
   }
-  lines.push("SEQUENCE:0", "TRANSP:OPAQUE");
-  if (ev.alarmMinutesBefore && ev.alarmMinutesBefore > 0) {
+  // A cancelled job no longer takes up the technician's time.
+  lines.push("SEQUENCE:0", `TRANSP:${status === "CANCELLED" ? "TRANSPARENT" : "OPAQUE"}`);
+  if (ev.alarmMinutesBefore && ev.alarmMinutesBefore > 0 && status !== "CANCELLED") {
     lines.push(
       "BEGIN:VALARM",
       "ACTION:DISPLAY",
@@ -93,7 +114,11 @@ export function buildEvent(ev: CalEvent): string {
     );
   }
   lines.push("END:VEVENT");
-  return lines.map(fold).join("\r\n");
+  return lines;
+}
+
+export function buildEvent(ev: CalEvent): string {
+  return eventLines(ev).map(fold).join("\r\n");
 }
 
 export interface CalendarOpts {
@@ -114,7 +139,9 @@ export function buildCalendar(events: CalEvent[], opts: CalendarOpts = {}): stri
     `REFRESH-INTERVAL;VALUE=DURATION:PT${refresh}M`,
     `X-PUBLISHED-TTL:PT${refresh}M`,
   ];
-  const body = events.map(buildEvent);
+  // Fold each content line exactly once. Folding whole event blocks would
+  // insert breaks at arbitrary points inside lines that were already folded.
+  const body = events.flatMap(eventLines);
   return [...head, ...body, "END:VCALENDAR"].map(fold).join("\r\n") + "\r\n";
 }
 
