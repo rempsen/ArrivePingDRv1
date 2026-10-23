@@ -21,6 +21,11 @@ export default function Team() {
   const router = useRouter();
   const params = useLocalSearchParams<{ status?: string }>();
   const [filter, setFilter] = useState<string | null>(params.status ?? null);
+  // Tab screens stay mounted, so a later tap on a Today tile or Crew row
+  // arrives as a new param on the same screen.
+  useEffect(() => {
+    if (params.status) setFilter(params.status);
+  }, [params.status]);
   const board = useBoard(null);
   const now = new Date();
   const { wide } = useLayout();

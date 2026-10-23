@@ -50,6 +50,29 @@ export function canPlace(dayOff: boolean): boolean {
   return !dayOff;
 }
 
+/**
+ * What the server lets this person do (api/routes/dispatch.ts): moving a
+ * job's time is `scheduler:edit`; putting it on another technician with a
+ * time is `work_orders:edit` AND `scheduler:edit`. Every placement sets a
+ * time, so `schedule` is the floor.
+ */
+export interface PlacePerms {
+  schedule: boolean;
+  assign: boolean;
+}
+
+/** Can this job be picked up at all: its own row needs schedule, anyone else's needs assign. */
+export function canArmWith(job: { status: string; riderId: string | null }, perms: PlacePerms): boolean {
+  if (!canArm(job)) return false;
+  return job.riderId ? perms.schedule : perms.assign;
+}
+
+/** Can the armed job land on this technician's row. */
+export function canPlaceOn(job: { riderId: string | null }, techId: string, dayOff: boolean, perms: PlacePerms): boolean {
+  if (!canPlace(dayOff)) return false;
+  return job.riderId === techId ? perms.schedule : perms.assign;
+}
+
 /** Where on the row a tap lands, snapped to the quarter hour and kept inside the window. */
 export function placedStart(rawMin: number, job: { durationMins?: number | null }, range: Range): number {
   return clampStart(snapMinutes(rawMin), durationOf(job), range);
