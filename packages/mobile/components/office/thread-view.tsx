@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { View, Text, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Alert, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -63,12 +63,9 @@ export function ThreadView({ techId, embedded }: { techId: string; embedded?: bo
       .then(() => qc.invalidateQueries({ queryKey: threadsKey(company) }))
       .catch(() => {});
   }, [techId, qc, company]);
-  // The tab stays focused while the pane switches threads, so the pane acks on
-  // every tech change as well as on focus.
+  // The pane remounts per technician (keyed by id in the Messages tab), so a
+  // focus effect covers both the phone route and every pane switch.
   useFocusEffect(markRead);
-  useEffect(() => {
-    if (embedded) markRead();
-  }, [embedded, markRead]);
 
   const send = useMutation({
     mutationFn: async (body: string) => {

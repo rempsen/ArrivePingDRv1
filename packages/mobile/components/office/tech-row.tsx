@@ -60,6 +60,9 @@ export function TechRow({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
+      // On a phone the row isn't a control, so VoiceOver reaches the
+      // call / text / map / message buttons inside it one by one.
+      accessible={!!onPress}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={onPress ? `${tech.name}, ${STATUS_LABEL[tech.status] ?? tech.status}` : undefined}
       accessibilityState={selected ? { selected: true } : undefined}
