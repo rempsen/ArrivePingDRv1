@@ -34,11 +34,16 @@ export function TechRow({
   currentJob,
   now,
   onMessage,
+  onPress,
+  selected,
 }: {
   tech: OfficeTech;
   currentJob?: string | null;
   now: Date;
   onMessage?: (tech: OfficeTech) => void;
+  /** Tapping the row itself (an iPad split view selects the technician). */
+  onPress?: () => void;
+  selected?: boolean;
 }) {
   const color = statusColor(tech.status);
   const detail =
@@ -52,7 +57,14 @@ export function TechRow({
   const where = tech.status === "offline" ? "" : ageLabel(tech.locationAt, now) + (tech.stale ? " (stale)" : "");
 
   return (
-    <View style={s.row}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={onPress ? `${tech.name}, ${STATUS_LABEL[tech.status] ?? tech.status}` : undefined}
+      accessibilityState={selected ? { selected: true } : undefined}
+      style={({ pressed }) => [s.row, selected && s.selected, { opacity: pressed ? 0.8 : 1 }]}
+    >
       <View>
         <Avatar name={tech.name} photoUrl={tech.photoUrl} color={tech.color} size={44} />
         <View style={[s.dot, { backgroundColor: color }]} />
@@ -95,7 +107,7 @@ export function TechRow({
           </Action>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -115,6 +127,7 @@ function Action({ label, onPress, children }: { label: string; onPress: () => vo
 
 const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
+  selected: { backgroundColor: C.bg3, borderRadius: R.card, marginHorizontal: -S.sm, paddingHorizontal: S.sm, borderBottomColor: "transparent" },
   dot: { position: "absolute", right: -1, bottom: -1, width: 14, height: 14, borderRadius: R.pill, borderWidth: 2, borderColor: C.bg },
   top: { flexDirection: "row", alignItems: "center", gap: S.sm },
   name: { color: C.text, fontSize: 15, fontWeight: "700", flexShrink: 1 },

@@ -15,11 +15,14 @@ export function JobRow({
   techName,
   onPress,
   actions,
+  selected,
 }: {
   job: OfficeJob;
   techName: string;
   onPress?: () => void;
   actions?: React.ReactNode;
+  /** The row open in an iPad split view's detail pane. */
+  selected?: boolean;
 }) {
   const pc = PRIORITY[job.priority];
   return (
@@ -28,7 +31,8 @@ export function JobRow({
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={`${job.customerName}, ${job.service}, ${fmtTime(job.scheduledAt)}`}
-      style={({ pressed }) => [s.row, { opacity: pressed ? 0.8 : 1 }]}
+      accessibilityState={selected ? { selected: true } : undefined}
+      style={({ pressed }) => [s.row, selected && s.selected, { opacity: pressed ? 0.8 : 1 }]}
     >
       <View style={s.timeCol}>
         <Text style={s.time} allowFontScaling={false}>
@@ -69,6 +73,7 @@ export function JobRow({
 
 const s = StyleSheet.create({
   row: { flexDirection: "row", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
+  selected: { backgroundColor: C.bg3, borderRadius: R.card, marginHorizontal: -S.sm, paddingHorizontal: S.sm, borderBottomColor: "transparent" },
   timeCol: { width: 64, alignItems: "flex-start" },
   time: { color: C.text, fontSize: 15, fontWeight: "800" },
   dur: { color: C.muted, fontSize: 11, marginTop: 2 },
