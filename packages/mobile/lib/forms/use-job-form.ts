@@ -18,6 +18,7 @@ import Constants from "expo-constants";
 import { authHeaders } from "../auth";
 import type { Answers } from "./form-model";
 import { combineAnswers, patchBody, withAnswers, type JobForm } from "./job-form-data";
+import { SIGNED_OUT, messageFromBody } from "../api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -70,9 +71,7 @@ export function useSaveJobAnswers(bookingId: string | undefined) {
       });
       const body = (await res.json().catch(() => null)) as any;
       if (!res.ok) {
-        throw new Error(
-          body?.message || body?.error?.message || (res.status === 401 ? "You've been signed out — sign in again." : "Couldn't save that answer."),
-        );
+        throw new Error(messageFromBody(body) ?? (res.status === 401 ? SIGNED_OUT : "Couldn't save that answer."));
       }
       return body.form as JobForm;
     },

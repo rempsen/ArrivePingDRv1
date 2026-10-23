@@ -5,6 +5,7 @@
  */
 import Constants from "expo-constants";
 import { authHeaders } from "./auth";
+import { throwIfNotOk } from "./api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -49,10 +50,7 @@ export async function uploadJobPhoto(opts: {
     headers: authHeaders(),
     body: form,
   });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as any;
-    throw new Error(body?.message || "Upload failed");
-  }
+  await throwIfNotOk(res, "Upload failed");
   const body = (await res.json().catch(() => null)) as any;
   return (body?.photo ?? body) as JobPhoto;
 }

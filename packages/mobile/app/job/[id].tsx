@@ -72,6 +72,7 @@ import { jobFormKey, jobFormScope, useJobForm } from "../../lib/forms/use-job-fo
 import { formIncomplete, missingSummary, type MissingQuestion } from "../../lib/forms/job-form-data";
 import { uploadJobPhoto } from "../../lib/job-photos";
 import { choosePhotoSource, pickPhoto, type PhotoSource } from "../../lib/pick-photo";
+import { SIGNED_OUT, messageFromBody, throwIfNotOk } from "../../lib/api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -355,11 +356,7 @@ export default function JobDetail() {
           err.formMissing = incomplete.missing;
           throw err;
         }
-        throw new Error(
-          body?.message ||
-            body?.error?.message ||
-            (res.status === 401 ? "You've been signed out — sign in again." : "Couldn't update this job."),
-        );
+        throw new Error(messageFromBody(body) ?? (res.status === 401 ? SIGNED_OUT : "Couldn't update this job."));
       }
     },
     onSuccess: () => {
@@ -402,10 +399,7 @@ export default function JobDetail() {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as any;
-        throw new Error(body?.message || body?.error?.message || "Couldn't resume the clock.");
-      }
+      await throwIfNotOk(res, "Couldn't resume the clock.");
     },
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -427,10 +421,7 @@ export default function JobDetail() {
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ reason, note }),
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as any;
-        throw new Error(body?.error?.message || body?.message || "Couldn't release this job");
-      }
+      await throwIfNotOk(res, "Couldn't release this job");
     },
     onSuccess: () => {
       setReleaseOpen(false);
@@ -707,7 +698,7 @@ export default function JobDetail() {
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Save failed");
+      await throwIfNotOk(res, "Save failed");
       await qc.invalidateQueries({ queryKey: ["job", id] });
       setSigExpanded(false);
       Alert.alert("Signed", "Sign-off saved to the job record.");
@@ -734,7 +725,7 @@ export default function JobDetail() {
     setDeletingSig(true);
     try {
       const res = await fetch(`${API}/api/bookings/${id}/signature`, { method: "DELETE", headers: authHeaders() });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message || "Couldn't delete it");
+      await throwIfNotOk(res, "Couldn't delete the signature");
       await qc.invalidateQueries({ queryKey: ["job", id] });
     } catch (e: any) {
       Alert.alert("Couldn't delete the signature", e?.message || "Try again");

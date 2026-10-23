@@ -4,6 +4,7 @@ import { Trash, Warning } from "phosphor-react-native";
 import Constants from "expo-constants";
 import { authHeaders } from "../lib/auth";
 import { C, R } from "../lib/theme";
+import { messageFromBody } from "../lib/api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -64,14 +65,12 @@ export function DeleteAccountSheet({ open, onClose, onDeleted }: { open: boolean
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ confirm: "DELETE" }),
       });
-      // Route errors are `{message}`; the global handler wraps as `{error:{message}}`.
-      const data = (await res.json().catch(() => ({}))) as { message?: string; error?: { message?: string } };
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data.message || data.error?.message;
         throw new Error(
           res.status >= 500
             ? "ArrivePing hit a problem partway through. Your login may already be disabled — try again in a minute; running it again is safe."
-            : msg || "Something went wrong. Your account was not deleted.",
+            : messageFromBody(data) || "Something went wrong. Your account was not deleted.",
         );
       }
     } catch (e: any) {

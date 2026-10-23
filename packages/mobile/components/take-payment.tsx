@@ -5,6 +5,7 @@ import { CheckCircle, CreditCard, X } from "phosphor-react-native";
 import { authHeaders } from "../lib/auth";
 import { C, money } from "../lib/theme";
 import { Button } from "./ui";
+import { messageFromBody } from "../lib/api-error";
 
 type LinkResp = { url: string; qr: string; total: number; paid: boolean; cardPayments: boolean; canText: boolean; sent: boolean };
 
@@ -15,7 +16,7 @@ async function fetchLink(api: string, bookingId: string, send = false): Promise<
     body: JSON.stringify({ send }),
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j?.error?.message || j?.message || "Couldn't start the payment");
+  if (!r.ok) throw new Error(messageFromBody(j) ?? "Couldn't start the payment");
   return j as LinkResp;
 }
 

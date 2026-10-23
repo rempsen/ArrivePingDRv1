@@ -15,6 +15,7 @@ import { statusColor } from "../../components/office/tech-row";
 import { ThreadView } from "../../components/office/thread-view";
 import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
 import { useLayout } from "../../lib/use-layout";
+import { throwIfNotOk } from "../../lib/api-error";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -140,8 +141,8 @@ function BroadcastSheet({ open, onClose }: { open: boolean; onClose: () => void 
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ body: text, target: { type: target } }),
       });
-      const j = (await res.json().catch(() => ({}))) as { sent?: number; count?: number; message?: string };
-      if (!res.ok) throw new Error(j.message || `Couldn't send (${res.status})`);
+      await throwIfNotOk(res, `Couldn't send (${res.status})`);
+      const j = (await res.json().catch(() => ({}))) as { sent?: number; count?: number };
       const n = j.sent ?? j.count;
       showToast(n != null ? `Sent to ${n} ${n === 1 ? "technician" : "technicians"}` : "Broadcast sent");
       setBody("");
