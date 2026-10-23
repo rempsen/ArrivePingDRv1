@@ -177,7 +177,15 @@ export default function Team() {
           </View>
         </>
       ) : selTech ? (
-        <TechRow tech={selTech} now={now} currentJob={jobTitle(selTech.currentJobId)?.customerName ?? null} onMessage={(t) => message(t.id)} />
+        <TechRow
+          tech={selTech}
+          now={now}
+          currentJob={jobTitle(selTech.currentJobId)?.customerName ?? null}
+          onMessage={(t) => {
+            setSel(null);
+            message(t.id);
+          }}
+        />
       ) : null;
     return (
       <View style={s.screen}>

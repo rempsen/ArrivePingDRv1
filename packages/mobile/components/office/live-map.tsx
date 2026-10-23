@@ -68,7 +68,9 @@ export function LiveMap({
                 e.stopPropagation();
                 onSelect({ kind: "job", id: j.id });
               }}
+              // The pin's tip is the point: Apple Maps reads centerOffset, Google reads anchor.
               anchor={{ x: 0.5, y: 1 }}
+              centerOffset={{ x: 0, y: -15 }}
               tracksViewChanges={false}
               accessibilityLabel={`${j.customerName || j.title}, ${PIN_LABEL[j.kind]}`}
             >
