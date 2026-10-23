@@ -26,6 +26,12 @@ interface PushMessage {
   badge?: number;
   priority?: "default" | "normal" | "high";
   channelId?: string;
+  /**
+   * Notification category the app registered (expo-notifications
+   * `setNotificationCategoryAsync`). Its action buttons appear on the push;
+   * an app that never registered it just shows the push without buttons.
+   */
+  categoryId?: string;
 }
 
 interface ExpoTicket {
@@ -78,6 +84,7 @@ export async function sendPush(
   body: string,
   data?: Record<string, unknown>,
   badge?: number,
+  opts: { categoryId?: string } = {},
 ): Promise<void> {
   let tokens: string[];
   try {
@@ -97,6 +104,7 @@ export async function sendPush(
     priority: "high",
     channelId: "default",
     ...(badge != null ? { badge } : {}),
+    ...(opts.categoryId ? { categoryId: opts.categoryId } : {}),
   }));
 
   await deliver(messages);

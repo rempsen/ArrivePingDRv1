@@ -16,6 +16,7 @@ import { usePushNotifications, setAppBadgeCount } from "../../lib/push";
 import { useNotifySummary } from "../../lib/notify-summary";
 import { useCoach } from "../../components/coach-tour";
 import { authClient } from "../../lib/auth";
+import { useCalendarAutoSync } from "../../lib/calendar-sync";
 
 export default function RiderLayout() {
   // Rider's own status drives whether native background GPS tracking runs at
@@ -71,6 +72,10 @@ export default function RiderLayout() {
   useEffect(() => {
     if (me.isSuccess && userId) coach.maybeStart(userId);
   }, [me.isSuccess, userId, coach]);
+  // Jobs into the phone's calendar, if the tech turned that on (Profile →
+  // Calendar sync): on open, on returning to the app, every 15 minutes.
+  useCalendarAutoSync(userId);
+
   const cancelCoach = coach.cancel;
   useEffect(() => () => cancelCoach(), [cancelCoach]);
 

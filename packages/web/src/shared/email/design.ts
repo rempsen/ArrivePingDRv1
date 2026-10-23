@@ -400,6 +400,7 @@ export const EMAIL_TOKENS: { key: string; label: string }[] = [
   { key: "eta", label: "ETA (minutes)" },
   { key: "newWhen", label: "Revised arrival time" },
   { key: "delayMins", label: "Minutes late" },
+  { key: "reason", label: "Decline or release reason" },
   { key: "price", label: "Price" },
   { key: "trackUrl", label: "Tracking link" },
   { key: "propertyUrl", label: "Property history link" },
@@ -430,6 +431,7 @@ export const EMAIL_SAMPLE_VARS = {
   propertyUrl: "https://arriveping.com/p/abc123def456",
   delayMins: 20,
   newWhen: "2:50 PM",
+  reason: "Schedule conflict",
 };
 
 /* -------------------------------------------------------------- plain text -- */

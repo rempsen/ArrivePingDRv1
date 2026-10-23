@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Signpost, SquaresFour } from "phosphor-react-native";
+import { Camera, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Signpost, SquaresFour, CalendarBlank } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { authClient, clearToken, authHeaders } from "../../lib/auth";
 import { unregisterPushToken } from "../../lib/push";
@@ -24,6 +24,7 @@ import { CoachAnchor, useCoach } from "../../components/coach-tour";
 import { useShift } from "../../lib/shift";
 import { resolveMode } from "../../lib/app-mode";
 import { getSavedMode, setSavedMode } from "../../lib/app-mode-store";
+import { disconnectCalendar, useCalendarSyncSettings } from "../../lib/calendar-sync";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0";
@@ -35,6 +36,8 @@ export default function Profile() {
   const { data: session } = authClient.useSession();
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const calendarSync = useCalendarSyncSettings();
+  const calendarOn = !!calendarSync && calendarSync.userId === session?.user?.id;
 
   const biometric = useQuery({
     queryKey: ["biometric-lock"],
@@ -172,6 +175,9 @@ export default function Profile() {
     // holds the phone next, and iOS keeps treating us as having live
     // background content.
     await endAllLiveActivities().catch(() => {});
+    // Jobs synced into this phone's calendar carry customer names and
+    // addresses: take them off before the phone changes hands.
+    await disconnectCalendar({ removeEvents: true }).catch(() => {});
     await clearUnlockStamp().catch(() => {});
     // Leaving a stale company id behind would point the NEXT driver on a
     // shared work phone at this driver's company until they re-pick.
@@ -406,6 +412,18 @@ export default function Profile() {
 
         <Card>
           <Pressable
+            onPress={() => router.push("/calendar-sync")}
+            style={s.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel={`Calendar sync, ${calendarOn ? "on" : "off"}`}
+            accessibilityHint="Add your jobs to Apple Calendar, Google Calendar or Outlook"
+          >
+            <CalendarBlank color={C.sub} size={18} />
+            <Text style={s.linkTxt}>Calendar sync</Text>
+            <Text style={[s.linkState, calendarOn && { color: C.green }]}>{calendarOn ? "On" : "Off"}</Text>
+            <CaretRight color={C.muted} size={16} />
+          </Pressable>
+          <Pressable
             onPress={() => session?.user?.id && coach.replay(session.user.id)}
             style={s.linkRow}
             accessibilityRole="button"
@@ -546,6 +564,7 @@ const s = StyleSheet.create({
   knobOn: { backgroundColor: "#03130d", alignSelf: "flex-end" },
   cardTitle: { color: C.text, fontSize: 15, fontWeight: "700", marginBottom: 6 },
   linkRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border },
+  linkState: { color: C.muted, fontSize: 13, fontWeight: "700" },
   linkTxt: { color: C.text, fontSize: 14.5, flex: 1 },
   deleteLink: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 16 },
   deleteTxt: { color: C.muted, fontSize: 13.5, fontWeight: "600", textDecorationLine: "underline" },

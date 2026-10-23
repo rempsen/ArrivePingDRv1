@@ -19,6 +19,8 @@ export interface Board {
   generatedAt: string;
   techs: OfficeTech[];
   jobs: OfficeJob[];
+  /** Days off in the range (company-time days), so the board doesn't place work on them. */
+  timeOff: Array<{ techId: string; day: string }>;
 }
 
 export interface DayLoad {
@@ -27,7 +29,8 @@ export interface DayLoad {
   days: Array<{ day: string; jobs: number; bookedMins: number; techs: number }>;
 }
 
-export const boardKey = (company: string, day: string | null) => ["board", company, day ?? "today"] as const;
+export const boardKey = (company: string, day: string | null, days = 1) =>
+  days === 1 ? (["board", company, day ?? "today"] as const) : (["board", company, day ?? "today", days] as const);
 
 export async function fetchBoard(day: string | null, days = 1): Promise<Board> {
   const q = new URLSearchParams({ days: String(days) });
@@ -42,12 +45,12 @@ export async function fetchBoard(day: string | null, days = 1): Promise<Board> {
  * clock (the server decides, so the app never guesses the timezone before
  * the first response). Polls every 30 s only while the live stream is down.
  */
-export function useBoard(day: string | null, enabled = true) {
+export function useBoard(day: string | null, enabled = true, days = 1) {
   const company = getActiveCompany();
   const healthy = useStreamHealthy();
   return useQuery({
-    queryKey: boardKey(company, day),
-    queryFn: () => fetchBoard(day),
+    queryKey: boardKey(company, day, days),
+    queryFn: () => fetchBoard(day, days),
     staleTime: 10_000,
     refetchInterval: healthy ? false : 30_000,
     enabled,
