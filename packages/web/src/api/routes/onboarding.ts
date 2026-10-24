@@ -25,7 +25,9 @@ import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { db } from "../database";
+import { db, sdb } from "../database";
+import { auth } from "../auth";
+import { emailTemplates, sendEmail } from "../../services/email";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { requireAdmin, tenantId } from "../middleware/auth";
@@ -71,7 +73,6 @@ import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qu
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
 import { inviteStaffMember, kindToRole, type StaffInviteResult } from "../lib/staff-invite";
 import { pushSignupStarted } from "../../services/hubspot-leads";
-import { checkSignupProof, consumeSignupProof, existingLogin, requestSignupCode, verifySignupCode } from "../../services/signup-email-proof";
 import { computeLaunchChecklist } from "../../services/launch-checklist";
 import {
   getIndustryPreset,
@@ -122,18 +123,24 @@ const SelfServeSignupBody = CompanyCreateBody.omit({
   // Required whenever Stripe is configured: no card, no trial.
   billingCustomerId: optText(80),
   billingSetupIntentId: optText(80),
-  // From POST /email/verify, when the admin email already has a login.
-  emailProof: optText(200),
 });
 
 const EmailCheckBody = z.object({ email: emailField("Email") });
-const EmailVerifyBody = z.object({ email: emailField("Email"), code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code") });
 const onboardingEmailLimiter = rateLimit({
-  name: "onboarding-email-code",
-  limit: 12,
+  name: "onboarding-email-check",
+  limit: 30,
   windowMs: 60 * 60_000,
   keyFn: keyByIp,
 });
+
+/** The login that already uses this email, if any (a deleted account doesn't count). */
+async function existingLogin(email: string) {
+  const [u] = await sdb
+    .select({ id: schema.user.id, name: schema.user.name, role: schema.user.role })
+    .from(schema.user)
+    .where(sql`lower(${schema.user.email}) = ${email.trim().toLowerCase()}`);
+  return u && u.role !== "deleted" ? u : null;
+}
 
 const BillingSetupBody = z.object({
   email: emailField("Email"),
@@ -196,29 +203,12 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
 
   // POST /api/public/onboarding/email/check — before the card step. When the
   // email already has a login (a customer or technician of another company),
-  // a code is emailed so they can prove it's theirs and add their new company
-  // to that login. Nothing is created here.
+  // the page asks them to sign in with it; the new company is then added to
+  // that login. (The signup itself said "email already in use" before, so this
+  // tells a visitor nothing new.)
   .post("/email/check", onboardingEmailLimiter, jsonBody(EmailCheckBody), async (c) => {
     const { email } = c.req.valid("json");
-    try {
-      const r = await requestSignupCode(email);
-      return c.json({ exists: r.exists, codeSent: r.sent }, 200);
-    } catch (e) {
-      console.error("[onboarding] email check failed", e);
-      return c.json({ message: "We couldn't check that email. Please try again in a moment." }, 502);
-    }
-  })
-  // POST /api/public/onboarding/email/verify — the emailed code, for a proof
-  // token /signup accepts.
-  .post("/email/verify", onboardingEmailLimiter, jsonBody(EmailVerifyBody), async (c) => {
-    const { email, code } = c.req.valid("json");
-    const r = await verifySignupCode(email, code);
-    if (!r.ok)
-      return c.json(
-        { message: r.reason === "wrong" ? "That code isn't right. Check the email and try again." : "That code has expired. Send a new one." },
-        400,
-      );
-    return c.json({ proof: r.proof }, 200);
+    return c.json({ exists: !!(await existingLogin(email)) }, 200);
   })
 
   // POST /api/public/onboarding/signup — starts the 30-day trial subscription
@@ -231,18 +221,23 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
   // they've even authenticated; the admin can view/rotate their key from
   // Settings once signed in.
   .post("/signup", onboardingSignupLimiter, jsonBody(SelfServeSignupBody), async (c) => {
-    const { billingCustomerId, billingSetupIntentId, emailProof, ...b } = c.req.valid("json");
-    // An email that already has a login needs the emailed code first, before
-    // a card is charged or anything is created.
+    const { billingCustomerId, billingSetupIntentId, ...b } = c.req.valid("json");
+    // An email that already has a login: the person must be signed in as that
+    // login (the page signs them in with their existing password first). The
+    // new company is then added to it, before any card is charged. Nobody can
+    // attach a company to, or change, someone else's login from here.
     const existing = await existingLogin(b.adminEmail);
-    if (existing && !(await checkSignupProof(b.adminEmail, emailProof)))
-      return c.json(
-        {
-          code: "email_needs_code",
-          message: "This email already has an ArrivePing login. Confirm it with the code we email you to add your new company to it.",
-        },
-        409,
-      );
+    if (existing) {
+      const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+      if (session?.user?.id !== existing.id)
+        return c.json(
+          {
+            code: "email_needs_signin",
+            message: "This email already has an ArrivePing login. Sign in with it to add your new company to that login.",
+          },
+          409,
+        );
+    }
     // Self-serve can't be asked to pick another slug on a collision, so take
     // the next free one ("acme-hvac-2") before anything is created.
     const base = slugify(b.slug || b.name);
@@ -283,7 +278,6 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       throw e;
     }
     const companyId = result.company.id;
-    if (existing) await consumeSignupProof(b.adminEmail).catch(() => {});
     if (billing?.ok) {
       await db
         .update(schema.companies)
@@ -301,6 +295,14 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
           .subscriptions.update(billing.subscriptionId, { metadata: { companyId, source: "arriveping-self-serve" } })
           .catch(() => {});
       }
+    }
+
+    // 2b) an existing login: tell its owner a company was added to it, so a
+    //     signup they didn't make can't go unnoticed (never blocks).
+    if (existing) {
+      const origin = (process.env.WEBSITE_URL || "https://arriveping.com").replace(/\/$/, "");
+      const tpl = emailTemplates.companyAddedToLogin({ name: existing.name, company: result.company.name, signInUrl: `${origin}/sign-in` });
+      void sendEmail({ to: b.adminEmail, subject: tpl.subject, html: tpl.html }).catch(() => {});
     }
 
     // 3) tell the team (never blocks the signup)

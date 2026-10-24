@@ -443,16 +443,14 @@ export const emailTemplates = {
     ].join("\n");
     return { subject: `${company} added you to ArrivePing`, html: shell(`Welcome to ${esc(company)}`, body, undefined, brand), text };
   },
-  /** One-time code proving someone owns an email that already has an ArrivePing login. */
-  signupCode(d: { name?: string; code: string }) {
-    const body = `<p>Hi ${esc(d.name || "there")}, you're setting up a new company on ArrivePing with this email address.</p>
-      <p style="margin-top:12px">This email already has an ArrivePing login, for example from a company you're a customer of or work for. Enter this code to add your new company to that login:</p>
-      <p style="margin:18px 0;font-size:30px;font-weight:800;letter-spacing:6px">${esc(d.code)}</p>
-      <p style="color:#94a3b8;font-size:13px">The code expires in 15 minutes. The password you chose during signup becomes the password for this login.</p>
-      <p style="margin-top:12px;color:#94a3b8;font-size:13px">If you didn't start a signup, you can ignore this email. Nothing changes without the code.</p>`;
+  /** Told to the owner of a login when a new company is added to it at signup. */
+  companyAddedToLogin(d: { name?: string; company: string; signInUrl: string }) {
+    const body = `<p>Hi ${esc(d.name || "there")}, a new company, <b>${esc(d.company)}</b>, was just set up on ArrivePing with your login, and you're its admin.</p>
+      <p style="margin-top:12px">You use the same email and password as before. Switch between your companies from the company menu after you sign in.</p>
+      <p style="margin-top:16px;color:#94a3b8;font-size:13px">If this wasn't you, reset your password now and reply to this email.</p>`;
     return {
-      subject: `Your ArrivePing signup code: ${d.code}`,
-      html: shell("Confirm your email", body, undefined, FALLBACK_BRAND),
+      subject: `${d.company} was added to your ArrivePing login`,
+      html: shell("New company on your login", body, { label: "Sign in", url: d.signInUrl }, FALLBACK_BRAND),
     };
   },
   passwordReset(d: { name?: string; url: string }, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {

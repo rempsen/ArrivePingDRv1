@@ -108,12 +108,12 @@ export default function SignupCompanyPage() {
   const [adminPassword2, setAdminPassword2] = useState("");
   const [personErr, setPersonErr] = useState("");
   // An email that already has a login (a customer or technician of another
-  // company): the emailed code proves it's theirs. `proofFor` is the email the
-  // proof was issued for, so changing the email asks again.
-  const [codeFor, setCodeFor] = useState("");
-  const [code, setCode] = useState("");
-  const [proof, setProof] = useState("");
-  const [proofFor, setProofFor] = useState("");
+  // company): they sign in with it, and the new company is added to that
+  // login. `existingFor` is the email we found a login for; `signedInAs` the
+  // email they signed in as, so changing the email asks again.
+  const [existingFor, setExistingFor] = useState("");
+  const [existingPw, setExistingPw] = useState("");
+  const [signedInAs, setSignedInAs] = useState("");
   const [checking, setChecking] = useState(false);
 
   const [brand, setBrand] = useState<BrandProposal | null>(null);
@@ -239,61 +239,52 @@ export default function SignupCompanyPage() {
 
   const emailKey = adminEmail.trim().toLowerCase();
 
-  async function postJson(path: string, body: unknown) {
-    const res = await fetch(`/api/public/onboarding/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const d = (await res.json().catch(() => ({}))) as Record<string, any>;
-    return { ok: res.ok, d };
-  }
-
-  async function sendCode(force = false) {
-    const { ok, d } = await postJson("email/check", { email: emailKey });
-    if (!ok) throw new Error(d?.message || "We couldn't check that email. Please try again.");
-    if (d.exists) {
-      setCodeFor(emailKey);
-      if (force && !d.codeSent) setPersonErr("We just sent a code. Give it a minute, then check your spam folder.");
-    }
-    return !!d.exists;
-  }
+  const usingExisting = existingFor === emailKey;
+  const signedIn = usingExisting && signedInAs === emailKey;
 
   async function continueToPayment(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (adminPassword !== adminPassword2) {
-      setPersonErr("Those passwords don't match. Please type them again.");
+    setPersonErr("");
+    if (signedIn) {
+      setStep("payment");
       return;
     }
-    setPersonErr("");
-    if (proof && proofFor === emailKey) {
-      setStep("payment");
+    if (!usingExisting && adminPassword !== adminPassword2) {
+      setPersonErr("Those passwords don't match. Please type them again.");
       return;
     }
     setChecking(true);
     try {
-      if (codeFor === emailKey) {
-        // Waiting on the code they were emailed.
-        const { ok, d } = await postJson("email/verify", { email: emailKey, code: code.trim() });
-        if (!ok) {
-          setPersonErr(d?.message || "That code isn't right.");
+      if (usingExisting) {
+        // Sign in with the login they already have.
+        const { error } = await authClient.signIn.email(
+          { email: emailKey, password: existingPw },
+          { onSuccess: (ctx) => captureToken(ctx) },
+        );
+        if (error) {
+          setPersonErr("That password doesn't match this login. Try again, or reset it.");
           return;
         }
-        setProof(String(d.proof));
-        setProofFor(emailKey);
+        setSignedInAs(emailKey);
         setStep("payment");
         return;
       }
-      const exists = await sendCode();
-      if (!exists) setStep("payment");
+      const res = await fetch("/api/public/onboarding/email/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailKey }),
+      });
+      const d = (await res.json().catch(() => ({}))) as Record<string, any>;
+      if (!res.ok) throw new Error(d?.message || "We couldn't check that email. Please try again.");
+      if (d.exists) setExistingFor(emailKey);
+      else setStep("payment");
     } catch (e2: any) {
       setPersonErr(e2?.message || "Something went wrong. Please try again.");
     } finally {
       setChecking(false);
     }
   }
-
 
   // Arriving from the homepage setup film: /get-started?site=example.com, with
   // the work email they typed handed over in sessionStorage (never the URL).
@@ -346,22 +337,22 @@ export default function SignupCompanyPage() {
           adminLastName: lastName.trim(),
           adminPhone: adminPhone.trim() || undefined,
           adminEmail,
-          adminPassword,
+          // An existing login keeps its own password; the server checks the
+          // session instead and never sets it.
+          adminPassword: signedIn ? existingPw : adminPassword,
           brand: reviewedBrand,
           billingCustomerId: billing?.customerId,
           billingSetupIntentId: billing?.setupIntentId,
-          emailProof: proofFor === emailKey ? proof || undefined : undefined,
         },
       });
       const d = await res.json();
-      if (!res.ok && (d as any)?.code === "email_needs_code") {
-        // The proof ran out (or the email changed): confirm the email again.
-        setProof("");
-        setProofFor("");
+      if (!res.ok && (d as any)?.code === "email_needs_signin") {
+        // Signed out meanwhile (or the email changed): sign in again.
+        setSignedInAs("");
+        setExistingFor(emailKey);
         setSubmitting(false);
         setStep("person");
-        await sendCode().catch(() => {});
-        setPersonErr((d as any)?.message || "Confirm your email with the code we sent.");
+        setPersonErr((d as any)?.message || "Sign in with your existing login to continue.");
         return;
       }
       if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
@@ -373,7 +364,7 @@ export default function SignupCompanyPage() {
       // the final "all set" line for a beat before handing off to /admin —
       // the onboarding chat picks up from there.
       const { error } = await authClient.signIn.email(
-        { email: adminEmail, password: adminPassword },
+        { email: adminEmail, password: signedIn ? existingPw : adminPassword },
         { onSuccess: (ctx) => captureToken(ctx) },
       );
       if (error) throw new Error(error.message);
@@ -765,6 +756,8 @@ export default function SignupCompanyPage() {
                           <Sparkles className="h-3 w-3 text-cyan-glow" /> Use {contactEmail.trim()}
                         </button>
                       )}
+                      {!usingExisting && (
+                        <>
                       <div className="relative">
                         <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                         <input aria-label="Password" type="password" className={inputCls + " pl-11"} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Password (min. 8 characters)" minLength={8} required autoComplete="new-password" />
@@ -783,35 +776,28 @@ export default function SignupCompanyPage() {
                           autoComplete="new-password"
                         />
                       </div>
-                      {codeFor === emailKey && !(proof && proofFor === emailKey) && (
+                        </>
+                      )}
+                      {usingExisting && !signedIn && (
                         <div className="rounded-lg border border-cyan-glow/30 bg-cyan-glow/[0.06] px-3.5 py-3">
                           <p className="text-sm font-semibold text-white">You already have an ArrivePing login</p>
                           <p className="mt-1 text-xs leading-relaxed text-slate-300">
-                            {emailKey} is already used on ArrivePing, maybe as a customer or technician of another company. We emailed it a
-                            6-digit code. Enter it to add {name.trim() || "your new company"} to that login. The password above becomes its
-                            password.
+                            {emailKey} is already used on ArrivePing, maybe as a customer or technician of another company. Sign in with it
+                            and {name.trim() || "your new company"} is added to the same login, so you switch between them from one account.
                           </p>
                           <input
-                            aria-label="6-digit code"
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                            maxLength={6}
-                            className={inputCls + " mt-2.5 tracking-[0.4em]"}
-                            value={code}
-                            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                            placeholder="123456"
+                            aria-label="Your existing ArrivePing password"
+                            type="password"
+                            autoComplete="current-password"
+                            className={inputCls + " mt-2.5"}
+                            value={existingPw}
+                            onChange={(e) => setExistingPw(e.target.value)}
+                            placeholder="Your existing ArrivePing password"
                             required
                           />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPersonErr("");
-                              void sendCode(true).catch((e2) => setPersonErr(e2?.message || "Couldn't send a new code."));
-                            }}
-                            className="mt-2 text-xs text-cyan-glow hover:underline"
-                          >
-                            Send a new code
-                          </button>
+                          <a href="/forgot-password" target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-cyan-glow hover:underline">
+                            Forgot it, or never set one? Reset it by email
+                          </a>
                         </div>
                       )}
                       <div className="min-h-[18px]" role="alert" aria-live="polite">
@@ -831,7 +817,7 @@ export default function SignupCompanyPage() {
                       disabled={checking}
                       className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
                     >
-                      {checking ? "Checking…" : codeFor === emailKey && !(proof && proofFor === emailKey) ? "Confirm code" : "Continue"}{" "}
+                      {checking ? "Checking…" : usingExisting && !signedIn ? "Sign in and continue" : "Continue"}{" "}
                       <ArrowRight className="h-4 w-4" />
                     </button>
 
