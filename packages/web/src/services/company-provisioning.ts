@@ -15,7 +15,7 @@
  */
 import { libraryFor } from "../shared/forms/library";
 import { toLegacy } from "../shared/forms/legacy";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
@@ -373,6 +373,27 @@ export async function seedOptionCatalogForCompany(
  * Mirrors the create-superadmin / team provisioning pattern: sign up via
  * better-auth (which may default the role), then stamp role + companyId.
  */
+/** Set a login's password with better-auth's own hasher, creating the credential row if needed. */
+async function setLoginPassword(userId: string, password: string) {
+  const ctx = await auth.$context;
+  const hash = await ctx.password.hash(password);
+  const [cred] = await sdb
+    .select()
+    .from(schema.account)
+    .where(and(eq(schema.account.userId, userId), eq(schema.account.providerId, "credential")));
+  if (cred) await sdb.update(schema.account).set({ password: hash, updatedAt: new Date() }).where(eq(schema.account.id, cred.id));
+  else
+    await sdb.insert(schema.account).values({
+      id: crypto.randomUUID(),
+      accountId: userId,
+      providerId: "credential",
+      userId,
+      password: hash,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as never);
+}
+
 export async function ensureUser(opts: {
   name: string;
   email: string;
@@ -515,7 +536,16 @@ export function scoutedTeamProfile(brand: Record<string, any>): Record<string, u
 export async function provisionCompany(
   b: CompanyCreateInput,
   actor: ProvisionActor,
-  opts?: { source?: "superadmin" | "self_serve" },
+  opts?: {
+    source?: "superadmin" | "self_serve";
+    /**
+     * The admin email already has a login, and the person proved they own the
+     * inbox (services/signup-email-proof.ts). The new company is added to that
+     * login, and the password they typed becomes its password, as a
+     * forgot-password reset would. Without this an existing email is refused.
+     */
+    existingAdminVerified?: boolean;
+  },
 ): Promise<ProvisionResult> {
   const source = opts?.source ?? "superadmin";
   const name = b.name;
@@ -546,6 +576,7 @@ export async function provisionCompany(
   // lookup (the new company doesn't exist yet) — sdb, same rationale as
   // ensureUser() above.
   for (const email of [adminEmail, ...(wantManager ? [managerEmail] : [])]) {
+    if (email === adminEmail && opts?.existingAdminVerified) continue;
     const [u] = await sdb.select().from(schema.user).where(eq(schema.user.email, email));
     if (u) throw Err.conflict(`Email already in use: ${email}`);
   }
@@ -938,6 +969,13 @@ export async function provisionCompany(
     lastName: String(b.adminLastName ?? "").trim() || undefined,
     phone: formatPhone(String(b.adminPhone ?? "")) || undefined,
   });
+  // An existing login the person proved is theirs: the password they just
+  // chose replaces the old one (they signed up with it and sign in with it
+  // next), and the email now counts as verified.
+  if (admin.reused && opts?.existingAdminVerified) {
+    await setLoginPassword(admin.id, adminPassword);
+    await sdb.update(schema.user).set({ emailVerified: true }).where(eq(schema.user.id, admin.id));
+  }
   let manager: { id: string } | null = null;
   if (wantManager) {
     manager = await ensureUser({

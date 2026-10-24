@@ -71,6 +71,7 @@ import { applyQualifyingTuning, type QualifyingProfile } from "../../services/qu
 import { applyIcpAnswerTuning, type IcpTuningSummary } from "../../services/icp-answer-tuning";
 import { inviteStaffMember, kindToRole, type StaffInviteResult } from "../lib/staff-invite";
 import { pushSignupStarted } from "../../services/hubspot-leads";
+import { checkSignupProof, consumeSignupProof, existingLogin, requestSignupCode, verifySignupCode } from "../../services/signup-email-proof";
 import { computeLaunchChecklist } from "../../services/launch-checklist";
 import {
   getIndustryPreset,
@@ -121,6 +122,17 @@ const SelfServeSignupBody = CompanyCreateBody.omit({
   // Required whenever Stripe is configured: no card, no trial.
   billingCustomerId: optText(80),
   billingSetupIntentId: optText(80),
+  // From POST /email/verify, when the admin email already has a login.
+  emailProof: optText(200),
+});
+
+const EmailCheckBody = z.object({ email: emailField("Email") });
+const EmailVerifyBody = z.object({ email: emailField("Email"), code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code") });
+const onboardingEmailLimiter = rateLimit({
+  name: "onboarding-email-code",
+  limit: 12,
+  windowMs: 60 * 60_000,
+  keyFn: keyByIp,
 });
 
 const BillingSetupBody = z.object({
@@ -182,6 +194,33 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     }
   })
 
+  // POST /api/public/onboarding/email/check — before the card step. When the
+  // email already has a login (a customer or technician of another company),
+  // a code is emailed so they can prove it's theirs and add their new company
+  // to that login. Nothing is created here.
+  .post("/email/check", onboardingEmailLimiter, jsonBody(EmailCheckBody), async (c) => {
+    const { email } = c.req.valid("json");
+    try {
+      const r = await requestSignupCode(email);
+      return c.json({ exists: r.exists, codeSent: r.sent }, 200);
+    } catch (e) {
+      console.error("[onboarding] email check failed", e);
+      return c.json({ message: "We couldn't check that email. Please try again in a moment." }, 502);
+    }
+  })
+  // POST /api/public/onboarding/email/verify — the emailed code, for a proof
+  // token /signup accepts.
+  .post("/email/verify", onboardingEmailLimiter, jsonBody(EmailVerifyBody), async (c) => {
+    const { email, code } = c.req.valid("json");
+    const r = await verifySignupCode(email, code);
+    if (!r.ok)
+      return c.json(
+        { message: r.reason === "wrong" ? "That code isn't right. Check the email and try again." : "That code has expired. Send a new one." },
+        400,
+      );
+    return c.json({ proof: r.proof }, 200);
+  })
+
   // POST /api/public/onboarding/signup — starts the 30-day trial subscription
   // on the saved card, then provisions a brand-new tenant end to end (same
   // pipeline the superadmin panel uses) and returns just enough for the
@@ -192,7 +231,18 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
   // they've even authenticated; the admin can view/rotate their key from
   // Settings once signed in.
   .post("/signup", onboardingSignupLimiter, jsonBody(SelfServeSignupBody), async (c) => {
-    const { billingCustomerId, billingSetupIntentId, ...b } = c.req.valid("json");
+    const { billingCustomerId, billingSetupIntentId, emailProof, ...b } = c.req.valid("json");
+    // An email that already has a login needs the emailed code first, before
+    // a card is charged or anything is created.
+    const existing = await existingLogin(b.adminEmail);
+    if (existing && !(await checkSignupProof(b.adminEmail, emailProof)))
+      return c.json(
+        {
+          code: "email_needs_code",
+          message: "This email already has an ArrivePing login. Confirm it with the code we email you to add your new company to it.",
+        },
+        409,
+      );
     // Self-serve can't be asked to pick another slug on a collision, so take
     // the next free one ("acme-hvac-2") before anything is created.
     const base = slugify(b.slug || b.name);
@@ -227,12 +277,13 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     // 2) the tenant
     let result: Awaited<ReturnType<typeof provisionCompany>>;
     try {
-      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve" });
+      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve", existingAdminVerified: !!existing });
     } catch (e) {
       if (billing?.ok) await cancelSubscriptionQuietly(billing.subscriptionId);
       throw e;
     }
     const companyId = result.company.id;
+    if (existing) await consumeSignupProof(b.adminEmail).catch(() => {});
     if (billing?.ok) {
       await db
         .update(schema.companies)

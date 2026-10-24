@@ -107,6 +107,14 @@ export default function SignupCompanyPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminPassword2, setAdminPassword2] = useState("");
   const [personErr, setPersonErr] = useState("");
+  // An email that already has a login (a customer or technician of another
+  // company): the emailed code proves it's theirs. `proofFor` is the email the
+  // proof was issued for, so changing the email asks again.
+  const [codeFor, setCodeFor] = useState("");
+  const [code, setCode] = useState("");
+  const [proof, setProof] = useState("");
+  const [proofFor, setProofFor] = useState("");
+  const [checking, setChecking] = useState(false);
 
   const [brand, setBrand] = useState<BrandProposal | null>(null);
   const [scouting, setScouting] = useState(false);
@@ -229,7 +237,29 @@ export default function SignupCompanyPage() {
     setStep("person");
   }
 
-  function continueToPayment(e: React.FormEvent) {
+  const emailKey = adminEmail.trim().toLowerCase();
+
+  async function postJson(path: string, body: unknown) {
+    const res = await fetch(`/api/public/onboarding/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = (await res.json().catch(() => ({}))) as Record<string, any>;
+    return { ok: res.ok, d };
+  }
+
+  async function sendCode(force = false) {
+    const { ok, d } = await postJson("email/check", { email: emailKey });
+    if (!ok) throw new Error(d?.message || "We couldn't check that email. Please try again.");
+    if (d.exists) {
+      setCodeFor(emailKey);
+      if (force && !d.codeSent) setPersonErr("We just sent a code. Give it a minute, then check your spam folder.");
+    }
+    return !!d.exists;
+  }
+
+  async function continueToPayment(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
     if (adminPassword !== adminPassword2) {
@@ -237,7 +267,31 @@ export default function SignupCompanyPage() {
       return;
     }
     setPersonErr("");
-    setStep("payment");
+    if (proof && proofFor === emailKey) {
+      setStep("payment");
+      return;
+    }
+    setChecking(true);
+    try {
+      if (codeFor === emailKey) {
+        // Waiting on the code they were emailed.
+        const { ok, d } = await postJson("email/verify", { email: emailKey, code: code.trim() });
+        if (!ok) {
+          setPersonErr(d?.message || "That code isn't right.");
+          return;
+        }
+        setProof(String(d.proof));
+        setProofFor(emailKey);
+        setStep("payment");
+        return;
+      }
+      const exists = await sendCode();
+      if (!exists) setStep("payment");
+    } catch (e2: any) {
+      setPersonErr(e2?.message || "Something went wrong. Please try again.");
+    } finally {
+      setChecking(false);
+    }
   }
 
 
@@ -296,9 +350,20 @@ export default function SignupCompanyPage() {
           brand: reviewedBrand,
           billingCustomerId: billing?.customerId,
           billingSetupIntentId: billing?.setupIntentId,
+          emailProof: proofFor === emailKey ? proof || undefined : undefined,
         },
       });
       const d = await res.json();
+      if (!res.ok && (d as any)?.code === "email_needs_code") {
+        // The proof ran out (or the email changed): confirm the email again.
+        setProof("");
+        setProofFor("");
+        setSubmitting(false);
+        setStep("person");
+        await sendCode().catch(() => {});
+        setPersonErr((d as any)?.message || "Confirm your email with the code we sent.");
+        return;
+      }
       if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
       // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
       hubspotIdentify(adminEmail);
@@ -718,6 +783,37 @@ export default function SignupCompanyPage() {
                           autoComplete="new-password"
                         />
                       </div>
+                      {codeFor === emailKey && !(proof && proofFor === emailKey) && (
+                        <div className="rounded-lg border border-cyan-glow/30 bg-cyan-glow/[0.06] px-3.5 py-3">
+                          <p className="text-sm font-semibold text-white">You already have an ArrivePing login</p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                            {emailKey} is already used on ArrivePing, maybe as a customer or technician of another company. We emailed it a
+                            6-digit code. Enter it to add {name.trim() || "your new company"} to that login. The password above becomes its
+                            password.
+                          </p>
+                          <input
+                            aria-label="6-digit code"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={6}
+                            className={inputCls + " mt-2.5 tracking-[0.4em]"}
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            placeholder="123456"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPersonErr("");
+                              void sendCode(true).catch((e2) => setPersonErr(e2?.message || "Couldn't send a new code."));
+                            }}
+                            className="mt-2 text-xs text-cyan-glow hover:underline"
+                          >
+                            Send a new code
+                          </button>
+                        </div>
+                      )}
                       <div className="min-h-[18px]" role="alert" aria-live="polite">
                         {(personErr || (adminPassword2 && adminPassword2 !== adminPassword)) && (
                           <p className="text-xs font-medium text-red-400">{personErr || "Passwords don't match yet."}</p>
@@ -732,9 +828,11 @@ export default function SignupCompanyPage() {
 
                     <button
                       type="submit"
+                      disabled={checking}
                       className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
                     >
-                      Continue <ArrowRight className="h-4 w-4" />
+                      {checking ? "Checking…" : codeFor === emailKey && !(proof && proofFor === emailKey) ? "Confirm code" : "Continue"}{" "}
+                      <ArrowRight className="h-4 w-4" />
                     </button>
 
                     <button

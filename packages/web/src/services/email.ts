@@ -443,6 +443,18 @@ export const emailTemplates = {
     ].join("\n");
     return { subject: `${company} added you to ArrivePing`, html: shell(`Welcome to ${esc(company)}`, body, undefined, brand), text };
   },
+  /** One-time code proving someone owns an email that already has an ArrivePing login. */
+  signupCode(d: { name?: string; code: string }) {
+    const body = `<p>Hi ${esc(d.name || "there")}, you're setting up a new company on ArrivePing with this email address.</p>
+      <p style="margin-top:12px">This email already has an ArrivePing login, for example from a company you're a customer of or work for. Enter this code to add your new company to that login:</p>
+      <p style="margin:18px 0;font-size:30px;font-weight:800;letter-spacing:6px">${esc(d.code)}</p>
+      <p style="color:#94a3b8;font-size:13px">The code expires in 15 minutes. The password you chose during signup becomes the password for this login.</p>
+      <p style="margin-top:12px;color:#94a3b8;font-size:13px">If you didn't start a signup, you can ignore this email. Nothing changes without the code.</p>`;
+    return {
+      subject: `Your ArrivePing signup code: ${d.code}`,
+      html: shell("Confirm your email", body, undefined, FALLBACK_BRAND),
+    };
+  },
   passwordReset(d: { name?: string; url: string }, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
     const co = brand.company || "your";
     const body = `<p>Hi ${d.name || "there"}, we received a request to reset the password for your ${esc(co)} account.</p>
