@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { api } from "../lib/api";
+import { ApiError } from "../lib/api-error";
 import { authClient, captureToken } from "../lib/auth";
 import { Logo } from "../components/brand";
 import { Field, inputCls } from "../components/modal";
@@ -346,15 +347,6 @@ export default function SignupCompanyPage() {
         },
       });
       const d = await res.json();
-      if (!res.ok && (d as any)?.code === "email_needs_signin") {
-        // Signed out meanwhile (or the email changed): sign in again.
-        setSignedInAs("");
-        setExistingFor(emailKey);
-        setSubmitting(false);
-        setStep("person");
-        setPersonErr((d as any)?.message || "Sign in with your existing login to continue.");
-        return;
-      }
       if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
       // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
       hubspotIdentify(adminEmail);
@@ -369,13 +361,30 @@ export default function SignupCompanyPage() {
       );
       if (error) throw new Error(error.message);
       setProvisionDone(true);
+      // Open the company just created, not whichever one this browser last
+      // had open (an existing login keeps its other companies).
+      try {
+        localStorage.setItem("active_company", String((d as any)?.companySlug || ""));
+      } catch {
+        /* storage blocked: the server falls back to the login's home company, which is now this one */
+      }
       await new Promise((r) => setTimeout(r, 1600));
       window.location.assign("/admin");
     } catch (e: any) {
-      setErr(e.message || "Something went wrong");
-      setSubmitting(false);
       setProvisionResult(null);
       setProvisionDone(false);
+      setSubmitting(false);
+      // The API client throws on any non-2xx. Signed out meanwhile (or the
+      // email changed): sign in with the existing login again.
+      const body = e instanceof ApiError ? (e.body as { code?: string; message?: string } | undefined) : undefined;
+      if (body?.code === "email_needs_signin" || (e instanceof ApiError && e.code === "email_needs_signin")) {
+        setSignedInAs("");
+        setExistingFor(emailKey);
+        setStep("person");
+        setPersonErr(body?.message || "Sign in with your existing login to continue.");
+        return;
+      }
+      setErr(e.message || "Something went wrong");
     }
   }
 
