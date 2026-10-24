@@ -269,6 +269,8 @@ export default function SignupCompanyPage() {
         }
         setSignedInAs(emailKey);
         setStep("payment");
+        // Interrupted after the card step: carry on with the same card.
+        if (lastBilling.current) void submit(lastBilling.current);
         return;
       }
       const res = await fetch("/api/public/onboarding/email/check", {
@@ -310,7 +312,14 @@ export default function SignupCompanyPage() {
     }
   }, []);
 
+  // The saved card from the last attempt. If a signup has to stop to sign in
+  // again, it resumes with the same card, so a retry finds the company that
+  // card may already have (the server matches on its Stripe customer) instead
+  // of starting a second one with a new card setup.
+  const lastBilling = useRef<BillingIds>(null);
+
   async function submit(billing: BillingIds) {
+    lastBilling.current = billing;
     setErr("");
     setSubmitting(true);
     try {
