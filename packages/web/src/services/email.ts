@@ -443,6 +443,16 @@ export const emailTemplates = {
     ].join("\n");
     return { subject: `${company} added you to ArrivePing`, html: shell(`Welcome to ${esc(company)}`, body, undefined, brand), text };
   },
+  /** Told to the owner of a login when a new company is added to it at signup. */
+  companyAddedToLogin(d: { name?: string; company: string; signInUrl: string }) {
+    const body = `<p>Hi ${esc(d.name || "there")}, a new company, <b>${esc(d.company)}</b>, was just set up on ArrivePing with your login, and you're its admin.</p>
+      <p style="margin-top:12px">You use the same email and password as before. Switch between your companies from the company menu after you sign in.</p>
+      <p style="margin-top:16px;color:#94a3b8;font-size:13px">If this wasn't you, reset your password now and reply to this email.</p>`;
+    return {
+      subject: `${d.company} was added to your ArrivePing login`,
+      html: shell("New company on your login", body, { label: "Sign in", url: d.signInUrl }, FALLBACK_BRAND),
+    };
+  },
   passwordReset(d: { name?: string; url: string }, brand: TenantEmailBrand = FALLBACK_BRAND, _tz?: string | null) {
     const co = brand.company || "your";
     const body = `<p>Hi ${d.name || "there"}, we received a request to reset the password for your ${esc(co)} account.</p>

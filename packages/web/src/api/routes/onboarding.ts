@@ -25,7 +25,9 @@ import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { db } from "../database";
+import { db, sdb } from "../database";
+import { auth } from "../auth";
+import { emailTemplates, sendEmail } from "../../services/email";
 import { tdb } from "../database/tenant";
 import * as schema from "../database/schema";
 import { requireAdmin, tenantId } from "../middleware/auth";
@@ -123,6 +125,23 @@ const SelfServeSignupBody = CompanyCreateBody.omit({
   billingSetupIntentId: optText(80),
 });
 
+const EmailCheckBody = z.object({ email: emailField("Email") });
+const onboardingEmailLimiter = rateLimit({
+  name: "onboarding-email-check",
+  limit: 30,
+  windowMs: 60 * 60_000,
+  keyFn: keyByIp,
+});
+
+/** The login that already uses this email, if any (a deleted account doesn't count). */
+async function existingLogin(email: string) {
+  const [u] = await sdb
+    .select({ id: schema.user.id, name: schema.user.name, role: schema.user.role })
+    .from(schema.user)
+    .where(sql`lower(${schema.user.email}) = ${email.trim().toLowerCase()}`);
+  return u && u.role !== "deleted" ? u : null;
+}
+
 const BillingSetupBody = z.object({
   email: emailField("Email"),
   name: shortText("Your name", 200),
@@ -182,6 +201,16 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     }
   })
 
+  // POST /api/public/onboarding/email/check — before the card step. When the
+  // email already has a login (a customer or technician of another company),
+  // the page asks them to sign in with it; the new company is then added to
+  // that login. (The signup itself said "email already in use" before, so this
+  // tells a visitor nothing new.)
+  .post("/email/check", onboardingEmailLimiter, jsonBody(EmailCheckBody), async (c) => {
+    const { email } = c.req.valid("json");
+    return c.json({ exists: !!(await existingLogin(email)) }, 200);
+  })
+
   // POST /api/public/onboarding/signup — starts the 30-day trial subscription
   // on the saved card, then provisions a brand-new tenant end to end (same
   // pipeline the superadmin panel uses) and returns just enough for the
@@ -193,6 +222,22 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
   // Settings once signed in.
   .post("/signup", onboardingSignupLimiter, jsonBody(SelfServeSignupBody), async (c) => {
     const { billingCustomerId, billingSetupIntentId, ...b } = c.req.valid("json");
+    // An email that already has a login: the person must be signed in as that
+    // login (the page signs them in with their existing password first). The
+    // new company is then added to it, before any card is charged. Nobody can
+    // attach a company to, or change, someone else's login from here.
+    const existing = await existingLogin(b.adminEmail);
+    if (existing) {
+      const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+      if (session?.user?.id !== existing.id)
+        return c.json(
+          {
+            code: "email_needs_signin",
+            message: "This email already has an ArrivePing login. Sign in with it to add your new company to that login.",
+          },
+          409,
+        );
+    }
     // Self-serve can't be asked to pick another slug on a collision, so take
     // the next free one ("acme-hvac-2") before anything is created.
     const base = slugify(b.slug || b.name);
@@ -227,7 +272,7 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     // 2) the tenant
     let result: Awaited<ReturnType<typeof provisionCompany>>;
     try {
-      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve" });
+      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve", existingAdminVerified: !!existing });
     } catch (e) {
       if (billing?.ok) await cancelSubscriptionQuietly(billing.subscriptionId);
       throw e;
@@ -250,6 +295,14 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
           .subscriptions.update(billing.subscriptionId, { metadata: { companyId, source: "arriveping-self-serve" } })
           .catch(() => {});
       }
+    }
+
+    // 2b) an existing login: tell its owner a company was added to it, so a
+    //     signup they didn't make can't go unnoticed (never blocks).
+    if (existing) {
+      const origin = (process.env.WEBSITE_URL || "https://arriveping.com").replace(/\/$/, "");
+      const tpl = emailTemplates.companyAddedToLogin({ name: existing.name, company: result.company.name, signInUrl: `${origin}/sign-in` });
+      void sendEmail({ to: b.adminEmail, subject: tpl.subject, html: tpl.html }).catch(() => {});
     }
 
     // 3) tell the team (never blocks the signup)

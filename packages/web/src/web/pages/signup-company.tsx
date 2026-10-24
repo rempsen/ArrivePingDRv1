@@ -107,6 +107,14 @@ export default function SignupCompanyPage() {
   const [adminPassword, setAdminPassword] = useState("");
   const [adminPassword2, setAdminPassword2] = useState("");
   const [personErr, setPersonErr] = useState("");
+  // An email that already has a login (a customer or technician of another
+  // company): they sign in with it, and the new company is added to that
+  // login. `existingFor` is the email we found a login for; `signedInAs` the
+  // email they signed in as, so changing the email asks again.
+  const [existingFor, setExistingFor] = useState("");
+  const [existingPw, setExistingPw] = useState("");
+  const [signedInAs, setSignedInAs] = useState("");
+  const [checking, setChecking] = useState(false);
 
   const [brand, setBrand] = useState<BrandProposal | null>(null);
   const [scouting, setScouting] = useState(false);
@@ -229,17 +237,54 @@ export default function SignupCompanyPage() {
     setStep("person");
   }
 
-  function continueToPayment(e: React.FormEvent) {
+  const emailKey = adminEmail.trim().toLowerCase();
+
+  const usingExisting = existingFor === emailKey;
+  const signedIn = usingExisting && signedInAs === emailKey;
+
+  async function continueToPayment(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (adminPassword !== adminPassword2) {
+    setPersonErr("");
+    if (signedIn) {
+      setStep("payment");
+      return;
+    }
+    if (!usingExisting && adminPassword !== adminPassword2) {
       setPersonErr("Those passwords don't match. Please type them again.");
       return;
     }
-    setPersonErr("");
-    setStep("payment");
+    setChecking(true);
+    try {
+      if (usingExisting) {
+        // Sign in with the login they already have.
+        const { error } = await authClient.signIn.email(
+          { email: emailKey, password: existingPw },
+          { onSuccess: (ctx) => captureToken(ctx) },
+        );
+        if (error) {
+          setPersonErr("That password doesn't match this login. Try again, or reset it.");
+          return;
+        }
+        setSignedInAs(emailKey);
+        setStep("payment");
+        return;
+      }
+      const res = await fetch("/api/public/onboarding/email/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailKey }),
+      });
+      const d = (await res.json().catch(() => ({}))) as Record<string, any>;
+      if (!res.ok) throw new Error(d?.message || "We couldn't check that email. Please try again.");
+      if (d.exists) setExistingFor(emailKey);
+      else setStep("payment");
+    } catch (e2: any) {
+      setPersonErr(e2?.message || "Something went wrong. Please try again.");
+    } finally {
+      setChecking(false);
+    }
   }
-
 
   // Arriving from the homepage setup film: /get-started?site=example.com, with
   // the work email they typed handed over in sessionStorage (never the URL).
@@ -292,13 +337,24 @@ export default function SignupCompanyPage() {
           adminLastName: lastName.trim(),
           adminPhone: adminPhone.trim() || undefined,
           adminEmail,
-          adminPassword,
+          // An existing login keeps its own password; the server checks the
+          // session instead and never sets it.
+          adminPassword: signedIn ? existingPw : adminPassword,
           brand: reviewedBrand,
           billingCustomerId: billing?.customerId,
           billingSetupIntentId: billing?.setupIntentId,
         },
       });
       const d = await res.json();
+      if (!res.ok && (d as any)?.code === "email_needs_signin") {
+        // Signed out meanwhile (or the email changed): sign in again.
+        setSignedInAs("");
+        setExistingFor(emailKey);
+        setSubmitting(false);
+        setStep("person");
+        setPersonErr((d as any)?.message || "Sign in with your existing login to continue.");
+        return;
+      }
       if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
       // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
       hubspotIdentify(adminEmail);
@@ -308,7 +364,7 @@ export default function SignupCompanyPage() {
       // the final "all set" line for a beat before handing off to /admin —
       // the onboarding chat picks up from there.
       const { error } = await authClient.signIn.email(
-        { email: adminEmail, password: adminPassword },
+        { email: adminEmail, password: signedIn ? existingPw : adminPassword },
         { onSuccess: (ctx) => captureToken(ctx) },
       );
       if (error) throw new Error(error.message);
@@ -700,6 +756,8 @@ export default function SignupCompanyPage() {
                           <Sparkles className="h-3 w-3 text-cyan-glow" /> Use {contactEmail.trim()}
                         </button>
                       )}
+                      {!usingExisting && (
+                        <>
                       <div className="relative">
                         <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                         <input aria-label="Password" type="password" className={inputCls + " pl-11"} value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Password (min. 8 characters)" minLength={8} required autoComplete="new-password" />
@@ -718,6 +776,30 @@ export default function SignupCompanyPage() {
                           autoComplete="new-password"
                         />
                       </div>
+                        </>
+                      )}
+                      {usingExisting && !signedIn && (
+                        <div className="rounded-lg border border-cyan-glow/30 bg-cyan-glow/[0.06] px-3.5 py-3">
+                          <p className="text-sm font-semibold text-white">You already have an ArrivePing login</p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                            {emailKey} is already used on ArrivePing, maybe as a customer or technician of another company. Sign in with it
+                            and {name.trim() || "your new company"} is added to the same login, so you switch between them from one account.
+                          </p>
+                          <input
+                            aria-label="Your existing ArrivePing password"
+                            type="password"
+                            autoComplete="current-password"
+                            className={inputCls + " mt-2.5"}
+                            value={existingPw}
+                            onChange={(e) => setExistingPw(e.target.value)}
+                            placeholder="Your existing ArrivePing password"
+                            required
+                          />
+                          <a href="/forgot-password" target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-cyan-glow hover:underline">
+                            Forgot it, or never set one? Reset it by email
+                          </a>
+                        </div>
+                      )}
                       <div className="min-h-[18px]" role="alert" aria-live="polite">
                         {(personErr || (adminPassword2 && adminPassword2 !== adminPassword)) && (
                           <p className="text-xs font-medium text-red-400">{personErr || "Passwords don't match yet."}</p>
@@ -732,9 +814,11 @@ export default function SignupCompanyPage() {
 
                     <button
                       type="submit"
+                      disabled={checking}
                       className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
                     >
-                      Continue <ArrowRight className="h-4 w-4" />
+                      {checking ? "Checking…" : usingExisting && !signedIn ? "Sign in and continue" : "Continue"}{" "}
+                      <ArrowRight className="h-4 w-4" />
                     </button>
 
                     <button

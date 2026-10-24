@@ -15,7 +15,7 @@
  */
 import { libraryFor } from "../shared/forms/library";
 import { toLegacy } from "../shared/forms/legacy";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, sdb } from "../api/database";
 import { tdb } from "../api/database/tenant";
@@ -373,6 +373,35 @@ export async function seedOptionCatalogForCompany(
  * Mirrors the create-superadmin / team provisioning pattern: sign up via
  * better-auth (which may default the role), then stamp role + companyId.
  */
+/**
+ * Add a new company to a login that already exists (the person signed in as
+ * it to sign up). Only memberships change:
+ *  - the new company gets an active admin membership;
+ *  - the company they belonged to before keeps theirs: a legacy login with no
+ *    membership row there gets one first, so moving their home company to the
+ *    new one doesn't cut them off from it;
+ *  - the login's password, name and global role are untouched (a platform
+ *    superadmin stays one, and keeps their home company).
+ */
+export async function attachExistingAdmin(email: string, companyId: string): Promise<{ id: string; reused: boolean }> {
+  const [u] = await sdb
+    .select()
+    .from(schema.user)
+    .where(sql`lower(${schema.user.email}) = ${email.trim().toLowerCase()}`);
+  if (!u || u.role === "deleted") throw Err.badRequest("That login no longer exists.");
+  const home = u.companyId;
+  if (home && home !== companyId) {
+    const [m] = await sdb
+      .select({ id: schema.memberships.id })
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.userId, u.id), eq(schema.memberships.companyId, home)));
+    if (!m && u.role !== "superadmin") await attachMembership({ userId: u.id, companyId: home, role: u.role || "customer", status: "active" });
+  }
+  await attachMembership({ userId: u.id, companyId, role: "admin", status: "active" });
+  if (u.role !== "superadmin") await sdb.update(schema.user).set({ companyId }).where(eq(schema.user.id, u.id));
+  return { id: u.id, reused: true };
+}
+
 export async function ensureUser(opts: {
   name: string;
   email: string;
@@ -515,7 +544,16 @@ export function scoutedTeamProfile(brand: Record<string, any>): Record<string, u
 export async function provisionCompany(
   b: CompanyCreateInput,
   actor: ProvisionActor,
-  opts?: { source?: "superadmin" | "self_serve" },
+  opts?: {
+    source?: "superadmin" | "self_serve";
+    /**
+     * The admin email already has a login and the caller is signed in as it
+     * (self-serve signup checks the session). The new company is added to that
+     * login as an admin membership; its password, name and global role are left
+     * alone. Without this an existing email is refused.
+     */
+    existingAdminVerified?: boolean;
+  },
 ): Promise<ProvisionResult> {
   const source = opts?.source ?? "superadmin";
   const name = b.name;
@@ -546,6 +584,7 @@ export async function provisionCompany(
   // lookup (the new company doesn't exist yet) — sdb, same rationale as
   // ensureUser() above.
   for (const email of [adminEmail, ...(wantManager ? [managerEmail] : [])]) {
+    if (email === adminEmail && opts?.existingAdminVerified) continue;
     const [u] = await sdb.select().from(schema.user).where(eq(schema.user.email, email));
     if (u) throw Err.conflict(`Email already in use: ${email}`);
   }
@@ -928,16 +967,18 @@ export async function provisionCompany(
   }
 
   // 3) provision the admin + (optional) manager accounts
-  const admin = await ensureUser({
-    name: adminName,
-    email: adminEmail,
-    password: adminPassword,
-    role: "admin",
-    companyId: slug,
-    firstName: String(b.adminFirstName ?? "").trim() || undefined,
-    lastName: String(b.adminLastName ?? "").trim() || undefined,
-    phone: formatPhone(String(b.adminPhone ?? "")) || undefined,
-  });
+  const admin = opts?.existingAdminVerified
+    ? await attachExistingAdmin(adminEmail, slug)
+    : await ensureUser({
+        name: adminName,
+        email: adminEmail,
+        password: adminPassword,
+        role: "admin",
+        companyId: slug,
+        firstName: String(b.adminFirstName ?? "").trim() || undefined,
+        lastName: String(b.adminLastName ?? "").trim() || undefined,
+        phone: formatPhone(String(b.adminPhone ?? "")) || undefined,
+      });
   let manager: { id: string } | null = null;
   if (wantManager) {
     manager = await ensureUser({
