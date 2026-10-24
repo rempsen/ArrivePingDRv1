@@ -79,6 +79,25 @@ describe("POST /signup with an existing email", () => {
   });
 });
 
+describe("POST /signup retried after it already went through", () => {
+  it("hands back the company the card already has, instead of making a second one", async () => {
+    await sdb.insert(schema.companies).values({ id: "sx-done", name: "Towers Realty", billingCustomerId: "cus_sx1" } as never);
+    await sdb.insert(schema.memberships).values({ id: "sx-m-done", userId: "sx-u1", companyId: "sx-done", role: "admin", status: "active" } as never);
+    signedIn = { id: "sx-u1", email: "SX-Client@Towers.test" };
+    const res = await post("/signup", { name: "Towers Realty", adminName: "Matt", adminEmail: EMAIL, adminPassword: "x-12345678", billingCustomerId: "cus_sx1" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ companySlug: "sx-done", alreadyCreated: true });
+    const rows = await sdb.select().from(schema.companies).where(eq(schema.companies.billingCustomerId, "cus_sx1"));
+    expect(rows.length).toBe(1);
+  });
+
+  it("won't hand that company to someone else's email", async () => {
+    signedIn = null;
+    const res = await post("/signup", { name: "Other", adminName: "X", adminEmail: "sx-other@x.test", adminPassword: "x-12345678", billingCustomerId: "cus_sx1" });
+    expect(res.status).toBe(409);
+  });
+});
+
 describe("adding the new company to the login", () => {
   const member = async (userId: string, companyId: string) =>
     (await sdb.select().from(schema.memberships).where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.companyId, companyId))))[0];
