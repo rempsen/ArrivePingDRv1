@@ -23,7 +23,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { db, sdb } from "../database";
 import { auth } from "../auth";
@@ -238,6 +238,36 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
           409,
         );
     }
+    // A retry after the server finished but the browser missed the answer
+    // (the final sign-in failed, the tab lost signal): the card's Stripe
+    // customer already has a company. Hand that back instead of making a
+    // second one on the same subscription.
+    if (billingCustomerId) {
+      const [done] = await db
+        .select({ id: schema.companies.id, name: schema.companies.name, trialEndsAt: schema.companies.billingTrialEndsAt })
+        .from(schema.companies)
+        .where(eq(schema.companies.billingCustomerId, billingCustomerId));
+      if (done) {
+        const [admin] = await sdb
+          .select({ id: schema.user.id, email: schema.user.email })
+          .from(schema.memberships)
+          .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
+          .where(and(eq(schema.memberships.companyId, done.id), eq(schema.memberships.role, "admin"), sql`lower(${schema.user.email}) = ${b.adminEmail.trim().toLowerCase()}`));
+        if (!admin) return c.json({ message: "This card is already used by another ArrivePing company." }, 409);
+        return c.json(
+          {
+            companySlug: done.id,
+            companyName: done.name,
+            admin,
+            seeded: null,
+            trialEndsAt: done.trialEndsAt ? done.trialEndsAt.toISOString() : null,
+            alreadyCreated: true,
+          },
+          200,
+        );
+      }
+    }
+
     // Self-serve can't be asked to pick another slug on a collision, so take
     // the next free one ("acme-hvac-2") before anything is created.
     const base = slugify(b.slug || b.name);
