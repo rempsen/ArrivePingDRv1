@@ -20,8 +20,10 @@ export function DayStrip({
   onChange: (day: string) => void;
 }) {
   const days = Array.from({ length: 9 }, (_, i) => addDays(today, i - 1));
+  // A ScrollView grows and shrinks like any flex child: on the iPad board it
+  // took half the screen, on the jobs list it was squeezed. Size to content.
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.strip}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.scroll} contentContainerStyle={s.strip}>
       {days.map((d) => {
         const on = d === day;
         const date = new Date(`${d}T12:00:00Z`);
@@ -50,6 +52,7 @@ export function DayStrip({
 }
 
 const s = StyleSheet.create({
+  scroll: { flexGrow: 0, flexShrink: 0 },
   strip: { paddingHorizontal: S.lg, gap: S.sm, paddingVertical: S.sm },
   chip: { width: 56, alignItems: "center", paddingVertical: S.sm, borderRadius: R.control, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.border },
   chipOn: { backgroundColor: "rgba(14,165,233,0.16)", borderColor: C.brand },
