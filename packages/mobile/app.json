@@ -68,14 +68,14 @@
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "scheme": [
       "arriveping",
       "homeserve"
     ],
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "plugins": [
       "expo-router",
       [
@@ -125,9 +125,11 @@
         }
       ],
       "@sentry/react-native",
-      "expo-audio"
+      "expo-audio",
+      "expo-font",
+      "expo-asset"
     ],
-    "runtimeVersion": "1.0.4",
+    "runtimeVersion": "1.0.5",
     "updates": {
       "url": "https://u.expo.dev/6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"
     }

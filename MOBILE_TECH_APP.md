@@ -2,6 +2,12 @@
 
 Dark NVC brand theme (ink bg, cyan/sky brand, emerald live). Expo Go for review/testing.
 
+## Native architecture (2026-10-25)
+- `newArchEnabled: true` (React Native New Architecture / Fabric + TurboModules). SDK 54 is the last SDK that still allowed the old architecture, and Reanimated 4 runs only on the new one.
+- Added `react-native-reanimated` 4.1, `react-native-worklets` 0.5, `react-native-gesture-handler` 2.28 (the iPad dispatch board's drag-and-drop) and declared the peer deps the app already relied on: `react-native-svg` (phosphor icons), `expo-font`, `expo-asset`. `GestureHandlerRootView` wraps the app in `app/_layout.tsx`.
+- Native modules changed, so `version`/`runtimeVersion` are 1.0.5: an OTA update for 1.0.5 can never land on a 1.0.4 binary.
+- Design source for the iPad office screens: the "ArrivePing" design system and "ArrivePing iPad Office" canvas (Claude artifacts; tokens mirror `lib/theme.ts`).
+
 ## Backend additions (packages/web)
 - `POST /riders/me/photo` — tech uploads own headshot (multipart `file`). Self-serve version of admin `/riders/:id/photo`.
 - `POST /bookings/:id/photos` — upload a job photo (multipart `file`, optional `caption`). Lists via `GET /bookings/:id/photos`.

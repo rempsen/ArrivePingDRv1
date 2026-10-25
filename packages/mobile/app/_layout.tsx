@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -48,6 +49,9 @@ function RootLayout() {
           devmode: __DEV__,
         }}
       >
+        {/* Gesture Handler needs one root view above every gesture (the
+            dispatch board's drag-and-drop lives under it). */}
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
             {/* Every screen in this app is dark, so the clock/battery/signal
@@ -84,6 +88,7 @@ function RootLayout() {
             </CoachProvider>
           </QueryClientProvider>
         </SafeAreaProvider>
+        </GestureHandlerRootView>
       </OneDollarStatsProvider>
     </ErrorBoundary>
   );
