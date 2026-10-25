@@ -35,7 +35,7 @@ export function JobRow({
       style={({ pressed }) => [s.row, selected && s.selected, { opacity: pressed ? 0.8 : 1 }]}
     >
       <View style={s.timeCol}>
-        <Text style={s.time} allowFontScaling={false}>
+        <Text style={s.time} allowFontScaling={false} numberOfLines={1}>
           {fmtTime(job.scheduledAt)}
         </Text>
         {job.durationMins ? <Text style={s.dur}>{job.durationMins} min</Text> : null}
@@ -74,7 +74,8 @@ export function JobRow({
 const s = StyleSheet.create({
   row: { flexDirection: "row", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
   selected: { backgroundColor: C.bg3, borderRadius: R.card, marginHorizontal: -S.sm, paddingHorizontal: S.sm, borderBottomColor: "transparent" },
-  timeCol: { width: 64, alignItems: "flex-start" },
+  // Wide enough for "12:00 PM" at this weight; 64 wrapped it onto two lines.
+  timeCol: { width: 76, alignItems: "flex-start" },
   time: { color: C.text, fontSize: 15, fontWeight: "800" },
   dur: { color: C.muted, fontSize: 11, marginTop: 2 },
   top: { flexDirection: "row", alignItems: "center", gap: S.sm },
