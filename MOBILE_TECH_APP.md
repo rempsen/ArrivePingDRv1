@@ -5,6 +5,7 @@ Dark NVC brand theme (ink bg, cyan/sky brand, emerald live). Expo Go for review/
 ## Native architecture (2026-10-25)
 - `newArchEnabled: true` (React Native New Architecture / Fabric + TurboModules). SDK 54 is the last SDK that still allowed the old architecture, and Reanimated 4 runs only on the new one.
 - Added `react-native-reanimated` 4.1, `react-native-worklets` 0.5, `react-native-gesture-handler` 2.28 (the iPad dispatch board's drag-and-drop) and declared the peer deps the app already relied on: `react-native-svg` (phosphor icons), `expo-font`, `expo-asset`. `GestureHandlerRootView` wraps the app in `app/_layout.tsx`.
+- Live map markers are the map's own pins (jobs, `pinColor`) and pre-rendered discs under `assets/map/` (technicians, one per status): react-native-maps loses custom `<View>` marker children after pan/zoom on the New Architecture (#5911 / #5877). Initials show in the selection card, not on the pin.
 - Native modules changed, so `version`/`runtimeVersion` are 1.0.5: an OTA update for 1.0.5 can never land on a 1.0.4 binary.
 - Design source for the iPad office screens: the "ArrivePing" design system and "ArrivePing iPad Office" canvas (Claude artifacts; tokens mirror `lib/theme.ts`).
 

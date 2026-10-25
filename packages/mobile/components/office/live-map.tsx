@@ -2,13 +2,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { ArrowsOutCardinal, Eye, EyeSlash } from "phosphor-react-native";
-import { statusColor } from "./tech-row";
 import { C, R, S } from "../../lib/theme";
 import type { OfficeJob, OfficeTech } from "../../lib/board";
 import { fitRegion, visibleJobs, visibleTechs, type PinKind } from "../../lib/map-pins";
 
 const PIN_COLOR: Record<PinKind, string> = { unassigned: C.red, offered: C.amber, active: C.green, scheduled: C.brand };
 const PIN_LABEL: Record<PinKind, string> = { unassigned: "Unassigned", offered: "Offered", active: "In the field", scheduled: "Scheduled" };
+
+/**
+ * Markers are the map's own pins (jobs, tinted by `pinColor`) and small
+ * pre-rendered discs (technicians, one per status). Under the New
+ * Architecture react-native-maps loses custom <View> marker children after a
+ * pan or zoom (react-native-maps #5911 / #5877), which on a dispatch map means
+ * jobs and people silently vanishing, so nothing here renders a child view.
+ * The technician's initials moved to the selection card; the disc carries the
+ * status colour, and a selected disc inverts (white ring, status dot).
+ */
+type TechPinStatus = "enroute" | "onsite" | "available" | "busy" | "offline";
+const TECH_PIN: Record<TechPinStatus, { off: number; on: number }> = {
+  enroute: { off: require("../../assets/map/tech-enroute.png"), on: require("../../assets/map/tech-enroute-on.png") },
+  onsite: { off: require("../../assets/map/tech-onsite.png"), on: require("../../assets/map/tech-onsite-on.png") },
+  available: { off: require("../../assets/map/tech-available.png"), on: require("../../assets/map/tech-available-on.png") },
+  busy: { off: require("../../assets/map/tech-busy.png"), on: require("../../assets/map/tech-busy-on.png") },
+  offline: { off: require("../../assets/map/tech-offline.png"), on: require("../../assets/map/tech-offline-on.png") },
+};
+function techPinStatus(status: string): TechPinStatus {
+  if (status === "break") return "busy";
+  return status in TECH_PIN ? (status as TechPinStatus) : "offline";
+}
 
 export type MapSelection = { kind: "tech" | "job"; id: string } | null;
 
@@ -68,22 +89,14 @@ export function LiveMap({
                 e.stopPropagation();
                 onSelect({ kind: "job", id: j.id });
               }}
-              // The pin's tip is the point: Apple Maps reads centerOffset, Google reads anchor.
-              anchor={{ x: 0.5, y: 1 }}
-              centerOffset={{ x: 0, y: -15 }}
-              tracksViewChanges={false}
+              pinColor={on ? C.text : PIN_COLOR[j.kind]}
               accessibilityLabel={`${j.customerName || j.title}, ${PIN_LABEL[j.kind]}`}
-            >
-              <View style={[s.pin, { borderColor: PIN_COLOR[j.kind] }, on && s.pinOn]}>
-                <View style={[s.pinDot, { backgroundColor: PIN_COLOR[j.kind] }]} />
-              </View>
-              <View style={[s.pinTail, { borderTopColor: on ? C.text : PIN_COLOR[j.kind] }]} />
-            </Marker>
+            />
           );
         })}
         {techPins.map((t) => {
           const on = selected?.kind === "tech" && selected.id === t.id;
-          const color = statusColor(t.status);
+          const pin = TECH_PIN[techPinStatus(t.status)];
           return (
             <Marker
               key={`tech-${t.id}`}
@@ -92,17 +105,13 @@ export function LiveMap({
                 e.stopPropagation();
                 onSelect({ kind: "tech", id: t.id });
               }}
+              image={on ? pin.on : pin.off}
               anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
+              centerOffset={{ x: 0, y: 0 }}
+              opacity={t.stale ? 0.6 : 1}
               zIndex={2}
               accessibilityLabel={`${t.name}, ${t.status}`}
-            >
-              <View style={[s.tech, { borderColor: color }, on && s.techOn, t.stale && { opacity: 0.6 }]}>
-                <Text style={s.techTxt} allowFontScaling={false}>
-                  {initials(t.name)}
-                </Text>
-              </View>
-            </Marker>
+            />
           );
         })}
       </MapView>
@@ -134,24 +143,8 @@ export function LiveMap({
   );
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join("");
-}
-
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.bg },
-  pin: { width: 22, height: 22, borderRadius: 11, borderWidth: 2.5, backgroundColor: C.bg, alignItems: "center", justifyContent: "center" },
-  pinOn: { borderColor: C.text, transform: [{ scale: 1.2 }] },
-  pinDot: { width: 8, height: 8, borderRadius: 4 },
-  pinTail: { alignSelf: "center", width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 7, borderLeftColor: "transparent", borderRightColor: "transparent", marginTop: -2 },
-  tech: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, backgroundColor: C.bg2, alignItems: "center", justifyContent: "center" },
-  techOn: { borderColor: C.text, transform: [{ scale: 1.15 }] },
-  techTxt: { color: C.text, fontSize: 11, fontWeight: "900" },
   // Top-left: the iPad selection card sits down the right edge.
   controls: { position: "absolute", top: S.md, left: S.md, gap: S.sm },
   ctl: { width: 40, height: 40, borderRadius: R.control, backgroundColor: C.bg2, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
