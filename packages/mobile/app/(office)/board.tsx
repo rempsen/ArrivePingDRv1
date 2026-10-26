@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Warning, X, Check } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { DayStrip, STRIP_DAYS } from "../../components/office/day-strip";
-import { Timeline } from "../../components/office/timeline";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { Timeline, type TimelineHandle } from "../../components/office/timeline";
+import type { DragCallbacks } from "../../components/office/drag-handle";
 import { QueueColumn } from "../../components/office/queue-column";
 import { WeekGrid } from "../../components/office/week-grid";
 import { showToast } from "../../components/office/undo-toast";
@@ -15,16 +17,17 @@ import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
 import { useDispatchActions } from "../../lib/use-dispatch-actions";
 import { addDays, isUnassigned, NO_JOBS, NO_TECHS } from "../../lib/board";
-import { IDLE, placeReducer, placedStart, placementRequest } from "../../lib/board-place";
+import { IDLE, canPlaceOn, placeReducer, placedStart, placementRequest } from "../../lib/board-place";
 import { jobMinutes, minLabel, mondayOf, type Range } from "../../lib/timeline";
 import { fmtInTz } from "../../lib/when";
 
 /**
  * Board: the whole crew's day on one screen (iPad only — the tab hides on a
  * phone). Jobs sit on their technician's row by time; the Unassigned column
- * holds the rest. Moving work is tap-to-place: tap a job, tap a time on a
- * row, confirm. The same assign / schedule calls as the Assign sheet, with
- * the server's conflict reasons and Undo.
+ * holds the rest. Two ways to move work, both ending at the same confirm
+ * card: tap a job then tap a time on a row, or hold a job and drag it onto
+ * a row (lib/board-drag.ts). Place runs the same assign / schedule calls as
+ * the Assign sheet, with the server's conflict reasons and Undo.
  */
 export default function Board() {
   const router = useRouter();
@@ -103,6 +106,91 @@ export default function Board() {
   }, [view]);
 
   const armedJob = place.kind === "idle" ? undefined : jobs.find((j) => j.id === place.jobId);
+
+  // ------------------------------------------------------- drag and drop --
+  // The job in the air follows the finger as a floating card (shared values,
+  // so it moves on the UI thread); the timeline answers "which row, what
+  // time" and draws a dashed ghost there. Dropping fills in the same confirm
+  // card as tap-to-place.
+  const rootRef = useRef<View>(null);
+  const tlRef = useRef<TimelineHandle>(null);
+  const fx = useSharedValue(0);
+  const fy = useSharedValue(0);
+  const ox = useSharedValue(0);
+  const oy = useSharedValue(0);
+  const [dragging, setDragging] = useState<(typeof jobs)[number] | null>(null);
+  const [hover, setHover] = useState<{ jobId: string; techId: string; startMin: number; ok: boolean } | null>(null);
+  const hoverKey = useRef("");
+  const dayOff = useMemo(() => new Set((board.data?.timeOff ?? []).filter((t) => t.day === shownDay).map((t) => t.techId)), [board.data, shownDay]);
+  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateX: fx.value - ox.value - 90 }, { translateY: fy.value - oy.value - 30 }] }));
+
+  const landing = (job: (typeof jobs)[number], absX: number, absY: number) => {
+    const h = tlRef.current?.hit(absX, absY);
+    if (!h) return null;
+    return { techId: h.techId, startMin: placedStart(h.rawMin, job, h.range), ok: canPlaceOn(job, h.techId, dayOff.has(h.techId), perms) };
+  };
+  // Last finger point, and the timer that keeps edge-scrolling while the
+  // finger rests near an edge (a pan sends no updates when it holds still).
+  const finger = useRef({ x: 0, y: 0 });
+  const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopEdge = () => {
+    if (edgeTimer.current) clearInterval(edgeTimer.current);
+    edgeTimer.current = null;
+  };
+  useEffect(() => stopEdge, []);
+  const showHover = (job: (typeof jobs)[number]) => {
+    const l = landing(job, finger.current.x, finger.current.y);
+    const key = l ? `${l.techId}:${l.startMin}:${l.ok}` : "";
+    if (key === hoverKey.current) return;
+    hoverKey.current = key;
+    setHover(l ? { jobId: job.id, ...l } : null);
+  };
+  const endDrag = () => {
+    stopEdge();
+    setDragging(null);
+    setHover(null);
+    hoverKey.current = "";
+  };
+  const dragFor = (job: (typeof jobs)[number]): DragCallbacks => ({
+    onDragStart: (absX, absY) => {
+      rootRef.current?.measureInWindow((x, y) => {
+        ox.value = x;
+        oy.value = y;
+      });
+      tlRef.current?.measure();
+      dispatch({ type: "cancel" });
+      fx.value = absX;
+      fy.value = absY;
+      finger.current = { x: absX, y: absY };
+      setDragging(job);
+      stopEdge();
+      // Scroll first, then hit-test: edge() moves the offsets at once, so the
+      // ghost and the drop always use where the grid is now.
+      edgeTimer.current = setInterval(() => {
+        if (tlRef.current?.edge(finger.current.x, finger.current.y)) showHover(job);
+      }, 32);
+    },
+    onDragMove: (absX, absY) => {
+      fx.value = absX;
+      fy.value = absY;
+      finger.current = { x: absX, y: absY };
+      showHover(job);
+    },
+    onDrop: (absX, absY) => {
+      stopEdge();
+      const l = landing(job, absX, absY);
+      endDrag();
+      if (!l) return;
+      if (!l.ok) {
+        const who = techs.find((t) => t.id === l.techId)?.name ?? "That person";
+        showToast(dayOff.has(l.techId) ? `${who} is off that day` : `You can't move work onto ${who}'s row`);
+        return;
+      }
+      dispatch({ type: "arm", jobId: job.id });
+      dispatch({ type: "tapCell", techId: l.techId, startMin: l.startMin });
+    },
+    onDragCancel: endDrag,
+  });
   const targetTech = place.kind === "confirm" ? techs.find((t) => t.id === place.techId) : undefined;
 
   function tapCell(techId: string, rawMin: number, range: Range) {
@@ -160,7 +248,7 @@ export default function Board() {
   );
 
   return (
-    <View style={s.screen}>
+    <View ref={rootRef} style={s.screen} collapsable={false}>
       <OfficeHeader title="Board" right={segment} />
       {anchor && from ? (
         <DayStrip today={anchor} day={day ?? anchor} from={from} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} onFrom={setFrom} />
@@ -199,6 +287,9 @@ export default function Board() {
       ) : (
         <View style={s.body}>
           <Timeline
+            ref={tlRef}
+            hover={hover}
+            dragFor={dragFor}
             techs={techs}
             jobs={jobs}
             timeOff={board.data?.timeOff ?? []}
@@ -220,6 +311,8 @@ export default function Board() {
             tz={tz}
             armedId={place.kind === "idle" ? null : place.jobId}
             perms={perms}
+            dragFor={dragFor}
+            draggingId={dragging?.id ?? null}
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
             onOpenJob={(id) => router.push(`/office/job/${id}`)}
           />
@@ -230,7 +323,7 @@ export default function Board() {
       {place.kind === "armed" && armedJob ? (
         <View style={s.banner} accessibilityLiveRegion="polite">
           <Text style={s.bannerTxt} numberOfLines={1}>
-            Tap a time on a {board.data?.workerNoun?.replace(/s$/, "") ?? "technician"}'s row for <Text style={s.bold}>{armedJob.customerName || armedJob.title}</Text>
+            Tap a time on a {board.data?.workerNoun?.replace(/s$/, "") ?? "technician"}'s row for <Text style={s.bold}>{armedJob.customerName || armedJob.title}</Text>, or hold and drag it there
           </Text>
           <Pressable onPress={() => dispatch({ type: "cancel" })} hitSlop={8} accessibilityRole="button" accessibilityLabel="Cancel placing">
             <X color={C.text} size={18} />
@@ -243,12 +336,28 @@ export default function Board() {
             {armedJob.riderId === targetTech.id ? "Move" : "Send"} <Text style={s.bold}>{armedJob.customerName || armedJob.title}</Text> to{" "}
             <Text style={s.bold}>{targetTech.name}</Text> at <Text style={s.bold}>{minLabel(place.startMin)}</Text>?
           </Text>
-          <Text style={s.confirmSub}>Tap another time to adjust.</Text>
+          <Text style={s.confirmSub}>Tap another time, or drag again, to adjust.</Text>
           <View style={s.confirmBtns}>
             <Button title="Cancel" variant="ghost" small onPress={() => dispatch({ type: "cancel" })} />
             <Button title="Place" small loading={busy} icon={<Check color="#04121c" size={16} weight="bold" />} onPress={() => confirm()} />
           </View>
         </View>
+      ) : null}
+
+      {/* The job in the air. */}
+      {dragging ? (
+        <Animated.View pointerEvents="none" style={[s.float, floatStyle]}>
+          <Text style={s.floatTime} allowFontScaling={false}>
+            {hover?.ok ? minLabel(hover.startMin) : minLabel(jobMinutes(dragging.scheduledAt, tz).min)}
+            {dragging.durationMins ? ` · ${dragging.durationMins} min` : ""}
+          </Text>
+          <Text style={s.floatName} numberOfLines={1}>
+            {dragging.customerName || dragging.title}
+          </Text>
+          <Text style={s.floatSub} numberOfLines={1}>
+            {hover ? (hover.ok ? (techs.find((t) => t.id === hover.techId)?.name ?? "") : "Can't place here") : "Drop on a row"}
+          </Text>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -281,4 +390,8 @@ const s = StyleSheet.create({
   confirmTxt: { color: C.text, fontSize: 15 },
   confirmSub: { color: C.muted, fontSize: 12 },
   confirmBtns: { flexDirection: "row", justifyContent: "flex-end", gap: S.sm, marginTop: S.sm },
+  float: { position: "absolute", left: 0, top: 0, width: 180, borderRadius: R.control, borderWidth: 1.5, borderColor: C.text, backgroundColor: C.bg3, paddingHorizontal: S.sm, paddingVertical: 6, shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  floatTime: { color: C.brand, fontSize: 11, fontWeight: "800" },
+  floatName: { color: C.text, fontSize: 14, fontWeight: "800" },
+  floatSub: { color: C.sub, fontSize: 11 },
 });
