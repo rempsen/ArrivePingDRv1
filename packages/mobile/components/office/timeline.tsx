@@ -1,5 +1,7 @@
-import { useMemo } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, type GestureResponderEvent } from "react-native";
+import { forwardRef, useImperativeHandle, useMemo, useRef } from "react";
+import { View, Text, Pressable, StyleSheet, type GestureResponderEvent } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
+import { DragHandle, type DragCallbacks } from "./drag-handle";
 import { Warning } from "phosphor-react-native";
 import { Avatar } from "../ui";
 import { statusColor } from "./tech-row";
@@ -7,8 +9,7 @@ import { C, R, S } from "../../lib/theme";
 import { STATUS_LABEL, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { GUTTER_W, HOUR_W, ROW_H, bookedMinutes, hoursIn, loadLevel, minLabel, minuteAtX, packLanes, spansFor, timelineRange, xOf, type Range } from "../../lib/timeline";
 import { canArmWith, canPlaceOn, type PlacePerms, type PlaceState } from "../../lib/board-place";
-
-const HEADER_H = 36;
+import { edgeScroll, hitCell, HEADER_H, type TimelineGeom } from "../../lib/board-drag";
 const LOAD_COLOR = { ok: C.green, high: C.amber, over: C.red } as const;
 
 /** Block colour by where the job is: nobody / offered / accepted / in the field / done. */
@@ -32,9 +33,23 @@ export interface TimelineProps {
   perms: PlacePerms;
   /** Extra room under the last row, so the placement card doesn't cover it. */
   bottomPad?: number;
+  /** Where a dragged job would land right now, drawn as a ghost on that row. */
+  hover?: { jobId: string; techId: string; startMin: number; ok: boolean } | null;
   onArm: (job: OfficeJob) => void;
   onTapCell: (techId: string, rawMin: number, range: Range) => void;
   onOpenJob: (jobId: string) => void;
+  /** Drag callbacks for one job's block (the board owns the floating copy). */
+  dragFor: (job: OfficeJob) => DragCallbacks;
+}
+
+/** What the board asks the timeline while a job is dragged over it. */
+export interface TimelineHandle {
+  /** Refresh the timeline's frame in window coordinates (call when a drag starts). */
+  measure: () => void;
+  /** The row and raw minute under a window point; null outside the grid. */
+  hit: (absX: number, absY: number) => { techId: string; rawMin: number; range: Range } | null;
+  /** Nudge the scroll views when the finger is near an edge. */
+  edge: (absX: number, absY: number) => void;
 }
 
 /**
@@ -43,7 +58,10 @@ export interface TimelineProps {
  * scrolls sideways. Tapping a block arms it, tapping a row places it (see
  * lib/board-place.ts); a long press opens the job.
  */
-export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, bottomPad = 0, onArm, onTapCell, onOpenJob }: TimelineProps) {
+export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timeline(
+  { techs, jobs, timeOff, day, tz, nowMin, place, perms, bottomPad = 0, hover = null, onArm, onTapCell, onOpenJob, dragFor },
+  ref,
+) {
   const spans = useMemo(() => spansFor(jobs, day, tz), [jobs, day, tz]);
   const range = useMemo(() => timelineRange(spans), [spans]);
   const hours = hoursIn(range);
@@ -61,9 +79,51 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, 
   const armedJob = armedId ? jobs.find((j) => j.id === armedId) : undefined;
   const target = place.kind === "confirm" ? place : null;
   const targetJob = target ? jobs.find((j) => j.id === target.jobId) : undefined;
+  const hoverJob = hover ? jobs.find((j) => j.id === hover.jobId) : undefined;
+
+  // Drag geometry: the vertical scroll view's window frame plus both offsets.
+  const frameRef = useRef<View>(null);
+  const vRef = useRef<ScrollView>(null);
+  const hRef = useRef<ScrollView>(null);
+  const geom = useRef<TimelineGeom>({ x: 0, y: 0, w: 0, h: 0, scrollX: 0, scrollY: 0 });
+  const measured = useRef(false);
+  const techIds = useMemo(() => techs.map((t) => t.id), [techs]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      measure: () => {
+        // A plain View around the scroll view has the same frame and a reliable measureInWindow.
+        frameRef.current?.measureInWindow((x, y, w, h) => {
+          geom.current = { ...geom.current, x, y, w, h };
+          measured.current = true;
+        });
+      },
+      hit: (absX, absY) => {
+        if (!measured.current) return null;
+        const r = hitCell(geom.current, absX, absY, techIds, range);
+        return r ? { ...r, range } : null;
+      },
+      edge: (absX, absY) => {
+        if (!measured.current) return;
+        const { dx, dy } = edgeScroll(geom.current, absX, absY);
+        if (dx) hRef.current?.scrollTo({ x: Math.max(0, geom.current.scrollX + dx), animated: false });
+        if (dy) vRef.current?.scrollTo({ y: Math.max(0, geom.current.scrollY + dy), animated: false });
+      },
+    }),
+    [techIds, range],
+  );
 
   return (
-    <ScrollView style={s.vertical} contentContainerStyle={{ paddingBottom: S.xxl + bottomPad }}>
+    <View ref={frameRef} style={s.vertical} collapsable={false}>
+    <ScrollView
+      ref={vRef}
+      style={s.vertical}
+      contentContainerStyle={{ paddingBottom: S.xxl + bottomPad }}
+      scrollEventThrottle={16}
+      onScroll={(e) => {
+        geom.current.scrollY = e.nativeEvent.contentOffset.y;
+      }}
+    >
       <View style={s.row}>
         {/* Gutter: who, how their day is going, how full it is. */}
         <View style={s.gutter}>
@@ -98,7 +158,17 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, 
         </View>
 
         {/* Grid: hour header, one row per technician, blocks laid by lane. */}
-        <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator contentContainerStyle={{ width: gridW }}>
+        <ScrollView
+          ref={hRef}
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator
+          contentContainerStyle={{ width: gridW }}
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            geom.current.scrollX = e.nativeEvent.contentOffset.x;
+          }}
+        >
           <View style={{ width: gridW }}>
             <View style={[s.hours, { height: HEADER_H }]}>
               {hours.map((h) => (
@@ -138,19 +208,21 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, 
                     const color = blockColor(sp.job);
                     const armed = sp.id === armedId;
                     const movable = canArmWith(sp.job, perms);
+                    const lifted = (target && target.jobId === sp.id) || (hover && hover.jobId === sp.id);
                     return (
-                      <Pressable
+                      <DragHandle
                         key={sp.id}
-                        onPress={() => (movable ? onArm(sp.job) : onOpenJob(sp.id))}
-                        onLongPress={() => onOpenJob(sp.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${sp.job.customerName || sp.job.title}, ${minLabel(sp.startMin)}${movable ? ", tap to move, hold to open" : ""}`}
-                        accessibilityState={armed ? { selected: true } : undefined}
-                        style={({ pressed }) => [
+                        movable={movable}
+                        onTap={() => (movable ? onArm(sp.job) : onOpenJob(sp.id))}
+                        onOpen={() => onOpenJob(sp.id)}
+                        drag={dragFor(sp.job)}
+                        accessibilityLabel={`${sp.job.customerName || sp.job.title}, ${minLabel(sp.startMin)}${movable ? ", tap to move, hold and drag to move, hold to open" : ""}`}
+                        selected={armed}
+                        style={[
                           s.block,
                           { left, width, top, height: h, borderColor: armed ? C.text : color, backgroundColor: color + (armed ? "55" : "26") },
                           lane.conflict && s.conflict,
-                          { opacity: pressed ? 0.7 : target && target.jobId === sp.id ? 0.4 : 1 },
+                          { opacity: lifted ? 0.35 : 1 },
                         ]}
                       >
                         <Text style={[s.blockTime, { color }]} numberOfLines={1} allowFontScaling={false}>
@@ -167,9 +239,28 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, 
                             {sp.job.service}
                           </Text>
                         ) : null}
-                      </Pressable>
+                      </DragHandle>
                     );
                   })}
+                  {/* Where the dragged job would land: dashed, red when it can't go there. */}
+                  {hover && hover.techId === t.id && hoverJob ? (
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        s.block,
+                        s.ghost,
+                        !hover.ok && s.ghostNo,
+                        { left: xOf(hover.startMin, range), width: Math.max(28, xOf(hover.startMin + Math.max(15, hoverJob.durationMins || 60), range) - xOf(hover.startMin, range) - 2), top: 5, height: ROW_H - 10 },
+                      ]}
+                    >
+                      <Text style={[s.blockTime, { color: hover.ok ? C.text : C.red }]} allowFontScaling={false}>
+                        {hover.ok ? minLabel(hover.startMin) : "Can't place here"}
+                      </Text>
+                      <Text style={s.blockTxt} numberOfLines={1}>
+                        {hoverJob.customerName || hoverJob.title}
+                      </Text>
+                    </View>
+                  ) : null}
                   {/* The block's new place, before it's confirmed. */}
                   {target && target.techId === t.id && targetJob ? (
                     <View
@@ -204,8 +295,9 @@ export function Timeline({ techs, jobs, timeOff, day, tz, nowMin, place, perms, 
         </ScrollView>
       </View>
     </ScrollView>
+    </View>
   );
-}
+});
 
 const s = StyleSheet.create({
   vertical: { flex: 1 },
@@ -230,6 +322,7 @@ const s = StyleSheet.create({
   block: { position: "absolute", borderRadius: R.control, borderWidth: 1.5, paddingHorizontal: 6, paddingVertical: 3, overflow: "hidden", justifyContent: "center" },
   conflict: { borderColor: C.red },
   ghost: { borderStyle: "dashed", borderColor: C.text, backgroundColor: "rgba(255,255,255,0.08)" },
+  ghostNo: { borderColor: C.red, backgroundColor: "rgba(239,68,68,0.10)" },
   blockTime: { fontSize: 10, fontWeight: "800" },
   blockTxt: { color: C.text, fontSize: 12, fontWeight: "700" },
   blockSub: { color: C.sub, fontSize: 11 },

@@ -1,4 +1,6 @@
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
+import { DragHandle, type DragCallbacks } from "./drag-handle";
 import { Tray } from "phosphor-react-native";
 import { StatusBadge } from "../ui";
 import { C, R, S } from "../../lib/theme";
@@ -13,7 +15,8 @@ export const QUEUE_W = 300;
  * Every job with nobody on it, soonest first — the board carries waiting jobs
  * whatever their date so none is lost, so an overdue or future one shows its
  * day. Times are on the company's clock, like the grid. Tapping one arms it
- * for placement on the timeline; a long press opens it.
+ * for placement on the timeline; holding and dragging carries it onto a row;
+ * holding without moving opens it.
  */
 export function QueueColumn({
   jobs,
@@ -24,6 +27,8 @@ export function QueueColumn({
   perms,
   onArm,
   onOpenJob,
+  dragFor,
+  draggingId,
 }: {
   jobs: readonly OfficeJob[];
   jobNoun: string;
@@ -34,6 +39,9 @@ export function QueueColumn({
   perms: PlacePerms;
   onArm: (job: OfficeJob) => void;
   onOpenJob: (jobId: string) => void;
+  dragFor: (job: OfficeJob) => DragCallbacks;
+  /** The job being dragged, dimmed here while it's in the air. */
+  draggingId?: string | null;
 }) {
   return (
     <View style={s.col}>
@@ -53,14 +61,15 @@ export function QueueColumn({
           const otherDay = at.day !== day;
           const when = otherDay ? fmtInTz(job.scheduledAt, tz) : minLabel(at.min);
           return (
-            <Pressable
+            <DragHandle
               key={job.id}
-              onPress={() => (movable ? onArm(job) : onOpenJob(job.id))}
-              onLongPress={() => onOpenJob(job.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`${job.customerName || job.title}, ${when}${otherDay ? ", not on this day" : ""}${movable ? ", tap to place, hold to open" : ""}`}
-              accessibilityState={armed ? { selected: true } : undefined}
-              style={({ pressed }) => [s.item, armed && s.armed, { opacity: pressed ? 0.8 : 1 }]}
+              movable={movable}
+              onTap={() => (movable ? onArm(job) : onOpenJob(job.id))}
+              onOpen={() => onOpenJob(job.id)}
+              drag={dragFor(job)}
+              accessibilityLabel={`${job.customerName || job.title}, ${when}${otherDay ? ", not on this day" : ""}${movable ? ", tap to place, hold and drag onto a row, hold to open" : ""}`}
+              selected={armed}
+              style={[s.item, armed && s.armed, draggingId === job.id && { opacity: 0.35 }]}
             >
               <View style={s.itemTop}>
                 <Text style={[s.time, otherDay && { color: C.amber }]} allowFontScaling={false}>
@@ -81,7 +90,7 @@ export function QueueColumn({
               <View style={{ marginTop: 6, flexDirection: "row" }}>
                 <StatusBadge status={job.status} />
               </View>
-            </Pressable>
+            </DragHandle>
           );
         })}
       </ScrollView>
