@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Warning, X, Check } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { DayStrip, STRIP_DAYS } from "../../components/office/day-strip";
@@ -52,6 +52,16 @@ export default function Board() {
   useEffect(() => {
     if (day === null && serverDay) setAnchor(serverDay);
   }, [day, serverDay]);
+  // Today's "Plan tomorrow" / "Plan the week" land here (one-shot, cleared).
+  const params = useLocalSearchParams<{ day?: string; anchor?: string; view?: string }>();
+  useEffect(() => {
+    if (!params.day && !params.view) return;
+    const today = anchor ?? params.anchor ?? null;
+    if (params.anchor && !anchor) setAnchor(params.anchor);
+    if (params.day) setDay(params.day === today ? null : params.day);
+    if (params.view === "day" || params.view === "week") setView(params.view);
+    router.setParams({ day: undefined, anchor: undefined, view: undefined });
+  }, [params.day, params.anchor, params.view, anchor, router]);
   // First day on the strip; yesterday until the dispatcher pages to another week.
   const [from, setFrom] = useState<string | null>(null);
   useEffect(() => {

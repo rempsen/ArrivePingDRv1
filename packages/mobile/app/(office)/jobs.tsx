@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, TextInput, Pressable, RefreshControl, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { ClipboardText, MagnifyingGlass, Plus, Warning } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { DayStrip, STRIP_DAYS } from "../../components/office/day-strip";
@@ -44,6 +44,19 @@ export default function Jobs() {
   useEffect(() => {
     if (day === null && serverDay) setAnchor(serverDay);
   }, [day, serverDay]);
+  // Today's tiles and "Plan tomorrow" open a day and a bucket here. One-shot,
+  // like Team's ?status: consumed, then cleared so a later tab tap keeps the
+  // dispatcher's own choice. `anchor` comes along so a first visit to this
+  // tab still knows which day is today.
+  const params = useLocalSearchParams<{ day?: string; anchor?: string; bucket?: string }>();
+  useEffect(() => {
+    if (!params.day && !params.bucket) return;
+    const today = anchor ?? params.anchor ?? null;
+    if (params.anchor && !anchor) setAnchor(params.anchor);
+    if (params.day) setDay(params.day === today ? null : params.day);
+    if (params.bucket && BUCKETS.some((b) => b.key === params.bucket)) setBucket(params.bucket as JobBucket);
+    router.setParams({ day: undefined, anchor: undefined, bucket: undefined });
+  }, [params.day, params.anchor, params.bucket, anchor, router]);
   // First day on the strip; yesterday until the dispatcher pages to another week.
   const [from, setFrom] = useState<string | null>(null);
   useEffect(() => {

@@ -26,7 +26,7 @@ import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "
  */
 export default function Team() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ status?: string }>();
+  const params = useLocalSearchParams<{ status?: string; mode?: string }>();
   const [filter, setFilter] = useState<string | null>(params.status ?? null);
   // Tab screens stay mounted, so a later tap on a Today tile or Crew row
   // arrives as a new param on the same screen. The param is consumed and
@@ -49,6 +49,12 @@ export default function Team() {
   // List | Map. The map fills the screen; what's tapped opens in a card on
   // an iPad or a sheet on a phone.
   const [mode, setMode] = useState<"list" | "map">("list");
+  // Today's "Map" button opens the map here (one-shot, cleared).
+  useEffect(() => {
+    if (params.mode !== "map" && params.mode !== "list") return;
+    setMode(params.mode);
+    router.setParams({ mode: undefined });
+  }, [params.mode, router]);
   const [sel, setSel] = useState<MapSelection>(null);
   const { can } = useAccess();
   useEffect(() => {
