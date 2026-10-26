@@ -129,7 +129,24 @@ export default function Board() {
     if (!h) return null;
     return { techId: h.techId, startMin: placedStart(h.rawMin, job, h.range), ok: canPlaceOn(job, h.techId, dayOff.has(h.techId), perms) };
   };
+  // Last finger point, and the timer that keeps edge-scrolling while the
+  // finger rests near an edge (a pan sends no updates when it holds still).
+  const finger = useRef({ x: 0, y: 0 });
+  const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopEdge = () => {
+    if (edgeTimer.current) clearInterval(edgeTimer.current);
+    edgeTimer.current = null;
+  };
+  useEffect(() => stopEdge, []);
+  const showHover = (job: (typeof jobs)[number]) => {
+    const l = landing(job, finger.current.x, finger.current.y);
+    const key = l ? `${l.techId}:${l.startMin}:${l.ok}` : "";
+    if (key === hoverKey.current) return;
+    hoverKey.current = key;
+    setHover(l ? { jobId: job.id, ...l } : null);
+  };
   const endDrag = () => {
+    stopEdge();
     setDragging(null);
     setHover(null);
     hoverKey.current = "";
@@ -144,19 +161,23 @@ export default function Board() {
       dispatch({ type: "cancel" });
       fx.value = absX;
       fy.value = absY;
+      finger.current = { x: absX, y: absY };
       setDragging(job);
+      stopEdge();
+      // Scroll first, then hit-test: edge() moves the offsets at once, so the
+      // ghost and the drop always use where the grid is now.
+      edgeTimer.current = setInterval(() => {
+        if (tlRef.current?.edge(finger.current.x, finger.current.y)) showHover(job);
+      }, 32);
     },
     onDragMove: (absX, absY) => {
       fx.value = absX;
       fy.value = absY;
-      tlRef.current?.edge(absX, absY);
-      const l = landing(job, absX, absY);
-      const key = l ? `${l.techId}:${l.startMin}:${l.ok}` : "";
-      if (key === hoverKey.current) return;
-      hoverKey.current = key;
-      setHover(l ? { jobId: job.id, ...l } : null);
+      finger.current = { x: absX, y: absY };
+      showHover(job);
     },
     onDrop: (absX, absY) => {
+      stopEdge();
       const l = landing(job, absX, absY);
       endDrag();
       if (!l) return;

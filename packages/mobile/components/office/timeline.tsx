@@ -48,8 +48,13 @@ export interface TimelineHandle {
   measure: () => void;
   /** The row and raw minute under a window point; null outside the grid. */
   hit: (absX: number, absY: number) => { techId: string; rawMin: number; range: Range } | null;
-  /** Nudge the scroll views when the finger is near an edge. */
-  edge: (absX: number, absY: number) => void;
+  /**
+   * Nudge the scroll views one step when the finger is near an edge. The
+   * board calls it on a timer while a drag is held, so a still finger keeps
+   * scrolling. Offsets update at once (not on the next onScroll), so a hit
+   * test right after sees where the grid now is. True when it moved.
+   */
+  edge: (absX: number, absY: number) => boolean;
 }
 
 /**
@@ -87,6 +92,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   const hRef = useRef<ScrollView>(null);
   const geom = useRef<TimelineGeom>({ x: 0, y: 0, w: 0, h: 0, scrollX: 0, scrollY: 0 });
   const measured = useRef(false);
+  const contentH = useRef(0);
   const techIds = useMemo(() => techs.map((t) => t.id), [techs]);
   useImperativeHandle(
     ref,
@@ -104,13 +110,21 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         return r ? { ...r, range } : null;
       },
       edge: (absX, absY) => {
-        if (!measured.current) return;
-        const { dx, dy } = edgeScroll(geom.current, absX, absY);
-        if (dx) hRef.current?.scrollTo({ x: Math.max(0, geom.current.scrollX + dx), animated: false });
-        if (dy) vRef.current?.scrollTo({ y: Math.max(0, geom.current.scrollY + dy), animated: false });
+        if (!measured.current) return false;
+        const g = geom.current;
+        const { dx, dy } = edgeScroll(g, absX, absY);
+        const maxX = Math.max(0, gridW - (g.w - GUTTER_W));
+        const maxY = Math.max(0, contentH.current - g.h);
+        const nx = Math.min(maxX, Math.max(0, g.scrollX + dx));
+        const ny = Math.min(maxY, Math.max(0, g.scrollY + dy));
+        if (nx === g.scrollX && ny === g.scrollY) return false;
+        if (nx !== g.scrollX) hRef.current?.scrollTo({ x: nx, animated: false });
+        if (ny !== g.scrollY) vRef.current?.scrollTo({ y: ny, animated: false });
+        geom.current = { ...g, scrollX: nx, scrollY: ny };
+        return true;
       },
     }),
-    [techIds, range],
+    [techIds, range, gridW],
   );
 
   return (
@@ -120,6 +134,9 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       style={s.vertical}
       contentContainerStyle={{ paddingBottom: S.xxl + bottomPad }}
       scrollEventThrottle={16}
+      onContentSizeChange={(_w, h) => {
+        contentH.current = h;
+      }}
       onScroll={(e) => {
         geom.current.scrollY = e.nativeEvent.contentOffset.y;
       }}
