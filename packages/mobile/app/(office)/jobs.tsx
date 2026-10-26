@@ -3,7 +3,7 @@ import { View, Text, FlatList, TextInput, Pressable, RefreshControl, StyleSheet 
 import { useRouter } from "expo-router";
 import { ClipboardText, MagnifyingGlass, Plus, Warning } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
-import { DayStrip } from "../../components/office/day-strip";
+import { DayStrip, STRIP_DAYS } from "../../components/office/day-strip";
 import { JobRow } from "../../components/office/job-row";
 import { JobDetail } from "../../components/office/job-detail";
 import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
@@ -44,7 +44,12 @@ export default function Jobs() {
   useEffect(() => {
     if (day === null && serverDay) setAnchor(serverDay);
   }, [day, serverDay]);
-  const load = useDayLoad(anchor ? addDays(anchor, -1) : null, 9);
+  // First day on the strip; yesterday until the dispatcher pages to another week.
+  const [from, setFrom] = useState<string | null>(null);
+  useEffect(() => {
+    if (anchor && from === null) setFrom(addDays(anchor, -1));
+  }, [anchor, from]);
+  const load = useDayLoad(from, STRIP_DAYS);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
@@ -97,7 +102,9 @@ export default function Jobs() {
           ) : undefined
         }
       />
-      {anchor ? <DayStrip today={anchor} day={day ?? anchor} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} /> : null}
+      {anchor && from ? (
+        <DayStrip today={anchor} day={day ?? anchor} from={from} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} onFrom={setFrom} />
+      ) : null}
       <View style={[s.segments, WIDE]}>
         {BUCKETS.map((b) => {
           const on = b.key === bucket;

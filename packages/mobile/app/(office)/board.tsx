@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Warning, X, Check } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
-import { DayStrip } from "../../components/office/day-strip";
+import { DayStrip, STRIP_DAYS } from "../../components/office/day-strip";
 import { Timeline } from "../../components/office/timeline";
 import { QueueColumn } from "../../components/office/queue-column";
 import { WeekGrid } from "../../components/office/week-grid";
@@ -52,7 +52,12 @@ export default function Board() {
   useEffect(() => {
     if (day === null && serverDay) setAnchor(serverDay);
   }, [day, serverDay]);
-  const load = useDayLoad(anchor ? addDays(anchor, -1) : null, 9);
+  // First day on the strip; yesterday until the dispatcher pages to another week.
+  const [from, setFrom] = useState<string | null>(null);
+  useEffect(() => {
+    if (anchor && from === null) setFrom(addDays(anchor, -1));
+  }, [anchor, from]);
+  const load = useDayLoad(from, STRIP_DAYS);
   // The week holding the shown day, Monday first; fetched only while the Week view is up.
   const weekFrom = anchor ? mondayOf(day ?? anchor) : null;
   const week = useBoard(weekFrom, view === "week" && !!weekFrom, 7);
@@ -147,7 +152,9 @@ export default function Board() {
   return (
     <View style={s.screen}>
       <OfficeHeader title="Board" right={segment} />
-      {anchor ? <DayStrip today={anchor} day={day ?? anchor} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} /> : null}
+      {anchor && from ? (
+        <DayStrip today={anchor} day={day ?? anchor} from={from} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} onFrom={setFrom} />
+      ) : null}
 
       {view === "week" ? (
         week.isLoading || !weekFrom ? (
