@@ -37,7 +37,7 @@ export default function Messages() {
   const router = useRouter();
   const inbox = useDispatchThreads();
   const { wide } = useLayout();
-  const { techId: wanted } = useLocalSearchParams<{ techId?: string }>();
+  const { techId: wanted, broadcast } = useLocalSearchParams<{ techId?: string; broadcast?: string }>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
     if (!wanted) return;
@@ -52,6 +52,12 @@ export default function Messages() {
   const { can } = useAccess();
   const canSend = can("work_orders:edit");
   const [cast, setCast] = useState(false);
+  // Today's "Broadcast" button opens the sheet here (one-shot, cleared).
+  useEffect(() => {
+    if (broadcast !== "1") return;
+    if (canSend) setCast(true);
+    router.setParams({ broadcast: undefined });
+  }, [broadcast, canSend, router]);
   const list = (
     <View style={s.screen}>
       <OfficeHeader
