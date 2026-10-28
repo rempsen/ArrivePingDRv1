@@ -53,12 +53,38 @@ function token(): string {
 }
 
 // A fresh token per call: the processing wait outlives a 15-minute token.
+// Apple's API occasionally hangs a request for minutes (the 2026-10-28
+// release died on a 5-minute fetch timeout while polling). Each request gets
+// 60 s; reads and PATCHes (safe to repeat) retry on a hang, network error,
+// 429 or 5xx. POSTs never retry, so nothing is created twice.
 async function asc(method: string, path: string, body?: unknown): Promise<any> {
-  const res = await fetch(`${API}${path}`, {
+  const retryable = method === "GET" || method === "PATCH";
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await ascOnce(method, path, body);
+      if (retryable && attempt < 4 && (res.status === 429 || res.status >= 500)) throw new Error(`HTTP ${res.status}`);
+      return await parse(res, method, path);
+    } catch (e) {
+      const transient = !(e instanceof AscError);
+      if (!retryable || !transient || attempt >= 4) throw e;
+      console.log(`App Store Connect ${method} ${path.split("?")[0]} didn't answer (${(e as Error).message}); retrying (${attempt}/3)…`);
+      await Bun.sleep(5_000 * attempt);
+    }
+  }
+}
+
+class AscError extends Error {}
+
+function ascOnce(method: string, path: string, body?: unknown): Promise<Response> {
+  return fetch(`${API}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
   });
+}
+
+async function parse(res: Response, method: string, path: string): Promise<any> {
   if (res.status === 204) return null;
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
@@ -72,7 +98,7 @@ async function asc(method: string, path: string, body?: unknown): Promise<any> {
         for (const a of list) lines.push(`  - ${a.detail ?? a.title}${a.code ? ` (${a.code})` : ""}`);
     }
     const detail = lines.join("\n") || text;
-    throw new Error(`App Store Connect ${method} ${path.split("?")[0]} → ${res.status}: ${detail}`);
+    throw new AscError(`App Store Connect ${method} ${path.split("?")[0]} → ${res.status}: ${detail}`);
   }
   return json;
 }
