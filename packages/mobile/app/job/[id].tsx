@@ -51,6 +51,7 @@ import {
   HandPalm,
   ClipboardText,
   Trash,
+  CloudArrowUp,
 } from "phosphor-react-native";
 import { api } from "../../lib/api";
 import { useCustomerNoun, useDistanceUnit, useJobNoun } from "../../lib/use-brand";
@@ -70,7 +71,15 @@ import { offerPath } from "../../lib/offer";
 import { JobForm, type JobFormHandle } from "../../components/job-form";
 import { jobFormKey, jobFormScope, useJobForm } from "../../lib/forms/use-job-form";
 import { formIncomplete, missingSummary, type MissingQuestion } from "../../lib/forms/job-form-data";
-import { uploadJobPhoto } from "../../lib/job-photos";
+import {
+  addJobPhoto,
+  discardPendingPhoto,
+  onPhotoUploaded,
+  pendingLabel,
+  retryPendingPhoto,
+  usePendingPhotos,
+  type PendingPhoto,
+} from "../../lib/photo-queue";
 import { choosePhotoSource, pickPhoto, type PhotoSource } from "../../lib/pick-photo";
 import { SIGNED_OUT, messageFromBody, throwIfNotOk } from "../../lib/api-error";
 
@@ -271,6 +280,18 @@ export default function JobDetail() {
       return (await res.json()).photos as any[];
     },
   });
+  // Photos taken here that haven't reached the server yet (kept on the phone).
+  const pendingPhotos = usePendingPhotos(id);
+  useEffect(
+    () =>
+      onPhotoUploaded((p) => {
+        if (p.bookingId !== id) return;
+        qc.invalidateQueries({ queryKey: ["photos", id] });
+        // a late form photo was added to its question by the server
+        if (p.formItemId) qc.invalidateQueries({ queryKey: jobFormKey(id) });
+      }),
+    [id, qc],
+  );
 
   // BMD Punch List: deficiencies synced onto this job from the hotel-project
   // integration. Empty for the overwhelming majority of jobs — the block
@@ -673,14 +694,40 @@ export default function JobDetail() {
     setUploading(true);
     try {
       // Tag the stage this shot documents — before/after is what makes the
-      // photo set usable as proof of condition later.
-      await uploadJobPhoto({ bookingId: id!, asset, phase });
-      await qc.invalidateQueries({ queryKey: ["photos", id] });
-    } catch (e: any) {
-      Alert.alert("Upload failed", e?.message || "Try again");
+      // photo set usable as proof of condition later. The photo is kept on
+      // the phone until the server has it, so a failed send loses nothing.
+      const r = await addJobPhoto({ bookingId: id!, asset, phase });
+      if (r.photo) await qc.invalidateQueries({ queryKey: ["photos", id] });
+      else
+        Alert.alert(
+          "Photo saved on this phone",
+          `It couldn't upload just now${r.error ? ` (${r.error})` : ""}. It will upload by itself when it can — keep working.`,
+        );
     } finally {
       setUploading(false);
     }
+  }
+
+  // Tap on a photo that hasn't uploaded: send it now, or (if the server keeps
+  // refusing it) let it go.
+  function pendingPhotoActions(p: PendingPhoto) {
+    Alert.alert(
+      p.stuck ? "This photo wasn't accepted" : "This photo hasn't uploaded yet",
+      p.lastError ? `Last try: ${p.lastError}` : "It's saved on this phone and will upload by itself.",
+      [
+        { text: "Retry now", onPress: () => void retryPendingPhoto(p.clientId) },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () =>
+            Alert.alert("Discard this photo?", "It hasn't reached the office and will be lost.", [
+              { text: "Keep", style: "cancel" },
+              { text: "Discard", style: "destructive", onPress: () => discardPendingPhoto(p.clientId) },
+            ]),
+        },
+        { text: "Close", style: "cancel" },
+      ],
+    );
   }
 
   // ── Customer sign-off ──────────────────────────────────────────────────────
@@ -1543,19 +1590,42 @@ export default function JobDetail() {
               ))}
             </View>
 
-            {(photos.data?.length ?? 0) > 0 ? (
+            {pendingPhotos.length > 0 && (
+              <View style={s.pendingNote}>
+                <CloudArrowUp color={C.amber} size={16} weight="bold" />
+                <Text style={s.pendingNoteTxt}>
+                  {pendingPhotos.length === 1 ? "1 photo is" : `${pendingPhotos.length} photos are`} saved on this phone and
+                  will upload by itself.
+                </Text>
+              </View>
+            )}
+            {(photos.data?.length ?? 0) + pendingPhotos.length > 0 ? (
               (["before", "during", "after"] as const).map((ph) => {
                 const group = (photos.data ?? []).filter((p: any) =>
                   ph === "during" ? !p.phase || p.phase === "during" : p.phase === ph,
                 );
-                if (!group.length) return null;
+                const waiting = pendingPhotos.filter((p) => p.phase === ph);
+                if (!group.length && !waiting.length) return null;
                 return (
                   <View key={ph} style={{ marginTop: 10 }}>
-                    <Text style={s.phaseLabel}>{ph.toUpperCase()} ({group.length})</Text>
+                    <Text style={s.phaseLabel}>{ph.toUpperCase()} ({group.length + waiting.length})</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                       <View style={{ flexDirection: "row", gap: 10 }}>
                         {group.map((p: any) => (
                           <Image key={p.id} source={{ uri: assetUrl(p.url) }} style={s.thumb} />
+                        ))}
+                        {waiting.map((p) => (
+                          <Pressable
+                            key={p.clientId}
+                            onPress={() => pendingPhotoActions(p)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${pendingLabel(p)}. Tap for options`}
+                          >
+                            <Image source={{ uri: p.uri }} style={[s.thumb, { opacity: 0.6 }]} />
+                            <View style={[s.pendingBadge, p.stuck && { backgroundColor: C.red }]}>
+                              <Text style={s.pendingBadgeTxt}>{pendingLabel(p)}</Text>
+                            </View>
+                          </Pressable>
                         ))}
                       </View>
                     </ScrollView>
@@ -2243,6 +2313,19 @@ const s = StyleSheet.create({
   defStatusPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: C.border, backgroundColor: "transparent" },
   defStatusTxt: { color: C.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase" },
   emptyPhoto: { color: C.muted, fontSize: 13, marginTop: 8 },
+  pendingNote: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  pendingNoteTxt: { color: C.amber, fontSize: 12, fontWeight: "600", flex: 1 },
+  pendingBadge: {
+    position: "absolute",
+    left: 4,
+    right: 4,
+    bottom: 4,
+    borderRadius: 6,
+    paddingVertical: 3,
+    backgroundColor: "rgba(7,11,18,0.85)",
+    alignItems: "center",
+  },
+  pendingBadgeTxt: { color: "#fff", fontSize: 9, fontWeight: "800" },
   bubble: { maxWidth: "82%", borderRadius: R.card, paddingHorizontal: 13, paddingVertical: 9 },
   bubbleMine: { backgroundColor: C.brand, alignSelf: "flex-end" },
   bubbleThem: { backgroundColor: C.bg3, alignSelf: "flex-start" },

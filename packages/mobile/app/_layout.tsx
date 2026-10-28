@@ -8,6 +8,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { OfflineBanner } from "../components/OfflineBanner";
 import { OneDollarStatsProvider } from "../lib/analytics";
 import { setupNetworkIntegration } from "../lib/network";
+import { setupPhotoQueue } from "../lib/photo-queue";
 import { setupSentry, Sentry } from "../lib/sentry";
 import { C } from "../lib/theme";
 import { CoachProvider } from "../components/coach-tour";
@@ -36,6 +37,8 @@ const hostname = applicationId ? `${applicationId}-mobile` : "localhost";
 
 function RootLayout() {
   useEffect(() => setupNetworkIntegration(), []);
+  // Photos that couldn't upload when they were taken go up in the background.
+  useEffect(() => setupPhotoQueue(), []);
   return (
     <ErrorBoundary>
       {/* Runable analytics provider — do not remove, required for analytics tracking.

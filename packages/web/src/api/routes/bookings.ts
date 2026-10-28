@@ -25,6 +25,7 @@ import { jobTimeline, logJobEvent } from "../../services/job-events";
 import { buildOfferPreview } from "../../services/job-offer";
 import {
   answeredCountFor,
+  attachPhotoToAnswer,
   closeJobForm,
   currentVersion,
   isInternalItem,
@@ -63,6 +64,7 @@ import {
   findUserByEmail,
   isMember,
 } from "../lib/memberships";
+import { captureException, log } from "../lib/logger";
 import { incr } from "../lib/metrics";
 import { deleteObject, putObject } from "../lib/storage";
 import {
@@ -1925,12 +1927,28 @@ export const bookingsRoutes = new Hono<AppEnv>()
     return c.json({ photos: rows }, 200);
   })
   // upload a job photo (tech). multipart: file, optional caption
+  //
+  // Retry-safe. The app names each photo once (`clientId`, a UUID) and keeps
+  // sending it until it gets an answer, so a photo that already landed comes
+  // back as-is instead of being stored twice. A failure says which step broke
+  // (`bad_upload` / `storage_unavailable`) and is logged with the request id,
+  // so a lost photo can be traced to one line in the server log.
   .post("/:id/photos", requireAuth, async (c) => {
     const id = c.req.param("id");
     const t = tx(c);
+    const requestId = c.get("requestId");
     const b = await t.selectOne(schema.bookings, eq(schema.bookings.id, id));
     if (!b) return c.json({ message: "Not found" }, 404);
-    const form = await c.req.formData();
+    let form: FormData;
+    try {
+      form = await c.req.formData();
+    } catch (err) {
+      log.warn("photo upload: unreadable body", { requestId, bookingId: id, err: (err as Error).message });
+      return c.json(
+        { error: { code: "bad_upload", message: "The photo didn't arrive complete. Try again." }, message: "The photo didn't arrive complete. Try again." },
+        400,
+      );
+    }
     const file = form.get("file");
     const caption = String(form.get("caption") || "");
     // before | during | after — what stage of the job this shot documents.
@@ -1946,6 +1964,29 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const formItemId = String(form.get("formItemId") || "")
       .replace(/[^A-Za-z0-9_-]/g, "")
       .slice(0, 64);
+    // A photo the app is sending again later: by now the technician may be off
+    // the job screen, so the server adds it to its question's answer.
+    const attachToAnswer = String(form.get("attachToAnswer") || "") === "1";
+    const rawClientId = String(form.get("clientId") || "").toLowerCase();
+    const clientId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(rawClientId) ? rawClientId : "";
+    const me = c.get("user") as SessionUser;
+    const attach = async (photoId: string) => {
+      if (!attachToAnswer || !formItemId) return;
+      try {
+        await attachPhotoToAnswer(b.companyId, b, formItemId, photoId, me?.name || "");
+      } catch (err) {
+        // The photo itself is safe; only the link to its question is missing.
+        log.error("photo upload: couldn't add photo to its form answer", { requestId, bookingId: id, photoId, formItemId, err: (err as Error).message });
+      }
+    };
+    if (clientId) {
+      const existing = await t.selectOne(schema.jobPhotos, eq(schema.jobPhotos.id, clientId));
+      if (existing) {
+        if (existing.bookingId !== id) return c.json({ message: "That photo belongs to another job." }, 409);
+        await attach(existing.id);
+        return c.json({ photo: existing, duplicate: true }, 200);
+      }
+    }
     // A photo for an office-only question (or one in an office-only section)
     // is office-only, whatever the client sent, and carries no caption onto
     // the customer's timeline.
@@ -1964,26 +2005,58 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
     if (file.type && !ALLOWED.includes(file.type))
       return c.json({ message: `Unsupported type ${file.type}` }, 400);
-    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 8);
-    const key = `job-photos/${id}/${crypto.randomUUID()}.${ext}`;
-    const stored = await putObject(
-      key,
-      Buffer.from(await file.arrayBuffer()),
-      file.type || "image/jpeg",
-    );
-    const [p] = await t.insert(schema.jobPhotos, {
-      bookingId: id,
-      url: stored.url,
-      caption: photoCaption,
-      source: "upload",
-      phase,
-      customerVisible: photoVisible,
-      formItemId,
-    });
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "jpg";
+    const key = `job-photos/${id}/${clientId || crypto.randomUUID()}.${ext}`;
+    let stored: Awaited<ReturnType<typeof putObject>>;
+    try {
+      stored = await putObject(
+        key,
+        Buffer.from(await file.arrayBuffer()),
+        file.type || "image/jpeg",
+      );
+    } catch (err) {
+      const msg = "Our server couldn't save the photo just now. It's kept on your phone and will be sent again.";
+      log.error("photo upload: storage write failed", {
+        requestId,
+        bookingId: id,
+        companyId: b.companyId,
+        bytes: file.size,
+        type: file.type,
+        err: (err as Error).message,
+      });
+      captureException(err, { requestId, bookingId: id, step: "photo_storage_write" });
+      incr("photo_upload_storage_failed_total");
+      return c.json({ error: { code: "storage_unavailable", message: msg }, message: msg, requestId }, 503);
+    }
+    let p: typeof schema.jobPhotos.$inferSelect | undefined;
+    try {
+      [p] = await t.insert(schema.jobPhotos, {
+        ...(clientId ? { id: clientId } : {}),
+        bookingId: id,
+        url: stored.url,
+        caption: photoCaption,
+        source: "upload",
+        phase,
+        customerVisible: photoVisible,
+        formItemId,
+      });
+    } catch (err) {
+      // Two sends of the same photo crossed (the app retried while the first
+      // was still in flight): hand back the copy that landed.
+      if (clientId) {
+        const landed = await t.selectOne(schema.jobPhotos, eq(schema.jobPhotos.id, clientId));
+        if (landed?.bookingId === id) {
+          await attach(landed.id);
+          return c.json({ photo: landed, duplicate: true }, 200);
+        }
+      }
+      log.error("photo upload: database insert failed", { requestId, bookingId: id, key, err: (err as Error).message });
+      throw err;
+    }
     if (!p) throw new Error("Failed to insert job photo");
+    await attach(p.id);
     // Timeline entry so the photo shows up in the customer's job history and
     // permanent record, not just the admin gallery.
-    const me = c.get("user") as SessionUser;
     await logJobEvent({
       companyId: b.companyId,
       bookingId: id,
