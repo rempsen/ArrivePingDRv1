@@ -1,9 +1,16 @@
-name: Ship iOS to TestFlight
+name: Ship iOS app
 
 # Manually triggered only — either from GitHub's own "Run workflow" button,
-# or by the admin dashboard's "Push to TestFlight" button
+# or by the admin dashboard's "Release iOS app" button
 # (packages/web/src/api/routes/mobile-release.ts), which calls the
 # workflow_dispatch API. Never runs automatically on push/PR.
+#
+# target=app-store (the default since ArrivePing went live, 2026-10-28):
+# build, upload, wait for Apple to process the build, then submit it for App
+# Store review with "release automatically after approval". The version in
+# packages/mobile/app.json must be newer than the live one; a preflight step
+# checks that before the build starts.
+# target=testflight: build and upload only (testers, no review).
 on:
   workflow_dispatch:
     inputs:
@@ -11,6 +18,16 @@ on:
         description: "Who/what triggered this run"
         required: false
         default: "manual"
+      target:
+        description: "Where the build goes"
+        required: false
+        type: choice
+        options: [app-store, testflight]
+        default: app-store
+      releaseNotes:
+        description: "What's New text for the App Store (app-store only)"
+        required: false
+        default: "Improvements and fixes."
 
 # One release at a time. Two clicks a minute apart used to start two builds
 # side by side; both then submitted "the latest" build, so the second upload
@@ -22,10 +39,18 @@ concurrency:
 jobs:
   ship:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Apple's processing of an upload can take a while before it can be submitted.
+    timeout-minutes: 100
     defaults:
       run:
         working-directory: packages/mobile
+    env:
+      TARGET: ${{ inputs.target || 'app-store' }}
+      # Not secrets: the same ids are in eas.json's submit profile.
+      ASC_APP_ID: "6776464675"
+      ASC_KEY_ID: "6Y6Z8B2F66"
+      ASC_ISSUER_ID: "e5beafb9-51e8-41e3-8818-4b18a424f6b9"
+      ASC_KEY_PATH: keys/AuthKey.p8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,6 +91,12 @@ jobs:
             exit 1
           }
 
+      - name: App Store preflight
+        # Fails in seconds, not after a 15-minute build, when this version
+        # can't be submitted (not newer than live, or one is already in review).
+        if: env.TARGET == 'app-store'
+        run: bun scripts/asc/release.ts preflight --version "$(jq -r .expo.version app.json)"
+
       - name: Build iOS app on Expo's servers
         id: build
         # --json prints the finished build to stdout (progress goes to stderr),
@@ -76,10 +107,20 @@ jobs:
           [ -n "$id" ] || { echo "::error::Couldn't read the build id from eas-cli."; cat build.json; exit 1; }
           echo "Built $(jq -r '(.[0].appVersion // "?") + " (" + (.[0].appBuildVersion // "?") + ")"' build.json): $id"
           echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r '.[0].appVersion' build.json)" >> "$GITHUB_OUTPUT"
+          echo "build=$(jq -r '.[0].appBuildVersion' build.json)" >> "$GITHUB_OUTPUT"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Submit to TestFlight
+      - name: Upload to App Store Connect
+        # Every iOS build lands in App Store Connect (and TestFlight) first;
+        # the next step takes it from there to the App Store.
         run: bunx --yes eas-cli submit --platform ios --id "${{ steps.build.outputs.id }}" --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Submit for App Store review
+        if: env.TARGET == 'app-store'
+        run: bun scripts/asc/release.ts submit --version "${{ steps.build.outputs.version }}" --build "${{ steps.build.outputs.build }}" --notes "$NOTES"
+        env:
+          NOTES: ${{ inputs.releaseNotes }}

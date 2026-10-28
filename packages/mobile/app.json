@@ -68,7 +68,7 @@
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "scheme": [
       "arriveping",
       "homeserve"
@@ -129,7 +129,9 @@
       "expo-font",
       "expo-asset"
     ],
-    "runtimeVersion": "1.0.5",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "updates": {
       "url": "https://u.expo.dev/6e43daa9-bb98-41e0-b7b7-9ea0e7a9ebac"
     }

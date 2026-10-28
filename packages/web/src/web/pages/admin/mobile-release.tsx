@@ -23,8 +23,8 @@ async function jget<T>(url: string): Promise<T> {
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function jpost<T>(url: string): Promise<T> {
-  const r = await fetch(url, { method: "POST", headers: authHeaders() });
+async function jpost<T>(url: string, body: unknown): Promise<T> {
+  const r = await fetch(url, { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
   if (!r.ok) {
     const text = await r.text();
     let message = text;
@@ -51,7 +51,7 @@ function fmtTime(ms: number | null) {
 const STATUS_META: Record<ReleaseStatus["status"], { label: string; color: string; icon: typeof Circle }> = {
   idle: { label: "Idle", color: "text-slate-400", icon: Circle },
   running: { label: "Building & submitting…", color: "text-sky-400", icon: Loader2 },
-  success: { label: "Submitted to App Store Connect", color: "text-emerald-400", icon: CheckCircle2 },
+  success: { label: "Done", color: "text-emerald-400", icon: CheckCircle2 },
   failed: { label: "Failed", color: "text-red-400", icon: XCircle },
 };
 
@@ -72,6 +72,7 @@ function StepRow({ step }: { step: Step }) {
 export default function AdminMobileRelease() {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [notes, setNotes] = useState("");
 
   const statusQ = useQuery({
     queryKey: ["mobile-release-status"],
@@ -84,11 +85,11 @@ export default function AdminMobileRelease() {
   const Icon = meta.icon;
   const running = data?.status === "running";
 
-  async function handleStart() {
+  async function handleStart(target: "app-store" | "testflight") {
     setError(null);
     setStarting(true);
     try {
-      await jpost("/api/mobile-release/start");
+      await jpost("/api/mobile-release/start", { target, releaseNotes: notes });
       await statusQ.refetch();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start the release.");
@@ -100,15 +101,38 @@ export default function AdminMobileRelease() {
   return (
     <PageWrap>
       <PageHead
-        title="Push to TestFlight"
-        subtitle="Build the iOS app and submit it to App Store Connect — no laptop, no terminal."
+        title="Release iOS app"
+        subtitle="Build ArrivePing for iPhone and iPad and submit it to the App Store — no laptop, no terminal."
         actions={
-          <BtnPrimary onClick={handleStart} disabled={running || starting}>
-            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-            {running ? "Running…" : "Push to TestFlight"}
-          </BtnPrimary>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleStart("testflight")}
+              disabled={running || starting}
+              className="text-sm font-medium text-slate-400 hover:text-slate-200 disabled:opacity-40"
+            >
+              TestFlight only
+            </button>
+            <BtnPrimary onClick={() => handleStart("app-store")} disabled={running || starting}>
+              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+              {running ? "Running…" : "Release to App Store"}
+            </BtnPrimary>
+          </div>
         }
       />
+
+      <label className="mb-4 block">
+        <span className="mb-1.5 block text-sm font-medium text-slate-300">What's New (shown on the App Store)</span>
+        <textarea
+          aria-label="What's New"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          maxLength={4000}
+          rows={3}
+          placeholder="Improvements and fixes."
+          className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-sky-500/50 focus:outline-none"
+        />
+      </label>
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -130,10 +154,12 @@ export default function AdminMobileRelease() {
         </div>
 
         <p className="mt-3 text-sm text-slate-400">
-          This takes 10–20 minutes end to end: the build runs on Expo's servers, then the finished
-          build is uploaded to App Store Connect automatically. Once it's done, finish on Apple's
-          side: appstoreconnect.apple.com → ArrivePing → TestFlight → add yourself as a tester
-          with the Apple ID signed into TestFlight on your iPhone, then install.
+          Release to App Store takes 30–60 minutes here: the build runs on Expo's servers, is
+          uploaded to App Store Connect, Apple processes it, and then it's submitted for review.
+          Apple usually reviews within a day or two, and the update goes live to customers
+          automatically once it's approved. Before each release, raise the version in
+          packages/mobile/app.json (for example 1.0.6 → 1.0.7); the release stops right away if
+          you forget. "TestFlight only" stops after the upload, for testers.
         </p>
 
         {data?.steps && data.steps.length > 0 && (
@@ -145,7 +171,7 @@ export default function AdminMobileRelease() {
         )}
 
         {!data?.steps?.length && data?.status === "idle" && (
-          <p className="mt-4 text-sm text-slate-500">No release has run yet. Click "Push to TestFlight" to start one.</p>
+          <p className="mt-4 text-sm text-slate-500">No release has run yet. Click "Release to App Store" to start one.</p>
         )}
 
         {data?.htmlUrl && (
