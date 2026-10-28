@@ -82,6 +82,17 @@ describe("PATCH /riders/me — liveness vs. position age", () => {
     expect(Date.now() - ms(after.lastSeenAt)!).toBeLessThan(5_000);
   });
 
+  it("an older fix arriving late doesn't drag the pin back", async () => {
+    const newer = Date.now() - 10_000;
+    await patchMe({ lat: 49.88, lng: -97.2, fixAt: newer });
+    await patchMe({ lat: 49.7, lng: -97.5, fixAt: newer - 120_000 });
+    const after = await row();
+    expect([after.lat, after.lng]).toEqual([49.88, -97.2]);
+    expect(ms(after.locationUpdatedAt)).toBe(newer);
+    // ...but it still counts as the phone checking in.
+    expect(Date.now() - ms(after.lastSeenAt)!).toBeLessThan(5_000);
+  });
+
   it("an older build that sends no fix time gets 'now'", async () => {
     await patchMe({ lat: 49.88, lng: -97.2 });
     expect(Date.now() - ms((await row()).locationUpdatedAt)!).toBeLessThan(5_000);

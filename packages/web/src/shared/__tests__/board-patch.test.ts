@@ -19,9 +19,10 @@ const board = (techs: BoardTech[], jobs: BoardJob[]): Board => ({
 
 describe("applyLocations", () => {
   const T0 = Date.parse("2026-10-17T19:00:00.000Z");
+  const NOW = T0 + 10_000;
   it("moves the pin, clears stale, and stamps the time", () => {
     const b = board([tech("a", { stale: true }), tech("b")], []);
-    const n = applyLocations(b, [{ techId: "a", lat: 50, lng: -98, at: T0 + 5_000 }]);
+    const n = applyLocations(b, [{ techId: "a", lat: 50, lng: -98, at: T0 + 5_000 }], NOW);
     expect(n.techs[0]).toMatchObject({ lat: 50, lng: -98, stale: false, locationAt: new Date(T0 + 5_000).toISOString() });
     expect(n.techs[1]).toBe(b.techs[1]!);
   });
@@ -31,23 +32,35 @@ describe("applyLocations", () => {
     const n = applyLocations(b, [
       { techId: "a", lat: 50, lng: -98, at: T0 + 9_000 },
       { techId: "a", lat: 51, lng: -99, at: T0 + 3_000 },
-    ]);
+    ], NOW);
     expect(n.techs[0]).toMatchObject({ lat: 50, lng: -98 });
-    expect(applyLocations(n, [{ techId: "a", lat: 1, lng: 1, at: T0 }])).toBe(n);
+    expect(applyLocations(n, [{ techId: "a", lat: 1, lng: 1, at: T0 }], NOW)).toBe(n);
   });
 
   it("returns the same board when nothing changes or the frame is junk", () => {
     const b = board([tech("a")], []);
-    expect(applyLocations(b, [])).toBe(b);
-    expect(applyLocations(b, [{ techId: "zzz", lat: 50, lng: -98, at: T0 + 1 }])).toBe(b);
-    expect(applyLocations(b, [{ techId: "a", lat: Number.NaN, lng: -98, at: T0 + 1 }])).toBe(b);
-    expect(applyLocations(b, [{ techId: "a", lat: 95, lng: -98, at: T0 + 1 }])).toBe(b);
-    expect(applyLocations(b, [{ techId: "a", lat: 49.9, lng: -97.1, at: T0 + 1 }])).toBe(b);
+    expect(applyLocations(b, [], NOW)).toBe(b);
+    expect(applyLocations(b, [{ techId: "zzz", lat: 50, lng: -98, at: T0 + 1 }], NOW)).toBe(b);
+    expect(applyLocations(b, [{ techId: "a", lat: Number.NaN, lng: -98, at: T0 + 1 }], NOW)).toBe(b);
+    expect(applyLocations(b, [{ techId: "a", lat: 95, lng: -98, at: T0 + 1 }], NOW)).toBe(b);
+    expect(applyLocations(b, [{ techId: "a", lat: 49.9, lng: -97.1, at: T0 + 1 }], NOW)).toBe(b);
+  });
+
+  it("an old fix arriving now moves the pin but stays grey", () => {
+    const b = board([tech("a", { locationAt: new Date(T0 - 30 * 60_000).toISOString() })], []);
+    const n = applyLocations(b, [{ techId: "a", lat: 50, lng: -98, at: T0 - 15 * 60_000 }], NOW);
+    expect(n.techs[0]).toMatchObject({ lat: 50, lng: -98, stale: true });
+  });
+
+  it("a fresh fix at the same spot clears grey", () => {
+    const b = board([tech("a", { stale: true, locationAt: new Date(T0 - 30 * 60_000).toISOString() })], []);
+    const n = applyLocations(b, [{ techId: "a", lat: 49.9, lng: -97.1, at: T0 }], NOW);
+    expect(n.techs[0]).toMatchObject({ stale: false, locationAt: new Date(T0).toISOString() });
   });
 
   it("places a technician who had no location", () => {
     const b = board([tech("n", { lat: null, lng: null, locationAt: null })], []);
-    const n = applyLocations(b, [{ techId: "n", lat: 50, lng: -98, at: T0 }]);
+    const n = applyLocations(b, [{ techId: "n", lat: 50, lng: -98, at: T0 }], NOW);
     expect(n.techs[0]).toMatchObject({ lat: 50, lng: -98 });
   });
 });

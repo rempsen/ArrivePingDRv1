@@ -2,7 +2,7 @@ import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { auth } from "../auth";
@@ -146,11 +146,6 @@ export const ridersRoutes = new Hono<AppEnv>()
     // Any call from the phone means its app is alive.
     set.lastSeenAt = new Date();
     const fixedAt = fixTime(body.fixAt);
-    if (body.lat != null) {
-      set.lat = body.lat;
-      set.lng = body.lng;
-      set.locationUpdatedAt = fixedAt;
-    }
 
     // Liveness heartbeat from the mobile app (no GPS): lastSeenAt above, and
     // nothing else. It used to stamp locationUpdatedAt, which made the last
@@ -176,13 +171,32 @@ export const ridersRoutes = new Hono<AppEnv>()
     if (Object.keys(set).length) {
       [r] = await t.update(schema.riders, set, eq(schema.riders.id, riderId));
     }
+    // The position moves only to a fix at least as new as the one stored:
+    // reports can arrive out of order (the foreground watcher, the background
+    // task and a delayed cached fix overlap, and a timed-out request can still
+    // land), and an older fix must not drag the pin back.
+    let moved = false;
+    if (body.lat != null && body.lng != null) {
+      const won = await t.update(
+        schema.riders,
+        { lat: body.lat, lng: body.lng, locationUpdatedAt: fixedAt },
+        and(
+          eq(schema.riders.id, riderId),
+          or(isNull(schema.riders.locationUpdatedAt), lte(schema.riders.locationUpdatedAt, fixedAt)),
+        ),
+      );
+      if (won[0]) {
+        r = won[0];
+        moved = true;
+      }
+    }
     if (toggled) {
       await reconcileRiderStatus(tenantId(c), riderId);
       r = await t.selectOne(schema.riders, eq(schema.riders.id, riderId));
     }
     // Live dispatch map: move the pin, and refresh the tech's status line.
-    if (body.lat != null && body.lng != null) {
-      void publishDispatch(tenantId(c), { kind: "location", techId: riderId, lat: body.lat, lng: body.lng, at: fixedAt.getTime() });
+    if (moved) {
+      void publishDispatch(tenantId(c), { kind: "location", techId: riderId, lat: body.lat!, lng: body.lng!, at: fixedAt.getTime() });
     }
     if (body.status != null) void publishDispatch(tenantId(c), { kind: "tech", techId: riderId });
     return c.json({ rider: r ?? null }, 200);
