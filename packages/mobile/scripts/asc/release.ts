@@ -112,6 +112,8 @@ async function versions(app: string): Promise<AscVersion[]> {
 
 async function preflight(app: string, version: string) {
   const all = await versions(app);
+  // What Apple reports, so a surprise state is visible in the log.
+  for (const v of all) console.log(`  App Store version ${v.versionString}: ${v.state}`);
   const plan = planVersion(all, version);
   if (plan.kind === "blocked") fail(plan.reason);
   console.log(`App Store preflight OK: ${version} can be submitted (${plan.kind === "create" ? "new version" : "reusing the open draft"}).`);

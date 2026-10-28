@@ -22,9 +22,18 @@ export interface AscVersion {
 }
 
 /** States in which a version can still be edited and submitted. */
-export const EDITABLE = new Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"]);
+export const EDITABLE = new Set([
+  "PREPARE_FOR_SUBMISSION",
+  // "Remove from Review" leaves a version here (appVersionState) or as
+  // DEVELOPER_REJECTED (the older appStoreState).
+  "READY_FOR_REVIEW",
+  "DEVELOPER_REJECTED",
+  "REJECTED",
+  "METADATA_REJECTED",
+  "INVALID_BINARY",
+]);
 /** States meaning a version is already with Apple; a second submission would be refused. */
-export const WITH_APPLE = new Set(["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_DISTRIBUTION", "PROCESSING_FOR_APP_STORE"]);
+export const WITH_APPLE = new Set(["WAITING_FOR_EXPORT_COMPLIANCE", "WAITING_FOR_REVIEW", "IN_REVIEW", "ACCEPTED", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE", "PROCESSING_FOR_DISTRIBUTION", "PROCESSING_FOR_APP_STORE"]);
 /** States meaning the version is (or was) live. */
 export const LIVE = new Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION", "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE"]);
 
@@ -57,7 +66,11 @@ export function planVersion(versions: readonly AscVersion[], version: string): P
       kind: "blocked",
       reason: `Version ${busy.versionString} is already with Apple (${busy.state}). Wait for it to be released or rejected, or withdraw it in App Store Connect, then release again.`,
     };
-  const draft = versions.find((v) => EDITABLE.has(v.state));
+  // Apple keeps at most one version that is neither live nor with them: that
+  // is the draft to reuse, whatever Apple calls its state (a state this list
+  // doesn't know must not make us try to create a second one, which Apple
+  // refuses with "cannot create a new version ... in the current state").
+  const draft = versions.find((v) => EDITABLE.has(v.state)) ?? versions.find((v) => !LIVE.has(v.state) && !WITH_APPLE.has(v.state));
   if (draft) return { kind: "reuse", versionId: draft.id, rename: draft.versionString !== version };
   return { kind: "create" };
 }
