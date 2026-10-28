@@ -306,6 +306,35 @@ export async function saveJobAnswers(
   return shape(v, saved);
 }
 
+/**
+ * Add a photo that has just landed to the photo question it was taken for.
+ * Used when the app sends a photo again later (it couldn't upload when it was
+ * taken): by then the technician may have left the job screen, so the app
+ * can't attach it itself. A no-op when the job has no form, the question isn't
+ * a photo question, the photo is already there, or the question is full.
+ */
+export async function attachPhotoToAnswer(
+  companyId: string,
+  b: Pick<Booking, "id" | "templateVersionId">,
+  itemId: string,
+  photoId: string,
+  by: string,
+): Promise<boolean> {
+  const f = await jobForm(companyId, b);
+  const item = f?.form.items.find((i) => i.id === itemId);
+  if (!f || !item || item.type !== "photo") return false;
+  const cur = f.answers[itemId];
+  const ids = cur?.photoIds ?? [];
+  if (ids.includes(photoId) || ids.length >= (item.maxPhotos ?? 30)) return false;
+  await saveJobAnswers(
+    companyId,
+    b,
+    { [itemId]: { value: cur?.value, photoIds: [...ids, photoId], at: new Date().toISOString() } },
+    by,
+  );
+  return true;
+}
+
 /** Required questions still unanswered on a job (empty when it can be finished). */
 export async function missingForJob(companyId: string, b: Pick<Booking, "id" | "templateVersionId">): Promise<FormItem[]> {
   const f = await jobForm(companyId, b);

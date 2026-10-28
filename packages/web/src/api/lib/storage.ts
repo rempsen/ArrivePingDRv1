@@ -58,6 +58,38 @@ if (!USE_S3) {
   });
 }
 
+/** Waits between storage write attempts: try, wait 0.4 s, try, wait 1.5 s, try. */
+export const WRITE_RETRY_DELAYS_MS = [400, 1500] as const;
+
+/**
+ * Run `fn`, and run it again after each delay if it throws. A single blip at
+ * the storage provider (a dropped connection, a 503, a slow handshake) must
+ * not cost a technician the photo they just took. The last error is rethrown,
+ * with the attempt count, when every try fails.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  delays: readonly number[] = WRITE_RETRY_DELAYS_MS,
+  what = "storage write",
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= delays.length) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        e.message = `${what} failed after ${attempt + 1} attempts: ${e.message}`;
+        throw e;
+      }
+      log.warn(`${what} failed, retrying`, { attempt: attempt + 1, err: err instanceof Error ? err.message : String(err) });
+      await sleep(delays[attempt]!);
+      attempt++;
+    }
+  }
+}
+
 /** Persist a buffer. Returns the storage key + a fetch URL. */
 export async function putObject(
   key: string,
@@ -65,7 +97,7 @@ export async function putObject(
   contentType: string,
 ): Promise<StoredObject> {
   if (USE_S3) {
-    await client().write(key, body, { type: contentType });
+    await withRetry(() => client().write(key, body, { type: contentType }), WRITE_RETRY_DELAYS_MS, `storage write ${key}`);
     const url = S3_PUBLIC_BASE
       ? `${S3_PUBLIC_BASE.replace(/\/$/, "")}/${key}`
       : `/api/public/file/${encodeURIComponent(key)}`; // public proxy route

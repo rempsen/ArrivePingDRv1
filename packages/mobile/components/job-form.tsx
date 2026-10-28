@@ -61,7 +61,7 @@ import {
 } from "phosphor-react-native";
 import { C, R, assetUrl } from "../lib/theme";
 import { useIsOnline } from "../lib/network";
-import { uploadJobPhoto } from "../lib/job-photos";
+import { addJobPhoto, onPhotoUploaded, pendingLabel, retryPendingPhoto, discardPendingPhoto, usePendingPhotos, type PendingPhoto } from "../lib/photo-queue";
 import { Segment, SignaturePad } from "./signature-pad";
 import {
   flaggedItems,
@@ -869,6 +869,22 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
   const full = max !== undefined && ids.length >= max;
 
   const urlFor = (id: string) => localUrls[id] ?? photos?.find((p) => p.id === id)?.url;
+  // Shots for this question that haven't reached the server yet. They're kept
+  // on the phone and sent again by themselves; when one lands the server adds
+  // it to this answer, and if this screen is still open it adds it here too.
+  const waiting = usePendingPhotos(bookingId, item.id);
+  useEffect(
+    () =>
+      onPhotoUploaded((p, photo) => {
+        if (p.bookingId !== bookingId || p.formItemId !== item.id || !photo?.id) return;
+        if (photo.url) setLocalUrls((m) => ({ ...m, [photo.id]: String(photo.url) }));
+        // (the server has already added it; this keeps the open screen in step)
+        if (!readOnly && !idsRef.current.includes(photo.id)) commit(item, { photoIds: [...idsRef.current, photo.id] });
+        onPhotosChanged();
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bookingId, item.id],
+  );
 
   async function take(source: PhotoSource) {
     const asset = await pickPhoto(source, "attach photos to this question");
@@ -876,7 +892,7 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
     const tappedAt = new Date();
     setBusy(true);
     try {
-      const photo = await uploadJobPhoto({
+      const r = await addJobPhoto({
         bookingId,
         asset,
         phase: "during",
@@ -885,16 +901,32 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
         // an office-only question's photo stays office-only
         customerVisible: item.internal ? false : undefined,
       });
+      const photo = r.photo;
       if (photo?.id) {
         if (photo.url) setLocalUrls((m) => ({ ...m, [photo.id]: String(photo.url) }));
         commit(item, { photoIds: [...idsRef.current, photo.id] }, tappedAt);
         onPhotosChanged();
+      } else {
+        Alert.alert(
+          "Photo saved on this phone",
+          `It couldn't upload just now${r.error ? ` (${r.error})` : ""}. It will upload by itself and be added to this question.`,
+        );
       }
-    } catch (e: any) {
-      Alert.alert("Photo not uploaded", `${e?.message || "Upload failed"}. Check your signal and try again.`);
     } finally {
       setBusy(false);
     }
+  }
+
+  function waitingActions(p: PendingPhoto) {
+    Alert.alert(
+      p.stuck ? "This photo wasn't accepted" : "This photo hasn't uploaded yet",
+      p.lastError ? `Last try: ${p.lastError}` : "It's saved on this phone and will upload by itself.",
+      [
+        { text: "Retry now", onPress: () => void retryPendingPhoto(p.clientId) },
+        { text: "Discard", style: "destructive", onPress: () => discardPendingPhoto(p.clientId) },
+        { text: "Close", style: "cancel" },
+      ],
+    );
   }
 
   function add() {
@@ -930,6 +962,20 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
             </View>
           );
         })}
+        {waiting.map((p) => (
+          <Pressable
+            key={p.clientId}
+            onPress={() => waitingActions(p)}
+            style={st.thumbWrap}
+            accessibilityRole="button"
+            accessibilityLabel={`${pendingLabel(p)}. Tap for options`}
+          >
+            <Image source={{ uri: p.uri }} style={[st.thumb, { opacity: 0.6 }]} />
+            <View style={[st.waitBadge, p.stuck && { backgroundColor: C.red }]}>
+              <Text style={st.waitBadgeTxt}>{pendingLabel(p)}</Text>
+            </View>
+          </Pressable>
+        ))}
         {!readOnly && !full && (
           <Pressable
             onPress={add}
@@ -1200,6 +1246,17 @@ const st = StyleSheet.create({
   thumbWrap: { position: "relative" },
   thumb: { width: 84, height: 84, borderRadius: R.control, backgroundColor: C.bg3 },
   thumbEmpty: { borderWidth: 1, borderColor: C.border },
+  waitBadge: {
+    position: "absolute",
+    left: 3,
+    right: 3,
+    bottom: 3,
+    borderRadius: 6,
+    paddingVertical: 2,
+    backgroundColor: "rgba(7,11,18,0.85)",
+    alignItems: "center",
+  },
+  waitBadgeTxt: { color: "#fff", fontSize: 8, fontWeight: "800" },
   thumbX: {
     position: "absolute",
     top: -6,
