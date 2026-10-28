@@ -28,6 +28,9 @@ describe("planVersion", () => {
     expect(planVersion([v("a", "1.0.5", "READY_FOR_SALE"), v("b", "1.0.6", "PREPARE_FOR_SUBMISSION")], "1.0.7")).toEqual({ kind: "reuse", versionId: "b", rename: true });
     expect(planVersion([v("b", "1.0.6", "REJECTED"), v("a", "1.0.5", "READY_FOR_SALE")], "1.0.6")).toEqual({ kind: "reuse", versionId: "b", rename: false });
   });
+  test("refuses while a version waits on export compliance", () => {
+    expect(planVersion([v("a", "1.0.5", "READY_FOR_SALE"), v("b", "1.0.7", "WAITING_FOR_EXPORT_COMPLIANCE")], "1.0.8").kind).toBe("blocked");
+  });
   test("reuses a version removed from review (READY_FOR_REVIEW)", () => {
     expect(planVersion([v("a", "1.0.5", "READY_FOR_SALE"), v("b", "1.0.7", "READY_FOR_REVIEW")], "1.0.8")).toEqual({ kind: "reuse", versionId: "b", rename: true });
   });
