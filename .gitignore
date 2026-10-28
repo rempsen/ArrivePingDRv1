@@ -95,6 +95,8 @@ packages/mobile/scripts/*
 !packages/mobile/scripts/generate-ios-certs.py
 !packages/mobile/scripts/ship-ios.sh
 !packages/mobile/scripts/ship-ios-ci.sh
+# App Store release script (App Store Connect API) and its tests.
+!packages/mobile/scripts/asc/
 
 # local upload fallback (runtime artifacts, not source)
 packages/web/uploads

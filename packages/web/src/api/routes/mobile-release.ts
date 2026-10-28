@@ -1,7 +1,10 @@
 /**
- * MOBILE RELEASE — one-click iOS → TestFlight for NVC360 staff.
+ * MOBILE RELEASE — one-click iOS release for NVC360 staff.
  *
- * Superadmin-only. Triggers the "Ship iOS to TestFlight" GitHub Actions
+ * Superadmin-only. By default the build goes to the App Store: built,
+ * uploaded, then submitted for review and released automatically once Apple
+ * approves (ArrivePing went live 2026-10-28). `target: "testflight"` stops
+ * after the upload, for testers only. Triggers the "Ship iOS app" GitHub Actions
  * workflow (.github/workflows/ship-ios.yml) and lets the admin dashboard
  * poll its progress.
  *
@@ -71,18 +74,22 @@ export const mobileReleaseRoutes = new Hono<AppEnv>()
       const busy = await activeShipRun(headers);
       if (busy)
         return c.json(
-          { message: "A TestFlight release is already running. Wait for it to finish before starting another.", htmlUrl: busy.html_url },
+          { message: "An iOS release is already running. Wait for it to finish before starting another.", htmlUrl: busy.html_url },
           409,
         );
     } catch (e) {
       return c.json({ message: `Couldn't check for a release in progress: ${(e as Error).message}` }, 502);
     }
 
+    const body = (await c.req.json().catch(() => ({}))) as { target?: string; releaseNotes?: string };
+    const target = body.target === "testflight" ? "testflight" : "app-store";
+    const releaseNotes = (body.releaseNotes ?? "").trim().slice(0, 4000) || "Improvements and fixes.";
+
     const user = c.get("user");
     const res = await fetch(`${GH_API}/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ ref: "main", inputs: { requestedBy: user?.email ?? "unknown" } }),
+      body: JSON.stringify({ ref: "main", inputs: { requestedBy: user?.email ?? "unknown", target, releaseNotes } }),
     });
     if (!res.ok) {
       return c.json({ message: `GitHub rejected the trigger (${res.status}): ${await res.text()}` }, 502);

@@ -181,7 +181,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               ...(platformRole !== "sales"
                 ? [
                     { to: "/admin/analytics", label: "Analytics", icon: ChartNoAxesCombined },
-                    { to: "/admin/mobile-release", label: "Push to TestFlight", icon: Rocket },
+                    { to: "/admin/mobile-release", label: "Release iOS app", icon: Rocket },
                   ]
                 : []),
             ],

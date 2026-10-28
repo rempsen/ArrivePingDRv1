@@ -91,7 +91,7 @@ export default function HubOps() {
       <h2 className="mb-3 mt-8 text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">Other tools</h2>
       <div className="grid gap-3 sm:grid-cols-3">
         <ToolLink href="/admin/companies" icon={Building2} title="Create a company by hand" text="With brand scouting, plus email-domain approvals." />
-        <ToolLink href="/admin/mobile-release" icon={Rocket} title="Push to TestFlight" text="Build the iPhone app and send it to testers." />
+        <ToolLink href="/admin/mobile-release" icon={Rocket} title="Release iOS app" text="Build the iPhone and iPad app and submit it to the App Store." />
         <ToolLink href="/admin/analytics" icon={MailCheck} title="Analytics" text="Trials, conversion and churn, week by week." />
       </div>
     </HubLayout>
