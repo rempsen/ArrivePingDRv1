@@ -50,6 +50,10 @@ type EarnJob = {
   flatPay?: number;
   /** $0 because the office has not set an hourly rate and there was no unit pay. */
   unrated: boolean;
+  /** QuickBooks Sync (companies that use it): none | po_open | billed | paid | error. */
+  vendorBillStatus?: string;
+  /** When the company paid this job's bill in QuickBooks, if it has. */
+  subtradePaidAt?: number | null;
 };
 type EarnPayout = {
   id: string;
@@ -342,6 +346,15 @@ export default function Earnings() {
                     {(b.flatPay ?? 0) > 0 ? ` · flat ${money(b.flatPay ?? 0)}` : ""}
                     {b.unitPay > 0 ? ` · per-unit ${money(b.unitPay)}` : ""}
                   </Text>
+                  {/* Companies that pay subtrades through QuickBooks: the bill's state. */}
+                  {b.vendorBillStatus === "paid" && (
+                    <Text style={s.jobPaid} numberOfLines={1}>
+                      Paid in QuickBooks{b.subtradePaidAt ? ` · ${fmtDate(b.subtradePaidAt)}` : ""}
+                    </Text>
+                  )}
+                  {b.vendorBillStatus === "billed" && (
+                    <Text style={s.jobPay} numberOfLines={1}>Billed in QuickBooks · awaiting payment</Text>
+                  )}
                 </View>
                 <Text style={s.jobAmt}>{money(b.pay)}</Text>
               </View>
@@ -416,6 +429,7 @@ const s = StyleSheet.create({
   jobMeta: { color: C.sub, fontSize: 12 },
   jobAmt: { color: C.green, fontSize: 15, fontWeight: "800" },
   jobPay: { color: C.sub, fontSize: 11.5, fontWeight: "600" },
+  jobPaid: { color: C.green, fontSize: 11.5, fontWeight: "700" },
   splitCard: {
     backgroundColor: C.card,
     borderRadius: R.card,
