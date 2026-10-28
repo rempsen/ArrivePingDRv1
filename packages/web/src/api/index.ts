@@ -18,7 +18,7 @@ import { ridersRoutes } from "./routes/riders";
 import { paymentsRoutes } from "./routes/payments";
 import { billingRoutes } from "./routes/billing";
 import { paymentsWebhookRoutes } from "./routes/payments-webhook";
-import { quickbooksWebhookRoutes } from "./routes/quickbooks";
+import { quickbooksRoutes, quickbooksWebhookRoutes } from "./routes/quickbooks";
 import { notificationsRoutes } from "./routes/notifications";
 import { adminRoutes } from "./routes/admin";
 import { directoryRoutes } from "./routes/directory";
@@ -410,6 +410,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/job-forms", jobFormsRoutes)
   .route("/automation", automationRoutes)
   .route("/maintenance", maintenanceRoutes)
+  // QuickBooks Sync settings — before /integrations so its paths are not read as /:id
+  .route("/integrations/quickbooks", quickbooksRoutes)
   .route("/integrations", integrationsRoutes)
   .route("/export", exportRoutes)
   .route("/import", importRoutes)

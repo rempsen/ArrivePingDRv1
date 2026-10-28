@@ -455,6 +455,7 @@ export default function JobReportPage() {
           <Card title="Technician pay" icon={<DollarSign className="h-4 w-4 text-amber-400" />}>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-rose-400">Internal — not shown to the customer</p>
             <p className="text-lg font-bold text-amber-300">{money(j.techPay?.total ?? 0)}</p>
+            <VendorBillBadge status={j.techPay?.vendorBillStatus} paidAt={j.techPay?.subtradePaidAt} />
             {pay && (
               <div className="mt-2 space-y-1 border-t border-white/5 pt-2 text-xs">
                 {Number(pay.hourlyPay) > 0 && (
@@ -494,4 +495,18 @@ export default function JobReportPage() {
       />
     </PageWrap>
   );
+}
+
+/** QuickBooks Sync: the subtrade's bill for this job. Nothing until the sync has touched the job. */
+function VendorBillBadge({ status, paidAt }: { status?: string | null; paidAt?: string | null }) {
+  if (!status || status === "none") return null;
+  const map: Record<string, { label: string; cls: string }> = {
+    po_open: { label: "PO sent in QuickBooks", cls: "bg-sky-500/15 text-sky-300" },
+    billed: { label: "Billed in QuickBooks", cls: "bg-amber-500/15 text-amber-300" },
+    paid: { label: `Subtrade paid${paidAt ? " · " + new Date(paidAt).toLocaleDateString() : ""}`, cls: "bg-emerald-live/15 text-emerald-live" },
+    error: { label: "QuickBooks needs attention", cls: "bg-red-500/15 text-red-300" },
+  };
+  const m = map[status];
+  if (!m) return null;
+  return <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${m.cls}`}>{m.label}</span>;
 }
