@@ -417,6 +417,17 @@ export const bookings = pgTable("bookings", {
    */
   payoutId: text("payout_id").notNull().default(""),
   /**
+   * QuickBooks Sync (services/quickbooks): where the subtrade's bill for this
+   * job stands in the company's QuickBooks.
+   *   none     not synced (feature off, no technician, sample job)
+   *   po_open  purchase order sent to the subtrade's vendor
+   *   billed   a bill is linked to the purchase order (ours or the bookkeeper's)
+   *   paid     the bill's balance reached zero
+   *   error    sync gave up; see qbo_issues
+   */
+  vendorBillStatus: text("vendor_bill_status").notNull().default("none"),
+  subtradePaidAt: timestamp("subtrade_paid_at", { mode: "date", withTimezone: true }),
+  /**
    * Sample-day job (services/sample-day.ts): part of the pretend day every new
    * company starts with. fireEvent sends nothing for it, the delay watch and
    * automations skip it, and reports/exports leave it out.
@@ -1452,6 +1463,53 @@ export const intakeSubmissions = pgTable("intake_submissions", {
  * every tenant can just click "Connect" and authorize on the provider's site —
  * no API keys ever touched by tenants. Falls back to env vars when absent.
  */
+/**
+ * QuickBooks Sync: which QuickBooks record a local record is linked to.
+ * kind: vendor (riders.id) | customer (user id of the customer) | item
+ * (template id) | purchase_order (booking id) | bill (booking id).
+ * syncToken is QuickBooks' optimistic-concurrency token from the last read;
+ * fingerprint is a hash of what we last sent, so unchanged records cost no
+ * API calls.
+ */
+export const qboLinks = pgTable(
+  "qbo_links",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull().default("default"),
+    kind: text("kind").notNull(),
+    localId: text("local_id").notNull(),
+    qboId: text("qbo_id").notNull(),
+    syncToken: text("sync_token").notNull().default(""),
+    fingerprint: text("fingerprint").notNull().default(""),
+    lastSyncedAt: timestamp("last_synced_at", { mode: "date", withTimezone: true }),
+    createdAt: now(),
+  },
+  (t) => ({
+    localUq: uniqueIndex("qbo_links_local_uq").on(t.companyId, t.kind, t.localId),
+    qboIdx: index("qbo_links_qbo_idx").on(t.companyId, t.kind, t.qboId),
+  }),
+);
+
+/** QuickBooks Sync: anything that needs a person (ambiguous vendor, locked period, …). */
+export const qboIssues = pgTable(
+  "qbo_issues",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull().default("default"),
+    bookingId: text("booking_id"),
+    kind: text("kind").notNull(),
+    message: text("message").notNull().default(""),
+    detail: text("detail").notNull().default("{}"), // JSON
+    status: text("status").notNull().default("open"), // open | resolved
+    createdAt: now(),
+    resolvedAt: timestamp("resolved_at", { mode: "date", withTimezone: true }),
+  },
+  (t) => ({
+    companyIdx: index("qbo_issues_company_idx").on(t.companyId, t.status),
+    bookingIdx: index("qbo_issues_booking_idx").on(t.bookingId),
+  }),
+);
+
 // Short-lived OAuth handshake state (CSRF token → which integration row is
 // being connected). GLOBAL: the provider's redirect carries no tenant
 // context, so the callback looks the row up by id before it knows the tenant.
@@ -1462,7 +1520,9 @@ export const oauthStates = pgTable("oauth_states", {
   companyId: text("company_id").notNull().default("default"),
   expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
   createdAt: now(),
-});
+}, (t) => ({
+  expiresIdx: index("oauth_states_expires_idx").on(t.expiresAt),
+}));
 
 export const oauthAppCredentials = pgTable("oauth_app_credentials", {
   provider: text("provider").primaryKey(), // quickbooks | gmail | google_calendar | ...

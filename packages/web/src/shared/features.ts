@@ -98,6 +98,14 @@ export const FEATURES = [
     group: "Connections",
   },
   {
+    key: "integrations.quickbooks",
+    label: "QuickBooks sync",
+    description: "Mirror assigned jobs as purchase orders and subtrade bills in the company's QuickBooks, and mark jobs paid when QuickBooks pays them.",
+    kind: "entitlement",
+    group: "Connections",
+    kindDefaults: { customer: false, demo: false, test: false, internal: true },
+  },
+  {
     key: "api.access",
     label: "API & MCP",
     description: "API keys and the MCP server for the company's own tools and agents.",

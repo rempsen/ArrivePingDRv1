@@ -239,6 +239,13 @@
       "when": 1793204152139,
       "tag": "0033_booking_duration_mins",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793225247284,
+      "tag": "0034_quickbooks_sync",
+      "breakpoints": true
     }
   ]
 }
