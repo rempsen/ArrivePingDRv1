@@ -131,7 +131,8 @@ export function JobDetail({
     const opts: Array<{ text: string; style?: "cancel" | "destructive"; onPress?: () => void }> = [
       { text: "Open in web console", onPress: () => Linking.openURL(webUrl("/admin/work-orders")).catch(() => {}) },
     ];
-    if (b.address) opts.push({ text: "Open in Maps", onPress: () => openMap(b.lat, b.lng, b.address) });
+    // At most three buttons: Android drops the rest (Close included). Maps
+    // lives on the address in the facts card.
     if (canEdit) opts.push({ text: "Cancel job", style: "destructive", onPress: cancelJob });
     opts.push({ text: "Close", style: "cancel" });
     Alert.alert(label, undefined, opts);

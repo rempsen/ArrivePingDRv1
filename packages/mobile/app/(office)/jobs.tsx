@@ -99,9 +99,14 @@ export default function Jobs() {
   // On an iPad the detail pane shouldn't sit empty: open the first job in
   // the list until the dispatcher picks one.
   const firstShown = shown[0]?.id;
+  // A bucket, day or search change that hides the open job moves the pane
+  // to the first job still listed (or empties it).
   useEffect(() => {
-    if (wide && !selectedId && firstShown) setSelectedId(firstShown);
-  }, [wide, selectedId, firstShown]);
+    if (!wide) return;
+    if (selectedId && shown.some((j) => j.id === selectedId)) return;
+    const next = firstShown ?? null;
+    if (next !== selectedId) setSelectedId(next);
+  }, [wide, selectedId, firstShown, shown]);
 
   const open = (id: string) => (wide ? setSelectedId(id) : router.push(`/office/job/${id}`));
 
