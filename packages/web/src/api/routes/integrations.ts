@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { requireAuth, tx } from "../middleware/auth";
 import { isSuperadmin } from "../lib/permissions";
 import { seal } from "../lib/secretbox";
+import { putState, takeState } from "../lib/oauth-state";
+import { quickbooksCompanyName } from "../../services/quickbooks/company";
 import {
   PROVIDERS, type ProviderId, hasCredentials, credentialSource, buildAuthorizeUrl,
   exchangeCode, refreshTokens, redirectUri, invalidateCredentialCache,
@@ -61,20 +63,6 @@ const DriveSettingsBody = z
   .partial()
   .refine((b) => Object.keys(b).length > 0, { error: "Nothing to update" });
 
-// short-lived state store for the OAuth handshake (CSRF + which integration row)
-const stateStore = new Map<string, { integrationId: string; provider: ProviderId; exp: number }>();
-function putState(integrationId: string, provider: ProviderId): string {
-  const s = crypto.randomUUID().replace(/-/g, "");
-  stateStore.set(s, { integrationId, provider, exp: Date.now() + 10 * 60_000 });
-  return s;
-}
-function takeState(s: string) {
-  const v = stateStore.get(s);
-  if (!v) return null;
-  stateStore.delete(s);
-  if (v.exp < Date.now()) return null;
-  return v;
-}
 
 function metaFor(provider: string) {
   const cfg = (PROVIDERS as any)[provider];
@@ -192,7 +180,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
       // Not yet enabled by the platform owner — tenant sees a friendly "coming soon".
       return c.json({ message: "not_available", provider }, 412);
     }
-    const state = putState(row.id, provider);
+    const state = await putState(row.id, provider, c.get("companyId") as string);
     const url = (await buildAuthorizeUrl(provider, state))!;
     return c.json({ authorizeUrl: url }, 200);
   })
@@ -206,13 +194,18 @@ export const integrationsRoutes = new Hono<AppEnv>()
     c.header("Content-Type", "text/html; charset=utf-8");
     if (err) return c.body(popupResult(false, `${provider}: ${err}`));
     if (!code || !state) return c.body(popupResult(false, "Missing authorization code."));
-    const st = takeState(state);
+    const st = await takeState(state);
     if (!st || st.provider !== provider) return c.body(popupResult(false, "Session expired. Try again."));
     try {
       const { tokens, raw } = await exchangeCode(provider, code);
       const cfg = PROVIDERS[provider];
       let label = cfg.name, externalId = "";
-      if (cfg.accountInfo) {
+      if (provider === "quickbooks") {
+        // Intuit sends the company (realm) id on the redirect, not in the
+        // token response. Without it every API call would be unaddressed.
+        externalId = c.req.query("realmId") ?? "";
+        label = (await quickbooksCompanyName(externalId, tokens.accessToken)) || "QuickBooks Company";
+      } else if (cfg.accountInfo) {
         const info = await cfg.accountInfo(tokens, raw);
         label = info.label; externalId = info.externalId;
       }

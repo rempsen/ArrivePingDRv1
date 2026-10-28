@@ -1452,6 +1452,18 @@ export const intakeSubmissions = pgTable("intake_submissions", {
  * every tenant can just click "Connect" and authorize on the provider's site —
  * no API keys ever touched by tenants. Falls back to env vars when absent.
  */
+// Short-lived OAuth handshake state (CSRF token → which integration row is
+// being connected). GLOBAL: the provider's redirect carries no tenant
+// context, so the callback looks the row up by id before it knows the tenant.
+export const oauthStates = pgTable("oauth_states", {
+  id: text("id").primaryKey(),
+  integrationId: text("integration_id").notNull(),
+  provider: text("provider").notNull(),
+  companyId: text("company_id").notNull().default("default"),
+  expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+  createdAt: now(),
+});
+
 export const oauthAppCredentials = pgTable("oauth_app_credentials", {
   provider: text("provider").primaryKey(), // quickbooks | gmail | google_calendar | ...
   clientId: text("client_id").notNull().default(""),
