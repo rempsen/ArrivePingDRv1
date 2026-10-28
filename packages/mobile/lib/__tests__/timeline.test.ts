@@ -81,6 +81,8 @@ describe("durations and load", () => {
   test("loadLevel", () => {
     expect(loadLevel(200)).toBe("ok");
     expect(loadLevel(420)).toBe("high");
+    expect(loadLevel(359)).toBe("ok");
+    expect(loadLevel(360)).toBe("high");
     expect(loadLevel(481)).toBe("over");
   });
 });

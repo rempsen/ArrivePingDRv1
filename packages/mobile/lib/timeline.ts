@@ -87,10 +87,11 @@ export function bookedMinutes(jobs: ReadonlyArray<{ durationMins?: number | null
   return jobs.reduce((sum, j) => sum + durationOf(j), 0);
 }
 
-/** "ok", "high" over 83% of the day, "over" past a full day. */
+/** "ok", "high" from 75% of the day (6 of 8 h), "over" past a full day. */
 export function loadLevel(booked: number, capacity = DAY_CAPACITY_MINS): "ok" | "high" | "over" {
   if (booked > capacity) return "over";
-  if (booked > capacity * 0.83) return "high";
+  // Amber from 6 h of an 8 h day (the approved week legend: under 6 h, 6–8 h, over 8 h).
+  if (booked >= capacity * 0.75) return "high";
   return "ok";
 }
 

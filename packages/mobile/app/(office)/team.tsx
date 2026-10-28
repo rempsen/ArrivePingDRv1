@@ -83,6 +83,28 @@ export default function Team() {
     }));
   }, [techs, filter]);
 
+  // How many people each chip would show (break counts under Busy, like Today).
+  const perStatus = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const t of techs) {
+      const k = STATUS_ORDER.includes(t.status) ? t.status : "offline";
+      const key = k === "break" ? "busy" : k;
+      m[key] = (m[key] ?? 0) + 1;
+    }
+    return m;
+  }, [techs]);
+
+  // On an iPad the detail pane shouldn't sit empty: open the first person
+  // in the list until the dispatcher picks one.
+  const firstShown = sections[0]?.data[0]?.id;
+  // A chip that hides the open person moves the pane to the first one listed.
+  useEffect(() => {
+    if (!wide || mode !== "list") return;
+    if (selectedId && sections.some((sec) => sec.data.some((t) => t.id === selectedId))) return;
+    const next = firstShown ?? null;
+    if (next !== selectedId) setSelectedId(next);
+  }, [wide, mode, selectedId, firstShown, sections]);
+
   const chips: Array<{ key: string | null; label: string }> = [
     { key: null, label: "All" },
     { key: "enroute", label: "On route" },
@@ -119,7 +141,9 @@ export default function Team() {
               accessibilityState={{ selected: on }}
               style={[s.chip, on && s.chipOn]}
             >
-              <Text style={[s.chipTxt, on && s.chipTxtOn]}>{c.label}</Text>
+              <Text style={[s.chipTxt, on && s.chipTxtOn]}>
+                {c.label} <Text style={[s.chipN, on && s.chipTxtOn]}>{c.key ? (perStatus[c.key] ?? 0) : techs.length}</Text>
+              </Text>
             </Pressable>
           );
         })}
@@ -252,6 +276,7 @@ const s = StyleSheet.create({
   chipOn: { backgroundColor: "rgba(14,165,233,0.16)", borderColor: C.brand },
   chipTxt: { color: C.sub, fontSize: 12, fontWeight: "700" },
   chipTxtOn: { color: C.brand },
+  chipN: { color: C.text, fontWeight: "800" },
   head: { flexDirection: "row", alignItems: "center", gap: S.sm, paddingTop: S.lg, paddingBottom: S.xs },
   dot: { width: 8, height: 8, borderRadius: R.pill },
   headTxt: { color: C.text, fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5, flex: 1 },

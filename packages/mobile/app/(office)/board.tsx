@@ -8,7 +8,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanima
 import { Timeline, type TimelineHandle } from "../../components/office/timeline";
 import type { DragCallbacks } from "../../components/office/drag-handle";
 import { QueueColumn } from "../../components/office/queue-column";
-import { WeekGrid } from "../../components/office/week-grid";
+import { WeekBar, WeekGrid } from "../../components/office/week-grid";
 import { showToast } from "../../components/office/undo-toast";
 import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S } from "../../lib/theme";
@@ -250,7 +250,26 @@ export default function Board() {
   return (
     <View ref={rootRef} style={s.screen} collapsable={false}>
       <OfficeHeader title="Board" right={segment} />
-      {anchor && from ? (
+      {view === "week" && anchor && weekFrom ? (
+        <WeekBar
+          from={weekFrom}
+          thisWeek={mondayOf(anchor)}
+          // Only the seven days shown: the board also carries older waiting jobs.
+          jobs={(week.data?.jobs ?? NO_JOBS).filter((j) => {
+            if (j.status === "cancelled") return false;
+            const d = jobMinutes(j.scheduledAt, week.data?.tz ?? tz).day;
+            return d >= weekFrom && d <= addDays(weekFrom, 6);
+          }).length}
+          techs={(week.data?.techs ?? NO_TECHS).length}
+          // Same weekday in the chosen week, so Day view lands somewhere sensible.
+          onWeek={(monday) => {
+            const d = addDays(day ?? anchor, Math.round((Date.parse(monday) - Date.parse(weekFrom)) / 86_400_000));
+            setDay(d === anchor ? null : d);
+            // Keep the day strip on that week for when Day view comes back.
+            setFrom(monday);
+          }}
+        />
+      ) : anchor && from ? (
         <DayStrip today={anchor} day={day ?? anchor} from={from} counts={counts} onChange={(d) => setDay(d === anchor ? null : d)} onFrom={setFrom} />
       ) : null}
 
@@ -272,6 +291,8 @@ export default function Board() {
               today={anchor ?? ""}
               onPickDay={(d) => {
                 setDay(d === anchor ? null : d);
+                // Bring the day strip to the picked day if it's off the strip.
+                if (from && (d < from || d >= addDays(from, STRIP_DAYS))) setFrom(addDays(d, -1));
                 setView("day");
               }}
             />

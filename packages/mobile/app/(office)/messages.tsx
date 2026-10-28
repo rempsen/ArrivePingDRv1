@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, RefreshControl, StyleSheet, Pressable, TextInput, Alert } from "react-native";
 import Constants from "expo-constants";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChatCircleDots, Warning, Megaphone } from "phosphor-react-native";
+import { ChatCircleDots, Warning, Megaphone, MagnifyingGlass } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { Avatar, Button, Empty, ListSkeleton } from "../../components/ui";
 import { Sheet } from "../../components/office/sheet";
@@ -58,6 +58,26 @@ export default function Messages() {
     if (canSend) setCast(true);
     router.setParams({ broadcast: undefined });
   }, [broadcast, canSend, router]);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [q, setQ] = useState("");
+  const all = useMemo(() => inbox.threads ?? [], [inbox.threads]);
+  const unreadN = all.filter((t) => t.unread > 0).length;
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return all.filter((t) => (!unreadOnly || t.unread > 0) && (!needle || t.name.toLowerCase().includes(needle) || (t.lastMessage ?? "").toLowerCase().includes(needle)));
+  }, [all, unreadOnly, q]);
+  // On an iPad the conversation pane shouldn't sit empty: open the first
+  // thread (unread ones sort first) until the dispatcher picks one.
+  const firstShown = shown[0]?.techId;
+  // A filter or search that hides the open thread moves to the first one
+  // listed. A thread opened by request (?techId=) stays even if it's filtered out.
+  useEffect(() => {
+    if (!wide) return;
+    if (selectedId && (all.some((t) => t.techId === selectedId) ? shown.some((t) => t.techId === selectedId) : true)) return;
+    const next = firstShown ?? null;
+    if (next !== selectedId) setSelectedId(next);
+  }, [wide, selectedId, firstShown, shown, all]);
+
   const list = (
     <View style={s.screen}>
       <OfficeHeader
@@ -71,6 +91,35 @@ export default function Messages() {
         }
       />
       <BroadcastSheet open={cast} onClose={() => setCast(false)} />
+      <View style={[s.segments, WIDE]}>
+        {(
+          [
+            [false, "All", all.length],
+            [true, "Unread", unreadN],
+          ] as const
+        ).map(([key, label, n]) => {
+          const on = unreadOnly === key;
+          return (
+            <Pressable key={label} onPress={() => setUnreadOnly(key)} accessibilityRole="tab" accessibilityState={{ selected: on }} style={[s.seg, on && s.segOn]}>
+              <Text style={[s.segTxt, on && s.segTxtOn]}>{label}</Text>
+              <Text style={[s.segN, on && s.segTxtOn]}>{n}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={[s.search, WIDE]}>
+        <MagnifyingGlass color={C.muted} size={16} />
+        <TextInput
+          value={q}
+          onChangeText={setQ}
+          placeholder="Search people and messages"
+          placeholderTextColor={C.muted}
+          style={s.input}
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          accessibilityLabel="Search conversations"
+        />
+      </View>
       {inbox.isLoading ? (
         <View style={[s.pad, WIDE]}>
           <ListSkeleton rows={5} height={72} />
@@ -79,7 +128,7 @@ export default function Messages() {
         <Empty icon={<Warning color={C.red} size={28} />} text="Couldn't load messages" sub={(inbox.error as Error)?.message} />
       ) : (
         <FlatList
-          data={inbox.threads}
+          data={shown}
           keyExtractor={(t) => t.techId}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
           refreshControl={<RefreshControl refreshing={inbox.isFetching && !inbox.isLoading} onRefresh={() => inbox.refetch()} tintColor={C.brand} />}
@@ -113,7 +162,13 @@ export default function Messages() {
               ) : null}
             </Pressable>
           )}
-          ListEmptyComponent={<Empty icon={<ChatCircleDots color={C.muted} size={28} />} text="No conversations yet" sub="Threads appear here once you or a technician sends a message." />}
+          ListEmptyComponent={
+            q || unreadOnly ? (
+              <Empty icon={<ChatCircleDots color={C.muted} size={28} />} text={q ? "No matches" : "All caught up"} />
+            ) : (
+              <Empty icon={<ChatCircleDots color={C.muted} size={28} />} text="No conversations yet" sub="Threads appear here once you or a technician sends a message." />
+            )
+          }
         />
       )}
     </View>
@@ -198,6 +253,14 @@ const s = StyleSheet.create({
   targetTxt: { color: C.sub, fontSize: 12, fontWeight: "800" },
   castInput: { minHeight: 110, textAlignVertical: "top", color: C.text, fontSize: 15, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.border, borderRadius: R.card, paddingHorizontal: S.md, paddingVertical: 12 },
   pad: { paddingHorizontal: S.lg },
+  segments: { flexDirection: "row", paddingHorizontal: S.lg, gap: S.xs, marginTop: S.xs },
+  seg: { flex: 1, alignItems: "center", paddingVertical: S.sm, borderRadius: R.control, backgroundColor: C.bg2, borderWidth: 1, borderColor: C.border },
+  segOn: { backgroundColor: "rgba(14,165,233,0.16)", borderColor: C.brand },
+  segTxt: { color: C.sub, fontSize: 11, fontWeight: "700" },
+  segTxtOn: { color: C.brand },
+  segN: { color: C.muted, fontSize: 13, fontWeight: "800", marginTop: 1 },
+  search: { flexDirection: "row", alignItems: "center", gap: S.sm, marginHorizontal: S.lg, marginVertical: S.md, paddingHorizontal: S.md, height: 40, borderRadius: R.control, backgroundColor: C.bg3, borderWidth: 1, borderColor: C.border },
+  input: { flex: 1, color: C.text, fontSize: 14 },
   row: { flexDirection: "row", alignItems: "center", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
   selected: { backgroundColor: C.bg3, borderRadius: R.card, marginHorizontal: -S.sm, paddingHorizontal: S.sm, borderBottomColor: "transparent" },
   dot: { position: "absolute", right: -1, bottom: -1, width: 14, height: 14, borderRadius: R.pill, borderWidth: 2, borderColor: C.bg },
