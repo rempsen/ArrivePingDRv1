@@ -35,9 +35,21 @@ mock.module("../../lib/storage", () => ({
   },
 }));
 
-// Other test files in the same run use the real local-disk storage.
+// Adding a late photo to its question that can be made to fail once.
+let attachDown = false;
+const realForms = { ...(await import("../../../services/job-forms")) };
+mock.module("../../../services/job-forms", () => ({
+  ...realForms,
+  attachPhotoToAnswer: async (...args: Parameters<typeof realForms.attachPhotoToAnswer>) => {
+    if (attachDown) throw new Error("deadlock detected");
+    return realForms.attachPhotoToAnswer(...args);
+  },
+}));
+
+// Other test files in the same run use the real modules.
 afterAll(() => {
   mock.module("../../lib/storage", () => realStorage);
+  mock.module("../../../services/job-forms", () => realForms);
 });
 
 const { db } = await import("../../database/index");
@@ -163,6 +175,20 @@ describe("a photo for a form question, sent again later", () => {
     const form = ((await (await app.request(`/job-forms/${jobId}`, { headers: { "X-Test-User": TECH } })).json()) as any).form;
     expect(form.answers.floor.photoIds).toEqual([clientId]);
     expect(form.missing).toEqual([]);
+  });
+
+  it("when adding it to the answer fails, the app is told to try again, and the retry adds it", async () => {
+    const id = "4f8b2c4e-1a2b-4c3d-8e9f-a0b1c2d3e4f5";
+    attachDown = true;
+    const r = await send(jobId, { clientId: id, formItemId: "floor", attachToAnswer: "1" });
+    attachDown = false;
+    expect(r.status).toBe(503);
+    expect(((await r.json()) as any).error.code).toBe("attach_failed");
+    expect((await photosOf(jobId)).some((p) => p.id === id)).toBe(true); // the photo itself is kept
+    const again = await send(jobId, { clientId: id, formItemId: "floor", attachToAnswer: "1" });
+    expect(again.status).toBe(200);
+    const form = ((await (await app.request(`/job-forms/${jobId}`, { headers: { "X-Test-User": TECH } })).json()) as any).form;
+    expect(form.answers.floor.photoIds).toContain(id);
   });
 
   it("isn't added when the app attaches it itself (first send, still on screen)", async () => {

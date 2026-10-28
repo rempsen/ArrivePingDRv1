@@ -58,14 +58,28 @@ function all(): PendingPhoto[] {
   return items;
 }
 
-function save(next: PendingPhoto[]) {
+/** Replace the queue. Returns false when it couldn't be written to the phone's storage. */
+function save(next: PendingPhoto[]): boolean {
   items = next;
+  let written = true;
   try {
     indexFile().write(JSON.stringify(next));
   } catch {
-    /* the in-memory copy still drives this session */
+    // The in-memory copy still drives this session; addJobPhoto checks this
+    // before it tells anyone a photo is kept.
+    written = false;
   }
   for (const l of listeners) l();
+  return written;
+}
+
+function deleteCopy(uri: string) {
+  try {
+    const f = new File(uri);
+    if (f.exists && f.uri.includes("pending-photos")) f.delete();
+  } catch {
+    /* a leftover file is harmless */
+  }
 }
 
 function update(clientId: string, fn: (p: PendingPhoto) => PendingPhoto) {
@@ -74,23 +88,22 @@ function update(clientId: string, fn: (p: PendingPhoto) => PendingPhoto) {
 
 function drop(p: PendingPhoto) {
   save(all().filter((x) => x.clientId !== p.clientId));
-  try {
-    const f = new File(p.uri);
-    if (f.exists && f.uri.includes("pending-photos")) f.delete();
-  } catch {
-    /* a leftover file is harmless */
-  }
+  deleteCopy(p.uri);
 }
 
-/** Copy the picked photo into the app's storage; the camera's temp file can be cleared by iOS. */
-function keepCopy(asset: UploadAsset, clientId: string): string {
+/**
+ * Copy the picked photo into the app's storage; the camera's temp file can be
+ * cleared by iOS. Null when it couldn't be copied (storage full, say): then
+ * the photo is NOT safe on the phone and nobody may be told it is.
+ */
+function keepCopy(asset: UploadAsset, clientId: string): string | null {
   const ext = (asset.fileName?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   try {
     const dest = new File(folder(), `${clientId}.${ext}`);
     new File(asset.uri).copy(dest);
-    return dest.uri;
+    return dest.exists ? dest.uri : null;
   } catch {
-    return asset.uri;
+    return null;
   }
 }
 
@@ -129,6 +142,12 @@ export interface AddPhotoResult {
   pending?: PendingPhoto;
   /** Why the first send failed. */
   error?: string;
+  /**
+   * The send failed AND the photo couldn't be kept on the phone (no room to
+   * copy it, or the waiting list couldn't be saved): it is gone, so ask for
+   * it to be taken again.
+   */
+  lost?: boolean;
 }
 
 /**
@@ -144,11 +163,12 @@ export async function addJobPhoto(opts: {
   formItemId?: string;
 }): Promise<AddPhotoResult> {
   const clientId = newPhotoId();
+  const copy = keepCopy(opts.asset, clientId);
   const p: PendingPhoto = {
     clientId,
     bookingId: opts.bookingId,
     companyId: getActiveCompany() || undefined,
-    uri: keepCopy(opts.asset, clientId),
+    uri: copy ?? opts.asset.uri,
     fileName: opts.asset.fileName || "job.jpg",
     mimeType: opts.asset.mimeType || "image/jpeg",
     phase: opts.phase,
@@ -158,7 +178,30 @@ export async function addJobPhoto(opts: {
     createdAt: Date.now(),
     attempts: 0,
   };
-  save([...all(), p]);
+  const before = all();
+  const kept = copy !== null && save([...before, p]);
+  if (!kept) {
+    // Not safe on the phone: send it once, and if that fails say so plainly
+    // instead of promising a later upload that would never happen.
+    if (copy !== null) {
+      save(before);
+      deleteCopy(copy);
+    }
+    try {
+      const photo = await uploadJobPhoto({
+        bookingId: p.bookingId,
+        asset: opts.asset,
+        phase: p.phase,
+        caption: p.caption,
+        customerVisible: p.customerVisible,
+        formItemId: p.formItemId,
+        clientId,
+      });
+      return { photo };
+    } catch (e) {
+      return { lost: true, error: e instanceof Error ? e.message : "Upload failed" };
+    }
+  }
   try {
     // First send: the screen that took it attaches it to its question itself.
     const photo = await send(p, false);
