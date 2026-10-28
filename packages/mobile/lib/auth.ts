@@ -1,12 +1,14 @@
 import { createAuthClient } from "better-auth/react";
 import { inferAdditionalFields } from "better-auth/client/plugins";
 import { Platform } from "react-native";
-import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
-import { getActiveCompany } from "./active-company";
+import { getActiveCompany, upgradeActiveCompanyKeychain } from "./active-company";
+import { backgroundKeychain } from "./keychain";
 
 const isWeb = Platform.OS === "web";
 const TOKEN_KEY = "bearer_token";
+/** The session token, readable by the background location task on a locked phone (lib/keychain.ts). */
+const tokenStore = backgroundKeychain(TOKEN_KEY);
 
 export type Role =
   | "customer"
@@ -39,28 +41,39 @@ const baseURL =
 // on the web build; on native, a SecureStore failure should just mean
 // "no token available" (safe no-op), not a second crash.
 export function getToken(): string {
-  try {
-    return SecureStore.getItem(TOKEN_KEY) ?? "";
-  } catch {
-    if (isWeb) return localStorage.getItem(TOKEN_KEY) ?? "";
-    return "";
-  }
+  return tokenStore.read().value;
+}
+
+/**
+ * Is there a session, and can it be read right now? "unreadable" is NOT
+ * "signed out": the Keychain can refuse a read (before the first unlock after
+ * a restart) while the session is fine. The background location task waits
+ * that out instead of stopping tracking.
+ */
+export function tokenState(): "present" | "missing" | "unreadable" {
+  return tokenStore.read().state;
 }
 
 function setToken(token: string) {
   try {
-    SecureStore.setItem(TOKEN_KEY, token);
+    tokenStore.write(token);
   } catch {
-    if (isWeb) localStorage.setItem(TOKEN_KEY, token);
+    /* Keychain refused; the next response carrying the token tries again */
   }
 }
 
 async function removeToken() {
-  try {
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-  } catch {
-    if (isWeb) localStorage.removeItem(TOKEN_KEY);
-  }
+  await tokenStore.clear();
+}
+
+/**
+ * Move the session and active company saved by older builds to Keychain items
+ * the background task can read on a locked phone. Call once the app is in the
+ * foreground; harmless on every launch.
+ */
+export async function upgradeKeychainForBackground(): Promise<void> {
+  await tokenStore.upgrade();
+  await upgradeActiveCompanyKeychain();
 }
 
 /**

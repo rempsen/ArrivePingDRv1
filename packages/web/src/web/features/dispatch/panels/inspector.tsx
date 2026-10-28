@@ -76,7 +76,9 @@ export function TechInspector({
 
 function statusText(t: BoardTech): string {
   const s = t.status === "enroute" ? "En route" : t.status.charAt(0).toUpperCase() + t.status.slice(1);
-  return t.stale && t.status !== "offline" ? `${s} · location is old` : s;
+  if (!t.stale || t.status === "offline" || !t.locationAt) return s;
+  const mins = Math.round((Date.now() - new Date(t.locationAt).getTime()) / 60_000);
+  return `${s} · location ${mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`} old`;
 }
 
 export function JobInspector({

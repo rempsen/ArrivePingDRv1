@@ -99,7 +99,7 @@ export const trackingRoutes = new Hono<AppEnv>()
     if (b?.riderId) {
       await t.update(
         schema.riders,
-        { lat, lng, locationUpdatedAt: new Date() },
+        { lat, lng, locationUpdatedAt: new Date(), lastSeenAt: new Date() },
         eq(schema.riders.id, b.riderId),
       );
       void publishDispatch(tenantId(c), { kind: "location", techId: b.riderId, lat, lng, at: Date.now() });

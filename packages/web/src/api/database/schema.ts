@@ -80,7 +80,15 @@ export const riders = pgTable("riders", {
   // last known location
   lat: real("lat"),
   lng: real("lng"),
+  // When lat/lng were last FIXED by the phone's GPS. Only a real position may
+  // move this: the map's "location is old", job offers' "fresh location" and
+  // the inspector's age all read it.
   locationUpdatedAt: timestamp("location_updated_at", { mode: "date", withTimezone: true }),
+  // When the phone's app last checked in (any request from its location
+  // service, GPS or not). Presence reads this. Kept apart from
+  // locationUpdatedAt: a check-in without a fix used to stamp that one, so a
+  // 40-minute-old pin showed as live while the phone sent pings but no GPS.
+  lastSeenAt: timestamp("last_seen_at", { mode: "date", withTimezone: true }),
   // Sample-day technician (services/sample-day.ts). Never billed, never
   // synced to HubSpot, never in reports or exports; removed by "Clear sample data".
   isSample: boolean("is_sample").notNull().default(false),
