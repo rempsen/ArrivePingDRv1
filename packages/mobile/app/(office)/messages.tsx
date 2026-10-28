@@ -69,9 +69,14 @@ export default function Messages() {
   // On an iPad the conversation pane shouldn't sit empty: open the first
   // thread (unread ones sort first) until the dispatcher picks one.
   const firstShown = shown[0]?.techId;
+  // A filter or search that hides the open thread moves to the first one
+  // listed. A thread opened by request (?techId=) stays even if it's filtered out.
   useEffect(() => {
-    if (wide && !selectedId && firstShown) setSelectedId(firstShown);
-  }, [wide, selectedId, firstShown]);
+    if (!wide) return;
+    if (selectedId && (all.some((t) => t.techId === selectedId) ? shown.some((t) => t.techId === selectedId) : true)) return;
+    const next = firstShown ?? null;
+    if (next !== selectedId) setSelectedId(next);
+  }, [wide, selectedId, firstShown, shown, all]);
 
   const list = (
     <View style={s.screen}>

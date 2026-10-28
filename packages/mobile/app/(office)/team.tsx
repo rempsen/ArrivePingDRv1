@@ -97,9 +97,13 @@ export default function Team() {
   // On an iPad the detail pane shouldn't sit empty: open the first person
   // in the list until the dispatcher picks one.
   const firstShown = sections[0]?.data[0]?.id;
+  // A chip that hides the open person moves the pane to the first one listed.
   useEffect(() => {
-    if (wide && mode === "list" && !selectedId && firstShown) setSelectedId(firstShown);
-  }, [wide, mode, selectedId, firstShown]);
+    if (!wide || mode !== "list") return;
+    if (selectedId && sections.some((sec) => sec.data.some((t) => t.id === selectedId))) return;
+    const next = firstShown ?? null;
+    if (next !== selectedId) setSelectedId(next);
+  }, [wide, mode, selectedId, firstShown, sections]);
 
   const chips: Array<{ key: string | null; label: string }> = [
     { key: null, label: "All" },

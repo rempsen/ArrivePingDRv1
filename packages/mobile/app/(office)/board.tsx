@@ -254,7 +254,12 @@ export default function Board() {
         <WeekBar
           from={weekFrom}
           thisWeek={mondayOf(anchor)}
-          jobs={(week.data?.jobs ?? NO_JOBS).filter((j) => j.status !== "cancelled").length}
+          // Only the seven days shown: the board also carries older waiting jobs.
+          jobs={(week.data?.jobs ?? NO_JOBS).filter((j) => {
+            if (j.status === "cancelled") return false;
+            const d = jobMinutes(j.scheduledAt, week.data?.tz ?? tz).day;
+            return d >= weekFrom && d <= addDays(weekFrom, 6);
+          }).length}
           techs={(week.data?.techs ?? NO_TECHS).length}
           // Same weekday in the chosen week, so Day view lands somewhere sensible.
           onWeek={(monday) => {
