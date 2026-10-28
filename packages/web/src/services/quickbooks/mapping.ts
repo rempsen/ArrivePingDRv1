@@ -120,7 +120,15 @@ export function buildPurchaseOrder(i: PoInput): PurchaseOrder {
   };
 }
 
-export function buildBill(i: PoInput & { poId: string; txnDate: string; dueDate: string }): Bill {
+/**
+ * The bill for a job, linked to its purchase order. Intuit only honours the
+ * link line by line (verified in the sandbox: a header-only link leaves the
+ * PO open), so bill line n is linked to the PO's own line id n for as many
+ * lines as the two share; a bill with more lines than the PO carries the rest
+ * unlinked, and a PO with more lines than the bill is closed afterwards by
+ * sync.ts. Amounts may differ: the PO was an estimate at assignment.
+ */
+export function buildBill(i: PoInput & { poId: string; poLineIds?: string[]; txnDate: string; dueDate: string }): Bill {
   return {
     DocNumber: i.docNumber,
     PrivateNote: i.privateNote,
@@ -129,10 +137,10 @@ export function buildBill(i: PoInput & { poId: string; txnDate: string; dueDate:
     VendorRef: { value: i.vendorId },
     GlobalTaxCalculation: "TaxExcluded",
     LinkedTxn: [{ TxnId: i.poId, TxnType: "PurchaseOrder" }],
-    Line: i.lines.map((l, idx) => ({
-      ...expenseLine(i, l),
-      LinkedTxn: [{ TxnId: i.poId, TxnType: "PurchaseOrder", TxnLineId: String(idx + 1) }],
-    })),
+    Line: i.lines.map((l, idx) => {
+      const lineId = i.poLineIds?.[idx];
+      return lineId ? { ...expenseLine(i, l), LinkedTxn: [{ TxnId: i.poId, TxnType: "PurchaseOrder", TxnLineId: lineId }] } : expenseLine(i, l);
+    }),
   };
 }
 

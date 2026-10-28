@@ -9,7 +9,16 @@ bookkeeper already expects, and brings payment status back:
 | Job completed, bill mode **ArrivePing creates the bill** | **Bill** linked to the PO (closes it) for the computed tech pay |
 | Job completed, bill mode **Subcontractors send their own invoices** | nothing written; when the bookkeeper enters the subtrade's Bill against the PO it is adopted |
 | Bill paid in QuickBooks (balance 0) | job shows **Subtrade paid** with the payment date (`bookings.vendor_bill_status`, `subtrade_paid_at`) |
-| Job cancelled | the PO is deleted if nothing was billed on it; otherwise an issue asks a person |
+| Job cancelled, technician declines or is released | the PO is deleted if nothing was billed on it; otherwise an issue asks a person |
+| Job reassigned | the previous technician's PO is deleted the same way and a new one goes to the new vendor |
+
+**Pricing the PO.** At assignment nothing has been paid yet, so the PO is
+priced by the same tech-pay rules from what the job already knows (per-unit
+line items, flat pay). The bill at completion carries the pay actually
+accrued; bill line *n* is linked to PO line *n* (Intuit honours the link only
+line by line), extra bill lines are unlinked, and a PO with lines the bill did
+not cover is closed by the sync. A job that cannot be priced yet (hourly tech,
+no line items) raises a `no_pay` issue and gets its PO when it completes.
 
 Code: `src/services/quickbooks/` — `client.ts` (API, token refresh, error
 classes), `resolve.ts` (vendor / customer / item links, tenant settings),
@@ -36,8 +45,14 @@ Tables: `qbo_links`, `qbo_issues` (migration `0034`).
    - **Shadow mode** (default on): everything is logged under *Issues* as
      "would create…" and nothing is written. Turn it off to go live.
 4. **Issues** lists anything that needs a person: an ambiguous vendor name,
-   a locked period, a cancelled job that already has a bill, a bill removed in
-   QuickBooks. Resolve them there; **Sync now** on a job retries it.
+   a locked period, a cancelled or reassigned job that already has a bill, a
+   bill removed in QuickBooks, a job that cannot be priced yet, a reconnect to
+   a different QuickBooks company (`realm_changed`: every saved link is
+   cleared, so check Mappings before going live). Resolve them there;
+   **Sync now** on a job retries it. The same open issue is never raised twice.
+5. **Reconnecting** (after a revoked token, or on purpose) re-queues the recent
+   jobs that waited: never synced or failed, and completed with only a PO when
+   ArrivePing writes the bill.
 
 Per-tenant settings live in `integrations.config` (JSON):
 `{ billMode, taxCodeId, defaultItemId, parentCustomerId, shadow, reconnectNotifiedAt }`.
@@ -82,6 +97,12 @@ PASS  CDC sees the changed bill
 Learned: Intuit links a payment to a bill as `BillPaymentCheck` /
 `BillPaymentCreditCard`, not `BillPayment` (`pull.ts` matches the prefix).
 Refresh tokens rotate about once a day, so every refresh response is stored.
+A header-level `LinkedTxn` on a bill does **not** link it to the PO: the link
+has to be on each line with the PO's own line id (`Line[].Id`, "1", "2", …).
+A bill with fewer lines than the PO leaves it Open; a linked line with a
+different amount, an extra unlinked line, a negative adjustment line and a
+zero-amount linked line are all accepted; a sparse update with
+`POStatus: "Closed"` closes a PO by hand. (Probed 2026-10-28, same sandbox.)
 The script deactivates / deletes what it made unless `QBO_SMOKE_KEEP=1`.
 
 ## Operating notes
@@ -99,6 +120,14 @@ The script deactivates / deletes what it made unless `QBO_SMOKE_KEEP=1`.
 - **Nothing is deleted in QuickBooks** except an open, un-billed PO when its
   job is cancelled.
 - **Sample jobs** (`bookings.is_sample`) never sync.
+- **More than one server**: a partial unique index on `scheduled_tasks`
+  (`booking_id, kind` where pending and `kind LIKE 'qbo.%'`, migration `0035`)
+  keeps it to one queued write per job and kind; if two instances still create
+  the same PO or bill at once, the one that loses the `qbo_links` row deletes
+  its copy.
+- **Manual "Sync" on the Integrations card** goes through the QuickBooks
+  client (refresh on use, tokens stay sealed); for other providers the
+  refresh token is opened before the refresh and the rotation sealed.
 - Limits: 500 requests/min and 10 concurrent per company; the sync makes a
   handful of calls per job.
 

@@ -125,6 +125,20 @@ describe("sweepQboChanges", () => {
     expect(poLinks.length).toBe(1); // this job's only, nothing new
   });
 
+  it("treats a deleted entity in the change feed as a removed bill and keeps going (I1)", async () => {
+    const gone = await jobWithPoAndBill("702", "147");
+    const paid = await jobWithPoAndBill("703", "148");
+    cdcBills = [
+      { Id: "147", status: "Deleted" }, // CDC shape for a deleted record: no Line, no amounts
+      { Id: "148", SyncToken: "3", TotalAmt: 100, Balance: 0, VendorRef: { value: "1" }, Line: [], LinkedTxn: [{ TxnId: "703", TxnType: "PurchaseOrder" }] },
+    ];
+    const before = (await integration()).lastSyncAt!.getTime();
+    await sweepQboChanges();
+    expect((await booking(gone.id)).vendorBillStatus).toBe("po_open");
+    expect((await booking(paid.id)).vendorBillStatus).toBe("paid");
+    expect((await integration()).lastSyncAt!.getTime()).toBeGreaterThan(before);
+  });
+
   it("skips tenants with the switch off", async () => {
     await features.setFeatureOverride({ companyId: CO, key: "integrations.quickbooks", enabled: false, actor: { id: "t", name: "T" } });
     await sweepQboChanges();

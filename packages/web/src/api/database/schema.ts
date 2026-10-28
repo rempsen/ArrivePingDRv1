@@ -1892,6 +1892,9 @@ export const scheduledTasks = pgTable(
     // the hot query: claim due pending work
     dueIdx: index("schedtask_due_idx").on(t.status, t.runAt),
     bookingIdx: index("schedtask_booking_idx").on(t.bookingId),
+    // QuickBooks sync: at most one pending write per job and kind, whatever
+    // instance enqueues it (services/quickbooks/sync.ts inserts ON CONFLICT DO NOTHING).
+    qboPendingUq: uniqueIndex("schedtask_qbo_pending_uq").on(t.bookingId, t.kind).where(sql`status = 'pending' AND kind LIKE 'qbo.%'`),
   }),
 );
 

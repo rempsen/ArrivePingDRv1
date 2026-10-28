@@ -76,7 +76,7 @@ export async function adoptBillForPo(companyId: string, bill: Bill): Promise<Boo
   if (!bill.Id) return null;
   const already = await bookingForLink(companyId, "bill", bill.Id);
   if (already) return already;
-  const poIds = [...(bill.LinkedTxn ?? []), ...bill.Line.flatMap((l) => l.LinkedTxn ?? [])].filter((l) => l.TxnType === "PurchaseOrder").map((l) => l.TxnId);
+  const poIds = [...(bill.LinkedTxn ?? []), ...(bill.Line ?? []).flatMap((l) => l.LinkedTxn ?? [])].filter((l) => l.TxnType === "PurchaseOrder").map((l) => l.TxnId);
   for (const poId of new Set(poIds)) {
     const b = await bookingForLink(companyId, "purchase_order", poId);
     if (!b) continue;
@@ -122,7 +122,7 @@ export async function applyBillBalance(companyId: string, bill: Bill): Promise<v
   }
 }
 
-async function billRemoved(companyId: string, qboBillId: string): Promise<void> {
+export async function billRemoved(companyId: string, qboBillId: string): Promise<void> {
   const b = await bookingForLink(companyId, "bill", qboBillId);
   if (!b) return;
   const l = await getLink(companyId, "bill", b.id);
@@ -131,6 +131,14 @@ async function billRemoved(companyId: string, qboBillId: string): Promise<void> 
   await sdb.update(schema.bookings).set({ vendorBillStatus: po ? "po_open" : "none", subtradePaidAt: null }).where(eq(schema.bookings.id, b.id));
   await raiseIssue(companyId, "bill_removed", "The subtrade's bill for this job was deleted or voided in QuickBooks.", { bookingId: b.id, detail: { qboId: qboBillId } });
   await logJobEvent({ companyId, bookingId: b.id, kind: "accounting", label: "Bill removed in QuickBooks", meta: { qboId: qboBillId } });
+}
+
+/** What the change feed says about a bill: removed, or current. */
+export async function applyChangedBill(companyId: string, bill: Bill & { status?: string }): Promise<void> {
+  if (!bill.Id) return;
+  if (bill.status === "Deleted" || bill.status === "Voided") return billRemoved(companyId, bill.Id);
+  await adoptBillForPo(companyId, bill);
+  await applyBillBalance(companyId, bill);
 }
 
 /** Fetch one changed record and apply what it says. */

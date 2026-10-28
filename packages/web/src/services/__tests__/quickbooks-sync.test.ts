@@ -32,6 +32,7 @@ let calls: Call[] = [];
 let pos: Record<string, any> = {};
 let bills: Record<string, any> = {};
 let failNext: { status: number; body: unknown } | null = null;
+let onPoCreate: ((po: any) => Promise<void>) | null = null;
 let nextId = 800;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", intuit_tid: "t" } });
 
@@ -41,8 +42,15 @@ beforeAll(async () => {
   await db.insert(schema.user).values([
     { id: "qsy-tech", name: "B. Froese Service & Installation", email: "b@froese.test", role: "rider", companyId: CO },
     { id: "qsy-cust", name: "Allard Condos", email: "c@allard.test", role: "customer", companyId: CO },
+    { id: "qsy-tech2", name: "Second Tech", email: "s@froese.test", role: "rider", companyId: CO },
+    { id: "qsy-tech3", name: "Unmapped Tech", email: "u@froese.test", role: "rider", companyId: CO },
+    { id: "qsy-cust2", name: "New Customer", email: "n@allard.test", role: "customer", companyId: CO },
   ] as never);
-  await db.insert(schema.riders).values({ id: "qsy-rider", userId: "qsy-tech", companyId: CO } as never);
+  await db.insert(schema.riders).values([
+    { id: "qsy-rider", userId: "qsy-tech", companyId: CO },
+    { id: "qsy-rider2", userId: "qsy-tech2", companyId: CO },
+    { id: "qsy-rider3", userId: "qsy-tech3", companyId: CO, payRatePerHour: 60 },
+  ] as never);
   await db.insert(schema.services).values({ id: "qsy-svc", name: "Flooring", category: "flooring", basePrice: 0, companyId: CO } as never);
   await db.insert(schema.integrations).values({
     companyId: CO, provider: "quickbooks", status: "connected", externalAccountId: "r1", accessToken: "at", refreshToken: "rt",
@@ -50,6 +58,7 @@ beforeAll(async () => {
     config: JSON.stringify({ billMode: "arriveping", taxCodeId: "4", defaultItemId: "154", parentCustomerId: "", shadow: false }),
   } as never);
   await setMapping(CO, "vendor", "qsy-rider", "227");
+  await setMapping(CO, "vendor", "qsy-rider2", "228");
   await setMapping(CO, "customer", "qsy-cust", "364");
   await features.setFeatureOverride({ companyId: CO, key: "integrations.quickbooks", enabled: true, actor: { id: "t", name: "T" } });
 
@@ -76,14 +85,29 @@ beforeAll(async () => {
       delete pos[body.Id];
       return json({ PurchaseOrder: { Id: body.Id, status: "Deleted" } });
     }
+    if (sql.startsWith("SELECT * FROM Vendor") || sql.startsWith("SELECT * FROM Customer")) return json({ QueryResponse: {} });
+    if (u.pathname.endsWith("/purchaseorder") && method === "POST" && body.sparse) {
+      pos[body.Id] = { ...pos[body.Id], ...body, SyncToken: String(Number(pos[body.Id].SyncToken) + 1) };
+      return json({ PurchaseOrder: pos[body.Id] });
+    }
     if (u.pathname.endsWith("/purchaseorder") && method === "POST") {
-      const po = { Id: String(nextId++), SyncToken: "0", POStatus: "Open", TotalAmt: body.Line.reduce((s: number, l: any) => s + l.Amount, 0), ...body };
+      const po = { Id: String(nextId++), SyncToken: "0", POStatus: "Open", TotalAmt: body.Line.reduce((s: number, l: any) => s + l.Amount, 0), ...body, Line: body.Line.map((l: any, i: number) => ({ ...l, Id: String(i + 1) })) };
       pos[po.Id] = po;
+      if (onPoCreate) await onPoCreate(po);
       return json({ PurchaseOrder: po });
     }
+    if (u.pathname.match(/\/bill\/\d+$/) && method === "GET") return json({ Bill: bills[u.pathname.split("/").pop()!] });
     if (u.pathname.endsWith("/bill") && method === "POST") {
       const bill = { Id: String(nextId++), SyncToken: "0", Balance: body.Line.reduce((s: number, l: any) => s + l.Amount, 0), TotalAmt: body.Line.reduce((s: number, l: any) => s + l.Amount, 0), ...body };
       bills[bill.Id] = bill;
+      // Intuit closes a PO once every one of its lines is linked from a bill
+      for (const l of body.LinkedTxn ?? []) {
+        const po = pos[l.TxnId];
+        if (!po) continue;
+        po.LinkedTxn = [...(po.LinkedTxn ?? []), { TxnId: bill.Id, TxnType: "Bill" }];
+        const linked = new Set(body.Line.flatMap((x: any) => (x.LinkedTxn ?? []).map((t: any) => t.TxnLineId)));
+        if (po.Line.every((x: any) => linked.has(x.Id))) po.POStatus = "Closed";
+      }
       return json({ Bill: bill });
     }
     if (u.pathname.match(/\/purchaseorder\/\d+$/) && method === "GET") return json({ PurchaseOrder: pos[u.pathname.split("/").pop()!] });
@@ -100,9 +124,12 @@ beforeEach(async () => {
   pos = {};
   bills = {};
   failNext = null;
+  onPoCreate = null;
   nextId = 800;
   await db.delete(schema.scheduledTasks);
   await db.delete(schema.qboIssues);
+  await db.delete(schema.qboLinks).where(and(eq(schema.qboLinks.companyId, CO), eq(schema.qboLinks.localId, "qsy-rider3")));
+  await db.delete(schema.qboLinks).where(and(eq(schema.qboLinks.companyId, CO), eq(schema.qboLinks.localId, "qsy-cust2")));
   await db.update(schema.integrations).set({ status: "connected", config: JSON.stringify({ billMode: "arriveping", taxCodeId: "4", defaultItemId: "154", parentCustomerId: "", shadow: false }) }).where(eq(schema.integrations.companyId, CO));
   await features.setFeatureOverride({ companyId: CO, key: "integrations.quickbooks", enabled: true, actor: { id: "t", name: "T" } });
 });
@@ -185,6 +212,76 @@ describe("purchase order on assignment", () => {
     expect((await booking(b.id)).vendorBillStatus).toBe("none");
   });
 
+  it("prices the PO from the job's line items before the job has been paid (C1)", async () => {
+    // At assignment nothing has accrued yet: techPay is 0 and there is no breakdown.
+    const b = await job({ techPay: 0, techPayBreakdown: "", finishedAt: null });
+    await fireEvent("assigned", b.id);
+    await drain();
+    const creates = calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/purchaseorder"));
+    expect(creates.length).toBe(1);
+    expect(creates[0]!.body.Line[0].Amount).toBe(750);
+    expect(creates[0]!.body.Line[0].Description).toBe("Floor tile install");
+    expect((await booking(b.id)).vendorBillStatus).toBe("po_open");
+  });
+
+  it("tells a person when a job cannot be priced yet, then prices it at completion (C1)", async () => {
+    const b = await job({ riderId: "qsy-rider3", techPay: 0, techPayBreakdown: "", lineItems: "[]", finishedAt: null });
+    await setMapping(CO, "vendor", "qsy-rider3", "229");
+    await fireEvent("assigned", b.id);
+    await drain();
+    expect(calls.filter((c) => c.method === "POST").length).toBe(0);
+    const open = (await issues()).filter((i) => i.status === "open");
+    expect(open.map((i) => i.kind)).toEqual(["no_pay"]);
+    expect((await booking(b.id)).vendorBillStatus).toBe("none");
+    // the tech finishes 2h on site; completion accrues the pay
+    await db.update(schema.bookings).set({ status: "completed", techPay: 120, finishedAt: new Date("2026-10-28T20:00:00Z"), techPayBreakdown: JSON.stringify({ hourlyPay: 120, techPay: 120, onSiteMinutes: 120 }) }).where(eq(schema.bookings.id, b.id));
+    await fireEvent("completed", b.id);
+    await drain();
+    expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/purchaseorder")).length).toBe(1);
+    expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/bill")).length).toBe(1);
+    expect((await issues()).filter((i) => i.kind === "no_pay" && i.status === "open")).toEqual([]);
+    expect((await booking(b.id)).vendorBillStatus).toBe("billed");
+  });
+
+  it("in shadow mode creates no vendor or customer either (C2)", async () => {
+    await db.update(schema.integrations).set({ config: JSON.stringify({ billMode: "arriveping", taxCodeId: "4", defaultItemId: "154", parentCustomerId: "", shadow: true }) }).where(eq(schema.integrations.companyId, CO));
+    const b = await job({ riderId: "qsy-rider3", customerId: "qsy-cust2" });
+    await fireEvent("assigned", b.id);
+    await drain();
+    expect(calls.filter((c) => c.method === "POST").length).toBe(0);
+    expect(await link("vendor", "qsy-rider3")).toEqual([]);
+    expect(await link("customer", "qsy-cust2")).toEqual([]);
+    const msgs = (await issues()).map((i) => i.message).join("\n");
+    expect(msgs).toContain('vendor "Unmapped Tech"');
+    expect(msgs).toContain('customer "New Customer');
+    expect(msgs).toContain("purchase order AP-");
+  });
+
+  it("removes its own duplicate when another instance linked the job's PO first (I3)", async () => {
+    const b = await job();
+    onPoCreate = async () => {
+      // the other instance created PO 700 and linked it between our query and our create
+      pos["700"] = { Id: "700", SyncToken: "0", POStatus: "Open", VendorRef: { value: "227" }, Line: [] };
+      await setMapping(CO, "purchase_order", b.id, "700");
+      onPoCreate = null;
+    };
+    await syncBookingNow(CO, b.id);
+    expect(calls.some((c) => c.url.searchParams.get("operation") === "delete" && c.body.Id === "800")).toBe(true);
+    expect((await link("purchase_order", b.id))[0]!.qboId).toBe("700");
+    expect(pos["700"]).toBeDefined();
+  });
+
+  it("allows only one pending QuickBooks task per job and kind at the database (I3)", async () => {
+    const b = await job();
+    await db.insert(schema.scheduledTasks).values({ companyId: CO, kind: "qbo.po.create", bookingId: b.id, runAt: new Date(), payload: "{}" } as never);
+    await expect(async () => {
+      await db.insert(schema.scheduledTasks).values({ companyId: CO, kind: "qbo.po.create", bookingId: b.id, runAt: new Date(), payload: "{}" } as never);
+    }).toThrow();
+    // a done task does not block a new pending one
+    await db.update(schema.scheduledTasks).set({ status: "done" }).where(eq(schema.scheduledTasks.bookingId, b.id));
+    await db.insert(schema.scheduledTasks).values({ companyId: CO, kind: "qbo.po.create", bookingId: b.id, runAt: new Date(), payload: "{}" } as never);
+  });
+
   it("records what it would have sent in shadow mode and writes nothing", async () => {
     await db.update(schema.integrations).set({ config: JSON.stringify({ billMode: "arriveping", taxCodeId: "4", defaultItemId: "154", parentCustomerId: "", shadow: true }) }).where(eq(schema.integrations.companyId, CO));
     const b = await job();
@@ -222,6 +319,43 @@ describe("bill on completion", () => {
     await drain();
     expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/purchaseorder")).length).toBe(1);
     expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/bill")).length).toBe(1);
+  });
+
+  it("adopts the bookkeeper's bill that is linked to the PO even under her own number (I2)", async () => {
+    const b = await job();
+    await fireEvent("assigned", b.id);
+    await drain();
+    pos["800"].LinkedTxn = [{ TxnId: "900", TxnType: "Bill" }];
+    bills["900"] = { Id: "900", SyncToken: "1", DocNumber: "SUB-0091", TotalAmt: 750, Balance: 750, VendorRef: { value: "227" }, Line: [], LinkedTxn: [{ TxnId: "800", TxnType: "PurchaseOrder" }] };
+    await fireEvent("completed", b.id);
+    await drain();
+    expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/bill")).length).toBe(0);
+    expect((await link("bill", b.id))[0]!.qboId).toBe("900");
+    expect((await booking(b.id)).vendorBillStatus).toBe("billed");
+  });
+
+  it("links bill lines to the PO's real line ids and closes a PO the bill did not cover (I7)", async () => {
+    // PO priced at assignment from two line items; at completion only one was done, plus labour
+    const two = JSON.stringify([
+      { itemId: "cat-1", kind: "unit", name: "Floor tile install", sku: "", unit: "sq ft", qty: 300, unitCost: 2.5, unitPrice: 4, taxable: false, cost: 750, price: 1200 },
+      { itemId: "cat-2", kind: "unit", name: "Baseboard", sku: "", unit: "ft", qty: 40, unitCost: 1, unitPrice: 2, taxable: false, cost: 40, price: 80 },
+    ]);
+    const b = await job({ techPay: 0, techPayBreakdown: "", lineItems: two, finishedAt: null });
+    await fireEvent("assigned", b.id);
+    await drain();
+    expect(pos["800"].Line.map((l: any) => l.Id)).toEqual(["1", "2"]);
+    // in the end the tech was paid 1h of labour only
+    await db.update(schema.bookings).set({ status: "completed", techPay: 60, finishedAt: new Date("2026-10-28T20:00:00Z"), techPayBreakdown: JSON.stringify({ hourlyPay: 60, techPay: 60, onSiteMinutes: 60 }), lineItems: "[]" }).where(eq(schema.bookings.id, b.id));
+    await fireEvent("completed", b.id);
+    await drain();
+    const create = calls.find((c) => c.method === "POST" && c.url.pathname.endsWith("/bill"))!;
+    expect(create.body.LinkedTxn).toEqual([{ TxnId: "800", TxnType: "PurchaseOrder" }]);
+    expect(create.body.Line.length).toBe(1);
+    expect(create.body.Line[0].Amount).toBe(60);
+    expect(create.body.Line[0].LinkedTxn).toEqual([{ TxnId: "800", TxnType: "PurchaseOrder", TxnLineId: "1" }]);
+    // the stub leaves the PO open when a line is not fully billed; the sync closes it
+    expect(pos["800"].POStatus).toBe("Closed");
+    expect(calls.some((c) => c.method === "POST" && c.url.pathname.endsWith("/purchaseorder") && c.body.Id === "800" && c.body.POStatus === "Closed" && c.body.sparse === true)).toBe(true);
   });
 
   it("writes no bill when the tenant's subtrades invoice themselves", async () => {
@@ -268,11 +402,39 @@ describe("cancellation", () => {
     const b = await job();
     await fireEvent("assigned", b.id);
     await drain();
+    await db.update(schema.bookings).set({ status: "cancelled" }).where(eq(schema.bookings.id, b.id));
     await fireEvent("cancelled", b.id);
     await drain();
     expect(calls.some((c) => c.url.searchParams.get("operation") === "delete" && c.body.Id === "800")).toBe(true);
     expect((await booking(b.id)).vendorBillStatus).toBe("none");
     expect(await link("purchase_order", b.id)).toEqual([]);
+  });
+
+  it("moves the PO to the new technician's vendor on reassignment (I5)", async () => {
+    const b = await job();
+    await fireEvent("assigned", b.id);
+    await drain();
+    await db.update(schema.bookings).set({ riderId: "qsy-rider2" }).where(eq(schema.bookings.id, b.id));
+    await fireEvent("assigned", b.id);
+    await drain();
+    expect(calls.some((c) => c.url.searchParams.get("operation") === "delete" && c.body.Id === "800")).toBe(true);
+    const creates = calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/purchaseorder") && !c.url.searchParams.get("operation"));
+    expect(creates.length).toBe(2);
+    expect(creates[1]!.body.VendorRef).toEqual({ value: "228" });
+    expect((await link("purchase_order", b.id))[0]!.qboId).toBe("801");
+    expect((await booking(b.id)).vendorBillStatus).toBe("po_open");
+  });
+
+  it("removes the PO when the technician declines or is released from the job (I5)", async () => {
+    const b = await job();
+    await fireEvent("assigned", b.id);
+    await drain();
+    await db.update(schema.bookings).set({ riderId: null, status: "pending", assignStatus: "pending" }).where(eq(schema.bookings.id, b.id));
+    await fireEvent("released", b.id);
+    await drain();
+    expect(calls.some((c) => c.url.searchParams.get("operation") === "delete" && c.body.Id === "800")).toBe(true);
+    expect(await link("purchase_order", b.id)).toEqual([]);
+    expect((await booking(b.id)).vendorBillStatus).toBe("none");
   });
 
   it("asks a person when the PO already has a bill", async () => {
@@ -281,9 +443,29 @@ describe("cancellation", () => {
     await drain();
     await fireEvent("completed", b.id);
     await drain();
+    await db.update(schema.bookings).set({ status: "cancelled" }).where(eq(schema.bookings.id, b.id));
     await fireEvent("cancelled", b.id);
     await drain();
     expect(calls.some((c) => c.url.searchParams.get("operation") === "delete")).toBe(false);
     expect((await issues()).some((i) => i.kind === "po_cancel_review")).toBe(true);
+  });
+});
+
+describe("after a reconnect", () => {
+  it("re-queues the jobs that were waiting while the connection was down (I4)", async () => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO)); // only this test's jobs count
+    const waiting = await job({ vendorBillStatus: "none" });
+    const errored = await job({ vendorBillStatus: "error" });
+    const completedOpen = await job({ status: "completed", vendorBillStatus: "po_open" });
+    const done = await job({ status: "completed", vendorBillStatus: "billed" });
+    const cancelled = await job({ status: "cancelled", vendorBillStatus: "none" });
+    const { requeueAfterReconnect } = await import("../quickbooks/sync");
+    const n = await requeueAfterReconnect(CO);
+    expect(n).toBe(3);
+    expect((await tasks(waiting.id)).map((t) => t.kind)).toEqual(["qbo.po.create"]);
+    expect((await tasks(errored.id)).map((t) => t.kind)).toEqual(["qbo.po.create"]);
+    expect((await tasks(completedOpen.id)).map((t) => t.kind)).toEqual(["qbo.bill.create"]);
+    expect(await tasks(done.id)).toEqual([]);
+    expect(await tasks(cancelled.id)).toEqual([]);
   });
 });

@@ -14,8 +14,9 @@ import * as schema from "../../api/database/schema";
 import { sendEmail } from "../email";
 import { companiesWithFeature } from "../features";
 import { qboCdc, QboError } from "./client";
+import { raiseIssue } from "./resolve";
 import type { Bill } from "./entities";
-import { adoptBillForPo, applyBillBalance } from "./pull";
+import { applyChangedBill } from "./pull";
 
 const LOOKBACK_MS = 5 * 60_000;
 /** Intuit keeps CDC history for 30 days; a tenant away longer starts from there. */
@@ -85,10 +86,17 @@ export async function sweepCompany(companyId: string): Promise<void> {
       for (const b of (qr.Bill ?? []) as Bill[]) bills.push(b);
     }
   }
+  // one bad record must not hold every later one (and the sync marker) back
+  let failed = 0;
   for (const bill of bills) {
-    await adoptBillForPo(companyId, bill);
-    await applyBillBalance(companyId, bill);
+    try {
+      await applyChangedBill(companyId, bill);
+    } catch (e) {
+      failed++;
+      console.error("[qbo] sweep bill", companyId, bill.Id, e instanceof Error ? e.message : e);
+    }
   }
+  if (failed) await raiseIssue(companyId, "sweep_failed", `${failed} changed bill(s) could not be applied during the QuickBooks sweep. Check the bill in QuickBooks, then use Sync now on the job.`, { detail: { failed, since: since.toISOString() } });
   await sdb.update(schema.integrations).set({ lastSyncAt: startedAt }).where(eq(schema.integrations.id, row.id));
   // a successful sweep means the connection is healthy again
   if (readConfig(row).reconnectNotifiedAt) await patchConfig(companyId, { reconnectNotifiedAt: "" });

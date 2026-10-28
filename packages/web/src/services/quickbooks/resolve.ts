@@ -9,7 +9,7 @@
  * Nothing is guessed: two records with the same name become an issue for a
  * person. Links are kept in qbo_links so each lookup costs one API call once.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { sdb } from "../../api/database";
 import * as schema from "../../api/database/schema";
 import { q, qboFetch, qboQuery } from "./client";
@@ -85,7 +85,15 @@ export async function setMapping(companyId: string, kind: LinkKind, localId: str
   }
 }
 
+/** Record something for a person (or, resolved, for the record). The same open message is not raised twice. */
 export async function raiseIssue(companyId: string, kind: string, message: string, opts: { bookingId?: string | null; detail?: unknown; resolved?: boolean } = {}): Promise<string> {
+  if (!opts.resolved) {
+    const [dup] = await sdb
+      .select({ id: schema.qboIssues.id })
+      .from(schema.qboIssues)
+      .where(and(eq(schema.qboIssues.companyId, companyId), eq(schema.qboIssues.kind, kind), eq(schema.qboIssues.status, "open"), eq(schema.qboIssues.message, message), opts.bookingId ? eq(schema.qboIssues.bookingId, opts.bookingId) : isNull(schema.qboIssues.bookingId)));
+    if (dup) return dup.id;
+  }
   const [row] = await sdb
     .insert(schema.qboIssues)
     .values({
@@ -101,9 +109,39 @@ export async function raiseIssue(companyId: string, kind: string, message: strin
   return row!.id;
 }
 
-type Resolved = { qboId: string } | { issue: string };
+/** Close every open issue of a kind for a job (the thing it asked about has happened). */
+export async function resolveIssues(companyId: string, bookingId: string, kind: string): Promise<void> {
+  await sdb
+    .update(schema.qboIssues)
+    .set({ status: "resolved", resolvedAt: new Date() })
+    .where(and(eq(schema.qboIssues.companyId, companyId), eq(schema.qboIssues.bookingId, bookingId), eq(schema.qboIssues.kind, kind), eq(schema.qboIssues.status, "open")));
+}
 
-export async function resolveVendor(companyId: string, rider: { id: string; userId: string; name: string; email: string }): Promise<Resolved> {
+/**
+ * Save the link for a local record unless another instance saved one first.
+ * Returns the link that stands: ours, or the winner's (then `won` is false and
+ * the caller undoes what it created).
+ */
+export async function claimMapping(companyId: string, kind: LinkKind, localId: string, qboId: string, extra: { syncToken?: string; fingerprint?: string } = {}): Promise<{ won: boolean; qboId: string }> {
+  const values = { qboId, syncToken: extra.syncToken ?? "", fingerprint: extra.fingerprint ?? "", lastSyncedAt: new Date() };
+  const inserted = await sdb.insert(schema.qboLinks).values({ companyId, kind, localId, ...values }).onConflictDoNothing().returning({ id: schema.qboLinks.id });
+  if (inserted.length) return { won: true, qboId };
+  const existing = await getLink(companyId, kind, localId);
+  if (!existing) return { won: false, qboId };
+  return { won: existing.qboId === qboId, qboId: existing.qboId };
+}
+
+type Resolved = { qboId: string; shadow?: true } | { issue: string };
+
+export interface ResolveOpts {
+  /** Shadow mode: say what would be created, create nothing, save no link. */
+  shadow?: boolean;
+}
+
+/** The placeholder id a shadow-mode payload carries where a created record would go. */
+export const SHADOW_ID = "shadow";
+
+export async function resolveVendor(companyId: string, rider: { id: string; userId: string; name: string; email: string }, opts: ResolveOpts = {}): Promise<Resolved> {
   const linked = await getLink(companyId, "vendor", rider.id);
   if (linked) return { qboId: linked.qboId };
   const name = rider.name.trim();
@@ -117,22 +155,29 @@ export async function resolveVendor(companyId: string, rider: { id: string; user
   }
   let vendor = hits[0];
   if (!vendor) {
-    const created = await qboFetch<{ Vendor: Vendor }>(companyId, "/vendor", {
-      method: "POST",
-      body: { DisplayName: name, ...(rider.email ? { PrimaryEmailAddr: { Address: rider.email } } : {}) },
-    });
+    const body = { DisplayName: name, ...(rider.email ? { PrimaryEmailAddr: { Address: rider.email } } : {}) };
+    if (opts.shadow) {
+      await raiseIssue(companyId, "shadow", `Shadow mode: would create vendor "${name}" for technician ${rider.name}.`, { detail: { riderId: rider.id, payload: body }, resolved: true });
+      return { qboId: SHADOW_ID, shadow: true };
+    }
+    const created = await qboFetch<{ Vendor: Vendor }>(companyId, "/vendor", { method: "POST", body });
     vendor = created.Vendor;
   }
   await setMapping(companyId, "vendor", rider.id, vendor.Id, { syncToken: vendor.SyncToken });
   return { qboId: vendor.Id };
 }
 
-export async function resolveCustomer(companyId: string, job: { customerId: string; customerName: string; address: string }): Promise<Resolved> {
+export async function resolveCustomer(companyId: string, job: { customerId: string; customerName: string; address: string }, opts: ResolveOpts = {}): Promise<Resolved> {
   const linked = await getLink(companyId, "customer", job.customerId);
   if (linked) return { qboId: linked.qboId };
   const name = job.customerName.trim();
   if (!name) return { issue: "customer_unnamed" };
-  const hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(name)}`);
+  // The name a customer is created under here (name - address) is looked for
+  // first, so a link lost to a reconnect finds the record again; then the
+  // bare name the bookkeeper may have used.
+  const displayName = [name, job.address.trim()].filter(Boolean).join(" - ").slice(0, 100);
+  let hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(displayName)}`);
+  if (!hits.length && displayName !== name) hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(name)}`);
   if (hits.length > 1) {
     await raiseIssue(companyId, "customer_ambiguous", `More than one QuickBooks customer is called "${name}". Pick one on the Integrations page.`, {
       detail: { customerId: job.customerId, candidates: hits.map((h) => ({ id: h.Id, name: h.DisplayName })) },
@@ -142,11 +187,14 @@ export async function resolveCustomer(companyId: string, job: { customerId: stri
   let customer = hits[0];
   if (!customer) {
     const cfg = await settings(companyId);
-    const displayName = [name, job.address.trim()].filter(Boolean).join(" - ").slice(0, 100);
     const body: Record<string, unknown> = { DisplayName: displayName };
     if (cfg.parentCustomerId) {
       body.ParentRef = { value: cfg.parentCustomerId };
       body.Job = true;
+    }
+    if (opts.shadow) {
+      await raiseIssue(companyId, "shadow", `Shadow mode: would create customer "${displayName}".`, { detail: { customerId: job.customerId, payload: body }, resolved: true });
+      return { qboId: SHADOW_ID, shadow: true };
     }
     const created = await qboFetch<{ Customer: Customer }>(companyId, "/customer", { method: "POST", body });
     customer = created.Customer;

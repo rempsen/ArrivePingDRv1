@@ -4,9 +4,10 @@ import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx } from "../middleware/auth";
 import { isSuperadmin } from "../lib/permissions";
-import { seal } from "../lib/secretbox";
+import { open, seal } from "../lib/secretbox";
 import { putState, takeState } from "../lib/oauth-state";
 import { quickbooksCompanyName } from "../../services/quickbooks/company";
+import { qboFetch, QboError } from "../../services/quickbooks/client";
 import {
   PROVIDERS, type ProviderId, hasCredentials, credentialSource, buildAuthorizeUrl,
   exchangeCode, refreshTokens, redirectUri, invalidateCredentialCache,
@@ -212,6 +213,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
       // Pre-tenant: the provider redirect carries no request/tenant context,
       // only the integration row id the OAuth-state map resolved. `sdb` is
       // the deliberate escape hatch for exactly this.
+      const [prior] = await sdb.select({ externalAccountId: schema.integrations.externalAccountId }).from(schema.integrations).where(eq(schema.integrations.id, st.integrationId));
       await sdb.update(schema.integrations).set({
         status: "connected",
         accountLabel: label,
@@ -222,6 +224,14 @@ export const integrationsRoutes = new Hono<AppEnv>()
         externalAccountId: externalId,
         lastSyncAt: new Date(),
       }).where(eq(schema.integrations.id, st.integrationId));
+      if (provider === "quickbooks") {
+        try {
+          const { afterQuickbooksConnect } = await import("../../services/quickbooks/sync");
+          await afterQuickbooksConnect(st.companyId, prior?.externalAccountId ?? "", externalId);
+        } catch (e) {
+          console.error("[qbo] post-connect", e instanceof Error ? e.message : e);
+        }
+      }
       return c.body(popupResult(true, `${cfg.name} linked as ${label}.`));
     } catch (e: any) {
       await sdb.update(schema.integrations).set({ status: "error" }).where(eq(schema.integrations.id, st.integrationId));
@@ -391,11 +401,17 @@ export const integrationsRoutes = new Hono<AppEnv>()
     const provider = row.provider as ProviderId;
     if (row.status !== "connected") return c.json({ message: "Not connected" }, 400);
     try {
-      if (row.refreshToken && (await hasCredentials(provider))) {
-        const t = await refreshTokens(provider, row.refreshToken);
+      if (provider === "quickbooks") {
+        // The QuickBooks client refreshes on use, keeps the rotated refresh
+        // token sealed, and marks a revoked connection needs_reconnect (which
+        // the reconnect flow, not a retry, clears).
+        await qboFetch(c.get("companyId") as string, `/companyinfo/${row.externalAccountId}`);
+        await t9.update(schema.integrations, { lastSyncAt: new Date() }, eq(schema.integrations.id, row.id));
+      } else if (row.refreshToken && (await hasCredentials(provider))) {
+        const t = await refreshTokens(provider, open(row.refreshToken));
         await t9.update(schema.integrations, {
-          accessToken: t.accessToken,
-          refreshToken: t.refreshToken || row.refreshToken,
+          accessToken: seal(t.accessToken),
+          refreshToken: t.refreshToken ? seal(t.refreshToken) : row.refreshToken,
           expiresAt: t.expiresAt ? new Date(t.expiresAt) : row.expiresAt,
           scope: t.scope || row.scope,
           lastSyncAt: new Date(),
@@ -406,7 +422,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
       const r = await t9.selectOne(schema.integrations, eq(schema.integrations.id, row.id));
       return c.json({ integration: r, ok: true }, 200);
     } catch (e: any) {
-      await t9.update(schema.integrations, { status: "error" }, eq(schema.integrations.id, row.id));
+      if (!(e instanceof QboError && e.code === "needs_reconnect")) await t9.update(schema.integrations, { status: "error" }, eq(schema.integrations.id, row.id));
       // 4xx, not 502 — see the drive/export handler above for why: Cloudflare
       // eats 502/504 bodies and replaces them with an HTML error page.
       return c.json({ message: e?.message || "sync_failed" }, 422);

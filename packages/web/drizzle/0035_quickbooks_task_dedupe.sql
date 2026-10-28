@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "schedtask_qbo_pending_uq" ON "scheduled_tasks" USING btree ("booking_id","kind") WHERE status = 'pending' AND kind LIKE 'qbo.%';

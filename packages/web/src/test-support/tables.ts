@@ -3,7 +3,7 @@
  * PGlite database from the drizzle schema, so a test can use the actual
  * service code instead of hand-written SQL. Safe to call repeatedly.
  */
-import { getTableConfig, type PgColumn, type PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect, type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { db } from "../api/database";
 
 function colDdl(col: PgColumn, withPk: boolean): string {
@@ -34,7 +34,9 @@ export async function ensureTables(...tables: PgTable[]) {
       const ic = idx.config;
       if (!ic.unique || !ic.name) continue;
       const cols = ic.columns.map((c) => `"${(c as PgColumn).name}"`).join(", ");
-      await s.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "${ic.name}" ON "${cfg.name}" (${cols})`);
+      // partial indexes are written with plain SQL text (no bound params) in schema.ts
+      const where = ic.where ? ` WHERE ${new PgDialect().sqlToQuery(ic.where).sql}` : "";
+      await s.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "${ic.name}" ON "${cfg.name}" (${cols})${where}`);
     }
   }
 }

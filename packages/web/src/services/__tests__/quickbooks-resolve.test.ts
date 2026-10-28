@@ -108,6 +108,22 @@ describe("resolveCustomer", () => {
     expect(await resolveCustomer(CO, job)).toEqual({ qboId: "364" });
   });
 
+  it("finds a customer it created earlier under the name-plus-address it was given (I8)", async () => {
+    customersByName["Allard Condos - 1055 Allard Ave, Winnipeg, MB"] = [{ Id: "365", DisplayName: "Allard Condos - 1055 Allard Ave, Winnipeg, MB" }];
+    expect(await resolveCustomer(CO, job)).toEqual({ qboId: "365" });
+    expect(calls.filter((c) => c.method === "POST").length).toBe(0);
+  });
+
+  it("in shadow mode reports what it would create and creates nothing (C2)", async () => {
+    const out = await resolveCustomer(CO, { ...job, customerId: "cust-shadow" }, { shadow: true });
+    expect(out).toEqual({ qboId: "shadow", shadow: true });
+    expect(calls.filter((c) => c.method === "POST").length).toBe(0);
+    const [i] = await issues();
+    expect(i!.kind).toBe("shadow");
+    expect(i!.message).toContain('customer "Allard Condos - 1055 Allard Ave, Winnipeg, MB"');
+    expect(await db.select().from(schema.qboLinks).where(and(eq(schema.qboLinks.kind, "customer"), eq(schema.qboLinks.localId, "cust-shadow")))).toEqual([]);
+  });
+
   it("creates a customer named after the job and its address when none matches", async () => {
     const out = await resolveCustomer(CO, job);
     expect("qboId" in out).toBe(true);

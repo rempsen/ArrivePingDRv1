@@ -109,8 +109,15 @@ describe("buildBill", () => {
     expect(out.TxnDate).toBe("2026-10-28");
     expect(out.DueDate).toBe("2026-11-27");
     expect(out.DocNumber).toBe("AP-9EB51D43");
-    expect(out.Line[0]!.LinkedTxn).toEqual([{ TxnId: "801", TxnType: "PurchaseOrder", TxnLineId: "1" }]);
-    expect(out.Line[1]!.LinkedTxn).toEqual([{ TxnId: "801", TxnType: "PurchaseOrder", TxnLineId: "2" }]);
+    // without the PO's line ids nothing is linked line by line (I7)
+    expect(out.Line[0]!.LinkedTxn).toBeUndefined();
+    expect(out.Line[1]!.LinkedTxn).toBeUndefined();
+  });
+
+  it("links bill lines to the purchase order's own line ids, as far as they go (I7)", () => {
+    const out = buildBill({ ...po, poId: "801", poLineIds: ["7"], txnDate: "2026-10-28", dueDate: "2026-11-27" });
+    expect(out.Line[0]!.LinkedTxn).toEqual([{ TxnId: "801", TxnType: "PurchaseOrder", TxnLineId: "7" }]);
+    expect(out.Line[1]!.LinkedTxn).toBeUndefined();
   });
 });
 
