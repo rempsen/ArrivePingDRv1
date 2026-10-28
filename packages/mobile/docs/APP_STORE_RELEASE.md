@@ -94,8 +94,8 @@ workflow.
 - **iPad:** because Split View is allowed, the app must handle every
   orientation. Screens use the `WIDE`/`FORM` width caps from `lib/theme.ts` so
   content stays readable on a 13" screen — keep using them on new screens.
-- **Android** mirrors iOS (`com.nvc360.uberize`): `eas build --platform android
-  --profile production` when a Play Store track is wanted.
+- **Android** mirrors iOS (`com.nvc360.uberize`): see
+  [PLAY_STORE_RELEASE.md](./PLAY_STORE_RELEASE.md) and the **Ship Android app** workflow.
 - **Brand icon (approved Oct 14, 2026).** `assets/icon-source.png` is the
   approved 2048² "AP" master (navy, white letters, blue signal). `icon.png`
   (App Store + default Home Screen, opaque), `icon-dark.png` / `icon-tinted.png`

@@ -5,6 +5,7 @@ import * as TaskManager from "expo-task-manager";
 import { api } from "./api";
 import { tokenState, upgradeKeychainForBackground } from "./auth";
 import { activeCompanyState } from "./active-company";
+import { noteBackgroundLocationAnswer, okToAskForBackgroundLocation } from "./location-disclosure";
 import { Sentry } from "./sentry";
 
 /**
@@ -219,10 +220,18 @@ TaskManager.defineTask(BG_TASK, async ({ data, error }) => {
 /** Start background delivery if "Always" is granted. Asks for permission only when `ask`. */
 async function startBackgroundUpdates(ask: boolean): Promise<boolean> {
   try {
+    // Android: Play requires our own disclosure before the system prompts.
+    // "Not now" means don't prompt (the foreground watcher still runs if
+    // foreground permission was granted earlier).
+    if (ask && !(await okToAskForBackgroundLocation())) return false;
     // "Always" permission is required for background delivery.
     const fg = ask ? await Location.requestForegroundPermissionsAsync() : await Location.getForegroundPermissionsAsync();
-    if (!fg.granted) return false;
+    if (!fg.granted) {
+      if (ask) noteBackgroundLocationAnswer(false);
+      return false;
+    }
     const bg = ask ? await Location.requestBackgroundPermissionsAsync() : await Location.getBackgroundPermissionsAsync();
+    if (ask) noteBackgroundLocationAnswer(bg.granted);
     if (!bg.granted) return false;
 
     const already = await Location.hasStartedLocationUpdatesAsync(BG_TASK).catch(
