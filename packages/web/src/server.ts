@@ -11,6 +11,7 @@ import { startScheduler } from "./services/scheduler";
 // tasks and find no handler.
 import "./services/reviews";
 import "./services/maintenance";
+import "./services/quickbooks"; // registers the QuickBooks Sync task handlers
 import { sweepTimeTriggers } from "./services/automation";
 import { sweepDelays } from "./services/delay-watch";
 import { sweepCustomMilestones } from "./services/custom-milestones";
