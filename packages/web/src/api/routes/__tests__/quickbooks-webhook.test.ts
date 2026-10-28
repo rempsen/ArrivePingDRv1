@@ -24,7 +24,7 @@ const CO = "qw-co";
 const payload = {
   eventNotifications: [
     {
-      realmId: "4620816365",
+      realmId: "9130355780",
       dataChangeEvent: {
         entities: [
           { name: "Bill", id: "145", operation: "Update", lastUpdated: "2026-10-28T20:00:00.000Z" },
@@ -42,7 +42,7 @@ const post = (body: string, sig?: string) =>
 beforeAll(async () => {
   await ensureTables(schema.companies, schema.integrations, schema.scheduledTasks, schema.idempotencyKeys);
   await db.insert(schema.companies).values({ id: CO, name: "Webhook Co", kind: "test" } as never);
-  await db.insert(schema.integrations).values({ companyId: CO, provider: "quickbooks", status: "connected", externalAccountId: "4620816365", accessToken: "a", refreshToken: "r" } as never);
+  await db.insert(schema.integrations).values({ companyId: CO, provider: "quickbooks", status: "connected", externalAccountId: "9130355780", accessToken: "a", refreshToken: "r" } as never);
 });
 
 describe("verifyIntuitSignature", () => {

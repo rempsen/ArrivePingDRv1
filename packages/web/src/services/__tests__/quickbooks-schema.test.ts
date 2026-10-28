@@ -4,6 +4,7 @@
  * subtrade-bill state, and the feature switch exists in the catalog.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -28,7 +29,7 @@ describe("qbo_links", () => {
       dup = e;
     }
     expect(dup).not.toBeNull();
-    const [row] = await db.select().from(schema.qboLinks);
+    const [row] = await db.select().from(schema.qboLinks).where(eq(schema.qboLinks.companyId, "qs-co"));
     expect(row!.qboId).toBe("227");
   });
 });
