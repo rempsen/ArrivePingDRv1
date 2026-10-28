@@ -12,6 +12,7 @@ import { startScheduler } from "./services/scheduler";
 import "./services/reviews";
 import "./services/maintenance";
 import "./services/quickbooks"; // registers the QuickBooks Sync task handlers
+import { sweepQboChanges } from "./services/quickbooks/sweep";
 import { sweepTimeTriggers } from "./services/automation";
 import { sweepDelays } from "./services/delay-watch";
 import { sweepCustomMilestones } from "./services/custom-milestones";
@@ -155,6 +156,15 @@ if (hubspotEnabled()) {
     void oncePerTick("hubspot-sweep", sweepHubspotSync);
   }, 30 * 60 * 1000);
 }
+
+// QuickBooks Sync: Intuit's webhook is best-effort, so every 30 min each
+// connected tenant's changed bills are pulled through change data capture.
+setTimeout(() => {
+  void oncePerTick("qbo-sweep", sweepQboChanges);
+}, 60 * 1000);
+setInterval(() => {
+  void oncePerTick("qbo-sweep", sweepQboChanges);
+}, 30 * 60 * 1000);
 
 // Launch progress (services/launch-progress.ts): for each company in its first
 // ten days, record checklist steps as they're done, keep the HubSpot activation

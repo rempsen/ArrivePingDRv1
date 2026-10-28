@@ -6,3 +6,5 @@
 export { enqueueQboSync, isQboActive, onJobEvent, syncBookingNow, docNumberFor } from "./sync";
 export { settings, parseSettings, setMapping, type QboSettings, type BillMode } from "./resolve";
 export { QboError, loadConnection } from "./client";
+export { sweepQboChanges, sweepCompany, notifyNeedsReconnect, patchConfig } from "./sweep";
+export { handleWebhook, pullEntity, verifyIntuitSignature } from "./pull";
