@@ -866,13 +866,15 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
   const [busy, setBusy] = useState(false);
   const min = item.minPhotos ?? 0;
   const max = item.maxPhotos;
-  const full = max !== undefined && ids.length >= max;
 
   const urlFor = (id: string) => localUrls[id] ?? photos?.find((p) => p.id === id)?.url;
   // Shots for this question that haven't reached the server yet. They're kept
   // on the phone and sent again by themselves; when one lands the server adds
   // it to this answer, and if this screen is still open it adds it here too.
   const waiting = usePendingPhotos(bookingId, item.id);
+  // Photos still waiting to upload count toward the question's limit, or one
+  // added meanwhile would fill it and the waiting one couldn't be attached.
+  const full = max !== undefined && ids.length + waiting.length >= max;
   useEffect(
     () =>
       onPhotoUploaded((p, photo) => {
@@ -906,6 +908,11 @@ function PhotoAnswer({ item, answer, readOnly, commit, bookingId, photos, onPhot
         if (photo.url) setLocalUrls((m) => ({ ...m, [photo.id]: String(photo.url) }));
         commit(item, { photoIds: [...idsRef.current, photo.id] }, tappedAt);
         onPhotosChanged();
+      } else if (r.lost) {
+        Alert.alert(
+          "Photo not uploaded",
+          `It couldn't upload${r.error ? ` (${r.error})` : ""} and there wasn't room to keep it on this phone. Please take it again.`,
+        );
       } else {
         Alert.alert(
           "Photo saved on this phone",

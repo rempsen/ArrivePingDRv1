@@ -1932,20 +1932,28 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const rawClientId = String(form.get("clientId") || "").toLowerCase();
     const clientId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(rawClientId) ? rawClientId : "";
     const me = c.get("user") as SessionUser;
-    const attach = async (photoId: string) => {
-      if (!attachToAnswer || !formItemId) return;
+    // Adds a late photo to its question. False when that failed: the photo
+    // itself is stored, so the answer is a retryable 503 and the app's next
+    // send (a duplicate) tries the attach again instead of dropping the photo.
+    const attach = async (photoId: string): Promise<boolean> => {
+      if (!attachToAnswer || !formItemId) return true;
       try {
         await attachPhotoToAnswer(b.companyId, b, formItemId, photoId, me?.name || "");
+        return true;
       } catch (err) {
-        // The photo itself is safe; only the link to its question is missing.
         log.error("photo upload: couldn't add photo to its form answer", { requestId, bookingId: id, photoId, formItemId, err: (err as Error).message });
+        return false;
       }
+    };
+    const attachFailed = () => {
+      const msg = "The photo is saved, but it couldn't be added to its question yet. The app will try again.";
+      return c.json({ error: { code: "attach_failed", message: msg }, message: msg, requestId }, 503);
     };
     if (clientId) {
       const existing = await t.selectOne(schema.jobPhotos, eq(schema.jobPhotos.id, clientId));
       if (existing) {
         if (existing.bookingId !== id) return c.json({ message: "That photo belongs to another job." }, 409);
-        await attach(existing.id);
+        if (!(await attach(existing.id))) return attachFailed();
         return c.json({ photo: existing, duplicate: true }, 200);
       }
     }
@@ -2008,7 +2016,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
       if (clientId) {
         const landed = await t.selectOne(schema.jobPhotos, eq(schema.jobPhotos.id, clientId));
         if (landed?.bookingId === id) {
-          await attach(landed.id);
+          if (!(await attach(landed.id))) return attachFailed();
           return c.json({ photo: landed, duplicate: true }, 200);
         }
       }
@@ -2016,7 +2024,6 @@ export const bookingsRoutes = new Hono<AppEnv>()
       throw err;
     }
     if (!p) throw new Error("Failed to insert job photo");
-    await attach(p.id);
     // Timeline entry so the photo shows up in the customer's job history and
     // permanent record, not just the admin gallery.
     await logJobEvent({
@@ -2041,6 +2048,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
         data: { event: "photo_added", photoId: p.id, bookingId: id },
       });
     }
+    if (!(await attach(p.id))) return attachFailed();
     return c.json({ photo: p }, 201);
   })
   // ── Full internal timeline for the office (includes hidden events) ───────

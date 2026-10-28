@@ -698,6 +698,11 @@ export default function JobDetail() {
       // the phone until the server has it, so a failed send loses nothing.
       const r = await addJobPhoto({ bookingId: id!, asset, phase });
       if (r.photo) await qc.invalidateQueries({ queryKey: ["photos", id] });
+      else if (r.lost)
+        Alert.alert(
+          "Photo not uploaded",
+          `It couldn't upload${r.error ? ` (${r.error})` : ""} and there wasn't room to keep it on this phone. Please take it again.`,
+        );
       else
         Alert.alert(
           "Photo saved on this phone",
