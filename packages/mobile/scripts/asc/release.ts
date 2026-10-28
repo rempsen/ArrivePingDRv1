@@ -8,6 +8,8 @@
  *     the App Store: not newer than the live one, or another one is in review.
  *
  *   bun scripts/asc/release.ts submit --version 1.0.6 --build 57 [--notes "..."]
+ *     (also re-run on its own by the workflow's existingBuild input, to retry
+ *     a submission without building again)
  *     Waits for Apple to finish processing that uploaded build, puts it on
  *     the App Store version (creating or reusing the draft), sets "What's
  *     New", and submits it for review. Release type is "automatically after
@@ -61,7 +63,15 @@ async function asc(method: string, path: string, body?: unknown): Promise<any> {
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
   if (!res.ok) {
-    const detail = (json?.errors ?? []).map((e: any) => e.detail ?? e.title).join("; ") || text;
+    // Apple puts the actual reasons (missing metadata, build state, …) in
+    // meta.associatedErrors; surface those, not only the summary line.
+    const lines: string[] = [];
+    for (const e of json?.errors ?? []) {
+      lines.push(e.detail ?? e.title);
+      for (const list of Object.values(e.meta?.associatedErrors ?? {}) as any[][])
+        for (const a of list) lines.push(`  - ${a.detail ?? a.title}${a.code ? ` (${a.code})` : ""}`);
+    }
+    const detail = lines.join("\n") || text;
     throw new Error(`App Store Connect ${method} ${path.split("?")[0]} → ${res.status}: ${detail}`);
   }
   return json;
@@ -156,8 +166,9 @@ async function submit(app: string, version: string, build: string, notes: string
       },
     });
   } catch (e) {
-    // Already in this submission from an earlier, interrupted run.
-    if (!/already|409/i.test((e as Error).message)) throw e;
+    // Already in this submission from an earlier, interrupted run. Anything
+    // else (Apple says the version isn't ready) must be shown, not swallowed.
+    if (!/already (exists|added|in)/i.test((e as Error).message)) throw e;
   }
   await asc("PATCH", `/reviewSubmissions/${subId}`, { data: { type: "reviewSubmissions", id: subId, attributes: { submitted: true } } });
   console.log(`Submitted ${version} (${build}) for App Store review. It goes live automatically once Apple approves it.`);

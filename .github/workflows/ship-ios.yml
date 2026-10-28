@@ -28,6 +28,10 @@ on:
         description: "What's New text for the App Store (app-store only)"
         required: false
         default: "Improvements and fixes."
+      existingBuild:
+        description: "Retry only: submit this already-uploaded build number to the App Store instead of building again (app-store only)"
+        required: false
+        default: ""
 
 # One release at a time. Two clicks a minute apart used to start two builds
 # side by side; both then submitted "the latest" build, so the second upload
@@ -46,6 +50,7 @@ jobs:
         working-directory: packages/mobile
     env:
       TARGET: ${{ inputs.target || 'app-store' }}
+      EXISTING_BUILD: ${{ inputs.existingBuild }}
       # Not secrets: the same ids are in eas.json's submit profile.
       ASC_APP_ID: "6776464675"
       ASC_KEY_ID: "6Y6Z8B2F66"
@@ -94,11 +99,12 @@ jobs:
       - name: App Store preflight
         # Fails in seconds, not after a 15-minute build, when this version
         # can't be submitted (not newer than live, or one is already in review).
-        if: env.TARGET == 'app-store'
+        if: env.TARGET == 'app-store' && env.EXISTING_BUILD == ''
         run: bun scripts/asc/release.ts preflight --version "$(jq -r .expo.version app.json)"
 
       - name: Build iOS app on Expo's servers
         id: build
+        if: env.EXISTING_BUILD == ''
         # --json prints the finished build to stdout (progress goes to stderr),
         # so the next step submits exactly this build, not whichever is newest.
         run: |
@@ -115,12 +121,16 @@ jobs:
       - name: Upload to App Store Connect
         # Every iOS build lands in App Store Connect (and TestFlight) first;
         # the next step takes it from there to the App Store.
+        if: env.EXISTING_BUILD == ''
         run: bunx --yes eas-cli submit --platform ios --id "${{ steps.build.outputs.id }}" --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Submit for App Store review
         if: env.TARGET == 'app-store'
-        run: bun scripts/asc/release.ts submit --version "${{ steps.build.outputs.version }}" --build "${{ steps.build.outputs.build }}" --notes "$NOTES"
+        run: |
+          version="${{ steps.build.outputs.version }}"; build="${{ steps.build.outputs.build }}"
+          if [ -n "$EXISTING_BUILD" ]; then version="$(jq -r .expo.version app.json)"; build="$EXISTING_BUILD"; fi
+          bun scripts/asc/release.ts submit --version "$version" --build "$build" --notes "$NOTES"
         env:
           NOTES: ${{ inputs.releaseNotes }}
