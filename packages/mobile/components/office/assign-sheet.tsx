@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Star } from "phosphor-react-native";
 import { Sheet } from "./sheet";
 import { Avatar, Empty, ListSkeleton } from "../ui";
@@ -8,8 +7,7 @@ import { C, R, S } from "../../lib/theme";
 import { STATUS_LABEL, type OfficeTech } from "../../lib/board";
 import { useBoard } from "../../lib/use-board";
 import { useCandidates, type Candidate } from "../../lib/use-booking";
-import { useDispatchActions } from "../../lib/use-dispatch-actions";
-import { showToast } from "./undo-toast";
+import { useAssign } from "./use-assign";
 
 const FIT_LABEL: Record<Candidate["fit"], string> = { ready: "Ready", busy: "Busy", unqualified: "Not qualified", offline: "Off shift" };
 const FIT_COLOR: Record<Candidate["fit"], string> = { ready: C.green, busy: C.amber, unqualified: C.muted, offline: C.muted };
@@ -38,53 +36,15 @@ export function AssignSheet({
 }) {
   const board = useBoard(null, open);
   const candidates = useCandidates(bookingId, open);
-  const { assign, undo } = useDispatchActions();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const { assignTo, busyId } = useAssign(bookingId, currentRiderId, jobLabel);
 
   const techs = new Map<string, OfficeTech>((board.data?.techs ?? []).map((t) => [t.id, t]));
 
-  /**
-   * The server keeps two overrides apart: `force` interrupts a job that is
-   * already in the field (or re-offers one the tech accepted); `forceBusy`
-   * double-books over a clash or time off. A refusal with a `reason` is the
-   * availability kind; one without is the in-flight kind. Each confirm adds
-   * only the override the server asked about, so saying yes to "interrupt the
-   * current visit" never silently double-books the same person as well.
-   */
-  async function pick(c: Candidate, overrides: { force?: boolean; forceBusy?: boolean } = {}) {
-    const tech = techs.get(c.techId);
-    const name = tech?.name ?? "that technician";
-    setBusyId(c.techId);
-    const r = await assign(bookingId, c.techId, {
-      force: !!overrides.force,
-      // Explicit false keeps the availability check on while `force` is set.
-      forceBusy: !!overrides.forceBusy,
-      expectRiderId: currentRiderId,
-    });
-    setBusyId(null);
-    if (r.ok) {
+  function pick(c: Candidate) {
+    assignTo(c.techId, techs.get(c.techId)?.name ?? "that technician", () => {
       onClose();
       onAssigned?.(c.techId);
-      const undoToken = r.undo;
-      showToast(`${jobLabel} → ${name}`, {
-        onUndo: undoToken
-          ? async () => {
-              const u = await undo(undoToken, bookingId);
-              if (!u.ok) Alert.alert("Couldn't undo", u.message);
-            }
-          : undefined,
-      });
-      return;
-    }
-    if (r.forceable) {
-      const next = r.reason ? { ...overrides, forceBusy: true } : { ...overrides, force: true };
-      Alert.alert(`Send ${name} anyway?`, r.message, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Assign anyway", style: "destructive", onPress: () => pick(c, next) },
-      ]);
-      return;
-    }
-    Alert.alert("Couldn't assign", r.message);
+    });
   }
 
   const rows = (candidates.data ?? []).filter((c) => c.techId !== currentRiderId);

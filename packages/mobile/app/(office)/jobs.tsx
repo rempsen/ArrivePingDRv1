@@ -96,6 +96,13 @@ export default function Jobs() {
     if (selectedId && board.data && !board.data.jobs.some((j) => j.id === selectedId)) setSelectedId(null);
   }, [selectedId, board.data]);
 
+  // On an iPad the detail pane shouldn't sit empty: open the first job in
+  // the list until the dispatcher picks one.
+  const firstShown = shown[0]?.id;
+  useEffect(() => {
+    if (wide && !selectedId && firstShown) setSelectedId(firstShown);
+  }, [wide, selectedId, firstShown]);
+
   const open = (id: string) => (wide ? setSelectedId(id) : router.push(`/office/job/${id}`));
 
   const list = (
