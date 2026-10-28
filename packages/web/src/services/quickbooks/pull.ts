@@ -91,7 +91,8 @@ export async function adoptBillForPo(companyId: string, bill: Bill): Promise<Boo
 }
 
 async function paymentDate(companyId: string, bill: Bill): Promise<Date> {
-  const payments = (bill.LinkedTxn ?? []).filter((l) => l.TxnType === "BillPayment");
+  // Intuit links the payment as "BillPaymentCheck" / "BillPaymentCreditCard".
+  const payments = (bill.LinkedTxn ?? []).filter((l) => l.TxnType.startsWith("BillPayment"));
   let latest: Date | null = null;
   for (const p of payments) {
     try {

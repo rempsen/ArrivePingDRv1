@@ -94,7 +94,7 @@ describe("applyBillBalance", () => {
     await setMapping(CO, "bill", b.id, "145");
     await db.update(schema.bookings).set({ vendorBillStatus: "billed" }).where(eq(schema.bookings.id, b.id));
     billPayments["146"] = { Id: "146", SyncToken: "0", TxnDate: "2026-11-05", TotalAmt: 787.5, Line: [{ Amount: 787.5, LinkedTxn: [{ TxnId: "145", TxnType: "Bill" }] }] };
-    await applyBillBalance(CO, { Id: "145", SyncToken: "2", DocNumber: "SUB-0091", TotalAmt: 787.5, Balance: 0, VendorRef: { value: "227" }, Line: [], LinkedTxn: [{ TxnId: "146", TxnType: "BillPayment" }] });
+    await applyBillBalance(CO, { Id: "145", SyncToken: "2", DocNumber: "SUB-0091", TotalAmt: 787.5, Balance: 0, VendorRef: { value: "227" }, Line: [], LinkedTxn: [{ TxnId: "146", TxnType: "BillPaymentCheck" }] });
     const row = await booking(b.id);
     expect(row.vendorBillStatus).toBe("paid");
     expect(row.subtradePaidAt?.toISOString().slice(0, 10)).toBe("2026-11-05");

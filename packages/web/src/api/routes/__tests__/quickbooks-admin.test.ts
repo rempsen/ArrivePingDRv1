@@ -35,7 +35,7 @@ app.route("/api/integrations/quickbooks", quickbooksRoutes);
 // the real server maps AppError (validation, forbidden…) to its status
 app.onError((err, c) => c.json({ error: err.message }, ((err as { status?: number }).status ?? 500) as never));
 const call = (path: string, init: RequestInit = {}, user = ADMIN) =>
-  app.request(`/api/integrations/quickbooks${path}`, { ...init, headers: { "content-type": "application/json", "X-Test-User": user, ...(init.headers ?? {}) } });
+  app.request(`/api/integrations/quickbooks${path}`, { ...init, headers: { "content-type": "application/json", "X-Test-User": user, ...init.headers } });
 
 beforeAll(async () => {
   for (const v of Object.values(schema)) if (v instanceof PgTable) await ensureTables(v);

@@ -12,10 +12,13 @@ For each provider below: create an OAuth app, add the **Redirect URI**, copy the
 ---
 
 ## QuickBooks (Accounting)
-1. Go to https://developer.intuit.com → **My Apps** → **Create an app** → QuickBooks Online Accounting.
-2. Keys & OAuth → use **Production** keys (or Development for testing).
-3. **Redirect URI:** `https://nvc360fourdraft.runable.site/api/integrations/oauth/callback/quickbooks`
-4. Copy **Client ID** + **Client Secret** → paste in Developer setup.
+App `9bbffa40-a498-4e2c-8fd5-391bce3698fc` ("Accounting app for NVC360") at https://developer.intuit.com.
+1. **Keys and credentials** → Development (sandbox) or Production keys.
+2. **Redirect URI:** `https://arriveping.com/api/integrations/oauth/callback/quickbooks`
+3. **Webhooks** → endpoint `https://arriveping.com/api/integrations/quickbooks/webhook`, entities Bill, BillPayment, PurchaseOrder, Vendor, Customer; copy the **Verifier Token** into `QUICKBOOKS_WEBHOOK_VERIFIER`.
+4. Copy **Client ID** + **Client Secret** → paste in Developer setup. Set `QUICKBOOKS_ENV=production` when the production keys are in use.
+5. Production keys need Intuit's App Assessment (the portal's **Compliance** page); the answers are in `packages/web/docs/QUICKBOOKS_SYNC.md`.
+See `packages/web/docs/QUICKBOOKS_SYNC.md` for what the sync does and how a tenant is switched on.
 
 ## Google — Gmail, Calendar, Drive (one app covers all three)
 All three use the **GOOGLE** app. Register once; scopes are requested per integration.
