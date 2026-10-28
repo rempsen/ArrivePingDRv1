@@ -34,7 +34,12 @@ const occupies = (j: Pick<BoardJob, "status" | "riderId">) => !!j.riderId && OCC
 
 const valid = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
 
-export function applyLocations(board: Board, frames: readonly LocationFrame[]): Board {
+/**
+ * @param now The clock frames are aged against: a frame can carry an old fix
+ * (a phone that took it a while ago and is only now reporting), and an old
+ * fix must stay grey, not light up as live.
+ */
+export function applyLocations(board: Board, frames: readonly LocationFrame[], now = Date.now()): Board {
   if (frames.length === 0) return board;
   const byTech = new Map<string, LocationFrame>();
   for (const f of frames) {
@@ -48,9 +53,10 @@ export function applyLocations(board: Board, frames: readonly LocationFrame[]): 
     if (!f) return t;
     // An older frame than what we already have is ignored.
     if (t.locationAt && new Date(t.locationAt).getTime() > f.at) return t;
-    if (t.lat === f.lat && t.lng === f.lng && !t.stale) return t;
+    const stale = now - f.at > STALE_LOCATION_MS;
+    if (t.lat === f.lat && t.lng === f.lng && t.stale === stale) return t;
     changed = true;
-    return { ...t, lat: f.lat, lng: f.lng, locationAt: new Date(f.at).toISOString(), stale: false };
+    return { ...t, lat: f.lat, lng: f.lng, locationAt: new Date(f.at).toISOString(), stale };
   });
   return changed ? { ...board, techs } : board;
 }

@@ -197,7 +197,7 @@ export async function deleteOwnAccount(userId: string): Promise<{ companies: str
     for (const r of riders) {
       await tx
         .update(schema.riders)
-        .set({ approval: "suspended", status: "offline", phone: "", photoUrl: "", photoKey: "", licensePlate: "", licenseNumber: "", address: "", notes: "", lat: null, lng: null, locationUpdatedAt: null })
+        .set({ approval: "suspended", status: "offline", phone: "", photoUrl: "", photoKey: "", licensePlate: "", licenseNumber: "", address: "", notes: "", lat: null, lng: null, locationUpdatedAt: null, lastSeenAt: null })
         .where(eq(schema.riders.id, r.id));
     }
 

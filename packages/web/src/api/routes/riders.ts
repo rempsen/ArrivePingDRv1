@@ -2,7 +2,7 @@ import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { sdb } from "../database";
 import * as schema from "../database/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 import { requireAuth, requireAdmin, tx, tenantId } from "../middleware/auth";
 import { isAdminRole } from "../lib/permissions";
 import { auth } from "../auth";
@@ -60,7 +60,22 @@ const RiderSelfPatch = z.object({
   lng: longitude.optional(),
   status: riderStatus.optional(),
   heartbeat: z.boolean().optional(),
+  /** When the phone took the fix (ms since epoch). Older builds don't send it. */
+  fixAt: z.number().int().positive().optional(),
 });
+
+/** Oldest fix time accepted as given; anything older (or a bad clock) is stamped as "now - this". */
+const MAX_FIX_AGE_MS = 24 * 60 * 60_000;
+
+/**
+ * When a reported position was fixed. The phone says when it took the fix
+ * (a cached or delayed fix is older than the request carrying it); without
+ * that, the request's own time. A clock ahead of ours is clamped to now.
+ */
+export function fixTime(fixAt: number | undefined, now = Date.now()): Date {
+  if (fixAt == null || !Number.isFinite(fixAt)) return new Date(now);
+  return new Date(Math.min(now, Math.max(fixAt, now - MAX_FIX_AGE_MS)));
+}
 
 const RiderProfileFields = {
   phone: phoneField.optional(),
@@ -128,17 +143,16 @@ export const ridersRoutes = new Hono<AppEnv>()
 
     const set: Record<string, unknown> = {};
     if (body.vehicle) set.vehicle = body.vehicle;
-    if (body.lat != null) { set.lat = body.lat; set.lng = body.lng; set.locationUpdatedAt = new Date(); }
+    // Any call from the phone means its app is alive.
+    set.lastSeenAt = new Date();
+    const fixedAt = fixTime(body.fixAt);
 
-    // Liveness heartbeat from the mobile app's background/foreground GPS
-    // watcher: bumps locationUpdatedAt so presence doesn't flap to "offline"
-    // during a GPS warm-up window. Must NEVER touch status/manualOffline —
-    // this used to be sent as {status:"available"}, which silently reversed
-    // an explicit "go Offline" toggle every 90s / every foreground event,
-    // making the off-shift switch effectively not stick.
-    if (body.heartbeat === true && body.status == null) {
-      set.locationUpdatedAt = new Date();
-    }
+    // Liveness heartbeat from the mobile app (no GPS): lastSeenAt above, and
+    // nothing else. It used to stamp locationUpdatedAt, which made the last
+    // known pin look live for as long as the app kept pinging, however old
+    // the position was. Must NEVER touch status/manualOffline either — this
+    // used to be sent as {status:"available"}, which silently reversed an
+    // explicit "go Offline" toggle every 90s / every foreground event.
 
     let toggled = false;
     if (body.status === "offline") {
@@ -148,7 +162,6 @@ export const ridersRoutes = new Hono<AppEnv>()
     } else if (body.status === "available") {
       set.manualOffline = false;
       set.status = "available";
-      set.locationUpdatedAt = new Date();
       toggled = true;
     } else if (body.status) {
       set.status = body.status;
@@ -158,13 +171,32 @@ export const ridersRoutes = new Hono<AppEnv>()
     if (Object.keys(set).length) {
       [r] = await t.update(schema.riders, set, eq(schema.riders.id, riderId));
     }
+    // The position moves only to a fix at least as new as the one stored:
+    // reports can arrive out of order (the foreground watcher, the background
+    // task and a delayed cached fix overlap, and a timed-out request can still
+    // land), and an older fix must not drag the pin back.
+    let moved = false;
+    if (body.lat != null && body.lng != null) {
+      const won = await t.update(
+        schema.riders,
+        { lat: body.lat, lng: body.lng, locationUpdatedAt: fixedAt },
+        and(
+          eq(schema.riders.id, riderId),
+          or(isNull(schema.riders.locationUpdatedAt), lte(schema.riders.locationUpdatedAt, fixedAt)),
+        ),
+      );
+      if (won[0]) {
+        r = won[0];
+        moved = true;
+      }
+    }
     if (toggled) {
       await reconcileRiderStatus(tenantId(c), riderId);
       r = await t.selectOne(schema.riders, eq(schema.riders.id, riderId));
     }
     // Live dispatch map: move the pin, and refresh the tech's status line.
-    if (body.lat != null && body.lng != null) {
-      void publishDispatch(tenantId(c), { kind: "location", techId: riderId, lat: body.lat, lng: body.lng, at: Date.now() });
+    if (moved) {
+      void publishDispatch(tenantId(c), { kind: "location", techId: riderId, lat: body.lat!, lng: body.lng!, at: fixedAt.getTime() });
     }
     if (body.status != null) void publishDispatch(tenantId(c), { kind: "tech", techId: riderId });
     return c.json({ rider: r ?? null }, 200);

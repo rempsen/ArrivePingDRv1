@@ -43,7 +43,9 @@ export function HoverPeek({ tech, anchor, jobs, tz, noun }: Props) {
       <strong>{tech.name}</strong>
       <span className="ap-peek__line">
         <span className="ap-dot" data-status={tech.status} /> {STATUS[tech.status] ?? tech.status}
-        {tech.status !== "offline" && ` · seen ${ago(tech.locationAt)}`}
+        {/* The age of the GPS fix, not of the app's last check-in: a phone can
+            be online with an old position. */}
+        {tech.status !== "offline" && (tech.locationAt ? ` · location ${ago(tech.locationAt)}` : " · no location yet")}
       </span>
       {cur && <span className="ap-peek__line">Now: {jobTitle(cur, noun)}</span>}
       {next && (

@@ -1,5 +1,4 @@
-import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
+import { backgroundKeychain } from "./keychain";
 
 /**
  * Which company is this driver working for right now?
@@ -26,26 +25,31 @@ import { Platform } from "react-native";
  * correct default for a single-company driver who never sees a picker.
  */
 const KEY = "active_company_id";
-const isWeb = Platform.OS === "web";
+/** Readable by the background location task on a locked phone (lib/keychain.ts). */
+const store = backgroundKeychain(KEY);
 
-/** Sync read — safe to call from a fetch header builder. Never throws. */
+/**
+ * Sync read — safe to call from a fetch header builder. Never throws. A
+ * Keychain refusal reads as "not chosen" (lib/keychain.ts); background work
+ * checks activeCompanyState() first so it never reports to the wrong company.
+ */
 export function getActiveCompany(): string {
-  try {
-    return SecureStore.getItem(KEY) ?? "";
-  } catch {
-    // Keychain reads CAN throw on a locked device (same failure mode that
-    // caused the background-location crash documented in lib/auth.ts). Treat
-    // it as "not chosen" rather than letting it escalate — and NEVER touch
-    // `localStorage` on native, where the global doesn't exist at all.
-    if (isWeb) {
-      try {
-        return localStorage.getItem(KEY) ?? "";
-      } catch {
-        return "";
-      }
-    }
-    return "";
-  }
+  return store.read().value;
+}
+
+/**
+ * "unreadable": the Keychain refused (before the first unlock after a
+ * restart). A request sent now would carry no company header and land on the
+ * driver's HOME company, so background location skips the report instead.
+ */
+export function activeCompanyState(): "set" | "unset" | "unreadable" {
+  const s = store.read().state;
+  return s === "present" ? "set" : s === "missing" ? "unset" : "unreadable";
+}
+
+/** See upgradeKeychainForBackground in lib/auth.ts. */
+export async function upgradeActiveCompanyKeychain(): Promise<void> {
+  await store.upgrade();
 }
 
 /**
@@ -61,15 +65,9 @@ export function getActiveCompany(): string {
  */
 export async function setActiveCompany(companyId: string): Promise<void> {
   try {
-    await SecureStore.setItemAsync(KEY, companyId);
+    await store.writeAsync(companyId);
   } catch (err) {
-    if (isWeb) {
-      // On web the Keychain shim can be unavailable; localStorage is the real
-      // store there, so a successful fallback write is not a failure.
-      localStorage.setItem(KEY, companyId);
-    } else {
-      throw err instanceof Error ? err : new Error("Could not save active company");
-    }
+    throw err instanceof Error ? err : new Error("Could not save active company");
   }
   // Read back through the same sync path the request headers use. If the store
   // accepted the write but headers would still send the old id, that is still
@@ -85,17 +83,7 @@ export async function setActiveCompany(companyId: string): Promise<void> {
  * driver's company until they hit the picker.
  */
 export async function clearActiveCompany(): Promise<void> {
-  try {
-    await SecureStore.deleteItemAsync(KEY);
-  } catch {
-    if (isWeb) {
-      try {
-        localStorage.removeItem(KEY);
-      } catch {
-        /* best-effort */
-      }
-    }
-  }
+  await store.clear();
 }
 
 export type CompanyOption = {

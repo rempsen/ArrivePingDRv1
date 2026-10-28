@@ -111,7 +111,9 @@ export async function reconcileRiderStatus(companyId: string, riderId: string): 
   // app is actively in use, so we trust the live field state regardless of the
   // last GPS heartbeat timestamp.
   const inField = candidates.some((j) => IN_FIELD_STATUSES.has(j.status));
-  const online = inField || hasFreshHeartbeat(rider.locationUpdatedAt);
+  // Liveness is the app's last check-in; a GPS fix counts as one too (older
+  // rows and paths like the job screen's ETA pings only stamp the fix).
+  const online = inField || hasFreshHeartbeat(rider.lastSeenAt) || hasFreshHeartbeat(rider.locationUpdatedAt);
 
   let next: string;
   if (!online) {

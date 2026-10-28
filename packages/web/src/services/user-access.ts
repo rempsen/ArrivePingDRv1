@@ -79,6 +79,12 @@ export type ReassignTarget = string | null;
 
 const OPEN = [...OPEN_STATUSES] as string[];
 
+/** The later of the phone's last check-in and its last GPS fix, as ISO. */
+function lastActive(r: { lastSeenAt?: Date | null; locationUpdatedAt?: Date | null }): string | null {
+  const t = Math.max(r.lastSeenAt?.getTime() ?? 0, r.locationUpdatedAt?.getTime() ?? 0);
+  return t > 0 ? new Date(t).toISOString() : null;
+}
+
 export type Member = { membership: typeof schema.memberships.$inferSelect; user: typeof schema.user.$inferSelect; rider: typeof schema.riders.$inferSelect | null };
 
 export async function loadMember(companyId: string, userId: string): Promise<Member | null> {
@@ -160,7 +166,7 @@ export async function seatCandidates(companyId: string, actor?: Pick<Actor, "id"
       email: u.email,
       staffType: m.staffType === "driver" ? "driver" : "technician",
       roleLabel: null,
-      lastActiveAt: r.locationUpdatedAt ? r.locationUpdatedAt.toISOString() : null,
+      lastActiveAt: lastActive(r),
       openJobs: openCounts.get(r.id) ?? 0,
     });
   }
@@ -181,7 +187,7 @@ export async function seatCandidates(companyId: string, actor?: Pick<Actor, "id"
         email: u.email,
         staffType: "office" as const,
         roleLabel: ROLE_LABELS[m.role] ?? m.role,
-        lastActiveAt: r?.locationUpdatedAt ? r.locationUpdatedAt.toISOString() : null,
+        lastActiveAt: r ? lastActive(r) : null,
         openJobs: r ? (openCounts.get(r.id) ?? 0) : 0,
       };
     })

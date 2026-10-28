@@ -60,7 +60,10 @@ export async function computeLaunchChecklist(companyId: string): Promise<LaunchC
   // location, registered for push, or a real client opened a session. Adding a
   // brand-new technician creates a session on the server (Better Auth signs the
   // new login in), and that one has no user agent, so it doesn't count.
-  let signedIn = activeTechIds.some((id) => realRiders.get(id)?.locationUpdatedAt != null);
+  let signedIn = activeTechIds.some((id) => {
+    const r = realRiders.get(id);
+    return r?.lastSeenAt != null || r?.locationUpdatedAt != null;
+  });
   if (!signedIn && activeTechIds.length) {
     // Sessions and push tokens belong to the login, not to one company (one
     // login can work for several), so these are system reads, limited to this
