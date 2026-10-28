@@ -730,6 +730,34 @@ describe("PATCH /bookings/:id — editing a job onto busy time", () => {
     expect((await row("dap-pt-job2")).rider_id).toBe(RIDER);
   });
 
+  it("asks before a longer job runs into the tech's next one", async () => {
+    // A 90-minute service, the next job two hours later: 3 hours overlaps it.
+    await seedJob({ id: "dap-len-a", status: "assigned", riderId: RIDER, scheduledAt: SLOT });
+    await seedJob({ id: "dap-len-b", status: "assigned", riderId: RIDER, scheduledAt: SLOT + 120 * 60_000 });
+    const res = await req("/bookings/dap-len-a", { method: "PATCH", json: { durationMins: 180 } });
+    expect(res.status).toBe(409);
+    expect((await res.json()).forceable).toBe(true);
+    expect((await row("dap-len-a")).duration_mins ?? null).toBeNull();
+    const ok = await req("/bookings/dap-len-a", { method: "PATCH", json: { durationMins: 180, force: true } });
+    expect(ok.status).toBe(200);
+    expect((await row("dap-len-a")).duration_mins).toBe(180);
+  });
+
+  it("undoes a length change only if nobody changed it since", async () => {
+    await seedJob({ id: "dap-len-c", status: "confirmed", assignStatus: "", riderId: null, scheduledAt: SLOT });
+    expect((await req("/bookings/dap-len-c", { method: "PATCH", json: { durationMins: 120 } })).status).toBe(200);
+    // Someone else makes it 150; an Undo expecting 120 is refused and changes nothing.
+    expect((await req("/bookings/dap-len-c", { method: "PATCH", json: { durationMins: 150 } })).status).toBe(200);
+    const stale = await req("/bookings/dap-len-c", { method: "PATCH", json: { durationMins: null, expectDurationMins: 120 } });
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).reason).toBe("changed_since");
+    expect((await row("dap-len-c")).duration_mins).toBe(150);
+    // Expecting the current value puts it back to following the service.
+    const undo = await req("/bookings/dap-len-c", { method: "PATCH", json: { durationMins: null, expectDurationMins: 150 } });
+    expect(undo.status).toBe(200);
+    expect((await row("dap-len-c")).duration_mins ?? null).toBeNull();
+  });
+
   it("does not warn on an edit that touches neither the tech nor the time", async () => {
     await seedJob({ id: "dap-pt-busy3", status: "assigned", riderId: RIDER, scheduledAt: SLOT });
     await seedJob({ id: "dap-pt-job3", status: "assigned", riderId: RIDER, scheduledAt: SLOT + 10 * 60_000 });

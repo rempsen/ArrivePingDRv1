@@ -34,6 +34,8 @@ export interface OfficeJob {
   service: string;
   category: string;
   durationMins: number;
+  /** The job's own length when the office set one; null/absent = follows the service. */
+  durationOverride?: number | null;
   status: string;
   /** none | offered | accepted */
   assignStatus: string;

@@ -71,6 +71,8 @@ export interface BoardJob {
   service: string;
   category: string;
   durationMins: number;
+  /** The job's own length when the office set one; null = follows the service. */
+  durationOverride: number | null;
   status: string;
   assignStatus: string;
   priority: string;
@@ -252,6 +254,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
           category: schema.services.category,
           durationMins: sql<number | null>`coalesce(${B.durationMins}, ${schema.services.durationMins})`,
           customerName: customer.name,
+          durationOverride: B.durationMins,
           customerPhone: sql<string | null>`coalesce(nullif(${B.customerPhone}, ''), ${customer.phone})`,
           total: B.total,
         })
@@ -309,6 +312,7 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         service: r.serviceName ?? "",
         category: r.category ?? "",
         durationMins: jobMinutes(r.durationMins),
+        durationOverride: r.durationOverride ?? null,
         status: r.status,
         assignStatus: r.assignStatus,
         priority: r.priority,

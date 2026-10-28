@@ -96,11 +96,13 @@ export function useDispatchActions() {
   /**
    * How long the job is booked for (the board's edge drag). `null` goes back
    * to the service's length. A clash with the tech's next job comes back
-   * forceable, like a move. Undo is the same call with the old length.
+   * forceable, like a move. Undo is the same call with the old length and
+   * `expect` set to the new one, so it won't overwrite a later change.
    */
   const resize = useCallback(
-    async (bookingId: string, durationMins: number | null, opts: { force?: boolean } = {}) => {
-      const r = await post(`/api/bookings/${encodeURIComponent(bookingId)}`, { durationMins, ...(opts.force ? { force: true } : {}) }, "PATCH");
+    async (bookingId: string, durationMins: number | null, opts: { force?: boolean; expect?: number | null } = {}) => {
+      const body = { durationMins, ...(opts.force ? { force: true } : {}), ...(opts.expect !== undefined ? { expectDurationMins: opts.expect } : {}) };
+      const r = await post(`/api/bookings/${encodeURIComponent(bookingId)}`, body, "PATCH");
       if (r.ok) settle(bookingId);
       return r;
     },

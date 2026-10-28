@@ -126,11 +126,13 @@ describe("loadBoard", () => {
     const b = await loadBoard(CO, { now: NOW });
     const d = b.jobs.find((j) => j.id === "b-day")!;
     expect(d.durationMins).toBe(150);
+    expect(d.durationOverride).toBe(150);
     expect(d.customerPhone).toBe("2045550100");
     expect(d.total).toBe(199.5);
     // No override: the service's 90 minutes; no number on the job: the client's (none here).
     const w = b.jobs.find((j) => j.id === "b-wait-old")!;
     expect(w.durationMins).toBe(90);
+    expect(w.durationOverride).toBeNull();
     expect(w.customerPhone).toBe("");
     expect(w.total).toBe(0);
   });

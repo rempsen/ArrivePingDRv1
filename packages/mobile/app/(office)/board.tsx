@@ -197,12 +197,15 @@ export default function Board() {
   // Dragging a block's right edge: save the new length, Undo puts the old
   // one back; running into the tech's next job asks first, like a move.
   async function resizeJob(job: (typeof jobs)[number], mins: number, force = false): Promise<boolean> {
-    const before = job.durationMins;
+    // What to put back: the job's own length, or null when it followed the
+    // service's (so Undo doesn't freeze the service's number onto the job).
+    const before = job.durationOverride !== undefined ? job.durationOverride : job.durationMins;
     const r = await actions.resize(job.id, mins, { force });
     if (r.ok) {
       showToast(`${job.customerName || job.title || "Job"} now ${lengthLabel(mins)}`, {
         onUndo: async () => {
-          const u = await actions.resize(job.id, before, { force: true });
+          // Only if nobody changed it again since (compare-and-set on the server).
+          const u = await actions.resize(job.id, before, { force: true, expect: mins });
           if (!u.ok) Alert.alert("Couldn't undo", u.message);
         },
       });

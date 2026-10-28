@@ -418,6 +418,11 @@ const BookingPatch = z
     scheduledAt: z.union([isoDate("Schedule date"), z.literal("")]),
     /** Minutes this job is booked for; null goes back to the service's length. */
     durationMins: durationField.nullable(),
+    /**
+     * Only change the length if it is still this (compare-and-set, for Undo):
+     * the job's own length, or null when it follows the service's.
+     */
+    expectDurationMins: durationField.nullable(),
     rateModel: jsonBlob(),
     lineItems: z.array(z.unknown()).max(500, "Too many line items"),
     requiredSkillClass: shortText("Skill class", 120).or(z.literal("")),
@@ -1252,6 +1257,21 @@ export const bookingsRoutes = new Hono<AppEnv>()
       );
       if (!tpl) return c.json({ message: "Template not found" }, 404);
     }
+
+    // Undo of a length change: refuse if someone changed it again since.
+    if (
+      body.expectDurationMins !== undefined &&
+      (prev.durationMins ?? null) !== (body.expectDurationMins ?? null)
+    )
+      return c.json(
+        {
+          message:
+            "Someone changed this job's length since, so it wasn't put back.",
+          reason: "changed_since",
+          forceable: false,
+        },
+        409,
+      );
 
     // A save from the work-order modal can change the tech, the time, or both —
     // the same double-booking as a drag or an assign, just through a different

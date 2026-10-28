@@ -58,7 +58,8 @@ export interface OfferPreview {
   assignStatus: string;
   status: string;
   /** Expected on-site time, minutes, and where the number came from. */
-  duration: { mins: number; source: "history" | "service" } | null;
+  /** "booked": the office set this job's own length, which beats everything else. */
+  duration: { mins: number; source: "booked" | "history" | "service" } | null;
   drive: OfferDrive | null;
   /** Why there is no drive time, when there isn't. */
   driveUnavailable: "" | "no_location" | "no_job_location" | "no_route";
@@ -88,11 +89,14 @@ export async function buildOfferPreview(
   const now = opts.now ?? Date.now();
   const svc = b.serviceId ? await t.selectOne(schema.services, eq(schema.services.id, b.serviceId)) : null;
 
-  // On-site time: the company's own history for this service beats the
-  // catalogue default, which is often the 60-minute placeholder.
+  // On-site time: the length the office booked for this job, else the
+  // company's own history for this service, else the catalogue default
+  // (often the 60-minute placeholder).
   const history = await typicalDurationMins(companyId, b.serviceId ?? null);
   const duration =
-    history != null
+    b.durationMins != null
+      ? { mins: b.durationMins, source: "booked" as const }
+      : history != null
       ? { mins: history, source: "history" as const }
       : svc?.durationMins
         ? { mins: svc.durationMins, source: "service" as const }
