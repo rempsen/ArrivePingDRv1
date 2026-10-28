@@ -7,11 +7,11 @@ import { classifyResponse, type DispatchResult } from "./dispatch-result";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
-async function post<T = unknown>(path: string, json: unknown): Promise<DispatchResult<T>> {
+async function post<T = unknown>(path: string, json: unknown, method: "POST" | "PATCH" = "POST"): Promise<DispatchResult<T>> {
   let res: Response;
   try {
     res = await fetch(`${API}${path}`, {
-      method: "POST",
+      method,
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(json),
     });
@@ -93,5 +93,19 @@ export function useDispatchActions() {
     [settle],
   );
 
-  return { assign, schedule, undo, cancel };
+  /**
+   * How long the job is booked for (the board's edge drag). `null` goes back
+   * to the service's length. A clash with the tech's next job comes back
+   * forceable, like a move. Undo is the same call with the old length.
+   */
+  const resize = useCallback(
+    async (bookingId: string, durationMins: number | null, opts: { force?: boolean } = {}) => {
+      const r = await post(`/api/bookings/${encodeURIComponent(bookingId)}`, { durationMins, ...(opts.force ? { force: true } : {}) }, "PATCH");
+      if (r.ok) settle(bookingId);
+      return r;
+    },
+    [settle],
+  );
+
+  return { assign, schedule, undo, cancel, resize };
 }

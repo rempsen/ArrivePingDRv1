@@ -13,7 +13,8 @@ import { useLayout } from "../../lib/use-layout";
 import { useStreamHealthy } from "../../lib/use-dispatch-stream";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
-import { crewGroups, dayAhead, hourRange, needsYou, pulseBlocks, pulseOf, upNext, type Need } from "../../lib/today";
+import { onDay } from "../../lib/map-pins";
+import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
 import { instantFor, jobMinutes, minLabel } from "../../lib/timeline";
 import { partsIn } from "../../lib/when";
 
@@ -63,6 +64,9 @@ export default function Today() {
     return p.hour * 60 + p.minute;
   }, [now, tz]);
   const pulse = useMemo(() => pulseOf(jobs, tz), [jobs, tz]);
+  // Money counts this day's jobs only: the board also carries older jobs still waiting.
+  const boardDay = board.data?.day;
+  const revenue = useMemo(() => revenueOf(boardDay ? onDay(jobs, boardDay, tz) : jobs), [jobs, boardDay, tz]);
   const strip = useMemo(() => pulseBlocks(jobs, tz), [jobs, tz]);
   const crew = useMemo(() => crewGroups(techs, jobs), [techs, jobs]);
   const wrapped = pulse.wrapped && !board.isLoading;
@@ -125,7 +129,15 @@ export default function Today() {
           secondary: tech?.phone ? { label: "Call", onPress: () => Linking.openURL(`tel:${tech.phone}`).catch(() => {}) } : undefined,
         };
       case "unconfirmed":
-        return { color: C.amber, reason: `Unconfirmed · ${whenLabel}`, title: customer, detail: [job?.service, tech?.name].filter(Boolean).join(" · "), primary: open, secondary: undefined };
+        // Nudge the client by text when there's a number; the office's own phone sends it.
+        return {
+          color: C.amber,
+          reason: `Unconfirmed · ${whenLabel}`,
+          title: customer,
+          detail: [job?.service, tech?.name].filter(Boolean).join(" · "),
+          primary: job?.customerPhone ? { label: "Text client", onPress: () => Linking.openURL(`sms:${job.customerPhone}`).catch(() => {}) } : open,
+          secondary: job?.customerPhone ? open : undefined,
+        };
     }
   };
   const SHOW = twoCol ? 6 : 5;
@@ -149,6 +161,7 @@ export default function Today() {
     { key: "late", n: pulse.late, label: "Late", color: C.red, hot: true, onPress: () => jobsAt("scheduled") },
     { key: "unassigned", n: pulse.unassigned, label: "Unassigned", sub: later ? `+${later} this week` : undefined, color: C.red, hot: true, onPress: () => jobsAt("unassigned") },
     { key: "offered", n: pulse.offered, label: "Offer pending", sub: pulse.unconfirmed ? `${pulse.unconfirmed} unconfirmed` : undefined, color: C.amber, onPress: () => jobsAt("scheduled") },
+    ...(revenue ? [{ key: "revenue", n: revenue.booked, text: moneyShort(revenue.booked), label: "Booked today", sub: `${moneyShort(revenue.done)} from finished work`, color: C.green, onPress: () => jobsAt("done") }] : []),
   ];
 
   const pulseCard = wrapped ? (
@@ -160,11 +173,12 @@ export default function Today() {
           <Text style={s.cardNote}>{pulse.lastEnd != null ? `last job ended ${minLabel(pulse.lastEnd % 1440)}` : "no jobs today"}</Text>
         </View>
         <Tiles
-          columns={3}
+          columns={revenue ? 4 : 3}
           tiles={[
             { key: "w-total", n: pulse.total + pulse.cancelled, label: "Jobs", color: C.text, onPress: () => jobsAt("done") },
             { key: "w-done", n: pulse.done, label: "Completed", color: C.green, onPress: () => jobsAt("done") },
             { key: "w-cxl", n: pulse.cancelled, label: "Cancelled", color: "#f87171", onPress: () => jobsAt("done") },
+            ...(revenue ? [{ key: "w-rev", n: revenue.done, text: moneyShort(revenue.done), label: "Earned", color: C.green, onPress: () => jobsAt("done") }] : []),
           ]}
         />
       </View>
@@ -200,7 +214,7 @@ export default function Today() {
     </View>
   ) : (
     <View style={s.card}>
-      <Tiles tiles={tiles} columns={twoCol ? 7 : wide ? 4 : 3} />
+      <Tiles tiles={tiles} columns={twoCol ? tiles.length : wide ? 4 : 3} />
       {pulse.total > 0 ? <DayBar blocks={strip.blocks} startMin={strip.startMin} endMin={strip.endMin} nowMin={nowMin} pulse={pulse} /> : null}
     </View>
   );

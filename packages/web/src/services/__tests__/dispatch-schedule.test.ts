@@ -697,6 +697,21 @@ describe("dispatchSchedule + undo", () => {
     await flushNotices();
   });
 
+  it("sizes a job by its own length when the office set one", async () => {
+    // A 90-minute service; this first job was stretched to 4 hours.
+    const long = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted", durationMins: 240 });
+    const next = await job(CO, { riderId: `${CO}-t2`, status: "assigned", assignStatus: "accepted" });
+    // Two hours after the long one starts: clear of a 90-minute job, inside a 4-hour one.
+    const twoHoursIn = minutesLater((await row(long)).scheduledAt, 120);
+    const r = await ds.dispatchSchedule(CO, { bookingId: next, scheduledAt: twoHoursIn, by: "Dana" }, NOW.getTime());
+    expect(r).toMatchObject({ ok: false, status: 409, forceable: true, reason: "overlap" });
+    // Back to the service's length: the same slot is free.
+    await db.update(schema.bookings).set({ durationMins: null }).where(eq(schema.bookings.id, long));
+    const ok = await ds.dispatchSchedule(CO, { bookingId: next, scheduledAt: twoHoursIn, by: "Dana" }, NOW.getTime());
+    expect(ok.ok).toBe(true);
+    await flushNotices();
+  });
+
   it("keeps assign tokens working through the shared undo, and rejects other companies", async () => {
     const id = await job(CO, { status: "pending", assignStatus: "none" });
     const a = await da.dispatchAssign(

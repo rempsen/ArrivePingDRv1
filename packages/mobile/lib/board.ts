@@ -44,6 +44,10 @@ export interface OfficeJob {
   scheduledAt: string;
   riderId: string | null;
   customerName: string;
+  /** The job's own number, else the client's; "" when none (older servers omit it). */
+  customerPhone?: string;
+  /** What the client pays, subtotal + tax (older servers omit it). */
+  total?: number;
   etaMins: number | null;
   late: boolean;
   isSample: boolean;

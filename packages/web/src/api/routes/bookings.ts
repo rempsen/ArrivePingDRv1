@@ -67,6 +67,7 @@ import { incr } from "../lib/metrics";
 import { deleteObject, putObject } from "../lib/storage";
 import {
   bookingStatus,
+  durationMins as durationField,
   email,
   id as idField,
   isoDate,
@@ -415,6 +416,8 @@ const BookingPatch = z
     // else's login (silently ignored on a unique-email collision).
     customerEmail: email("Customer email"),
     scheduledAt: z.union([isoDate("Schedule date"), z.literal("")]),
+    /** Minutes this job is booked for; null goes back to the service's length. */
+    durationMins: durationField.nullable(),
     rateModel: jsonBlob(),
     lineItems: z.array(z.unknown()).max(500, "Too many line items"),
     requiredSkillClass: shortText("Skill class", 120).or(z.literal("")),
@@ -1261,17 +1264,31 @@ export const bookingsRoutes = new Hono<AppEnv>()
     const movedInTime =
       Boolean(body.scheduledAt) &&
       Number(nextAt) !== Number(prev.scheduledAt ?? 0);
+    // A longer (or shorter) job can run into the next one just like a move.
+    const resized =
+      body.durationMins !== undefined &&
+      (body.durationMins ?? null) !== (prev.durationMins ?? null);
     if (
       nextRider &&
       !body.force &&
       !isTerminalStatus(prev.status) &&
-      (nextRider !== (prev.riderId ?? "") || movedInTime)
+      (nextRider !== (prev.riderId ?? "") || movedInTime || resized)
     ) {
+      // The length the job will have after this save: the new override, else
+      // (cleared or never set) the service's.
+      const nextService = body.serviceId ?? prev.serviceId;
+      const override =
+        body.durationMins !== undefined ? body.durationMins : prev.durationMins;
+      const svcMins = nextService
+        ? ((await t.selectOne(schema.services, eq(schema.services.id, nextService)))
+            ?.durationMins ?? null)
+        : null;
       const busy = await findAvailabilityBlock(co, {
         riderId: nextRider,
         scheduledAt: nextAt,
         bookingId: id,
-        serviceId: body.serviceId ?? prev.serviceId,
+        serviceId: nextService,
+        durationMins: override ?? svcMins,
       });
       if (busy)
         return c.json(
@@ -1320,6 +1337,7 @@ export const bookingsRoutes = new Hono<AppEnv>()
     if (body.customerPhone !== undefined)
       set.customerPhone = body.customerPhone;
     if (body.scheduledAt) set.scheduledAt = body.scheduledAt;
+    if (body.durationMins !== undefined) set.durationMins = body.durationMins;
     if (body.rateModel !== undefined)
       set.rateModel = body.rateModel ? JSON.stringify(body.rateModel) : "";
     if (body.techPayModel !== undefined)

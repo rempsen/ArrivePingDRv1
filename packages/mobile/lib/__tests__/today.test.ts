@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { crewGroups, dayAhead, hourRange, needsYou, pulseBlocks, pulseOf, upNext } from "../today";
+import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext } from "../today";
 import type { OfficeTech } from "../board";
 
 const TZ = "America/Winnipeg"; // UTC-5 in late October (CDT)
@@ -180,4 +180,25 @@ test("hourRange", () => {
   expect(hourRange(10 * 60)).toBe("10–11 AM");
   expect(hourRange(11 * 60)).toBe("11 AM–12 PM");
   expect(hourRange(13 * 60)).toBe("1–2 PM");
+});
+
+describe("revenueOf", () => {
+  test("sums the day's totals, finished work apart, cancelled left out", () => {
+    const r = revenueOf([
+      { status: "completed", total: 200 },
+      { status: "assigned", total: 150.5 },
+      { status: "cancelled", total: 999 },
+      { status: "pending" },
+    ]);
+    expect(r).toEqual({ booked: 350.5, done: 200 });
+  });
+  test("null when nothing carries a price", () => {
+    expect(revenueOf([{ status: "assigned" }, { status: "completed", total: 0 }])).toBeNull();
+  });
+  test("moneyShort", () => {
+    expect(moneyShort(840.4)).toBe("$840");
+    expect(moneyShort(4200)).toBe("$4.2k");
+    expect(moneyShort(4000)).toBe("$4k");
+    expect(moneyShort(12_400)).toBe("$12k");
+  });
 });

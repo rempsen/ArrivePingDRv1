@@ -88,7 +88,8 @@ beforeAll(async () => {
   await tech(CO, 5, { locationUpdatedAt: at(-25 * MIN) });
   await tech(OTHER, 1);
 
-  await job(CO, "b-day", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: at(HOUR) });
+  // The office stretched this one to 2½ h and it carries its own number and price.
+  await job(CO, "b-day", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "accepted", scheduledAt: at(HOUR), durationMins: 150, customerPhone: "2045550100", total: 199.5 });
   await job(CO, "b-day-later", { riderId: `${CO}-t1`, status: "assigned", assignStatus: "offered", scheduledAt: at(3 * HOUR) });
   await job(CO, "b-wait-old", { scheduledAt: at(-72 * HOUR), status: "pending", requiredSkills: "HVAC, Boiler" });
   await job(CO, "b-wait-future", { scheduledAt: at(120 * HOUR), status: "confirmed" });
@@ -119,6 +120,19 @@ describe("loadBoard", () => {
     // soonest first
     const times = b.jobs.map((j) => j.scheduledAt);
     expect(times).toEqual([...times].sort());
+  });
+
+  it("uses a job's own length over its service's, and carries its phone and total", async () => {
+    const b = await loadBoard(CO, { now: NOW });
+    const d = b.jobs.find((j) => j.id === "b-day")!;
+    expect(d.durationMins).toBe(150);
+    expect(d.customerPhone).toBe("2045550100");
+    expect(d.total).toBe(199.5);
+    // No override: the service's 90 minutes; no number on the job: the client's (none here).
+    const w = b.jobs.find((j) => j.id === "b-wait-old")!;
+    expect(w.durationMins).toBe(90);
+    expect(w.customerPhone).toBe("");
+    expect(w.total).toBe(0);
   });
 
   it("shapes jobs for the map", async () => {

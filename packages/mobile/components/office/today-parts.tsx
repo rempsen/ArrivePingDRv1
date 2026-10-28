@@ -19,6 +19,8 @@ export const timeIn = (iso: string, tz: string) => minLabel(jobMinutes(iso, tz).
 export interface Tile {
   key: string;
   n: number;
+  /** Shown instead of `n` (money, say); `n` still drives the empty styling. */
+  text?: string;
   label: string;
   sub?: string;
   color: string;
@@ -36,7 +38,7 @@ export function Tiles({ tiles, columns }: { tiles: Tile[]; columns: number }) {
           onPress={t.onPress}
           disabled={!t.onPress}
           accessibilityRole={t.onPress ? "button" : undefined}
-          accessibilityLabel={`${t.n} ${t.label}${t.sub ? `, ${t.sub}` : ""}`}
+          accessibilityLabel={`${t.text ?? t.n} ${t.label}${t.sub ? `, ${t.sub}` : ""}`}
           style={({ pressed }) => [
             s.tile,
             { flexBasis: `${100 / columns - 2}%` as const },
@@ -45,7 +47,7 @@ export function Tiles({ tiles, columns }: { tiles: Tile[]; columns: number }) {
           ]}
         >
           <Text style={[s.tileN, { color: t.n === 0 && t.hot ? C.sub : t.color }]} allowFontScaling={false}>
-            {t.n}
+            {t.text ?? t.n}
           </Text>
           <Text style={s.tileLabel} numberOfLines={1}>
             {t.label}

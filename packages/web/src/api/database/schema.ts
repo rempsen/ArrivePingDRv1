@@ -329,6 +329,11 @@ export const bookings = pgTable("bookings", {
   status: text("status").notNull().default("pending"),
   // pending | confirmed | assigned | enroute | arrived | in_progress | completed | cancelled
   scheduledAt: timestamp("scheduled_at", { mode: "date", withTimezone: true }).notNull(),
+  // How long this job is booked for, when the office has set it (dragging a
+  // block's edge on the board, or the work order). Null = the service's
+  // durationMins, then an hour: read through coalesce everywhere a length is
+  // needed (board, clash checks, ranking, calendar feed).
+  durationMins: integer("duration_mins"),
   address: text("address").notNull(),
   // resolved-or-created from `address` on save — links this job into the
   // property's permanent service history. Nullable: legacy rows + any job

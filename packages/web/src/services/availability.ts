@@ -9,7 +9,7 @@
  * FAILS OPEN. If this query throws (DB blip, odd data), dispatch continues. A
  * warning that can't be computed must never stop the office from booking work.
  */
-import { and, eq, gte, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, ne, sql } from "drizzle-orm";
 import * as schema from "../api/database/schema";
 import { tdb } from "../api/database/tenant";
 import { TERMINAL_STATUSES } from "../shared/job-status";
@@ -35,7 +35,7 @@ export interface AvailabilityInput {
   scheduledAt: number | Date | null | undefined;
   /** The job being moved/assigned, so it doesn't clash with itself. */
   bookingId?: string | null;
-  /** Used to size the window; falls back to the service's duration, then an hour. */
+  /** Used to size the window; falls back to the job's own length, the service's, then an hour. */
   durationMins?: number | null;
   serviceId?: string | null;
 }
@@ -47,6 +47,13 @@ async function serviceMinutes(companyId: string, serviceId?: string | null): Pro
   if (!serviceId) return null;
   const svc = await tdb(companyId).selectOne(schema.services, eq(schema.services.id, serviceId));
   return svc?.durationMins ?? null;
+}
+
+/** The job's own length when the office set one (bookings.duration_mins). */
+async function bookingMinutes(companyId: string, bookingId?: string | null): Promise<number | null> {
+  if (!bookingId) return null;
+  const b = await tdb(companyId).selectOne(schema.bookings, eq(schema.bookings.id, bookingId));
+  return b?.durationMins ?? null;
 }
 
 async function techLabel(companyId: string, riderId: string): Promise<string> {
@@ -80,7 +87,9 @@ export async function findAvailabilityBlock(
   try {
     const t = tdb(companyId);
     const tz = await companyTimeZone(companyId);
-    const durationMins = jobMinutes(input.durationMins ?? (await serviceMinutes(companyId, input.serviceId)));
+    const durationMins = jobMinutes(
+      input.durationMins ?? (await bookingMinutes(companyId, input.bookingId)) ?? (await serviceMinutes(companyId, input.serviceId)),
+    );
 
     // The tech's other live work anywhere near this time. Archived (soft-deleted),
     // completed and cancelled jobs are not clashes.
@@ -92,7 +101,7 @@ export async function findAvailabilityBlock(
           scheduledAt: schema.bookings.scheduledAt,
           status: schema.bookings.status,
           title: schema.bookings.title,
-          durationMins: schema.services.durationMins,
+          durationMins: sql<number | null>`coalesce(${schema.bookings.durationMins}, ${schema.services.durationMins})`,
         })
         .from(schema.bookings)
         .leftJoin(schema.services, eq(schema.services.id, schema.bookings.serviceId))

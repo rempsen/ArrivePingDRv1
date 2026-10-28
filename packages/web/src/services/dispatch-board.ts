@@ -81,6 +81,10 @@ export interface BoardJob {
   scheduledAt: string;
   riderId: string | null;
   customerName: string;
+  /** The number to text or call for this job: the job's own, else the client's. */
+  customerPhone: string;
+  /** What the client pays (subtotal + tax). */
+  total: number;
   requiredSkillClass: string;
   requiredSkills: string[];
   etaMins: number | null;
@@ -246,8 +250,10 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
           autoAssignedRuleId: B.autoAssignedRuleId,
           serviceName: schema.services.name,
           category: schema.services.category,
-          durationMins: schema.services.durationMins,
+          durationMins: sql<number | null>`coalesce(${B.durationMins}, ${schema.services.durationMins})`,
           customerName: customer.name,
+          customerPhone: sql<string | null>`coalesce(nullif(${B.customerPhone}, ''), ${customer.phone})`,
+          total: B.total,
         })
         .from(B)
         .leftJoin(schema.services, eq(schema.services.id, B.serviceId))
@@ -312,6 +318,8 @@ export async function loadBoard(companyId: string, opts: { day?: string | null; 
         scheduledAt: new Date(r.scheduledAt).toISOString(),
         riderId: r.riderId,
         customerName: r.customerName ?? "",
+        customerPhone: r.customerPhone ?? "",
+        total: Number(r.total) || 0,
         requiredSkillClass: r.requiredSkillClass,
         requiredSkills: parseSkills(r.requiredSkills),
         etaMins: r.etaMins,

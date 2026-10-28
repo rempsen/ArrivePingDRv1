@@ -63,7 +63,7 @@ async function eventFor(
     }
   }
   const start = new Date(b.scheduledAt);
-  const durMins = svc?.durationMins ?? 60;
+  const durMins = b.durationMins ?? svc?.durationMins ?? 60;
   const end = new Date(start.getTime() + durMins * 60_000);
   const descLines = [
     svc?.name ? `Service: ${svc.name}` : "",

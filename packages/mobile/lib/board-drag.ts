@@ -52,3 +52,26 @@ export function edgeScroll(g: TimelineGeom, absX: number, absY: number): { dx: n
 export function travelled(dx: number, dy: number): boolean {
   return Math.abs(dx) + Math.abs(dy) > DRAG_SLOP;
 }
+
+/** Shortest a job can be dragged to, and the step the edge snaps to. */
+export const MIN_JOB_MINS = 15;
+export const RESIZE_STEP = 15;
+
+/**
+ * The job's new length after dragging its right edge `dxPt` points: snapped
+ * to 15 minutes, at least 15 long, never past midnight.
+ */
+export function resizedMins(startMin: number, durationMins: number, dxPt: number, hourW: number): number {
+  const rawEnd = startMin + durationMins + (dxPt / hourW) * 60;
+  const snapped = Math.round(rawEnd / RESIZE_STEP) * RESIZE_STEP;
+  const end = Math.min(24 * 60, Math.max(startMin + MIN_JOB_MINS, snapped));
+  return end - startMin;
+}
+
+/** "45 min", "2 h", "2 h 30 min". */
+export function lengthLabel(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
