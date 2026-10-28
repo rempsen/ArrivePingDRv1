@@ -14,7 +14,7 @@ Everything builds on Expo's servers (EAS); nothing needs Xcode locally.
 | App name | **ArrivePing** |
 | Bundle ID (permanent) | `com.nvc360.uberize` (+ `com.nvc360.uberize.LiveActivity`) |
 | Apple Team | `86S82A9ZPS` · App Store Connect app id `6776464675` |
-| Marketing version | `app.json → expo.version` (**1.0.6** is the next release; 1.0.5 is live); build number auto-increments on EAS (`appVersionSource: remote`) |
+| Marketing version | `app.json → expo.version` (**1.0.7** is the next release; 1.0.6 is in review); build number auto-increments on EAS (`appVersionSource: remote`) |
 | Runtime version | `policy: appVersion`: follows `expo.version`, so an over-the-air update only reaches binaries of the same version |
 | Update channel | production builds use EAS Update channel `production` (from 1.0.6 on; the 1.0.5 binary has none) |
 | iPad | supported (`supportsTablet: true`, all orientations, Split View allowed) |

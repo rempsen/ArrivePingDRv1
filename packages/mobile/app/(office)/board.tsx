@@ -16,6 +16,7 @@ import { useBoard, useDayLoad } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
 import { useDispatchActions } from "../../lib/use-dispatch-actions";
+import { lengthLabel } from "../../lib/board-drag";
 import { addDays, isUnassigned, NO_JOBS, NO_TECHS } from "../../lib/board";
 import { IDLE, canPlaceOn, placeReducer, placedStart, placementRequest } from "../../lib/board-place";
 import { jobMinutes, minLabel, mondayOf, type Range } from "../../lib/timeline";
@@ -193,6 +194,35 @@ export default function Board() {
   });
   const targetTech = place.kind === "confirm" ? techs.find((t) => t.id === place.techId) : undefined;
 
+  // Dragging a block's right edge: save the new length, Undo puts the old
+  // one back; running into the tech's next job asks first, like a move.
+  async function resizeJob(job: (typeof jobs)[number], mins: number, force = false): Promise<boolean> {
+    // What to put back: the job's own length, or null when it followed the
+    // service's (so Undo doesn't freeze the service's number onto the job).
+    const before = job.durationOverride !== undefined ? job.durationOverride : job.durationMins;
+    const r = await actions.resize(job.id, mins, { force });
+    if (r.ok) {
+      showToast(`${job.customerName || job.title || "Job"} now ${lengthLabel(mins)}`, {
+        onUndo: async () => {
+          // Only if nobody changed it again since (compare-and-set on the server).
+          const u = await actions.resize(job.id, before, { force: true, expect: mins });
+          if (!u.ok) Alert.alert("Couldn't undo", u.message);
+        },
+      });
+      return true;
+    }
+    if (r.forceable && !force) {
+      return new Promise((done) =>
+        Alert.alert("Make it longer anyway?", r.message, [
+          { text: "Cancel", style: "cancel", onPress: () => done(false) },
+          { text: "Change anyway", style: "destructive", onPress: () => resizeJob(job, mins, true).then(done) },
+        ]),
+      );
+    }
+    Alert.alert("Couldn't change the length", r.message);
+    return false;
+  }
+
   function tapCell(techId: string, rawMin: number, range: Range) {
     if (!armedJob) return;
     dispatch({ type: "tapCell", techId, startMin: placedStart(rawMin, armedJob, range) });
@@ -323,6 +353,7 @@ export default function Board() {
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
             onTapCell={tapCell}
             onOpenJob={(id) => router.push(`/office/job/${id}`)}
+            onResize={can("work_orders:edit") ? resizeJob : undefined}
           />
           {board.data?.truncated ? <TruncatedNote /> : null}
           <QueueColumn

@@ -1,15 +1,16 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet, type GestureResponderEvent } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { DragHandle, type DragCallbacks } from "./drag-handle";
+import { ResizeEdge } from "./resize-edge";
 import { Warning } from "phosphor-react-native";
 import { Avatar } from "../ui";
 import { statusColor } from "./tech-row";
 import { C, R, S } from "../../lib/theme";
-import { STATUS_LABEL, type OfficeJob, type OfficeTech } from "../../lib/board";
+import { STATUS_LABEL, TERMINAL, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { GUTTER_W, HOUR_W, ROW_H, bookedMinutes, hoursIn, loadLevel, minLabel, minuteAtX, packLanes, spansFor, timelineRange, xOf, type Range } from "../../lib/timeline";
 import { canArmWith, canPlaceOn, type PlacePerms, type PlaceState } from "../../lib/board-place";
-import { edgeScroll, hitCell, HEADER_H, type TimelineGeom } from "../../lib/board-drag";
+import { edgeScroll, hitCell, HEADER_H, lengthLabel, resizedMins, type TimelineGeom } from "../../lib/board-drag";
 const LOAD_COLOR = { ok: C.green, high: C.amber, over: C.red } as const;
 
 /** Block colour by where the job is: nobody / offered / accepted / in the field / done. */
@@ -40,6 +41,8 @@ export interface TimelineProps {
   onOpenJob: (jobId: string) => void;
   /** Drag callbacks for one job's block (the board owns the floating copy). */
   dragFor: (job: OfficeJob) => DragCallbacks;
+  /** Dragging a block's right edge: the job's new length. Omit to hide the grips. */
+  onResize?: (job: OfficeJob, durationMins: number) => Promise<boolean>;
 }
 
 /** What the board asks the timeline while a job is dragged over it. */
@@ -64,7 +67,7 @@ export interface TimelineHandle {
  * lib/board-place.ts); a long press opens the job.
  */
 export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timeline(
-  { techs, jobs, timeOff, day, tz, nowMin, place, perms, bottomPad = 0, hover = null, onArm, onTapCell, onOpenJob, dragFor },
+  { techs, jobs, timeOff, day, tz, nowMin, place, perms, bottomPad = 0, hover = null, onArm, onTapCell, onOpenJob, dragFor, onResize },
   ref,
 ) {
   const spans = useMemo(() => spansFor(jobs, day, tz), [jobs, day, tz]);
@@ -85,6 +88,21 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   const target = place.kind === "confirm" ? place : null;
   const targetJob = target ? jobs.find((j) => j.id === target.jobId) : undefined;
   const hoverJob = hover ? jobs.find((j) => j.id === hover.jobId) : undefined;
+
+  // The length a block's edge is being dragged to. Kept after release until
+  // the board's next read shows the job at that length (or 5 s pass), so the
+  // block doesn't jump back while the save is in flight.
+  const [resize, setResize] = useState<{ jobId: string; mins: number; done?: boolean } | null>(null);
+  useEffect(() => {
+    if (!resize?.done) return;
+    const j = jobs.find((x) => x.id === resize.jobId);
+    if (!j || j.durationMins === resize.mins) {
+      setResize(null);
+      return;
+    }
+    const t = setTimeout(() => setResize(null), 5_000);
+    return () => clearTimeout(t);
+  }, [jobs, resize]);
 
   // Drag geometry: the vertical scroll view's window frame plus both offsets.
   const frameRef = useRef<View>(null);
@@ -219,16 +237,20 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
                   {mine.map((sp) => {
                     const lane = lanes.get(sp.id)!;
                     const left = xOf(sp.startMin, range);
-                    const width = Math.max(28, xOf(sp.endMin, range) - left - 2);
+                    const resizing = resize && resize.jobId === sp.id ? resize : null;
+                    const endMin = resizing ? sp.startMin + resizing.mins : sp.endMin;
+                    const width = Math.max(28, xOf(endMin, range) - left - 2);
                     const h = lane.lanes === 2 ? (ROW_H - 10) / 2 : ROW_H - 10;
                     const top = 5 + lane.lane * ((ROW_H - 10) / 2);
                     const color = blockColor(sp.job);
                     const armed = sp.id === armedId;
                     const movable = canArmWith(sp.job, perms);
                     const lifted = (target && target.jobId === sp.id) || (hover && hover.jobId === sp.id);
+                    const sizable = !!onResize && !TERMINAL.has(sp.job.status) && !lifted && !armed;
+                    const baseMins = sp.job.durationMins || sp.endMin - sp.startMin;
                     return (
+                      <View key={sp.id} style={StyleSheet.absoluteFill} pointerEvents="box-none">
                       <DragHandle
-                        key={sp.id}
                         movable={movable}
                         onTap={() => (movable ? onArm(sp.job) : onOpenJob(sp.id))}
                         onOpen={() => onOpenJob(sp.id)}
@@ -251,12 +273,37 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
                             {sp.job.customerName || sp.job.title}
                           </Text>
                         ) : null}
-                        {h > 48 ? (
+                        {resizing ? (
+                          <Text style={[s.blockSub, { color: C.text, fontWeight: "800" }]} numberOfLines={1}>
+                            {lengthLabel(resizing.mins)}
+                          </Text>
+                        ) : h > 48 ? (
                           <Text style={s.blockSub} numberOfLines={1}>
                             {sp.job.service}
                           </Text>
                         ) : null}
                       </DragHandle>
+                      {sizable ? (
+                        <ResizeEdge
+                          left={left + width - 10}
+                          top={top}
+                          height={h}
+                          color={color}
+                          label={`Change how long ${sp.job.customerName || sp.job.title} takes, now ${lengthLabel(baseMins)}`}
+                          onMove={(dx) => setResize({ jobId: sp.id, mins: resizedMins(sp.startMin, baseMins, dx, HOUR_W) })}
+                          onEnd={(dx) => {
+                            if (dx == null) return setResize(null);
+                            const mins = resizedMins(sp.startMin, baseMins, dx, HOUR_W);
+                            if (mins === baseMins) return setResize(null);
+                            setResize({ jobId: sp.id, mins, done: true });
+                            // Not saved (refused, cancelled at the prompt): snap back.
+                            onResize!(sp.job, mins).then((ok) => {
+                              if (!ok) setResize(null);
+                            });
+                          }}
+                        />
+                      ) : null}
+                      </View>
                     );
                   })}
                   {/* Where the dragged job would land: dashed, red when it can't go there. */}

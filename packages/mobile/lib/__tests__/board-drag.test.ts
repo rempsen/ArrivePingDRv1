@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { edgeScroll, hitCell, HEADER_H, travelled, type TimelineGeom } from "../board-drag";
+import { edgeScroll, hitCell, HEADER_H, lengthLabel, resizedMins, travelled, type TimelineGeom } from "../board-drag";
 import { GUTTER_W, HOUR_W, ROW_H } from "../timeline";
 
 const range = { startMin: 7 * 60, endMin: 19 * 60 };
@@ -38,4 +38,22 @@ describe("edgeScroll", () => {
 test("travelled", () => {
   expect(travelled(3, 4)).toBe(false);
   expect(travelled(6, 4)).toBe(true);
+});
+
+describe("resizedMins", () => {
+  // HOUR_W 120 pt: 30 pt is 15 minutes.
+  test("snaps to 15 minutes either way", () => {
+    expect(resizedMins(600, 60, 0, 120)).toBe(60);
+    expect(resizedMins(600, 60, 61, 120)).toBe(90);
+    expect(resizedMins(600, 60, -40, 120)).toBe(45);
+  });
+  test("never shorter than 15 minutes or past midnight", () => {
+    expect(resizedMins(600, 60, -1000, 120)).toBe(15);
+    expect(resizedMins(23 * 60, 30, 1000, 120)).toBe(60);
+  });
+  test("lengthLabel", () => {
+    expect(lengthLabel(45)).toBe("45 min");
+    expect(lengthLabel(120)).toBe("2 h");
+    expect(lengthLabel(150)).toBe("2 h 30 min");
+  });
 });

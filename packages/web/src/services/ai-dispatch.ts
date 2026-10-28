@@ -432,7 +432,7 @@ export async function techWorkload(
     const now = Date.now();
     for (const b of active) {
       if (!b.riderId) continue;
-      const dur = serviceDurations.get(b.serviceId) ?? 60;
+      const dur = b.durationMins ?? serviceDurations.get(b.serviceId) ?? 60;
       let remaining = dur;
       if (b.status === "in_progress" && b.startedAt) {
         const elapsed = (now - Number(b.startedAt)) / 60000;

@@ -48,7 +48,7 @@ interface Offer {
   bookingId: string;
   assignStatus: string;
   status: string;
-  duration: { mins: number; source: "history" | "service" } | null;
+  duration: { mins: number; source: "booked" | "history" | "service" } | null;
   drive: { km: number; mins: number; provider: string; locationAgeMins: number; fresh: boolean } | null;
   driveUnavailable: "" | "no_location" | "no_job_location" | "no_route";
   pay: {
@@ -245,7 +245,7 @@ export default function OfferDetails() {
               icon={<Clock color={C.brand} size={18} />}
               label="On site"
               value={o.duration ? fmtMinsShort(o.duration.mins) : "—"}
-              sub={o.duration ? (o.duration.source === "history" ? "your team's average" : "estimate") : ""}
+              sub={o.duration ? (o.duration.source === "booked" ? "booked by the office" : o.duration.source === "history" ? "your team's average" : "estimate") : ""}
             />
             {o.pay && (
               <Tile

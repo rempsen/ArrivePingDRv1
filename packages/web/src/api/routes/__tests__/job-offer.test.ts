@@ -153,6 +153,11 @@ describe("GET /bookings/:id/offer", () => {
     const { offer } = (await res.json()) as any;
     expect(offer.assignStatus).toBe("offered");
     expect(offer.duration).toEqual({ mins: 90, source: "service" });
+    // A length the office booked for this job wins over the service's.
+    await sqlClient().execute({ sql: "UPDATE bookings SET duration_mins = 240 WHERE id = ?", args: ["ofr-1"] });
+    const booked = (await (await call("GET", "/ofr-1/offer", HOLDER_USER)).json()) as any;
+    expect(booked.offer.duration).toEqual({ mins: 240, source: "booked" });
+    await sqlClient().execute({ sql: "UPDATE bookings SET duration_mins = NULL WHERE id = ?", args: ["ofr-1"] });
     // The tech has never reported a location.
     expect(offer.drive).toBeNull();
     expect(offer.driveUnavailable).toBe("no_location");

@@ -93,6 +93,33 @@ export function pulseBlocks<T extends J>(jobs: readonly T[], tz: string): { star
   return { startMin, endMin, blocks: raw.map((b) => ({ id: b.id, from: (b.s - startMin) / span, to: (Math.min(b.e, endMin) - startMin) / span, kind: b.kind })) };
 }
 
+/**
+ * Money on the day: what the jobs still on it are worth, and how much of
+ * that is from finished work. Cancelled jobs count for nothing. `null` when
+ * no job carries a price (older server, or a company that doesn't price
+ * jobs), so the tile stays hidden instead of showing $0.
+ */
+export function revenueOf(jobs: ReadonlyArray<Pick<OfficeJob, "status"> & { total?: number }>): { booked: number; done: number } | null {
+  let booked = 0;
+  let done = 0;
+  let priced = false;
+  for (const j of jobs) {
+    if (j.status === "cancelled") continue;
+    const t = Number(j.total) || 0;
+    if (t > 0) priced = true;
+    booked += t;
+    if (TERMINAL.has(j.status)) done += t;
+  }
+  return priced ? { booked: Math.round(booked * 100) / 100, done: Math.round(done * 100) / 100 } : null;
+}
+
+/** "$840", "$4.2k", "$12k" for a tile. */
+export function moneyShort(n: number): string {
+  if (n < 1000) return `$${Math.round(n)}`;
+  if (n < 10_000) return `$${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `$${Math.round(n / 1000)}k`;
+}
+
 // -------------------------------------------------------------------- crew --
 
 export type CrewKey = "available" | "enroute" | "onsite" | "busy" | "offline";

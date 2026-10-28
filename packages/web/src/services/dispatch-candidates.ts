@@ -13,7 +13,7 @@
  * off from shared/availability, "qualified" from shared/qualify, and the clash
  * sentence from shared/dispatch-fit.
  */
-import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { DEFAULT_TZ, safeTimeZone } from "../shared/tz";
@@ -98,7 +98,7 @@ export async function loadCandidates(
           requiredSkills: B.requiredSkills,
           serviceName: schema.services.name,
           category: schema.services.category,
-          durationMins: schema.services.durationMins,
+          durationMins: sql<number | null>`coalesce(${schema.bookings.durationMins}, ${schema.services.durationMins})`,
         })
         .from(B)
         .leftJoin(schema.services, eq(schema.services.id, B.serviceId))
@@ -147,7 +147,7 @@ export async function loadCandidates(
           accumulatedMs: B.accumulatedMs,
           lastResumeAt: B.lastResumeAt,
           etaMins: B.etaMins,
-          durationMins: schema.services.durationMins,
+          durationMins: sql<number | null>`coalesce(${schema.bookings.durationMins}, ${schema.services.durationMins})`,
         })
         .from(B)
         .leftJoin(schema.services, eq(schema.services.id, B.serviceId))

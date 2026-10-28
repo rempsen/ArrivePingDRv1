@@ -34,6 +34,8 @@ export interface OfficeJob {
   service: string;
   category: string;
   durationMins: number;
+  /** The job's own length when the office set one; null/absent = follows the service. */
+  durationOverride?: number | null;
   status: string;
   /** none | offered | accepted */
   assignStatus: string;
@@ -44,6 +46,10 @@ export interface OfficeJob {
   scheduledAt: string;
   riderId: string | null;
   customerName: string;
+  /** The job's own number, else the client's; "" when none (older servers omit it). */
+  customerPhone?: string;
+  /** What the client pays, subtotal + tax (older servers omit it). */
+  total?: number;
   etaMins: number | null;
   late: boolean;
   isSample: boolean;

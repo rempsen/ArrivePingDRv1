@@ -232,6 +232,13 @@
       "when": 1793201470369,
       "tag": "0032_rider_last_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793204152139,
+      "tag": "0033_booking_duration_mins",
+      "breakpoints": true
     }
   ]
 }

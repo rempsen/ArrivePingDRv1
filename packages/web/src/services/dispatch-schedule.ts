@@ -12,7 +12,7 @@
  * technician is already booked or off comes back as a question the dispatcher
  * can override.
  */
-import { and, eq, gte, isNull, lt, ne } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, ne, sql } from "drizzle-orm";
 import { tdb } from "../api/database/tenant";
 import * as schema from "../api/database/schema";
 import { DEFAULT_TZ, namedDayBounds, safeTimeZone, zonedDayKey } from "../shared/tz";
@@ -192,7 +192,7 @@ export async function loadDayLoad(companyId: string, opts: { from: string; days:
   const [rows, techRows, offRows] = await Promise.all([
     t.transaction((tx) =>
       tx
-        .select({ scheduledAt: B.scheduledAt, riderId: B.riderId, durationMins: schema.services.durationMins })
+        .select({ scheduledAt: B.scheduledAt, riderId: B.riderId, durationMins: sql<number | null>`coalesce(${B.durationMins}, ${schema.services.durationMins})` })
         .from(B)
         .leftJoin(schema.services, eq(schema.services.id, B.serviceId))
         .where(t.scope(B, and(isNull(B.deletedAt), ne(B.status, "cancelled"), gte(B.scheduledAt, start), lt(B.scheduledAt, end)))),
