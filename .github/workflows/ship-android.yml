@@ -1,0 +1,120 @@
+name: Ship Android app
+
+# Manually triggered only (GitHub's "Run workflow" button, or the
+# workflow_dispatch API). Never runs on push/PR.
+#
+# Builds the Android App Bundle (.aab) for Google Play on Expo's servers (EAS),
+# signed with the upload key EAS keeps for this app. The first run creates
+# that key; Google Play App Signing holds the real app-signing key.
+#
+# target=build-only (default): build and stop. The run summary links the
+#   .aab to download and upload in the Play Console — Google requires the
+#   very first upload to be done by hand there.
+# target=internal: build, then upload to the Internal testing track
+#   (no Google review; testers get it within minutes). Needs the
+#   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON secret and an app whose first release
+#   was already done by hand. playStatus=draft uploads a draft release
+#   instead, for an app Play still lists as a draft.
+# Promoting to Production stays a deliberate step in the Play Console.
+# Runbook: packages/mobile/docs/PLAY_STORE_RELEASE.md
+on:
+  workflow_dispatch:
+    inputs:
+      requestedBy:
+        description: "Who/what triggered this run"
+        required: false
+        default: "manual"
+      target:
+        description: "Where the build goes"
+        required: false
+        type: choice
+        options: [build-only, internal]
+        default: build-only
+      playStatus:
+        description: "Internal testing release status (internal only)"
+        required: false
+        type: choice
+        options: [completed, draft]
+        default: completed
+
+concurrency:
+  group: ship-android
+  cancel-in-progress: false
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: packages/mobile
+    env:
+      TARGET: ${{ inputs.target || 'build-only' }}
+      SUBMIT_PROFILE: ${{ inputs.playStatus == 'draft' && 'play-draft' || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Write Google Play service account key
+        # Checked before the build so a missing key fails in seconds, not after it.
+        if: env.TARGET == 'internal'
+        run: |
+          mkdir -p keys
+          secret="${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON}"
+          [ -n "$secret" ] || { echo "::error::Add the GOOGLE_PLAY_SERVICE_ACCOUNT_JSON repository secret first (docs/PLAY_STORE_RELEASE.md, step 8), or run with target build-only."; exit 1; }
+          # Stored either as the raw JSON file or base64 of it; accept both.
+          if printf '%s' "$secret" | jq -e .client_email > /dev/null 2>&1; then
+            printf '%s' "$secret" > keys/play-service-account.json
+          else
+            printf '%s' "$secret" | base64 -d > keys/play-service-account.json 2>/dev/null || true
+          fi
+          jq -e '.type == "service_account" and (.client_email | length > 0)' keys/play-service-account.json > /dev/null || {
+            echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON isn't a Google service account key (JSON)."
+            exit 1
+          }
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+
+      - name: Build Android app on Expo's servers
+        id: build
+        # --json prints the finished build to stdout (progress goes to stderr),
+        # so the next step uploads exactly this build.
+        run: |
+          bunx --yes eas-cli build --platform android --profile production --non-interactive --json > build.json
+          id="$(jq -r '.[0].id // empty' build.json)"
+          [ -n "$id" ] || { echo "::error::Couldn't read the build id from eas-cli."; cat build.json; exit 1; }
+          version="$(jq -r '.[0].appVersion // "?"' build.json)"
+          code="$(jq -r '.[0].appBuildVersion // "?"' build.json)"
+          aab="$(jq -r '.[0].artifacts.applicationArchiveUrl // .[0].artifacts.buildUrl // empty' build.json)"
+          echo "Built $version (versionCode $code): $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          {
+            echo "## ArrivePing Android $version (versionCode $code)"
+            echo
+            [ -n "$aab" ] && echo "- **App bundle (.aab):** [download]($aab)"
+            echo "- **EAS build:** https://expo.dev/accounts/nvc360/projects/nvc360v4/builds/$id"
+            echo "- Requested by: ${REQUESTED_BY}"
+            echo
+            if [ "$TARGET" = "build-only" ]; then
+              echo "Upload the .aab in the Play Console: Testing → Internal testing → Create new release."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          REQUESTED_BY: ${{ inputs.requestedBy || 'manual' }}
+
+      - name: Upload to Google Play (Internal testing)
+        if: env.TARGET == 'internal'
+        run: |
+          bunx --yes eas-cli submit --platform android --id "${{ steps.build.outputs.id }}" --profile "$SUBMIT_PROFILE" --non-interactive
+          echo "Uploaded to Google Play → Internal testing ($SUBMIT_PROFILE)." >> "$GITHUB_STEP_SUMMARY"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
