@@ -4,6 +4,7 @@ import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx } from "../middleware/auth";
 import { isSuperadmin } from "../lib/permissions";
+import { seal } from "../lib/secretbox";
 import {
   PROVIDERS, type ProviderId, hasCredentials, credentialSource, buildAuthorizeUrl,
   exchangeCode, refreshTokens, redirectUri, invalidateCredentialCache,
@@ -156,7 +157,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
     // Empty secret on update = keep existing secret (form shows it masked).
     const clientSecret = clientSecretRaw === undefined || clientSecretRaw === ""
       ? (existing?.clientSecret ?? "")
-      : clientSecretRaw;
+      : seal(clientSecretRaw);
 
     if (existing) {
       await db.update(schema.oauthAppCredentials).set({
@@ -221,8 +222,8 @@ export const integrationsRoutes = new Hono<AppEnv>()
       await sdb.update(schema.integrations).set({
         status: "connected",
         accountLabel: label,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: seal(tokens.accessToken),
+        refreshToken: seal(tokens.refreshToken),
         expiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null,
         scope: tokens.scope || cfg.scopes.join(" "),
         externalAccountId: externalId,

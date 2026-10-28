@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import * as schema from "../api/database/schema";
 import { tdb } from "../api/database/tenant";
 import { refreshTokens } from "./oauth";
+import { open, seal } from "../api/lib/secretbox";
 
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
@@ -32,19 +33,19 @@ async function freshAccessToken(row: IntegrationRow): Promise<string> {
     row.expiresAt instanceof Date
       ? row.expiresAt.getTime() - skewMs < Date.now()
       : false;
-  if (!expired && row.accessToken) return row.accessToken;
+  if (!expired && row.accessToken) return open(row.accessToken);
   if (!row.refreshToken) {
     // No refresh token and the access token is stale → force a reconnect.
-    if (row.accessToken) return row.accessToken;
+    if (row.accessToken) return open(row.accessToken);
     throw new Error("drive_not_connected");
   }
   try {
-    const t = await refreshTokens("google_drive", row.refreshToken);
+    const t = await refreshTokens("google_drive", open(row.refreshToken));
     await tdb(row.companyId).update(
       schema.integrations,
       {
-        accessToken: t.accessToken,
-        refreshToken: t.refreshToken || row.refreshToken,
+        accessToken: seal(t.accessToken),
+        refreshToken: t.refreshToken ? seal(t.refreshToken) : row.refreshToken,
         expiresAt: t.expiresAt ? new Date(t.expiresAt) : row.expiresAt,
         scope: t.scope || row.scope,
         lastSyncAt: new Date(),
