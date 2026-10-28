@@ -452,6 +452,23 @@ describe("cancellation", () => {
 });
 
 describe("after a reconnect", () => {
+  it("connecting a different QuickBooks company clears links and the job states that described them", async () => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));
+    const open = await job({ vendorBillStatus: "po_open" });
+    const paid = await job({ status: "completed", vendorBillStatus: "paid", subtradePaidAt: new Date() });
+    await setMapping(CO, "purchase_order", open.id, "700");
+    const { afterQuickbooksConnect } = await import("../quickbooks/sync");
+    await afterQuickbooksConnect(CO, "r1", "r9");
+    expect(await link("purchase_order", open.id)).toEqual([]);
+    // the open PO lived in the old books: back to "none" and queued for the new ones
+    expect((await booking(open.id)).vendorBillStatus).toBe("none");
+    expect((await tasks(open.id)).map((t) => t.kind)).toEqual(["qbo.po.create"]);
+    // what was billed and paid in the old company stays history
+    expect((await booking(paid.id)).vendorBillStatus).toBe("paid");
+    expect(await tasks(paid.id)).toEqual([]);
+    expect((await issues()).some((i) => i.kind === "realm_changed" && i.message.includes("1 job"))).toBe(true);
+  });
+
   it("re-queues the jobs that were waiting while the connection was down (I4)", async () => {
     await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO)); // only this test's jobs count
     const waiting = await job({ vendorBillStatus: "none" });

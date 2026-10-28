@@ -144,7 +144,7 @@ export const quickbooksRoutes = new Hono<AppEnv>()
       t.select(schema.qboLinks, inArray(schema.qboLinks.kind, ["vendor", "item"])),
     ]);
     const userIds = riders.map((r) => r.userId);
-    const users = userIds.length ? await db.select({ id: schema.user.id, name: schema.user.name }).from(schema.user).where(inArray(schema.user.id, userIds)) : [];
+    const users = userIds.length ? await t.select(schema.user, inArray(schema.user.id, userIds)) : [];
     const nameOf = new Map(users.map((u) => [u.id, u.name]));
     const byLocal = new Map(links.map((l) => [`${l.kind}:${l.localId}`, l.qboId]));
     // Names for the linked QuickBooks records, when QuickBooks answers.
@@ -184,12 +184,16 @@ export const quickbooksRoutes = new Hono<AppEnv>()
 
   .get("/issues", async (c) => {
     if (!(await canView(c))) return c.json({ message: "Forbidden" }, 403);
-    const rows = await db
-      .select()
-      .from(schema.qboIssues)
-      .where(and(eq(schema.qboIssues.companyId, c.get("companyId") as string), eq(schema.qboIssues.status, "open")))
-      .orderBy(desc(schema.qboIssues.createdAt))
-      .limit(200);
+    const companyId = c.get("companyId") as string;
+    // tenant transaction: qbo_issues has forced RLS, so the raw client would see nothing
+    const rows = await tx(c).transaction((t) =>
+      t
+        .select()
+        .from(schema.qboIssues)
+        .where(and(eq(schema.qboIssues.companyId, companyId), eq(schema.qboIssues.status, "open")))
+        .orderBy(desc(schema.qboIssues.createdAt))
+        .limit(200),
+    );
     return c.json({
       issues: rows.map((r) => {
         let detail: unknown = {};
@@ -205,10 +209,7 @@ export const quickbooksRoutes = new Hono<AppEnv>()
 
   .post("/issues/:id/resolve", async (c) => {
     if (!(await canEdit(c))) return c.json({ message: "Forbidden" }, 403);
-    await db
-      .update(schema.qboIssues)
-      .set({ status: "resolved", resolvedAt: new Date() })
-      .where(and(eq(schema.qboIssues.id, c.req.param("id")), eq(schema.qboIssues.companyId, c.get("companyId") as string)));
+    await tx(c).update(schema.qboIssues, { status: "resolved", resolvedAt: new Date() }, eq(schema.qboIssues.id, c.req.param("id")));
     return c.json({ ok: true });
   })
 

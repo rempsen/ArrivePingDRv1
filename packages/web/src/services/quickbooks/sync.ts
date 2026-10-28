@@ -113,7 +113,14 @@ export async function onJobEvent(event: string, b: Pick<Booking, "id" | "company
 export async function afterQuickbooksConnect(companyId: string, previousRealmId: string, realmId: string): Promise<void> {
   if (previousRealmId && realmId && previousRealmId !== realmId) {
     const dropped = await sdb.delete(schema.qboLinks).where(eq(schema.qboLinks.companyId, companyId)).returning({ id: schema.qboLinks.id });
-    await raiseIssue(companyId, "realm_changed", `QuickBooks is now connected to a different company (${realmId}, was ${previousRealmId}). ${dropped.length} saved vendor, customer, item and document links were cleared; check Mappings before going live.`, { detail: { previousRealmId, realmId, dropped: dropped.length } });
+    // An open PO lived in the old books: the job starts over in the new ones.
+    // What was billed or paid there is history and stays as it reads.
+    const reset = await sdb
+      .update(schema.bookings)
+      .set({ vendorBillStatus: "none" })
+      .where(and(eq(schema.bookings.companyId, companyId), inArray(schema.bookings.vendorBillStatus, ["po_open", "error"])))
+      .returning({ id: schema.bookings.id });
+    await raiseIssue(companyId, "realm_changed", `QuickBooks is now connected to a different company (${realmId}, was ${previousRealmId}). ${dropped.length} saved vendor, customer, item and document links were cleared and ${reset.length} job(s) with an open purchase order will get a new one; jobs already billed or paid keep their status. Check Mappings before going live.`, { detail: { previousRealmId, realmId, dropped: dropped.length, reset: reset.length } });
   }
   await requeueAfterReconnect(companyId);
 }
