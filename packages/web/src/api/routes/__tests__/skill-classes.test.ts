@@ -106,6 +106,8 @@ describe("skill classes", () => {
     expect(t1.skillClass).toBe("Tile Installation");
     const b1 = (await db.select().from(schema.bookings).where(eq(schema.bookings.id, "sc-b1")))[0]!;
     expect(b1.requiredSkillClass).toBe("Tile Installation");
+    const b2 = (await db.select().from(schema.bookings).where(eq(schema.bookings.id, "sc-b2")))[0]!;
+    expect(b2.requiredSkillClass).toBe("Carpentry");
     // Merged onto the existing class: the list doesn't grow a duplicate.
     const r = await (await call(app, "GET", "")).json();
     expect(r.classes.filter((c: any) => c.name === "Tile Installation")).toHaveLength(1);

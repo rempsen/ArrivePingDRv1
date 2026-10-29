@@ -96,7 +96,12 @@ export const skillClassRoutes = new Hono<AppEnv>()
     const t = tx(c);
     await t.update(schema.companySettings, { skillClasses: JSON.stringify(next), updatedAt: new Date() } as any, undefined);
     const techs = await t.update(schema.riders, { skillClass: target } as any, sql`lower(${schema.riders.skillClass}) = ${from.toLowerCase()}`);
-    const jobs = await t.update(schema.bookings, { requiredSkillClass: target } as any, and(sql`lower(${schema.bookings.requiredSkillClass}) = ${from.toLowerCase()}`, isNull(schema.bookings.deletedAt)));
+    // Open jobs only: finished and cancelled ones keep the class they were done under.
+    const jobs = await t.update(
+      schema.bookings,
+      { requiredSkillClass: target } as any,
+      and(sql`lower(${schema.bookings.requiredSkillClass}) = ${from.toLowerCase()}`, isNull(schema.bookings.deletedAt), sql`${schema.bookings.status} not in ('completed','cancelled')`),
+    );
     await audit({
       actorId: u.id, actorName: u.name, action: "update", entityType: "company_settings", entityId: tenantId(c),
       summary: `Renamed skill class "${from}" to "${target}" (${techs.length} technicians, ${jobs.length} jobs)`,
