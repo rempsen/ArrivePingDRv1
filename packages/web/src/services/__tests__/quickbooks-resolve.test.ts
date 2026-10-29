@@ -162,6 +162,6 @@ describe("resolveItem", () => {
 describe("settings", () => {
   it("fills defaults for anything the tenant has not set", async () => {
     await db.update(schema.integrations).set({ config: "{}" }).where(eq(schema.integrations.companyId, CO));
-    expect(await settings(CO)).toEqual({ billMode: "arriveping", taxCodeId: "", defaultItemId: "", parentCustomerId: "", shadow: true });
+    expect(await settings(CO)).toEqual({ billMode: "arriveping", taxCodeId: "", defaultItemId: "", parentCustomerId: "", shadow: true, syncSince: "" });
   });
 });
