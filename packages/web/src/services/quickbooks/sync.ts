@@ -67,10 +67,14 @@ function syncable(b: Booking | null): b is Booking {
   return !!b && !b.isSample && !b.deletedAt;
 }
 
-/** Jobs from before the tenant connected QuickBooks are the bookkeeper's history, never ours. */
-function withinSyncWindow(b: Booking, cfg: Pick<QboSettings, "syncSince">): boolean {
-  if (!cfg.syncSince) return true;
-  return b.scheduledAt.toISOString().slice(0, 10) >= cfg.syncSince;
+/**
+ * Jobs from before the tenant connected QuickBooks are the bookkeeper's
+ * history, never ours. Days are the tenant's calendar days. Cleanup of a
+ * purchase order that already exists (po.cancel) is never held back.
+ */
+async function withinSyncWindow(companyId: string, b: Booking, cfg: Pick<QboSettings, "syncSince">, kind: SyncKind): Promise<boolean> {
+  if (kind === "po.cancel" || !cfg.syncSince) return true;
+  return tenantDate(b.scheduledAt, await companyTimezone(companyId)) >= cfg.syncSince;
 }
 
 /** One pending task per job and kind: the partial unique index on scheduled_tasks decides, not a read. */
@@ -90,7 +94,7 @@ export async function enqueueQboSync(companyId: string, bookingId: string, kind:
     const b = await loadBooking(companyId, bookingId);
     if (!syncable(b)) return;
     if (kind !== "po.cancel" && !b.riderId) return;
-    if (!withinSyncWindow(b, await settings(companyId))) return;
+    if (!(await withinSyncWindow(companyId, b, await settings(companyId), kind))) return;
     await enqueueTask(companyId, bookingId, kind, COALESCE_MS);
   } catch (e) {
     console.error("[qbo] enqueue failed", kind, bookingId, e);
@@ -121,7 +125,7 @@ export async function afterQuickbooksConnect(companyId: string, previousRealmId:
   // The first connection fixes the day the sync starts from; a reconnect keeps it.
   if (!(await settings(companyId)).syncSince) {
     const { patchConfig } = await import("./sweep");
-    await patchConfig(companyId, { syncSince: new Date().toISOString().slice(0, 10) });
+    await patchConfig(companyId, { syncSince: tenantDate(new Date(), await companyTimezone(companyId)) });
   }
   if (previousRealmId && realmId && previousRealmId !== realmId) {
     const dropped = await sdb.delete(schema.qboLinks).where(eq(schema.qboLinks.companyId, companyId)).returning({ id: schema.qboLinks.id });
@@ -146,9 +150,10 @@ export async function afterQuickbooksConnect(companyId: string, previousRealmId:
 export async function requeueAfterReconnect(companyId: string, windowDays = 90): Promise<number> {
   if (!(await isQboActive(companyId))) return 0;
   const cfg = await settings(companyId);
-  const since = new Date(Math.max(Date.now() - windowDays * 86400_000, cfg.syncSince ? new Date(`${cfg.syncSince}T00:00:00Z`).getTime() : 0));
+  const since = new Date(Date.now() - windowDays * 86400_000);
+  const tz = await companyTimezone(companyId);
   const rows = await sdb
-    .select({ id: schema.bookings.id, status: schema.bookings.status, vendorBillStatus: schema.bookings.vendorBillStatus })
+    .select({ id: schema.bookings.id, status: schema.bookings.status, vendorBillStatus: schema.bookings.vendorBillStatus, scheduledAt: schema.bookings.scheduledAt })
     .from(schema.bookings)
     .where(
       and(
@@ -166,6 +171,7 @@ export async function requeueAfterReconnect(companyId: string, windowDays = 90):
     );
   let n = 0;
   for (const r of rows) {
+    if (cfg.syncSince && tenantDate(r.scheduledAt, tz) < cfg.syncSince) continue;
     const kind: SyncKind = r.status === "completed" ? "bill.create" : "po.create";
     if (await enqueueTask(companyId, r.id, kind, COALESCE_MS)) n++;
   }
@@ -393,7 +399,7 @@ async function run(companyId: string, bookingId: string, kind: SyncKind): Promis
   const b = await loadBooking(companyId, bookingId);
   if (!syncable(b)) return;
   const cfg = await settings(companyId);
-  if (!withinSyncWindow(b, cfg)) return;
+  if (!(await withinSyncWindow(companyId, b, cfg, kind))) return;
   if (kind === "po.cancel") return cancelPurchaseOrder(companyId, b);
   if (!b.riderId || b.status === "cancelled") return;
   const input = await poInput(companyId, b, cfg);
