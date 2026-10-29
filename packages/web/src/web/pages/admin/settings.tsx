@@ -8,7 +8,7 @@ import { PageWrap, TenantLogo } from "../../components/brand";
 import { PageHead } from "./shell";
 import { Field, inputCls, BtnPrimary, ConfirmModal } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
-import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Upload, AlertTriangle, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard, UserCheck, Receipt } from "lucide-react";
+import { Save, Building2, Check, Calendar, Copy, RefreshCw, ExternalLink, ChevronDown, MapPin, Sparkles, Upload, AlertTriangle, Plug, KeyRound, ScrollText, Lock, Eye, EyeOff, Tag, Plus, Trash2, Pencil, X, Star, CalendarClock, Clock3, CreditCard, UserCheck, Receipt, Wrench } from "lucide-react";
 import { useWorkerNoun, useJobNoun, useBrand } from "../../lib/use-brand";
 import { getIndustryPreset, industryLabel } from "../../../services/industry-presets";
 import { parsePlacesMode, resolveDirectoryVocab, type DirectoryPlacesMode } from "../../../shared/directory-vocab";
@@ -18,6 +18,7 @@ import AutomationPage from "./automation";
 import IntegrationsPage from "./integrations";
 import ApiAccessPage from "./api-access";
 import AuditPage from "./audit";
+import SkillClassesTab from "./skill-classes";
 import PaymentsSettingsTab from "./payments-settings";
 import BillingSettingsTab from "./billing-settings";
 import { CompanyCheckCard } from "./company-check";
@@ -1149,6 +1150,7 @@ type SettingsSection = {
 
 const ALL_SECTIONS: SettingsSection[] = [
   { key: "company", label: "Company", icon: Building2, render: () => <CompanySettingsTab /> },
+  { key: "skill-classes", label: "Skill Classes", icon: Wrench, render: () => <SkillClassesTab />, need: "techs:edit" },
   // Money and keys stay with admins (api/lib/office-access.ts).
   { key: "billing", label: "Billing", icon: Receipt, render: () => <BillingSettingsTab />, need: "admin" },
   { key: "payments", label: "Payments", icon: CreditCard, render: () => <PaymentsSettingsTab />, need: "admin" },

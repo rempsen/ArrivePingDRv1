@@ -5,6 +5,7 @@ import { requireAuth, tx } from "../middleware/auth";
 import { z } from "zod";
 import { jsonBody, shortText, longText } from "../lib/validate";
 import type { AppEnv } from "../env";
+import { parseSkillClasses } from "../../shared/skill-classes";
 import {
   AUTOMATION_ACTIONS,
   AUTOMATION_TRIGGERS,
@@ -66,7 +67,12 @@ export const automationRoutes = new Hono<AppEnv>()
       .filter((r) => r.approval === "active")
       .map((r) => ({ id: r.id, name: names.get(r.userId) ?? "Technician", skillClass: r.skillClass, status: r.status }))
       .sort((a, b) => a.name.localeCompare(b.name));
-    const skillClasses = Array.from(new Set(riders.map((r) => r.skillClass).filter(Boolean))).sort();
+    // The company's own list (Settings → Skill Classes) in its order, then any
+    // class a technician still carries that's no longer listed.
+    const listed = parseSkillClasses((await t.selectOne(schema.companySettings))?.skillClasses);
+    const keys = new Set(listed.map((n) => n.toLowerCase()));
+    const extra = Array.from(new Set(riders.map((r) => (r.skillClass ?? "").trim()).filter((n) => n && !keys.has(n.toLowerCase())))).sort();
+    const skillClasses = [...listed, ...extra];
     return c.json(
       {
         techs,

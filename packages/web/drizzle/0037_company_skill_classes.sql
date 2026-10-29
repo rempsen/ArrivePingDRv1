@@ -1,0 +1,1 @@
+ALTER TABLE "company_settings" ADD COLUMN "skill_classes" text DEFAULT '' NOT NULL;

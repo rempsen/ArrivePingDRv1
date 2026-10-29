@@ -783,6 +783,9 @@ export const companySettings = pgTable("company_settings", {
   companyId: text("company_id").notNull().default("default"),
   name: text("name").notNull().default("ArrivePing by NVC360"),
   legalName: text("legal_name").notNull().default(""),
+  // The company's own skill classes, a JSON array of names in display order
+  // (shared/skill-classes.ts). "" = never set: the built-in defaults.
+  skillClasses: text("skill_classes").notNull().default(""),
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
   address: text("address").notNull().default("423 Main Street, Winnipeg, Manitoba, Canada"),

@@ -11,6 +11,7 @@ import { sendPush } from "../../services/push";
 import { publishMsg, subscribeMsg } from "../../services/realtime";
 import { z } from "zod";
 import { jsonBody, shortText, longText, id as idField } from "../lib/validate";
+import { parseSkillClasses } from "../../shared/skill-classes";
 import type { AppEnv } from "../env";
 
 type SessionUser = { id: string; role?: string; name: string };
@@ -458,19 +459,26 @@ export const messagesRoutes = new Hono<AppEnv>()
     return c.json({ tags: filtered }, 200);
   })
 
-  // GET /api/messages/skill-classes — distinct skill classes across all riders in tenant
+  // GET /api/messages/skill-classes — the company's skill classes (Settings →
+  // Skill Classes, in its order) with how many technicians each has, then any
+  // class technicians still carry that is no longer in the list.
   .get("/skill-classes", requireAdmin, async (c) => {
     const t = tx(c);
     const riders = await t.select(schema.riders);
-    // collect distinct skill classes
-    const classMap = new Map<string, number>();
+    const counts = new Map<string, { name: string; count: number }>();
     for (const r of riders) {
       const sc = (r.skillClass ?? "General").trim();
-      if (sc) classMap.set(sc, (classMap.get(sc) ?? 0) + 1);
+      if (!sc) continue;
+      const k = sc.toLowerCase();
+      counts.set(k, { name: counts.get(k)?.name ?? sc, count: (counts.get(k)?.count ?? 0) + 1 });
     }
-    const skillClasses = Array.from(classMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const settings = await t.selectOne(schema.companySettings);
+    const listed = parseSkillClasses(settings?.skillClasses);
+    const keys = new Set(listed.map((n) => n.toLowerCase()));
+    const skillClasses = [
+      ...listed.map((name) => ({ name, count: counts.get(name.toLowerCase())?.count ?? 0 })),
+      ...[...counts.entries()].filter(([k]) => !keys.has(k)).map(([, v]) => ({ ...v, unlisted: true })).sort((a, b) => a.name.localeCompare(b.name)),
+    ];
     return c.json({ skillClasses }, 200);
   })
 
