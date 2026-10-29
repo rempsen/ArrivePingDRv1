@@ -56,7 +56,7 @@ const REPORTS: { id: ReportId; label: string; icon: any; desc: string }[] = [
   { id: "revenue", label: "Revenue & Sales", icon: DollarSign, desc: "Income, AOV, margin by day & service" },
   { id: "tech-performance", label: "Tech Performance", icon: Wrench, desc: "Jobs, revenue, ratings per technician" },
   { id: "job-status", label: "Job Status", icon: ClipboardList, desc: "Completion, pipeline & priority mix" },
-  { id: "payroll", label: "Payroll & Payouts", icon: Wallet, desc: "Gross, fees, net & pending by tech" },
+  { id: "payroll", label: "Payroll & Payouts", icon: Wallet, desc: "Net pay by tech; QuickBooks POs, bills & payments" },
   { id: "catalog", label: "Catalog Margin", icon: Boxes, desc: "Item revenue, COGS & margin" },
   { id: "clients", label: "Client Activity", icon: Users, desc: "Top clients, new vs returning" },
   { id: "invoices-ar", label: "Invoices / AR", icon: Receipt, desc: "Collected, outstanding & aging" },
@@ -260,6 +260,11 @@ export default function ReportsPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {d.kpis.map((k: any, i: number) => <KPI key={i} {...k} />)}
               </div>
+              {d.source === "quickbooks" && (
+                <p className="text-xs text-slate-500">
+                  Technicians are paid through QuickBooks: each job counts as <em>No PO yet</em>, <em>PO open</em>, <em>Billed</em> or <em>Paid</em> from its QuickBooks paperwork. Jobs scheduled in the range, by scheduled date.
+                </p>
+              )}
 
               {/* charts */}
               <div className={`grid gap-4 ${d.series2 ? "lg:grid-cols-[1.6fr_1fr]" : ""}`}>
