@@ -78,7 +78,21 @@ const popupResult = (ok: boolean, msg: string) => `<!doctype html><html><head><m
 
 export const integrationsRoutes = new Hono<AppEnv>()
   .get("/", requireAuth, async (c) => {
-    const rows = await tx(c).select(schema.integrations);
+    const t = tx(c);
+    let rows = await t.select(schema.integrations);
+    // Every company gets a card for every provider. The rows used to exist
+    // only for the seeded first company, so every later tenant saw an
+    // empty page with nothing to connect.
+    const have = new Set(rows.map((r) => r.provider));
+    const missing = (Object.keys(PROVIDERS) as ProviderId[]).filter((p) => !have.has(p));
+    if (missing.length) {
+      // two first reads at once (two tabs, two people) both get here; the
+      // unique index on (company, provider) makes the second insert a no-op
+      await t.transaction((tx) =>
+        tx.insert(schema.integrations).values(missing.map((provider) => ({ companyId: t.companyId, provider, accountLabel: "" }))).onConflictDoNothing(),
+      );
+      rows = await t.select(schema.integrations);
+    }
     const enriched = await Promise.all(rows.map(async (r) => ({
       id: r.id,
       provider: r.provider,

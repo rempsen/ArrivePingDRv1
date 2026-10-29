@@ -165,3 +165,54 @@ describe("reconnecting (I4, I6)", () => {
     expect(issue!.kind).toBe("realm_changed");
   });
 });
+
+describe("GET /integrations", () => {
+  it("offers every provider to a company that has never connected anything", async () => {
+    const CO2 = "oa-co-fresh";
+    await db.insert(schema.companies).values({ id: CO2, name: "Fresh Co", kind: "customer" } as never);
+    const fresh = new Hono<AppEnv>().use("*", async (c, next) => {
+      c.set("companyId", CO2);
+      c.set("requestId", "oa-req2");
+      c.set("user", { id: "oa-admin2", role: "admin", email: "b@oa.test", name: "B" } as never);
+      return next();
+    });
+    fresh.route("/integrations", integrationsRoutes);
+    const r = await fresh.request("/integrations");
+    expect(r.status).toBe(200);
+    const list = ((await r.json()) as any).integrations as { provider: string; status: string }[];
+    expect(list.map((i) => i.provider).sort()).toEqual(Object.keys(realOauth.PROVIDERS).sort());
+    expect(list.every((i) => i.status === "disconnected")).toBe(true);
+    // a second read creates nothing more
+    const again = ((await (await fresh.request("/integrations")).json()) as any).integrations;
+    expect(again.length).toBe(list.length);
+    const rows = await db.select().from(schema.integrations).where(eq(schema.integrations.companyId, CO2));
+    expect(rows.length).toBe(list.length);
+  });
+});
+
+describe("integrations are unique per company and provider", () => {
+  it("a second row for the same provider is refused by the database", async () => {
+    const CO3 = "oa-co-uniq";
+    await db.insert(schema.companies).values({ id: CO3, name: "Uniq Co", kind: "customer" } as never);
+    await db.insert(schema.integrations).values({ companyId: CO3, provider: "xero" } as never);
+    await expect(async () => {
+      await db.insert(schema.integrations).values({ companyId: CO3, provider: "xero" } as never);
+    }).toThrow();
+  });
+
+  it("two first reads at once still leave one card per provider", async () => {
+    const CO4 = "oa-co-race";
+    await db.insert(schema.companies).values({ id: CO4, name: "Race Co", kind: "customer" } as never);
+    const race = new Hono<AppEnv>().use("*", async (c, next) => {
+      c.set("companyId", CO4);
+      c.set("requestId", "oa-req4");
+      c.set("user", { id: "oa-admin4", role: "admin", email: "d@oa.test", name: "D" } as never);
+      return next();
+    });
+    race.route("/integrations", integrationsRoutes);
+    const [a, b] = await Promise.all([race.request("/integrations"), race.request("/integrations")]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    const rows = await db.select().from(schema.integrations).where(eq(schema.integrations.companyId, CO4));
+    expect(rows.length).toBe(Object.keys(realOauth.PROVIDERS).length);
+  });
+});

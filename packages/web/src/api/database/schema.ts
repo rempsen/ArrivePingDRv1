@@ -278,6 +278,8 @@ export const integrations = pgTable("integrations", {
   createdAt: now(),
 }, (t) => ({
   companyIdx: index("integ_company_idx").on(t.companyId),
+  // one card per provider per company (the Integrations page creates the missing ones on first read)
+  providerUq: uniqueIndex("integ_company_provider_uq").on(t.companyId, t.provider),
 }));
 
 /** CompanyCam-style job photos */
