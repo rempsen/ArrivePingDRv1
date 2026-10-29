@@ -139,6 +139,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
  * ------------------------------------------------------------------------- */
 import { db } from "../api/database";
 import { oauthAppCredentials } from "../api/database/schema";
+import { open } from "../api/lib/secretbox";
 
 let _credCache: { at: number; map: Record<string, { clientId: string; clientSecret: string; enabled: boolean }> } | null = null;
 export function invalidateCredentialCache() { _credCache = null; }
@@ -150,7 +151,7 @@ async function loadDbCredentials() {
     // oauth_app_credentials is a GLOBAL table (see GLOBAL_TABLES) — plain db.
     const rows = await db.select().from(oauthAppCredentials);
     for (const r of rows) {
-      map[r.provider] = { clientId: r.clientId, clientSecret: r.clientSecret, enabled: r.enabled };
+      map[r.provider] = { clientId: r.clientId, clientSecret: open(r.clientSecret), enabled: r.enabled };
     }
   } catch { /* table may not exist yet */ }
   _credCache = { at: Date.now(), map };

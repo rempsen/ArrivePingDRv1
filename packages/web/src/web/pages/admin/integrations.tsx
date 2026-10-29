@@ -10,6 +10,7 @@ import { Modal } from "../../components/modal";
 import { RefreshCw, Check, Plug, Link2Off, Settings, Copy, AlertTriangle, Clock, ShieldCheck, Save, Trash2, Eye, EyeOff, UploadCloud, ExternalLink } from "lucide-react";
 import { useWorkerNoun, useCustomerNoun } from "../../lib/use-brand";
 import { BrandIcon } from "../../components/brand-icons";
+import { QuickBooksSettingsModal, useQboStatus } from "./quickbooks-settings";
 
 const CATEGORY_ORDER = ["Accounting", "Email", "Calendar", "File Storage", "Photos", "Productivity", "Service"];
 
@@ -21,11 +22,14 @@ export default function IntegrationsPage() {
   const [comingSoon, setComingSoon] = useState<any>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [driveExport, setDriveExport] = useState(false);
+  const [qboSettings, setQboSettings] = useState(false);
 
   const list = useQuery({
     queryKey: ["integrations"],
     queryFn: async () => ok(await api.integrations.$get()),
   });
+  const qboConnected = ((list.data?.integrations ?? []) as any[]).some((i) => i.provider === "quickbooks" && i.status === "connected");
+  const qbo = useQboStatus(qboConnected);
 
   const disconnect = useMutation({
     mutationFn: async (id: string) => ok(await api.integrations[":id"].disconnect.$post({ param: { id } })),
@@ -64,6 +68,25 @@ export default function IntegrationsPage() {
     }
   }
 
+  // Intuit sends people here from its own "Connect"/"Disconnect" buttons
+  // (App details → Connect/Reconnect URL and Disconnect URL).
+  useEffect(() => {
+    if (!list.data) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("provider") !== "quickbooks") return;
+    const it = ((list.data.integrations ?? []) as any[]).find((i) => i.provider === "quickbooks");
+    window.history.replaceState(null, "", window.location.pathname);
+    if (!it) return;
+    if (params.get("disconnected") === "1") {
+      if (it.status === "connected") disconnect.mutate(it.id);
+    } else if (it.status !== "connected") {
+      void connect(it);
+    } else {
+      setQboSettings(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list.data]);
+
   if (list.isLoading) return <FullLoader label="Loading integrations…" />;
   const items = (list.data?.integrations ?? []) as any[];
   const connected = items.filter((i) => i.status === "connected").length;
@@ -90,7 +113,7 @@ export default function IntegrationsPage() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {g.items.map((it) => {
                 const on = it.status === "connected";
-                const err = it.status === "error";
+                const err = it.status === "error" || it.status === "needs_reconnect";
                 const soon = !on && !err && !it.available;
                 return (
                   <div key={it.id} className="nvc-card flex flex-col p-4">
@@ -111,6 +134,15 @@ export default function IntegrationsPage() {
                         {it.lastSyncAt && <span className="block text-slate-600">Synced {new Date(it.lastSyncAt).toLocaleString()}</span>}
                       </p>
                     )}
+                    {it.provider === "quickbooks" && qbo.data?.featureOff && (
+                      <p className="mb-3 text-xs text-slate-500">Connected. Ask ArrivePing to switch on QuickBooks sync for your account.</p>
+                    )}
+                    {it.provider === "quickbooks" && qbo.data?.status?.shadow && (
+                      <p className="mb-3 text-xs text-amber-300/80">Shadow mode: nothing is written to QuickBooks yet.</p>
+                    )}
+                    {it.provider === "quickbooks" && it.status === "needs_reconnect" && (
+                      <p className="mb-3 text-xs text-amber-300">QuickBooks needs to be reconnected.</p>
+                    )}
                     {soon && (
                       <p className="mb-3 text-xs text-slate-500">Available soon — your admin is finishing setup for this tool.</p>
                     )}
@@ -125,6 +157,14 @@ export default function IntegrationsPage() {
                             <button onClick={() => setDriveExport(true)}
                               className="nvc-btn nvc-btn-sm flex-1 bg-brand/15 text-brand hover:bg-brand/25">
                               <UploadCloud className="h-3.5 w-3.5" /> Export data
+                            </button>
+                          ) : it.provider === "quickbooks" && qbo.data && !qbo.data.featureOff ? (
+                            <button onClick={() => setQboSettings(true)}
+                              className="nvc-btn nvc-btn-sm flex-1 bg-brand/15 text-brand hover:bg-brand/25">
+                              <Settings className="h-3.5 w-3.5" /> Settings
+                              {qbo.data.status && qbo.data.status.openIssues > 0 && (
+                                <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 text-[10px] text-amber-300">{qbo.data.status.openIssues}</span>
+                              )}
                             </button>
                           ) : (
                             <button onClick={() => sync.mutate(it.id)} disabled={sync.isPending}
@@ -165,6 +205,7 @@ export default function IntegrationsPage() {
 
       <ComingSoonModal item={comingSoon} onClose={() => setComingSoon(null)} isOwner={isOwner} onSetup={() => { setComingSoon(null); setShowSetup(true); }} />
       {isOwner && <SetupModal open={showSetup} onClose={() => setShowSetup(false)} />}
+      <QuickBooksSettingsModal open={qboSettings} onClose={() => { setQboSettings(false); qc.invalidateQueries({ queryKey: ["qbo-status"] }); }} />
       <DriveExportModal
         open={driveExport}
         onClose={() => { setDriveExport(false); qc.invalidateQueries({ queryKey: ["integrations"] }); }}

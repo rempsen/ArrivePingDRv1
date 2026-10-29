@@ -33,6 +33,7 @@ import { describe, it, expect, beforeAll } from "bun:test";
 import { Hono } from "hono";
 import type { AppEnv } from "../../env";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -290,6 +291,17 @@ describe("GET /api/me/earnings", () => {
 
     const stamps = body.jobs.map((j) => j.finishedAt ?? 0);
     expect([...stamps].sort((a, b) => b - a)).toEqual(stamps);
+  });
+
+  it("tells the tech when their bill for a job was paid in QuickBooks", async () => {
+    await db.update(schema.bookings).set({ vendorBillStatus: "paid", subtradePaidAt: new Date(now - 12 * 3600_000) }).where(eq(schema.bookings.id, "eb-acme-1"));
+    const { body } = await call({ user: TECH, company: ACME });
+    const paid = body.jobs.find((j) => j.id === "eb-acme-1")!;
+    expect(paid.vendorBillStatus).toBe("paid");
+    expect(paid.subtradePaidAt).toBe(now - 12 * 3600_000);
+    const other = body.jobs.find((j) => j.id === "eb-acme-2")!;
+    expect(other.vendorBillStatus).toBe("none");
+    expect(other.subtradePaidAt).toBeNull();
   });
 
   it("keeps ratings per employer instead of blending them", async () => {

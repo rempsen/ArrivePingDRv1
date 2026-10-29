@@ -4,6 +4,10 @@ import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth, tx } from "../middleware/auth";
 import { isSuperadmin } from "../lib/permissions";
+import { open, seal } from "../lib/secretbox";
+import { putState, takeState } from "../lib/oauth-state";
+import { quickbooksCompanyName } from "../../services/quickbooks/company";
+import { qboFetch, QboError } from "../../services/quickbooks/client";
 import {
   PROVIDERS, type ProviderId, hasCredentials, credentialSource, buildAuthorizeUrl,
   exchangeCode, refreshTokens, redirectUri, invalidateCredentialCache,
@@ -60,20 +64,6 @@ const DriveSettingsBody = z
   .partial()
   .refine((b) => Object.keys(b).length > 0, { error: "Nothing to update" });
 
-// short-lived state store for the OAuth handshake (CSRF + which integration row)
-const stateStore = new Map<string, { integrationId: string; provider: ProviderId; exp: number }>();
-function putState(integrationId: string, provider: ProviderId): string {
-  const s = crypto.randomUUID().replace(/-/g, "");
-  stateStore.set(s, { integrationId, provider, exp: Date.now() + 10 * 60_000 });
-  return s;
-}
-function takeState(s: string) {
-  const v = stateStore.get(s);
-  if (!v) return null;
-  stateStore.delete(s);
-  if (v.exp < Date.now()) return null;
-  return v;
-}
 
 function metaFor(provider: string) {
   const cfg = (PROVIDERS as any)[provider];
@@ -156,7 +146,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
     // Empty secret on update = keep existing secret (form shows it masked).
     const clientSecret = clientSecretRaw === undefined || clientSecretRaw === ""
       ? (existing?.clientSecret ?? "")
-      : clientSecretRaw;
+      : seal(clientSecretRaw);
 
     if (existing) {
       await db.update(schema.oauthAppCredentials).set({
@@ -191,7 +181,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
       // Not yet enabled by the platform owner — tenant sees a friendly "coming soon".
       return c.json({ message: "not_available", provider }, 412);
     }
-    const state = putState(row.id, provider);
+    const state = await putState(row.id, provider, c.get("companyId") as string);
     const url = (await buildAuthorizeUrl(provider, state))!;
     return c.json({ authorizeUrl: url }, 200);
   })
@@ -205,29 +195,43 @@ export const integrationsRoutes = new Hono<AppEnv>()
     c.header("Content-Type", "text/html; charset=utf-8");
     if (err) return c.body(popupResult(false, `${provider}: ${err}`));
     if (!code || !state) return c.body(popupResult(false, "Missing authorization code."));
-    const st = takeState(state);
+    const st = await takeState(state);
     if (!st || st.provider !== provider) return c.body(popupResult(false, "Session expired. Try again."));
     try {
       const { tokens, raw } = await exchangeCode(provider, code);
       const cfg = PROVIDERS[provider];
       let label = cfg.name, externalId = "";
-      if (cfg.accountInfo) {
+      if (provider === "quickbooks") {
+        // Intuit sends the company (realm) id on the redirect, not in the
+        // token response. Without it every API call would be unaddressed.
+        externalId = c.req.query("realmId") ?? "";
+        label = (await quickbooksCompanyName(externalId, tokens.accessToken)) || "QuickBooks Company";
+      } else if (cfg.accountInfo) {
         const info = await cfg.accountInfo(tokens, raw);
         label = info.label; externalId = info.externalId;
       }
       // Pre-tenant: the provider redirect carries no request/tenant context,
       // only the integration row id the OAuth-state map resolved. `sdb` is
       // the deliberate escape hatch for exactly this.
+      const [prior] = await sdb.select({ externalAccountId: schema.integrations.externalAccountId }).from(schema.integrations).where(eq(schema.integrations.id, st.integrationId));
       await sdb.update(schema.integrations).set({
         status: "connected",
         accountLabel: label,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: seal(tokens.accessToken),
+        refreshToken: seal(tokens.refreshToken),
         expiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null,
         scope: tokens.scope || cfg.scopes.join(" "),
         externalAccountId: externalId,
         lastSyncAt: new Date(),
       }).where(eq(schema.integrations.id, st.integrationId));
+      if (provider === "quickbooks") {
+        try {
+          const { afterQuickbooksConnect } = await import("../../services/quickbooks/sync");
+          await afterQuickbooksConnect(st.companyId, prior?.externalAccountId ?? "", externalId);
+        } catch (e) {
+          console.error("[qbo] post-connect", e instanceof Error ? e.message : e);
+        }
+      }
       return c.body(popupResult(true, `${cfg.name} linked as ${label}.`));
     } catch (e: any) {
       await sdb.update(schema.integrations).set({ status: "error" }).where(eq(schema.integrations.id, st.integrationId));
@@ -397,11 +401,17 @@ export const integrationsRoutes = new Hono<AppEnv>()
     const provider = row.provider as ProviderId;
     if (row.status !== "connected") return c.json({ message: "Not connected" }, 400);
     try {
-      if (row.refreshToken && (await hasCredentials(provider))) {
-        const t = await refreshTokens(provider, row.refreshToken);
+      if (provider === "quickbooks") {
+        // The QuickBooks client refreshes on use, keeps the rotated refresh
+        // token sealed, and marks a revoked connection needs_reconnect (which
+        // the reconnect flow, not a retry, clears).
+        await qboFetch(c.get("companyId") as string, `/companyinfo/${row.externalAccountId}`);
+        await t9.update(schema.integrations, { lastSyncAt: new Date() }, eq(schema.integrations.id, row.id));
+      } else if (row.refreshToken && (await hasCredentials(provider))) {
+        const t = await refreshTokens(provider, open(row.refreshToken));
         await t9.update(schema.integrations, {
-          accessToken: t.accessToken,
-          refreshToken: t.refreshToken || row.refreshToken,
+          accessToken: seal(t.accessToken),
+          refreshToken: t.refreshToken ? seal(t.refreshToken) : row.refreshToken,
           expiresAt: t.expiresAt ? new Date(t.expiresAt) : row.expiresAt,
           scope: t.scope || row.scope,
           lastSyncAt: new Date(),
@@ -412,7 +422,7 @@ export const integrationsRoutes = new Hono<AppEnv>()
       const r = await t9.selectOne(schema.integrations, eq(schema.integrations.id, row.id));
       return c.json({ integration: r, ok: true }, 200);
     } catch (e: any) {
-      await t9.update(schema.integrations, { status: "error" }, eq(schema.integrations.id, row.id));
+      if (!(e instanceof QboError && e.code === "needs_reconnect")) await t9.update(schema.integrations, { status: "error" }, eq(schema.integrations.id, row.id));
       // 4xx, not 502 — see the drive/export handler above for why: Cloudflare
       // eats 502/504 bodies and replaces them with an HTML error page.
       return c.json({ message: e?.message || "sync_failed" }, 422);

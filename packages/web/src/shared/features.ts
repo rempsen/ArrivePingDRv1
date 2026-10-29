@@ -98,6 +98,14 @@ export const FEATURES = [
     group: "Connections",
   },
   {
+    key: "integrations.quickbooks",
+    label: "QuickBooks sync",
+    description: "Mirror assigned jobs as purchase orders and subtrade bills in the company's QuickBooks, and mark jobs paid when QuickBooks pays them.",
+    kind: "entitlement",
+    group: "Connections",
+    kindDefaults: { customer: false, demo: false, test: false, internal: true },
+  },
+  {
     key: "api.access",
     label: "API & MCP",
     description: "API keys and the MCP server for the company's own tools and agents.",
@@ -153,7 +161,8 @@ export const FEATURE_ROUTES: { prefix: string; feature: FeatureKey; except?: str
   { prefix: "/api/maintenance", feature: "maintenance.plans" },
   { prefix: "/api/payouts", feature: "payouts.tech_pay" },
   { prefix: "/api/automation", feature: "automation.rules" },
-  { prefix: "/api/integrations", feature: "integrations.apps", except: ["/api/integrations/oauth/callback/"] },
+  { prefix: "/api/integrations/quickbooks", feature: "integrations.quickbooks", except: ["/api/integrations/quickbooks/webhook"] },
+  { prefix: "/api/integrations", feature: "integrations.apps", except: ["/api/integrations/oauth/callback/", "/api/integrations/quickbooks/webhook"] },
   { prefix: "/api/api-keys", feature: "api.access" },
   { prefix: "/api/mcp", feature: "api.access" },
 ];

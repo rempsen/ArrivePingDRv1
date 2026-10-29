@@ -40,6 +40,8 @@ export type JobEventKind =
   | "checklist_completed"
   | "message"
   | "review_submitted"
+  // accounting sync (services/quickbooks): internal only
+  | "accounting"
   // a company-defined milestone (services/custom-milestones.ts); the label is
   // the milestone's own name and visibility is the milestone's own setting
   | "milestone";
@@ -83,6 +85,7 @@ const EVENT_POLICY: Record<JobEventKind, { visible: boolean; label: string }> = 
   milestone: { visible: false, label: "Milestone reached" },
   message: { visible: false, label: "Message sent" },
   review_submitted: { visible: false, label: "Review submitted" },
+  accounting: { visible: false, label: "Accounting" },
 };
 
 export async function logJobEvent(opts: {

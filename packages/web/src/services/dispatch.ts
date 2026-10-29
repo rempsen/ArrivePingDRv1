@@ -497,6 +497,16 @@ export async function fireEvent(event: NvcEvent, bookingId: string) {
     } catch (e) {
       console.error("[dispatch] custom milestone hook failed", event, e);
     }
+
+    // QuickBooks Sync (services/quickbooks/sync.ts): queue the purchase order
+    // / bill / cancellation for tenants with the switch on. It only queues a
+    // task, so QuickBooks being down can't touch the job.
+    try {
+      const { onJobEvent } = await import("./quickbooks/sync");
+      await onJobEvent(event, b);
+    } catch (e) {
+      console.error("[dispatch] quickbooks hook failed", event, e);
+    }
   } catch (e) {
     console.error("[dispatch] fireEvent failed", event, e);
   }

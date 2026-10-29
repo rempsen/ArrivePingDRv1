@@ -458,6 +458,10 @@ export const meRoutes = new Hono<AppEnv>()
       paidKm: number;
       /** $0 because no rate of any kind is set and there was no per-unit pay. */
       unrated: boolean;
+      /** QuickBooks Sync: none | po_open | billed | paid | error (see bookings.vendorBillStatus). */
+      vendorBillStatus: string;
+      /** When the company paid the tech's bill in QuickBooks (epoch ms), if it has. */
+      subtradePaidAt: number | null;
     };
     type PayoutRow = {
       id: string;
@@ -552,6 +556,8 @@ export const meRoutes = new Hono<AppEnv>()
             flatPay: pay.flatPay,
             paidKm: pay.paidKm,
             unrated: pay.unrated,
+            vendorBillStatus: b.vendorBillStatus ?? "none",
+            subtradePaidAt: b.subtradePaidAt ? Number(b.subtradePaidAt) : null,
             // Pre-tax job value. `price`/`total` includes the GST/HST the company
             // collected for the government, so the Earnings screen was showing a
             // tech $1,130 of "earnings" on a $1,000 job — and payouts are computed

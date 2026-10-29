@@ -629,6 +629,9 @@ export const jobSearchRoutes = new Hono<AppEnv>()
           breakdown: (() => {
             try { return JSON.parse(b.techPayBreakdown || "null"); } catch { return null; }
           })(),
+          // QuickBooks Sync: where the subtrade's bill stands (none | po_open | billed | paid | error)
+          vendorBillStatus: b.vendorBillStatus,
+          subtradePaidAt: b.subtradePaidAt,
         },
       },
       200,

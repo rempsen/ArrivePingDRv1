@@ -56,6 +56,7 @@ const GLOBAL_TABLES = new Set<string>([
   "idempotency_keys", // payment/webhook dedup, keyed by provider event id
   "companies", // GLOBAL tenant registry / allow-list (managed by superadmin)
   "oauth_app_credentials", // GLOBAL platform OAuth app keys (managed by superadmin)
+  "oauth_states", // GLOBAL OAuth handshake state: the callback has no tenant context yet
   // better-auth managed AND carry no company_id column at all (keyed by
   // userId/token instead) — there is no company predicate to write for them,
   // so they get no RLS policy. `user` DOES carry company_id and IS tenant-

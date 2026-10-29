@@ -18,6 +18,7 @@ import { ridersRoutes } from "./routes/riders";
 import { paymentsRoutes } from "./routes/payments";
 import { billingRoutes } from "./routes/billing";
 import { paymentsWebhookRoutes } from "./routes/payments-webhook";
+import { quickbooksRoutes, quickbooksWebhookRoutes } from "./routes/quickbooks";
 import { notificationsRoutes } from "./routes/notifications";
 import { adminRoutes } from "./routes/admin";
 import { directoryRoutes } from "./routes/directory";
@@ -212,6 +213,9 @@ const app = new Hono<{ Variables: Variables }>()
   // the handler can read the raw body for signature verification, and so it is
   // reachable unauthenticated (Stripe authenticates via the signature).
   .route("/api/payments/webhook", paymentsWebhookRoutes)
+  // Intuit webhook for QuickBooks Sync — same rules as Stripe's: raw body for
+  // the HMAC check, reachable without a session.
+  .route("/api/integrations/quickbooks/webhook", quickbooksWebhookRoutes)
   // PUBLIC intake forms — embeddable on any tenant's own website, so CORS is
   // permissive here (auth is the publishable key + origin allow-list on the key,
   // NOT CORS). Mounted before basePath/authMiddleware so it stays unauthenticated.
@@ -406,6 +410,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/job-forms", jobFormsRoutes)
   .route("/automation", automationRoutes)
   .route("/maintenance", maintenanceRoutes)
+  // QuickBooks Sync settings — before /integrations so its paths are not read as /:id
+  .route("/integrations/quickbooks", quickbooksRoutes)
   .route("/integrations", integrationsRoutes)
   .route("/export", exportRoutes)
   .route("/import", importRoutes)
