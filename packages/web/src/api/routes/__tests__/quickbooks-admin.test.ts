@@ -127,10 +127,23 @@ describe("issues", () => {
   it("lists open issues and resolves one", async () => {
     const list = (await (await call("/issues")).json()) as any;
     expect(list.issues.length).toBe(1);
+    expect(list.issues[0].resolved).toBe(false);
     const r = await call(`/issues/${list.issues[0].id}/resolve`, { method: "POST" });
     expect(r.status).toBe(200);
     const [row] = await db.select().from(schema.qboIssues).where(and(eq(schema.qboIssues.companyId, CO), eq(schema.qboIssues.id, list.issues[0].id)));
     expect(row!.status).toBe("resolved");
-    expect(((await (await call("/issues")).json()) as any).issues.length).toBe(0);
+    expect(((await (await call("/issues")).json()) as any).issues.filter((i: any) => !i.resolved).length).toBe(0);
+  });
+
+  it("also shows recent resolved notes the sync left for the bookkeeper", async () => {
+    const { raiseIssue } = await import("../../../services/quickbooks/resolve");
+    await raiseIssue(CO, "name_in_use", 'QuickBooks already uses the name "Dan Rosenblat"…', { resolved: true });
+    await raiseIssue(CO, "shadow", "Shadow mode: would create purchase order AP-1.", { resolved: true });
+    await db.update(schema.qboIssues).set({ resolvedAt: new Date(Date.now() - 10 * 86400_000) }).where(and(eq(schema.qboIssues.companyId, CO), eq(schema.qboIssues.kind, "shadow")));
+    const list = (await (await call("/issues")).json()) as any;
+    const notes = list.issues.filter((i: any) => i.resolved);
+    const kinds = notes.map((i: any) => i.kind);
+    expect(kinds).toContain("name_in_use");
+    expect(kinds).not.toContain("shadow"); // the 10-day-old shadow note has aged out
   });
 });
