@@ -8,6 +8,8 @@ import { companyTimeZone } from "../../services/company-tz";
 import { namedDayBounds, zonedDayKey } from "../../shared/tz";
 import { isFeatureOn } from "../../services/features";
 import { loadConnection } from "../../services/quickbooks/client";
+import { settings as qboSettings } from "../../services/quickbooks/resolve";
+import { priced } from "../../services/quickbooks/sync";
 import type { AppEnv } from "../env";
 
 /* ---------------------------------------------------------------------------
@@ -315,14 +317,22 @@ export const reportsRoutes = new Hono<AppEnv>()
         // A tenant whose technicians are paid through QuickBooks has no
         // ArrivePing payouts: the report reads each job's purchase order,
         // bill and payment state instead (services/quickbooks).
-        const qbo = (await isFeatureOn(tenantId(c), "integrations.quickbooks")) && (await loadConnection(tenantId(c)))?.status === "connected";
+        // Shadow mode writes nothing, so the payouts view stays until the sync is live.
+        const qbo =
+          (await isFeatureOn(tenantId(c), "integrations.quickbooks")) &&
+          (await loadConnection(tenantId(c)))?.status === "connected" &&
+          !(await qboSettings(tenantId(c))).shadow;
         if (qbo) {
           const bs = (await loadBookings()).filter((b) => b.status !== "cancelled" && b.riderId);
-          type Row = { technician: string; jobs: number; techPay: number; notSynced: number; poOpen: number; billed: number; paid: number; lastPaid: string };
+          const { riders } = await techNameMap(t);
+          const riderById = new Map(riders.map((r) => [r.id, r]));
+          type Row = { technician: string; jobs: number; techPay: number; notSynced: number; poOpen: number; billed: number; paid: number; error: number; lastPaid: string };
           const agg = new Map<string, Row>();
           for (const b of bs) {
-            const a = agg.get(b.riderId!) ?? { technician: map.get(b.riderId!)?.name ?? "Unknown", jobs: 0, techPay: 0, notSynced: 0, poOpen: 0, billed: 0, paid: 0, lastPaid: "" };
-            const pay = Number(b.techPay || 0);
+            const a = agg.get(b.riderId!) ?? { technician: map.get(b.riderId!)?.name ?? "Unknown", jobs: 0, techPay: 0, notSynced: 0, poOpen: 0, billed: 0, paid: 0, error: 0, lastPaid: "" };
+            // a job not yet completed has no accrued pay: use what its PO was priced at
+            const rider = riderById.get(b.riderId!);
+            const pay = Number((rider ? priced(b, rider) : b).techPay || 0);
             a.jobs += 1;
             a.techPay += pay;
             if (b.vendorBillStatus === "paid") {
@@ -331,6 +341,7 @@ export const reportsRoutes = new Hono<AppEnv>()
               if (d > a.lastPaid) a.lastPaid = d;
             } else if (b.vendorBillStatus === "billed") a.billed += pay;
             else if (b.vendorBillStatus === "po_open") a.poOpen += pay;
+            else if (b.vendorBillStatus === "error") a.error += pay;
             else a.notSynced += pay;
             agg.set(b.riderId!, a);
           }
@@ -342,7 +353,7 @@ export const reportsRoutes = new Hono<AppEnv>()
               { label: "Technician pay", value: money(sum("techPay")), tone: "neutral" },
               { label: "Billed, unpaid", value: money(sum("billed")), tone: "neutral" },
               { label: "Paid in QuickBooks", value: money(sum("paid")), tone: "good" },
-              { label: "Not yet billed", value: money(sum("poOpen") + sum("notSynced")), tone: "warn" },
+              { label: "Not yet billed", value: money(sum("poOpen") + sum("notSynced") + sum("error")), tone: "warn" },
             ],
             series: {
               id: "qbo-pay", title: "Billed and paid in QuickBooks, by technician", type: "bar", xKey: "technician",
@@ -358,6 +369,7 @@ export const reportsRoutes = new Hono<AppEnv>()
               { key: "poOpen", label: "PO open", kind: "money" },
               { key: "billed", label: "Billed", kind: "money" },
               { key: "paid", label: "Paid", kind: "money" },
+              { key: "error", label: "Needs attention", kind: "money" },
               { key: "lastPaid", label: "Last paid", kind: "text" },
             ],
           };

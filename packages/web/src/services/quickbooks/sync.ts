@@ -188,7 +188,7 @@ type Rider = typeof schema.riders.$inferSelect;
  * is the truth; before that, the same tech-pay rules estimate it from the
  * job's line items, flat pay and the rider's rates (no time on site yet).
  */
-function priced(b: Booking, rider: Rider): Pick<Booking, "techPay" | "techPayBreakdown" | "lineItems" | "onSiteMinutes"> {
+export function priced(b: Booking, rider: Pick<Rider, "payRatePerHour" | "payRatePerKm">): Pick<Booking, "techPay" | "techPayBreakdown" | "lineItems" | "onSiteMinutes"> {
   if (Number(b.techPay) > 0 || b.techPayBreakdown) return b;
   const est = jobTechPay(b, rider);
   if (!(est.techPay > 0)) return b;

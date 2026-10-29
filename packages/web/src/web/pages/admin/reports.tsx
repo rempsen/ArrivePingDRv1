@@ -262,7 +262,7 @@ export default function ReportsPage() {
               </div>
               {d.source === "quickbooks" && (
                 <p className="text-xs text-slate-500">
-                  Technicians are paid through QuickBooks: each job counts as <em>No PO yet</em>, <em>PO open</em>, <em>Billed</em> or <em>Paid</em> from its QuickBooks paperwork. Jobs scheduled in the range, by scheduled date.
+                  Technicians are paid through QuickBooks: each job counts as <em>No PO yet</em>, <em>PO open</em>, <em>Billed</em>, <em>Paid</em> or <em>Needs attention</em> (the sync stopped — see the QuickBooks card's Issues) from its QuickBooks paperwork; an open PO is counted at the pay it was priced at. Jobs scheduled in the range, by scheduled date.
                 </p>
               )}
 
