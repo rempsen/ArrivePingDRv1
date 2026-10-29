@@ -157,15 +157,18 @@ function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: ()
           </select>
         </Field>
         {who === "pick" && (
-          <Field label="Find a company">
-            <input
-              type="search"
-              aria-label="Find a company"
-              className={inputCls}
-              placeholder="Type a letter or part of the name, e.g. B for BMD Materials"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+          <div>
+            <Field label="Find a company">
+              <input
+                type="search"
+                aria-label="Find a company"
+                className={inputCls}
+                placeholder="Type a letter or part of the name, e.g. B for BMD Materials"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </Field>
+            {/* the list sits outside Field: Field is a <label>, and each row is its own */}
             <div className="mt-2 flex items-center justify-between text-[12px] text-slate-500">
               <span>
                 {ticked.length} ticked · {shown.length} shown
@@ -194,7 +197,7 @@ function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: ()
               ))}
               {shown.length === 0 && <li className="px-3 py-3 text-[13px] text-slate-500">No company matches "{query.trim()}".</li>}
             </ul>
-          </Field>
+          </div>
         )}
         <Field label="Industry (optional)">
           <select className={inputCls} value={industry} onChange={(e) => setIndustry(e.target.value)}>
