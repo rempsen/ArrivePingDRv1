@@ -260,6 +260,13 @@
       "when": 1793290674763,
       "tag": "0036_integrations_company_provider_uq",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793306733309,
+      "tag": "0037_company_skill_classes",
+      "breakpoints": true
     }
   ]
 }

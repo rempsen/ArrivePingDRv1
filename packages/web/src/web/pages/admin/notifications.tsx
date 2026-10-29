@@ -23,6 +23,7 @@ import { useEmailBrand } from "../../components/email-designer/use-email-brand";
 import { CustomMilestoneDialog } from "./custom-milestone-dialog";
 import { NotificationTestDialog } from "./notification-test-dialog";
 import { useAuth } from "../../hooks/use-auth";
+import { SkillClassSelect, useSkillClasses } from "../../components/skill-class-select";
 import { authClient } from "../../lib/auth";
 
 type Channel = "inApp" | "email" | "sms" | "webhook";
@@ -1386,10 +1387,15 @@ function Webhooks() {
 
 /* ---------------- Technician invites ---------------- */
 function Invites() {
+  const skillClasses = useSkillClasses();
   const qc = useQueryClient();
   const { noun, nounPlural } = useWorkerNoun();
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", skillClass: "General" });
+  // Start on this company's first class (the built-in "General" may not exist here).
+  useEffect(() => {
+    if (skillClasses.length && !skillClasses.some((c) => c.toLowerCase() === form.skillClass.toLowerCase())) setForm((f) => ({ ...f, skillClass: skillClasses[0]! }));
+  }, [skillClasses, form.skillClass]);
   const [copied, setCopied] = useState<string | null>(null);
 
   const list = useQuery({ queryKey: ["invites"], queryFn: async () => (await api.invites.$get()).json() });
@@ -1451,9 +1457,7 @@ function Invites() {
           <Field label="Email *"><input aria-label="jordan@email.com" className={inputCls} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="jordan@email.com" /></Field>
           <Field label="Phone (for SMS invite)"><input aria-label="+1 204 555 0199" className={inputCls} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+1 204 555 0199" /></Field>
           <Field label="Skill class">
-            <select className={inputCls} value={form.skillClass} onChange={(e) => setForm({ ...form, skillClass: e.target.value })}>
-              {["General", "HVAC", "Electrical", "Plumbing", "Appliance", "Landscaping"].map((s) => <option key={s}>{s}</option>)}
-            </select>
+            <SkillClassSelect classes={skillClasses} value={form.skillClass} onChange={(v) => setForm({ ...form, skillClass: v })} />
           </Field>
           <div className="flex justify-end gap-2 pt-1">
             <BtnGhost onClick={() => setModal(false)}>Cancel</BtnGhost>

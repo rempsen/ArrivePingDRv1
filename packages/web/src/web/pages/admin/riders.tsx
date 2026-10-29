@@ -10,6 +10,7 @@ import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
 import { TECH_STATUS, activate, dismiss, fmtDateShort, money } from "../../lib/utils";
 import { useWorkerNoun } from "../../lib/use-brand";
+import { SkillClassSelect, useSkillClasses } from "../../components/skill-class-select";
 import {
   Modal,
   Field,
@@ -67,7 +68,6 @@ export default function AdminTechs() {
   );
 }
 
-const SKILLS = ["General", "HVAC", "Electrical", "Plumbing", "Appliance", "Carpentry", "Landscaping"];
 const STATUS_FILTERS = ["all", "available", "enroute", "onsite", "busy", "offline"];
 
 function FieldStaffTab() {
@@ -81,6 +81,7 @@ function FieldStaffTab() {
   const [showDeactivated, setShowDeactivated] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"name" | "rating" | "jobs">("name");
+  const skillClasses = useSkillClasses();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -97,6 +98,10 @@ function FieldStaffTab() {
     payRatePerHour: 0,
     payRatePerKm: 0,
   });
+  // A new person starts on this company's first class (the built-in "General" may not exist here).
+  useEffect(() => {
+    if (skillClasses.length && !skillClasses.some((c) => c.toLowerCase() === form.skillClass.toLowerCase())) setForm((f) => ({ ...f, skillClass: skillClasses[0]! }));
+  }, [skillClasses, form.skillClass]);
   const [err, setErr] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
 
@@ -444,10 +449,7 @@ function FieldStaffTab() {
                 onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+1 416 555 1234" />
             </Field>
             <Field label="Skill class">
-              <select className={inputCls} value={form.skillClass}
-                onChange={(e) => setForm({ ...form, skillClass: e.target.value })}>
-                {SKILLS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <SkillClassSelect classes={skillClasses} value={form.skillClass} onChange={(v) => setForm({ ...form, skillClass: v })} />
             </Field>
           </div>
           <Field label="Pay rate per hour" hint="Used to compute tech pay from on-site time">
@@ -515,6 +517,7 @@ function FieldStaffTab() {
 }
 
 function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () => void }) {
+  const skillClasses = useSkillClasses();
   const qc = useQueryClient();
   const [tab, setTab] = useState<"profile" | "jobs" | "shifts" | "files">("profile");
   const [form, setForm] = useState<any>(null);
@@ -671,9 +674,7 @@ function TechDrawer({ riderId, onClose }: { riderId: string | null; onClose: () 
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="Skill class">
-                      <select className={inputCls} value={form.skillClass} onChange={(e) => setForm({ ...form, skillClass: e.target.value })}>
-                        {SKILLS.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                      <SkillClassSelect classes={skillClasses} value={form.skillClass} onChange={(v) => setForm({ ...form, skillClass: v })} />
                     </Field>
                     <Field label="Pay rate / hr">
                       <div className="relative">

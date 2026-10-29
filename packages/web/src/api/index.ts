@@ -54,6 +54,7 @@ import { auditRoutes } from "./routes/audit";
 import { notifConfigRoutes } from "./routes/notif-config";
 import { invitesRoutes } from "./routes/invites";
 import { skillsRoutes } from "./routes/skills";
+import { skillClassRoutes } from "./routes/skill-classes";
 import { pricingRoutes } from "./routes/pricing";
 import { calendarRoutes } from "./routes/calendar";
 import { reportsRoutes } from "./routes/reports";
@@ -430,6 +431,7 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/notif-config", notifConfigRoutes)
   .route("/invites", invitesRoutes)
   .route("/skills", skillsRoutes)
+  .route("/skill-classes", skillClassRoutes)
   .route("/pricing", pricingRoutes)
   .route("/calendar", calendarRoutes)
   .route("/reports", reportsRoutes)
