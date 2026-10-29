@@ -55,24 +55,37 @@ beforeAll(async () => {
     job("rpq-r1", 120, "po_open"),
     job("rpq-r2", 300, "none"),
     job("rpq-r2", 80, "paid", { subtradePaidAt: at("2026-10-28T12:00:00Z"), scheduledAt: at("2026-10-28T15:00:00Z") }),
+    job("rpq-r2", 0, "error", { techPay: 60 }), // bill failed after retries: needs a person
+    // assigned, not yet completed: nothing accrued, but the PO was priced from the line items
+    job("rpq-r2", 0, "po_open", { status: "assigned", techPayBreakdown: "", lineItems: JSON.stringify([{ itemId: "c1", kind: "unit", name: "Tile", sku: "", unit: "sq ft", qty: 10, unitCost: 4, unitPrice: 6, taxable: false, cost: 40, price: 60 }]) }),
     job("rpq-r1", 999, "paid", { scheduledAt: at("2026-08-01T15:00:00Z") }), // outside the range
     job("rpq-r1", 777, "paid", { isSample: true }), // sample day never counts
   ] as never);
 });
 
 describe("payroll report with QuickBooks", () => {
+  it("stays on the payouts view while the tenant is in shadow mode", async () => {
+    const { eq } = await import("drizzle-orm");
+    await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: true }) }).where(eq(schema.integrations.companyId, CO));
+    const d = (await (await app.request("/reports/payroll?from=2026-10-27&to=2026-10-30")).json()) as any;
+    expect(d.source).not.toBe("quickbooks");
+    expect(d.kpis[0].label).toBe("Gross earnings");
+    await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: false }) }).where(eq(schema.integrations.companyId, CO));
+  });
+
   it("totals purchase orders, bills and payments per technician from the jobs themselves", async () => {
     const r = await app.request("/reports/payroll?from=2026-10-27&to=2026-10-30");
     expect(r.status).toBe(200);
     const d = (await r.json()) as any;
     expect(d.source).toBe("quickbooks");
     expect(d.kpis.map((k: any) => k.label)).toEqual(["Technician pay", "Billed, unpaid", "Paid in QuickBooks", "Not yet billed"]);
-    expect(d.kpis.map((k: any) => k.value)).toEqual(["$1,250.00", "$500.00", "$330.00", "$420.00"]);
+    // pay 1,250 + 60 (error) + 40 (open PO priced from its line items); not yet billed = 120 + 40 open + 300 no PO + 60 error
+    expect(d.kpis.map((k: any) => k.value)).toEqual(["$1,350.00", "$500.00", "$330.00", "$520.00"]);
     const dan = d.rows.find((x: any) => x.technician === "Dan Rosenblat");
     expect(dan).toMatchObject({ jobs: 3, techPay: 870, poOpen: 120, billed: 500, paid: 250, lastPaid: "2026-10-29" });
     const second = d.rows.find((x: any) => x.technician === "Second Tech");
-    expect(second).toMatchObject({ jobs: 2, techPay: 380, notSynced: 300, paid: 80, lastPaid: "2026-10-28" });
-    expect(d.columns.map((c: any) => c.key)).toEqual(["technician", "jobs", "techPay", "notSynced", "poOpen", "billed", "paid", "lastPaid"]);
+    expect(second).toMatchObject({ jobs: 4, techPay: 480, notSynced: 300, poOpen: 40, error: 60, paid: 80, lastPaid: "2026-10-28" });
+    expect(d.columns.map((c: any) => c.key)).toEqual(["technician", "jobs", "techPay", "notSynced", "poOpen", "billed", "paid", "error", "lastPaid"]);
     expect(d.series.bars.map((b: any) => b.key)).toEqual(["billed", "paid"]);
   });
 });
