@@ -44,6 +44,10 @@ Tables: `qbo_links`, `qbo_issues` (migration `0034`).
      technicians are matched by exact name, then created as Vendors.
    - **Shadow mode** (default on): everything is logged under *Issues* as
      "would create…" and nothing is written. Turn it off to go live.
+   - **Sync jobs scheduled from** — fixed to the day QuickBooks was first
+     connected. Jobs scheduled before it are the bookkeeper's history and are
+     never sent (not on an event, not by the reconnect sweep). Move it if the
+     tenant wants an earlier or later start.
 4. **Issues** lists anything that needs a person: an ambiguous vendor name,
    a locked period, a cancelled or reassigned job that already has a bill, a
    bill removed in QuickBooks, a job that cannot be priced yet, a reconnect to
@@ -55,7 +59,7 @@ Tables: `qbo_links`, `qbo_issues` (migration `0034`).
    ArrivePing writes the bill.
 
 Per-tenant settings live in `integrations.config` (JSON):
-`{ billMode, taxCodeId, defaultItemId, parentCustomerId, shadow, reconnectNotifiedAt }`.
+`{ billMode, taxCodeId, defaultItemId, parentCustomerId, shadow, syncSince, reconnectNotifiedAt }`.
 
 ## Environment
 

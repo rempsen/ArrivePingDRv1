@@ -28,9 +28,15 @@ export interface QboSettings {
   parentCustomerId: string;
   /** Log what would be sent instead of writing to QuickBooks. */
   shadow: boolean;
+  /**
+   * Jobs scheduled before this day (YYYY-MM-DD, tenant's choice; set to the
+   * day QuickBooks was first connected) are the bookkeeper's history and are
+   * never synced. Empty: no cut-off.
+   */
+  syncSince: string;
 }
 
-export const DEFAULT_SETTINGS: QboSettings = { billMode: "arriveping", taxCodeId: "", defaultItemId: "", parentCustomerId: "", shadow: true };
+export const DEFAULT_SETTINGS: QboSettings = { billMode: "arriveping", taxCodeId: "", defaultItemId: "", parentCustomerId: "", shadow: true, syncSince: "" };
 
 export function parseSettings(config: string | null | undefined): QboSettings {
   let raw: Partial<Record<keyof QboSettings, unknown>> = {};
@@ -45,6 +51,7 @@ export function parseSettings(config: string | null | undefined): QboSettings {
     defaultItemId: typeof raw.defaultItemId === "string" ? raw.defaultItemId : "",
     parentCustomerId: typeof raw.parentCustomerId === "string" ? raw.parentCustomerId : "",
     shadow: typeof raw.shadow === "boolean" ? raw.shadow : true,
+    syncSince: typeof raw.syncSince === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.syncSince) ? raw.syncSince : "",
   };
 }
 

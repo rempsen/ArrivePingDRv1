@@ -67,6 +67,12 @@ function syncable(b: Booking | null): b is Booking {
   return !!b && !b.isSample && !b.deletedAt;
 }
 
+/** Jobs from before the tenant connected QuickBooks are the bookkeeper's history, never ours. */
+function withinSyncWindow(b: Booking, cfg: Pick<QboSettings, "syncSince">): boolean {
+  if (!cfg.syncSince) return true;
+  return b.scheduledAt.toISOString().slice(0, 10) >= cfg.syncSince;
+}
+
 /** One pending task per job and kind: the partial unique index on scheduled_tasks decides, not a read. */
 async function enqueueTask(companyId: string, bookingId: string, kind: SyncKind, delayMs: number): Promise<boolean> {
   const inserted = await sdb
@@ -84,6 +90,7 @@ export async function enqueueQboSync(companyId: string, bookingId: string, kind:
     const b = await loadBooking(companyId, bookingId);
     if (!syncable(b)) return;
     if (kind !== "po.cancel" && !b.riderId) return;
+    if (!withinSyncWindow(b, await settings(companyId))) return;
     await enqueueTask(companyId, bookingId, kind, COALESCE_MS);
   } catch (e) {
     console.error("[qbo] enqueue failed", kind, bookingId, e);
@@ -111,6 +118,11 @@ export async function onJobEvent(event: string, b: Pick<Booking, "id" | "company
  * told. Then the jobs that waited are queued.
  */
 export async function afterQuickbooksConnect(companyId: string, previousRealmId: string, realmId: string): Promise<void> {
+  // The first connection fixes the day the sync starts from; a reconnect keeps it.
+  if (!(await settings(companyId)).syncSince) {
+    const { patchConfig } = await import("./sweep");
+    await patchConfig(companyId, { syncSince: new Date().toISOString().slice(0, 10) });
+  }
   if (previousRealmId && realmId && previousRealmId !== realmId) {
     const dropped = await sdb.delete(schema.qboLinks).where(eq(schema.qboLinks.companyId, companyId)).returning({ id: schema.qboLinks.id });
     // An open PO lived in the old books: the job starts over in the new ones.
@@ -134,6 +146,7 @@ export async function afterQuickbooksConnect(companyId: string, previousRealmId:
 export async function requeueAfterReconnect(companyId: string, windowDays = 90): Promise<number> {
   if (!(await isQboActive(companyId))) return 0;
   const cfg = await settings(companyId);
+  const since = new Date(Math.max(Date.now() - windowDays * 86400_000, cfg.syncSince ? new Date(`${cfg.syncSince}T00:00:00Z`).getTime() : 0));
   const rows = await sdb
     .select({ id: schema.bookings.id, status: schema.bookings.status, vendorBillStatus: schema.bookings.vendorBillStatus })
     .from(schema.bookings)
@@ -144,7 +157,7 @@ export async function requeueAfterReconnect(companyId: string, windowDays = 90):
         isNull(schema.bookings.deletedAt),
         eq(schema.bookings.isSample, false),
         ne(schema.bookings.status, "cancelled"),
-        gte(schema.bookings.scheduledAt, new Date(Date.now() - windowDays * 86400_000)),
+        gte(schema.bookings.scheduledAt, since),
         or(
           inArray(schema.bookings.vendorBillStatus, ["none", "error"]),
           cfg.billMode === "arriveping" ? and(eq(schema.bookings.status, "completed"), eq(schema.bookings.vendorBillStatus, "po_open")) : undefined,
@@ -380,6 +393,7 @@ async function run(companyId: string, bookingId: string, kind: SyncKind): Promis
   const b = await loadBooking(companyId, bookingId);
   if (!syncable(b)) return;
   const cfg = await settings(companyId);
+  if (!withinSyncWindow(b, cfg)) return;
   if (kind === "po.cancel") return cancelPurchaseOrder(companyId, b);
   if (!b.riderId || b.status === "cancelled") return;
   const input = await poInput(companyId, b, cfg);

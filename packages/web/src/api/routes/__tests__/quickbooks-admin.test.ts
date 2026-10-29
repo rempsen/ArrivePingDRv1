@@ -86,6 +86,12 @@ describe("status and settings", () => {
     expect(s.shadow).toBe(false);
   });
 
+  it("lets an admin move the date the sync starts from, and reports it", async () => {
+    expect((await call("/settings", { method: "PUT", body: JSON.stringify({ syncSince: "2026-11-01" }) })).status).toBe(200);
+    expect(((await (await call("/status")).json()) as any).syncSince).toBe("2026-11-01");
+    expect((await call("/settings", { method: "PUT", body: JSON.stringify({ syncSince: "next tuesday" }) })).status).toBe(400);
+  });
+
   it("rejects a bill mode it doesn't know", async () => {
     expect((await call("/settings", { method: "PUT", body: JSON.stringify({ billMode: "someone_else" }) })).status).toBe(400);
   });
