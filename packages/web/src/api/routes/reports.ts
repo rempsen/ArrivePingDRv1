@@ -317,13 +317,16 @@ export const reportsRoutes = new Hono<AppEnv>()
         // A tenant whose technicians are paid through QuickBooks has no
         // ArrivePing payouts: the report reads each job's purchase order,
         // bill and payment state instead (services/quickbooks).
-        // Shadow mode writes nothing, so the payouts view stays until the sync is live.
-        const qbo =
+        // Shadow mode writes nothing, so the payouts view stays until the sync
+        // is live — unless jobs in this range already reached QuickBooks (a
+        // tenant that went live and later switched shadow back on keeps its history).
+        const QBO_STATES = new Set(["po_open", "billed", "paid"]);
+        const connected =
           (await isFeatureOn(tenantId(c), "integrations.quickbooks")) &&
-          (await loadConnection(tenantId(c)))?.status === "connected" &&
-          !(await qboSettings(tenantId(c))).shadow;
+          (await loadConnection(tenantId(c)))?.status === "connected";
+        const bs = connected ? (await loadBookings()).filter((b) => b.status !== "cancelled" && b.riderId) : [];
+        const qbo = connected && (!(await qboSettings(tenantId(c))).shadow || bs.some((b) => QBO_STATES.has(b.vendorBillStatus)));
         if (qbo) {
-          const bs = (await loadBookings()).filter((b) => b.status !== "cancelled" && b.riderId);
           const { riders } = await techNameMap(t);
           const riderById = new Map(riders.map((r) => [r.id, r]));
           type Row = { technician: string; jobs: number; techPay: number; notSynced: number; poOpen: number; billed: number; paid: number; error: number; lastPaid: string };
