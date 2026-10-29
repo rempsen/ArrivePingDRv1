@@ -86,7 +86,11 @@ export const integrationsRoutes = new Hono<AppEnv>()
     const have = new Set(rows.map((r) => r.provider));
     const missing = (Object.keys(PROVIDERS) as ProviderId[]).filter((p) => !have.has(p));
     if (missing.length) {
-      await t.insert(schema.integrations, missing.map((provider) => ({ provider, accountLabel: "" })));
+      // two first reads at once (two tabs, two people) both get here; the
+      // unique index on (company, provider) makes the second insert a no-op
+      await t.transaction((tx) =>
+        tx.insert(schema.integrations).values(missing.map((provider) => ({ companyId: t.companyId, provider, accountLabel: "" }))).onConflictDoNothing(),
+      );
       rows = await t.select(schema.integrations);
     }
     const enriched = await Promise.all(rows.map(async (r) => ({

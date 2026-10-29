@@ -253,6 +253,13 @@
       "when": 1793229713845,
       "tag": "0035_quickbooks_task_dedupe",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793290674763,
+      "tag": "0036_integrations_company_provider_uq",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "integ_company_provider_uq" ON "integrations" USING btree ("company_id","provider");

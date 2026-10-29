@@ -189,3 +189,30 @@ describe("GET /integrations", () => {
     expect(rows.length).toBe(list.length);
   });
 });
+
+describe("integrations are unique per company and provider", () => {
+  it("a second row for the same provider is refused by the database", async () => {
+    const CO3 = "oa-co-uniq";
+    await db.insert(schema.companies).values({ id: CO3, name: "Uniq Co", kind: "customer" } as never);
+    await db.insert(schema.integrations).values({ companyId: CO3, provider: "xero" } as never);
+    await expect(async () => {
+      await db.insert(schema.integrations).values({ companyId: CO3, provider: "xero" } as never);
+    }).toThrow();
+  });
+
+  it("two first reads at once still leave one card per provider", async () => {
+    const CO4 = "oa-co-race";
+    await db.insert(schema.companies).values({ id: CO4, name: "Race Co", kind: "customer" } as never);
+    const race = new Hono<AppEnv>().use("*", async (c, next) => {
+      c.set("companyId", CO4);
+      c.set("requestId", "oa-req4");
+      c.set("user", { id: "oa-admin4", role: "admin", email: "d@oa.test", name: "D" } as never);
+      return next();
+    });
+    race.route("/integrations", integrationsRoutes);
+    const [a, b] = await Promise.all([race.request("/integrations"), race.request("/integrations")]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    const rows = await db.select().from(schema.integrations).where(eq(schema.integrations.companyId, CO4));
+    expect(rows.length).toBe(Object.keys(realOauth.PROVIDERS).length);
+  });
+});
