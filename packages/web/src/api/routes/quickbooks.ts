@@ -9,7 +9,7 @@
  */
 import { Hono } from "hono";
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database";
 import * as schema from "../database/schema";
@@ -187,25 +187,34 @@ export const quickbooksRoutes = new Hono<AppEnv>()
     if (!(await canView(c))) return c.json({ message: "Forbidden" }, 403);
     const companyId = c.get("companyId") as string;
     // tenant transaction: qbo_issues has forced RLS, so the raw client would see nothing
+    // Open issues need a person. Notes the sync left already resolved
+    // (shadow-mode payloads, renamed records, reactivated customers — raised
+    // and resolved in the same instant) are listed after them for a week;
+    // issues a person resolved are not shown again.
+    const weekAgo = new Date(Date.now() - 7 * 86400_000);
     const rows = await tx(c).transaction((t) =>
       t
         .select()
         .from(schema.qboIssues)
-        .where(and(eq(schema.qboIssues.companyId, companyId), eq(schema.qboIssues.status, "open")))
+        .where(
+          and(
+            eq(schema.qboIssues.companyId, companyId),
+            or(eq(schema.qboIssues.status, "open"), and(gte(schema.qboIssues.resolvedAt, weekAgo), sql`${schema.qboIssues.resolvedAt} <= ${schema.qboIssues.createdAt} + interval '2 seconds'`)),
+          ),
+        )
         .orderBy(desc(schema.qboIssues.createdAt))
-        .limit(200),
+        .limit(300),
     );
-    return c.json({
-      issues: rows.map((r) => {
-        let detail: unknown = {};
-        try {
-          detail = JSON.parse(r.detail);
-        } catch {
-          /* raw */
-        }
-        return { id: r.id, bookingId: r.bookingId, kind: r.kind, message: r.message, detail, createdAt: r.createdAt };
-      }),
-    });
+    const shape = (r: (typeof rows)[number]) => {
+      let detail: unknown = {};
+      try {
+        detail = JSON.parse(r.detail);
+      } catch {
+        /* raw */
+      }
+      return { id: r.id, bookingId: r.bookingId, kind: r.kind, message: r.message, detail, createdAt: r.createdAt, resolved: r.status !== "open", resolvedAt: r.resolvedAt };
+    };
+    return c.json({ issues: [...rows.filter((r) => r.status === "open"), ...rows.filter((r) => r.status !== "open").slice(0, 100)].map(shape) });
   })
 
   .post("/issues/:id/resolve", async (c) => {

@@ -151,6 +151,10 @@ async function createNamed<T extends { Id: string }>(companyId: string, path: "/
     return (await qboFetch<Record<string, T>>(companyId, path, { method: "POST", body }))[key]!;
   } catch (e) {
     if (!(e instanceof QboError && e.code === "6240")) throw e;
+    // Another job may have created this very record between our lookup and
+    // our create: a same-type exact match is ours, not a collision.
+    const same = await qboQuery<T>(companyId, `SELECT * FROM ${key} WHERE DisplayName = ${q(String(body.DisplayName))}`);
+    if (same.length === 1) return same[0]!;
     const alt = `${String(body.DisplayName).slice(0, 100 - suffix.length)}${suffix}`;
     const made = (await qboFetch<Record<string, T>>(companyId, path, { method: "POST", body: { ...body, DisplayName: alt } }))[key]!;
     await raiseIssue(companyId, "name_in_use", `QuickBooks already uses the name "${body.DisplayName}" for another record, so ${about} was created as "${alt}". Rename it in QuickBooks if you prefer; the link follows the record, not the name.`, { detail: { requested: body.DisplayName, created: alt, qboId: made.Id, existing: /Id=(\d+)/.exec(e.detail)?.[1] ?? "" }, resolved: true });
@@ -228,7 +232,13 @@ export async function resolveCustomer(companyId: string, job: { customerId: stri
       resolved: true,
     });
   }
-  if (customer.Active === false && !opts.shadow) {
+  // Shadow mode writes nothing, so an inactive match is reported but not
+  // remembered: the first live job reactivates it and saves the link then.
+  if (customer.Active === false && opts.shadow) {
+    await raiseIssue(companyId, "shadow", `Shadow mode: would reactivate QuickBooks customer "${customer.DisplayName ?? name}".`, { detail: { customerId: job.customerId, qboId: customer.Id }, resolved: true });
+    return { qboId: customer.Id, shadow: true };
+  }
+  if (customer.Active === false) {
     const r = await qboFetch<{ Customer: Customer }>(companyId, "/customer", { method: "POST", body: { Id: customer.Id, SyncToken: customer.SyncToken, Active: true, sparse: true } });
     customer = r.Customer;
     await raiseIssue(companyId, "customer_reactivated", `QuickBooks customer "${customer.DisplayName ?? name}" was inactive; it was made active again for this job.`, { detail: { customerId: job.customerId, qboId: customer.Id }, resolved: true });

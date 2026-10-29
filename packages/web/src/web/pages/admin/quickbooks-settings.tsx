@@ -64,7 +64,7 @@ type Mappings = {
   technicians: { riderId: string; name: string; qboId: string; qboName: string }[];
   templates: { templateId: string; name: string; qboId: string; qboName: string }[];
 };
-type Issue = { id: string; bookingId: string | null; kind: string; message: string; createdAt: string };
+type Issue = { id: string; bookingId: string | null; kind: string; message: string; createdAt: string; resolved: boolean };
 
 const ISSUE_LABEL: Record<string, string> = {
   vendor_ambiguous: "Which vendor?",
@@ -191,12 +191,17 @@ export function QuickBooksSettingsModal({ open, onClose }: { open: boolean; onCl
       {tab === "issues" && (
         <div className="space-y-2 text-sm">
           {issues.isLoading && <p className="text-xs text-slate-500">Loading…</p>}
-          {issues.data && issues.data.issues.length === 0 && (
+          {issues.data && issues.data.issues.every((i) => i.resolved) && (
             <p className="flex items-center gap-2 text-xs text-emerald-live"><Check className="h-4 w-4" /> Nothing needs attention.</p>
           )}
-          {(issues.data?.issues ?? []).map((i) => (
-            <div key={i.id} className="flex items-start gap-3 rounded-xl border border-white/5 bg-ink-2 p-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          {issues.data && issues.data.issues.some((i) => i.resolved) && issues.data.issues.every((i) => i.resolved) && (
+            <p className="pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Notes from the sync (last 7 days)</p>
+          )}
+          {(issues.data?.issues ?? []).map((i, idx, all) => (
+            <div key={i.id}>
+              {i.resolved && idx > 0 && !all[idx - 1]!.resolved && <p className="pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Notes from the sync (last 7 days)</p>}
+            <div className={`flex items-start gap-3 rounded-xl border border-white/5 p-3 ${i.resolved ? "bg-transparent" : "bg-ink-2"}`}>
+              {i.resolved ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-white">{ISSUE_LABEL[i.kind] ?? i.kind}</p>
                 <p className="text-xs text-slate-400">{i.message}</p>
@@ -210,7 +215,8 @@ export function QuickBooksSettingsModal({ open, onClose }: { open: boolean; onCl
                   )}
                 </p>
               </div>
-              <button onClick={() => resolve.mutate(i.id)} className="nvc-btn nvc-btn-sm bg-white/5 text-slate-200 hover:bg-white/10">Resolve</button>
+              {!i.resolved && <button onClick={() => resolve.mutate(i.id)} className="nvc-btn nvc-btn-sm bg-white/5 text-slate-200 hover:bg-white/10">Resolve</button>}
+            </div>
             </div>
           ))}
         </div>

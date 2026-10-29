@@ -138,6 +138,26 @@ describe("names QuickBooks already uses", () => {
     expect((await links("customer"))[0]!.qboId).toBe("610");
   });
 
+  it("reuses a vendor another job created a moment earlier instead of a suffixed duplicate", async () => {
+    // between our lookup (no match) and our create, another instance created the vendor
+    takenNames["Dan Rosenblat"] = "900";
+    let lookups = 0;
+    const base = vendorsByName;
+    vendorsByName = new Proxy(base, { get: (t, k) => (k === "Dan Rosenblat" && ++lookups > 1 ? [{ Id: "900", DisplayName: "Dan Rosenblat" }] : t[k as string]) });
+    const out = await resolveVendor(CO, rider);
+    expect(out).toEqual({ qboId: "900" });
+    expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/vendor")).map((c) => c.body.DisplayName)).toEqual(["Dan Rosenblat"]);
+    expect(await issues()).toEqual([]);
+  });
+
+  it("in shadow mode does not remember an inactive customer it did not reactivate", async () => {
+    customersByName["Noni Rosenblat"] = [{ Id: "610", DisplayName: "Noni Rosenblat", Active: false }];
+    const out = await resolveCustomer(CO, { customerId: "cust-noni2", customerName: "Noni Rosenblat", address: "40 Mountbatten Ave" }, { shadow: true });
+    expect(out).toEqual({ qboId: "610", shadow: true });
+    expect(calls.filter((c) => c.method === "POST").length).toBe(0);
+    expect(await links("customer")).toEqual([]);
+  });
+
   it("creates the customer under a distinguishing name when a vendor already has it", async () => {
     takenNames["Acme Flooring - 1 Main St"] = "77";
     const out = await resolveCustomer(CO, { customerId: "cust-acme", customerName: "Acme Flooring", address: "1 Main St" });
