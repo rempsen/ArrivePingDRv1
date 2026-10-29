@@ -470,6 +470,31 @@ describe("jobs from before QuickBooks was connected", () => {
     expect((await tasks(after.id)).length).toBe(1);
   });
 
+  it("counts the day in the tenant's timezone, not UTC", async () => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));
+    await db.update(schema.integrations).set({ config: cfgWith({ syncSince: "2026-10-29" }) }).where(eq(schema.integrations.companyId, CO));
+    // 10 PM on Oct 28 in Winnipeg is already Oct 29 in UTC: still before the cut-off
+    const eveningBefore = await job({ scheduledAt: new Date("2026-10-29T03:00:00Z") });
+    await fireEvent("assigned", eveningBefore.id);
+    expect(await tasks(eveningBefore.id)).toEqual([]);
+  });
+
+  it("still cleans up a purchase order that exists, whatever the cut-off", async () => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));
+    await db.update(schema.integrations).set({ config: cfgWith({}) }).where(eq(schema.integrations.companyId, CO));
+    const b = await job({ scheduledAt: new Date("2026-10-20T15:00:00Z") });
+    await fireEvent("assigned", b.id);
+    await drain();
+    expect((await link("purchase_order", b.id)).length).toBe(1);
+    // the admin moves the cut-off past the job, then the job is cancelled
+    await db.update(schema.integrations).set({ config: cfgWith({ syncSince: "2026-10-29" }) }).where(eq(schema.integrations.companyId, CO));
+    await db.update(schema.bookings).set({ status: "cancelled" }).where(eq(schema.bookings.id, b.id));
+    await fireEvent("cancelled", b.id);
+    await drain();
+    expect(calls.some((c) => c.url.searchParams.get("operation") === "delete" && c.body.Id === "800")).toBe(true);
+    expect(await link("purchase_order", b.id)).toEqual([]);
+  });
+
   it("the first connection fixes the date; a reconnect keeps it", async () => {
     await db.update(schema.integrations).set({ config: cfgWith({}) }).where(eq(schema.integrations.companyId, CO));
     const { afterQuickbooksConnect } = await import("../quickbooks/sync");
