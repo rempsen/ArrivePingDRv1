@@ -124,12 +124,14 @@ export const reportsRoutes = new Hono<AppEnv>()
     };
 
     // ---- shared dataset: bookings in range (+ filters) ----
-    const loadBookingsInRange = async () => {
-      const bs = await t.select(schema.bookings);
-      // Archived (soft-deleted) jobs don't count, matching the Jobs list,
-      // the scheduler and payouts (bookings.ts, payouts.ts).
-      return bs.filter((b) => !b.isSample && !b.deletedAt && inRange(b.scheduledAt));
-    };
+    // Loaded once per request: the payroll case reads it twice.
+    let inRangeRows: Promise<(typeof schema.bookings.$inferSelect)[]> | undefined;
+    const loadBookingsInRange = () =>
+      (inRangeRows ??= t.select(schema.bookings).then((bs) =>
+        // Archived (soft-deleted) jobs don't count, matching the Jobs list,
+        // the scheduler and payouts (bookings.ts, payouts.ts).
+        bs.filter((b) => !b.isSample && !b.deletedAt && inRange(b.scheduledAt)),
+      ));
     const loadBookings = async () => {
       let bs = await loadBookingsInRange();
       if (fStatus) bs = bs.filter((b) => b.status === fStatus);
