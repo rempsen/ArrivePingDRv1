@@ -70,6 +70,7 @@ const SettingsBody = z
     taxCodeId: z.string().trim().max(40).optional(),
     defaultItemId: z.string().trim().max(40).optional(),
     parentCustomerId: z.string().trim().max(40).optional(),
+    syncSince: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-29").optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { error: "Nothing to update" });

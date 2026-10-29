@@ -451,6 +451,38 @@ describe("cancellation", () => {
   });
 });
 
+describe("jobs from before QuickBooks was connected", () => {
+  const cfgWith = (extra: Record<string, unknown>) => JSON.stringify({ billMode: "arriveping", taxCodeId: "4", defaultItemId: "154", parentCustomerId: "", shadow: false, ...extra });
+
+  it("are never synced: not on an event, not by the reconnect sweep", async () => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));
+    await db.update(schema.integrations).set({ config: cfgWith({ syncSince: "2026-10-29" }) }).where(eq(schema.integrations.companyId, CO));
+    const before = await job({ scheduledAt: new Date("2026-10-20T15:00:00Z") });
+    const after = await job({ scheduledAt: new Date("2026-10-30T15:00:00Z") });
+    await fireEvent("assigned", before.id);
+    await fireEvent("assigned", after.id);
+    expect(await tasks(before.id)).toEqual([]);
+    expect((await tasks(after.id)).map((t) => t.kind)).toEqual(["qbo.po.create"]);
+    await db.delete(schema.scheduledTasks);
+    const { requeueAfterReconnect } = await import("../quickbooks/sync");
+    expect(await requeueAfterReconnect(CO)).toBe(1);
+    expect(await tasks(before.id)).toEqual([]);
+    expect((await tasks(after.id)).length).toBe(1);
+  });
+
+  it("the first connection fixes the date; a reconnect keeps it", async () => {
+    await db.update(schema.integrations).set({ config: cfgWith({}) }).where(eq(schema.integrations.companyId, CO));
+    const { afterQuickbooksConnect } = await import("../quickbooks/sync");
+    const { settings } = await import("../quickbooks/resolve");
+    await afterQuickbooksConnect(CO, "", "r1");
+    const first = (await settings(CO)).syncSince;
+    expect(first).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await db.update(schema.integrations).set({ config: cfgWith({ syncSince: "2026-01-15" }) }).where(eq(schema.integrations.companyId, CO));
+    await afterQuickbooksConnect(CO, "r1", "r1");
+    expect((await settings(CO)).syncSince).toBe("2026-01-15");
+  });
+});
+
 describe("after a reconnect", () => {
   it("connecting a different QuickBooks company clears links and the job states that described them", async () => {
     await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));

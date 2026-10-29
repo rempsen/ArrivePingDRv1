@@ -38,6 +38,7 @@ export interface QboStatus {
   defaultItemId: string;
   parentCustomerId: string;
   shadow: boolean;
+  syncSince: string;
 }
 
 /** The card's own view of the sync: null while loading, `featureOff` when the Control Hub has it off. */
@@ -146,6 +147,17 @@ export function QuickBooksSettingsModal({ open, onClose }: { open: boolean; onCl
             <Select label="Default item" hint="For templates with no mapping" value={s.defaultItemId} options={o?.items ?? []} onChange={(v) => save.mutate({ defaultItemId: v })} />
             <Select label="Parent customer" hint="New customers are filed under it" value={s.parentCustomerId} options={o?.customers ?? []} onChange={(v) => save.mutate({ parentCustomerId: v })} allowNone />
           </div>
+          <label className="block">
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Sync jobs scheduled from</span>
+            <input
+              type="date"
+              aria-label="Sync jobs scheduled from"
+              className="w-full min-h-10 rounded-lg border border-white/10 bg-ink-3/60 px-3 py-2 text-sm text-white sm:max-w-xs"
+              value={s.syncSince}
+              onChange={(e) => e.target.value && save.mutate({ syncSince: e.target.value })}
+            />
+            <span className="mt-1.5 block text-xs text-slate-500">Set to the day QuickBooks was connected. Jobs scheduled before it stay with the bookkeeper and are never sent.</span>
+          </label>
           {s.lastSyncAt && <p className="text-xs text-slate-500">Last checked QuickBooks {new Date(s.lastSyncAt).toLocaleString()}</p>}
           {save.isError && <p className="text-xs text-red-400">{(save.error as Error).message}</p>}
         </div>
