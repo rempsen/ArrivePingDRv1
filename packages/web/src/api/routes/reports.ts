@@ -6,6 +6,8 @@ import { tdb, type TenantDb } from "../database/tenant";
 import { inPoly } from "../../shared/zone-utils";
 import { companyTimeZone } from "../../services/company-tz";
 import { namedDayBounds, zonedDayKey } from "../../shared/tz";
+import { isFeatureOn } from "../../services/features";
+import { loadConnection } from "../../services/quickbooks/client";
 import type { AppEnv } from "../env";
 
 /* ---------------------------------------------------------------------------
@@ -25,6 +27,8 @@ type Report = {
   rows: Record<string, any>[];
   columns: { key: string; label: string; kind?: "money" | "num" | "date" | "text" | "pct" }[];
   meta?: Record<string, any>;
+  /** Where the payroll numbers come from: ArrivePing payouts, or the tenant's QuickBooks sync. */
+  source?: "payouts" | "quickbooks";
 };
 
 const C = {
@@ -307,6 +311,59 @@ export const reportsRoutes = new Hono<AppEnv>()
       /* ========================= PAYROLL ========================= */
       case "payroll": {
         const { map } = await techNameMap(t);
+
+        // A tenant whose technicians are paid through QuickBooks has no
+        // ArrivePing payouts: the report reads each job's purchase order,
+        // bill and payment state instead (services/quickbooks).
+        const qbo = (await isFeatureOn(tenantId(c), "integrations.quickbooks")) && (await loadConnection(tenantId(c)))?.status === "connected";
+        if (qbo) {
+          const bs = (await loadBookings()).filter((b) => b.status !== "cancelled" && b.riderId);
+          type Row = { technician: string; jobs: number; techPay: number; notSynced: number; poOpen: number; billed: number; paid: number; lastPaid: string };
+          const agg = new Map<string, Row>();
+          for (const b of bs) {
+            const a = agg.get(b.riderId!) ?? { technician: map.get(b.riderId!)?.name ?? "Unknown", jobs: 0, techPay: 0, notSynced: 0, poOpen: 0, billed: 0, paid: 0, lastPaid: "" };
+            const pay = Number(b.techPay || 0);
+            a.jobs += 1;
+            a.techPay += pay;
+            if (b.vendorBillStatus === "paid") {
+              a.paid += pay;
+              const d = b.subtradePaidAt ? dayKey(new Date(b.subtradePaidAt), tz) : "";
+              if (d > a.lastPaid) a.lastPaid = d;
+            } else if (b.vendorBillStatus === "billed") a.billed += pay;
+            else if (b.vendorBillStatus === "po_open") a.poOpen += pay;
+            else a.notSynced += pay;
+            agg.set(b.riderId!, a);
+          }
+          const rows = [...agg.values()].sort((x, y) => y.techPay - x.techPay);
+          const sum = (k: keyof Row) => rows.reduce((acc, r) => acc + Number(r[k] || 0), 0);
+          out = {
+            source: "quickbooks",
+            kpis: [
+              { label: "Technician pay", value: money(sum("techPay")), tone: "neutral" },
+              { label: "Billed, unpaid", value: money(sum("billed")), tone: "neutral" },
+              { label: "Paid in QuickBooks", value: money(sum("paid")), tone: "good" },
+              { label: "Not yet billed", value: money(sum("poOpen") + sum("notSynced")), tone: "warn" },
+            ],
+            series: {
+              id: "qbo-pay", title: "Billed and paid in QuickBooks, by technician", type: "bar", xKey: "technician",
+              data: rows.slice(0, 12).map((r) => ({ technician: r.technician, billed: Math.round(r.billed), paid: Math.round(r.paid) })),
+              bars: [{ key: "billed", label: "Billed", color: C.brand }, { key: "paid", label: "Paid", color: C.green }],
+            },
+            rows,
+            columns: [
+              { key: "technician", label: "Technician", kind: "text" },
+              { key: "jobs", label: "Jobs", kind: "num" },
+              { key: "techPay", label: "Tech pay", kind: "money" },
+              { key: "notSynced", label: "No PO yet", kind: "money" },
+              { key: "poOpen", label: "PO open", kind: "money" },
+              { key: "billed", label: "Billed", kind: "money" },
+              { key: "paid", label: "Paid", kind: "money" },
+              { key: "lastPaid", label: "Last paid", kind: "text" },
+            ],
+          };
+          break;
+        }
+
         let payouts = await t.select(schema.payouts);
         payouts = payouts.filter((p) => inRange(p.periodStart) || inRange(p.periodEnd));
         if (fTech) payouts = payouts.filter((p) => p.riderId === fTech);
