@@ -64,12 +64,22 @@ beforeAll(async () => {
 });
 
 describe("payroll report with QuickBooks", () => {
-  it("stays on the payouts view while the tenant is in shadow mode", async () => {
+  it("stays on the payouts view while the tenant is in shadow mode and nothing has reached QuickBooks", async () => {
+    const { eq } = await import("drizzle-orm");
+    await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: true }) }).where(eq(schema.integrations.companyId, CO));
+    // September: no job in this range ever had a purchase order
+    const d = (await (await app.request("/reports/payroll?from=2026-09-01&to=2026-09-30")).json()) as any;
+    expect(d.source).not.toBe("quickbooks");
+    expect(d.kpis[0].label).toBe("Gross earnings");
+    await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: false }) }).where(eq(schema.integrations.companyId, CO));
+  });
+
+  it("keeps showing QuickBooks history if shadow mode is switched back on after going live", async () => {
     const { eq } = await import("drizzle-orm");
     await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: true }) }).where(eq(schema.integrations.companyId, CO));
     const d = (await (await app.request("/reports/payroll?from=2026-10-27&to=2026-10-30")).json()) as any;
-    expect(d.source).not.toBe("quickbooks");
-    expect(d.kpis[0].label).toBe("Gross earnings");
+    expect(d.source).toBe("quickbooks");
+    expect(d.kpis[2]).toMatchObject({ label: "Paid in QuickBooks", value: "$330.00" });
     await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: false }) }).where(eq(schema.integrations.companyId, CO));
   });
 
