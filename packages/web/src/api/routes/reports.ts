@@ -124,11 +124,16 @@ export const reportsRoutes = new Hono<AppEnv>()
     };
 
     // ---- shared dataset: bookings in range (+ filters) ----
+    // Loaded once per request: the payroll case reads it twice.
+    let inRangeRows: Promise<(typeof schema.bookings.$inferSelect)[]> | undefined;
+    const loadBookingsInRange = () =>
+      (inRangeRows ??= t.select(schema.bookings).then((bs) =>
+        // Archived (soft-deleted) jobs don't count, matching the Jobs list,
+        // the scheduler and payouts (bookings.ts, payouts.ts).
+        bs.filter((b) => !b.isSample && !b.deletedAt && inRange(b.scheduledAt)),
+      ));
     const loadBookings = async () => {
-      let bs = await t.select(schema.bookings);
-      // Archived (soft-deleted) jobs don't count, matching the Jobs list,
-      // the scheduler and payouts (bookings.ts, payouts.ts).
-      bs = bs.filter((b) => !b.isSample && !b.deletedAt && inRange(b.scheduledAt));
+      let bs = await loadBookingsInRange();
       if (fStatus) bs = bs.filter((b) => b.status === fStatus);
       if (fTech) bs = bs.filter((b) => b.riderId === fTech);
       return bs;
@@ -324,9 +329,12 @@ export const reportsRoutes = new Hono<AppEnv>()
         const connected =
           (await isFeatureOn(tenantId(c), "integrations.quickbooks")) &&
           (await loadConnection(tenantId(c)))?.status === "connected";
-        const bs = connected ? (await loadBookings()).filter((b) => b.status !== "cancelled" && b.riderId) : [];
-        const qbo = connected && (!(await qboSettings(tenantId(c))).shadow || bs.some((b) => QBO_STATES.has(b.vendorBillStatus)));
+        // History is judged on the whole range, before the technician/status
+        // filters, so filtering to one technician never flips the view.
+        const history = async () => (await loadBookingsInRange()).some((b) => b.status !== "cancelled" && QBO_STATES.has(b.vendorBillStatus));
+        const qbo = connected && (!(await qboSettings(tenantId(c))).shadow || (await history()));
         if (qbo) {
+          const bs = (await loadBookings()).filter((b) => b.status !== "cancelled" && b.riderId);
           const { riders } = await techNameMap(t);
           const riderById = new Map(riders.map((r) => [r.id, r]));
           type Row = { technician: string; jobs: number; techPay: number; notSynced: number; poOpen: number; billed: number; paid: number; error: number; lastPaid: string };

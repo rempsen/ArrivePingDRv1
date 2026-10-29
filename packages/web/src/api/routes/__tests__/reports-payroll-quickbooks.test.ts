@@ -37,12 +37,14 @@ beforeAll(async () => {
     { id: "rpq-admin", name: "Admin", email: "a@rpq.test", role: "admin", companyId: CO },
     { id: "rpq-u1", name: "Dan Rosenblat", email: "d@rpq.test", role: "rider", companyId: CO },
     { id: "rpq-u2", name: "Second Tech", email: "s@rpq.test", role: "rider", companyId: CO },
+    { id: "rpq-u3", name: "Third Tech", email: "t@rpq.test", role: "rider", companyId: CO },
   ] as never);
   await db.insert(schema.memberships).values([
     { userId: "rpq-u1", companyId: CO, role: "rider" },
     { userId: "rpq-u2", companyId: CO, role: "rider" },
+    { userId: "rpq-u3", companyId: CO, role: "rider" },
   ] as never);
-  await db.insert(schema.riders).values([{ id: "rpq-r1", userId: "rpq-u1", companyId: CO }, { id: "rpq-r2", userId: "rpq-u2", companyId: CO }] as never);
+  await db.insert(schema.riders).values([{ id: "rpq-r1", userId: "rpq-u1", companyId: CO }, { id: "rpq-r2", userId: "rpq-u2", companyId: CO }, { id: "rpq-r3", userId: "rpq-u3", companyId: CO }] as never);
   await db.insert(schema.services).values({ id: "rpq-svc", name: "Flooring", category: "flooring", basePrice: 0, companyId: CO } as never);
   await db.insert(schema.integrations).values({ companyId: CO, provider: "quickbooks", status: "connected", externalAccountId: "r5", accessToken: "at", refreshToken: "rt", expiresAt: new Date(Date.now() + 3600_000), config: JSON.stringify({ shadow: false }) } as never);
   await features.setFeatureOverride({ companyId: CO, key: "integrations.quickbooks", enabled: true, actor: { id: "t", name: "T" } });
@@ -58,6 +60,7 @@ beforeAll(async () => {
     job("rpq-r2", 0, "error", { techPay: 60 }), // bill failed after retries: needs a person
     // assigned, not yet completed: nothing accrued, but the PO was priced from the line items
     job("rpq-r2", 0, "po_open", { status: "assigned", techPayBreakdown: "", lineItems: JSON.stringify([{ itemId: "c1", kind: "unit", name: "Tile", sku: "", unit: "sq ft", qty: 10, unitCost: 4, unitPrice: 6, taxable: false, cost: 40, price: 60 }]) }),
+    job("rpq-r3", 45, "none"), // a technician whose jobs never reached QuickBooks
     job("rpq-r1", 999, "paid", { scheduledAt: at("2026-08-01T15:00:00Z") }), // outside the range
     job("rpq-r1", 777, "paid", { isSample: true }), // sample day never counts
   ] as never);
@@ -80,6 +83,11 @@ describe("payroll report with QuickBooks", () => {
     const d = (await (await app.request("/reports/payroll?from=2026-10-27&to=2026-10-30")).json()) as any;
     expect(d.source).toBe("quickbooks");
     expect(d.kpis[2]).toMatchObject({ label: "Paid in QuickBooks", value: "$330.00" });
+    // filtering to a technician whose own jobs never reached QuickBooks keeps the view:
+    // the range has history, so their jobs show as "No PO yet" rather than vanishing
+    const f = (await (await app.request("/reports/payroll?from=2026-10-27&to=2026-10-30&techId=rpq-r3")).json()) as any;
+    expect(f.source).toBe("quickbooks");
+    expect(f.rows).toEqual([expect.objectContaining({ technician: "Third Tech", notSynced: 45 })]);
     await db.update(schema.integrations).set({ config: JSON.stringify({ shadow: false }) }).where(eq(schema.integrations.companyId, CO));
   });
 
@@ -89,8 +97,8 @@ describe("payroll report with QuickBooks", () => {
     const d = (await r.json()) as any;
     expect(d.source).toBe("quickbooks");
     expect(d.kpis.map((k: any) => k.label)).toEqual(["Technician pay", "Billed, unpaid", "Paid in QuickBooks", "Not yet billed"]);
-    // pay 1,250 + 60 (error) + 40 (open PO priced from its line items); not yet billed = 120 + 40 open + 300 no PO + 60 error
-    expect(d.kpis.map((k: any) => k.value)).toEqual(["$1,350.00", "$500.00", "$330.00", "$520.00"]);
+    // pay 1,250 + 60 (error) + 40 (open PO priced from its line items) + 45 (third tech); not yet billed = 120 + 40 open + 345 no PO + 60 error
+    expect(d.kpis.map((k: any) => k.value)).toEqual(["$1,395.00", "$500.00", "$330.00", "$565.00"]);
     const dan = d.rows.find((x: any) => x.technician === "Dan Rosenblat");
     expect(dan).toMatchObject({ jobs: 3, techPay: 870, poOpen: 120, billed: 500, paid: 250, lastPaid: "2026-10-29" });
     const second = d.rows.find((x: any) => x.technician === "Second Tech");
