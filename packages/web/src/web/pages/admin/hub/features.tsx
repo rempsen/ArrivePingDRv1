@@ -1,7 +1,8 @@
 /**
  * Control Hub → Features: every switch, how many companies have it on, and
  * each company that differs from its default (with who changed it, why and
- * until when). Owners can switch one feature for a whole filtered group.
+ * until when). Owners can switch one feature for a whole filtered group, or
+ * for specific companies ticked by name.
  */
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,6 +12,7 @@ import { Modal, Field, inputCls, BtnPrimary, BtnGhost } from "../../../component
 import { toast } from "../../../components/toast";
 import { HubLayout, EmptyNote, useHubMe, useHubTenants } from "./hub-ui";
 import { hub, KIND_LABEL, type FeatureSummary, type TenantKind } from "./hub-data";
+import { pickCompanies, searchCompanies, type BulkWho } from "../../../lib/hub-bulk-pick";
 
 const KIND_TEXT: Record<FeatureSummary["kind"], string> = {
   entitlement: "Part of a plan",
@@ -98,20 +100,23 @@ export default function HubFeatures() {
   );
 }
 
-type Who = "customer" | "demo" | "test" | "all";
-
 function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: () => void }) {
   const tenants = useHubTenants();
   const qc = useQueryClient();
-  const [who, setWho] = useState<Who>("demo");
+  // Features are sold tenant by tenant, so picking companies by name is the
+  // primary path; the group choices stay for demos, tests and roll-outs.
+  const [who, setWho] = useState<BulkWho>("pick");
   const [industry, setIndustry] = useState("");
+  const [query, setQuery] = useState("");
+  const [ticked, setTicked] = useState<string[]>([]);
   const [value, setValue] = useState<"on" | "off" | "default">("on");
   const [reason, setReason] = useState("");
-  const pick = useMemo(
-    () => (tenants.data?.tenants ?? []).filter((t) => t.status !== "closed" && t.kind !== "internal" && (who === "all" || t.kind === who) && (!industry || t.industry === industry)),
-    [tenants.data, who, industry],
-  );
-  const industries = useMemo(() => [...new Map((tenants.data?.tenants ?? []).filter((t) => t.industry).map((t) => [t.industry, t.industryLabel])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [tenants.data]);
+  const rows = useMemo(() => tenants.data?.tenants ?? [], [tenants.data]);
+  const pick = useMemo(() => pickCompanies(rows, { who, industry, ids: ticked }), [rows, who, industry, ticked]);
+  const shown = useMemo(() => searchCompanies(rows, query).filter((t) => !industry || t.industry === industry), [rows, query, industry]);
+  const industries = useMemo(() => [...new Map(rows.filter((t) => t.industry).map((t) => [t.industry, t.industryLabel])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [rows]);
+  const tickedSet = new Set(ticked);
+  const toggle = (id: string, on: boolean) => setTicked((cur) => (on ? [...new Set([...cur, id])] : cur.filter((x) => x !== id)));
   const run = useMutation({
     mutationFn: () => hub<{ changed: number }>(`/features/${feature.key}/bulk`, { method: "POST", body: { companyIds: pick.map((t) => t.id), enabled: value === "default" ? null : value === "on", reason: reason.trim() || undefined } }),
     onSuccess: (r) => {
@@ -143,13 +148,54 @@ function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: ()
     >
       <div className="space-y-4">
         <Field label="Which companies">
-          <select className={inputCls} value={who} onChange={(e) => setWho(e.target.value as Who)}>
+          <select className={inputCls} value={who} onChange={(e) => setWho(e.target.value as BulkWho)}>
+            <option value="pick">Specific companies (search by name)</option>
+            <option value="customer">All customers</option>
             <option value="demo">All demos</option>
             <option value="test">All test accounts</option>
-            <option value="customer">All customers</option>
             <option value="all">Everyone</option>
           </select>
         </Field>
+        {who === "pick" && (
+          <Field label="Find a company">
+            <input
+              type="search"
+              aria-label="Find a company"
+              className={inputCls}
+              placeholder="Type a letter or part of the name, e.g. B for BMD Materials"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <div className="mt-2 flex items-center justify-between text-[12px] text-slate-500">
+              <span>
+                {ticked.length} ticked · {shown.length} shown
+              </span>
+              <span className="flex gap-3">
+                <button type="button" className="text-cyan-glow hover:underline" onClick={() => setTicked((cur) => [...new Set([...cur, ...shown.map((t) => t.id)])])}>
+                  Tick all shown
+                </button>
+                <button type="button" className="text-slate-400 hover:underline" onClick={() => setTicked([])}>
+                  Clear
+                </button>
+              </span>
+            </div>
+            <ul className="mt-2 max-h-56 divide-y divide-white/[0.05] overflow-y-auto rounded-xl border border-white/10 bg-ink-2" aria-label="Companies">
+              {shown.map((t) => (
+                <li key={t.id}>
+                  <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-[13px] hover:bg-white/[0.04]">
+                    <input type="checkbox" aria-label={t.name} className="h-4 w-4 accent-cyan-500" checked={tickedSet.has(t.id)} onChange={(e) => toggle(t.id, e.target.checked)} />
+                    <span className="flex-1 truncate text-slate-200">{t.name}</span>
+                    <span className="shrink-0 text-[11px] text-slate-500">
+                      {KIND_LABEL[t.kind]}
+                      {t.industryLabel ? ` · ${t.industryLabel}` : ""}
+                    </span>
+                  </label>
+                </li>
+              ))}
+              {shown.length === 0 && <li className="px-3 py-3 text-[13px] text-slate-500">No company matches "{query.trim()}".</li>}
+            </ul>
+          </Field>
+        )}
         <Field label="Industry (optional)">
           <select className={inputCls} value={industry} onChange={(e) => setIndustry(e.target.value)}>
             <option value="">Any industry</option>
@@ -170,7 +216,7 @@ function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: ()
         <Field label="Why (optional)">
           <input aria-label="Why" className={inputCls} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
         </Field>
-        {pick.length === 0 && <EmptyNote>No companies match.</EmptyNote>}
+        {pick.length === 0 && <EmptyNote>{who === "pick" ? "Tick at least one company." : "No companies match."}</EmptyNote>}
       </div>
     </Modal>
   );
