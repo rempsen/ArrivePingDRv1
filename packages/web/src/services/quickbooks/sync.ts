@@ -31,6 +31,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import { sdb } from "../../api/database";
 import * as schema from "../../api/database/schema";
 import { jobTechPay } from "../../shared/tech-pay";
+import { safeTimeZone } from "../../shared/tz";
 import { isFeatureOn } from "../features";
 import { logJobEvent } from "../job-events";
 import { registerTaskHandler, scheduleTask } from "../scheduler";
@@ -321,7 +322,8 @@ function addDays(ymd: string, days: number): string {
 
 async function companyTimezone(companyId: string): Promise<string> {
   const [row] = await sdb.select({ timezone: schema.companySettings.timezone }).from(schema.companySettings).where(eq(schema.companySettings.companyId, companyId));
-  return row?.timezone || "America/Winnipeg";
+  // a free-text or legacy value must not throw inside Intl: fall back like the rest of the app
+  return safeTimeZone(row?.timezone || "America/Winnipeg");
 }
 
 async function ensureBill(companyId: string, b: Booking, cfg: QboSettings, input: PoInput, po: PurchaseOrder): Promise<void> {

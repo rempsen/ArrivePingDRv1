@@ -479,6 +479,19 @@ describe("jobs from before QuickBooks was connected", () => {
     expect(await tasks(eveningBefore.id)).toEqual([]);
   });
 
+  it("survives a tenant whose saved timezone is not a real one", async () => {
+    await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));
+    await db.update(schema.integrations).set({ config: cfgWith({ syncSince: "2026-10-29" }) }).where(eq(schema.integrations.companyId, CO));
+    await db.insert(schema.companySettings).values({ id: "qsy-settings", companyId: CO, timezone: "Central Time (Winnipeg)" } as never);
+    try {
+      const b = await job({ scheduledAt: new Date("2026-10-30T15:00:00Z") });
+      await fireEvent("assigned", b.id);
+      expect((await tasks(b.id)).map((t) => t.kind)).toEqual(["qbo.po.create"]);
+    } finally {
+      await db.delete(schema.companySettings).where(eq(schema.companySettings.companyId, CO));
+    }
+  });
+
   it("still cleans up a purchase order that exists, whatever the cut-off", async () => {
     await db.delete(schema.bookings).where(eq(schema.bookings.companyId, CO));
     await db.update(schema.integrations).set({ config: cfgWith({}) }).where(eq(schema.integrations.companyId, CO));
