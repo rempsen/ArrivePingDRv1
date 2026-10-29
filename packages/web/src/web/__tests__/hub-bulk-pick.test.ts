@@ -41,10 +41,10 @@ describe("searchCompanies", () => {
     expect(ids(searchCompanies(all, "b"))).toEqual(["baker", "bmd"]);
     expect(ids(searchCompanies(all, "BMD Materials"))).toEqual(["bmd"]);
     expect(ids(searchCompanies(all, "heat"))).toEqual(["local"]);
-    expect(ids(searchCompanies(all, "co"))).toEqual(["review", "local", "prairie"]);
+    expect(ids(searchCompanies(all, "co"))).toEqual(["local", "prairie", "review"]);
   });
 
-  it("lists every pickable company, alphabetically, when nothing is typed", () => {
-    expect(ids(searchCompanies(all, "  "))).toEqual(["review", "baker", "bmd", "local", "prairie"]);
+  it("lists every pickable company when nothing is typed: customers first, then demos, then test accounts", () => {
+    expect(ids(searchCompanies(all, "  "))).toEqual(["baker", "bmd", "local", "prairie", "review"]);
   });
 });

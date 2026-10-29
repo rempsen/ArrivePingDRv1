@@ -103,7 +103,9 @@ export default function HubFeatures() {
 function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: () => void }) {
   const tenants = useHubTenants();
   const qc = useQueryClient();
-  const [who, setWho] = useState<BulkWho>("demo");
+  // Features are sold tenant by tenant, so picking companies by name is the
+  // primary path; the group choices stay for demos, tests and roll-outs.
+  const [who, setWho] = useState<BulkWho>("pick");
   const [industry, setIndustry] = useState("");
   const [query, setQuery] = useState("");
   const [ticked, setTicked] = useState<string[]>([]);
@@ -147,11 +149,11 @@ function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: ()
       <div className="space-y-4">
         <Field label="Which companies">
           <select className={inputCls} value={who} onChange={(e) => setWho(e.target.value as BulkWho)}>
+            <option value="pick">Specific companies (search by name)</option>
+            <option value="customer">All customers</option>
             <option value="demo">All demos</option>
             <option value="test">All test accounts</option>
-            <option value="customer">All customers</option>
             <option value="all">Everyone</option>
-            <option value="pick">Specific companies…</option>
           </select>
         </Field>
         {who === "pick" && (
@@ -160,7 +162,7 @@ function BulkDialog({ feature, onClose }: { feature: FeatureSummary; onClose: ()
               type="search"
               aria-label="Find a company"
               className={inputCls}
-              placeholder="Type a letter or part of the name"
+              placeholder="Type a letter or part of the name, e.g. B for BMD Materials"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

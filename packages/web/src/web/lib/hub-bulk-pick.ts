@@ -17,7 +17,10 @@ function pickable<T extends PickableCompany>(t: T): boolean {
   return t.status !== "closed" && t.kind !== "internal";
 }
 
-const byName = <T extends PickableCompany>(a: T, b: T) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+/** Paying customers first (they are who features are switched for), then demos, then test accounts; alphabetical within. */
+const KIND_ORDER: Record<string, number> = { customer: 0, demo: 1, test: 2 };
+const byName = <T extends PickableCompany>(a: T, b: T) =>
+  (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 
 /** The companies a bulk switch will change. `ids` are the ticked companies when `who` is "pick". */
 export function pickCompanies<T extends PickableCompany>(tenants: T[], sel: { who: BulkWho; industry: string; ids: string[] }): T[] {
@@ -27,8 +30,9 @@ export function pickCompanies<T extends PickableCompany>(tenants: T[], sel: { wh
 
 /**
  * Companies matching what was typed: a first letter or any part of the name,
- * names that start with the text first, then the rest, each alphabetical.
- * Nothing typed lists every pickable company.
+ * names that start with the text first, then the rest; customers before
+ * demos and test accounts, alphabetical within. Nothing typed lists every
+ * pickable company.
  */
 export function searchCompanies<T extends PickableCompany>(tenants: T[], query: string): T[] {
   const q = query.trim().toLowerCase();
