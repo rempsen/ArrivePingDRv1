@@ -165,3 +165,27 @@ describe("reconnecting (I4, I6)", () => {
     expect(issue!.kind).toBe("realm_changed");
   });
 });
+
+describe("GET /integrations", () => {
+  it("offers every provider to a company that has never connected anything", async () => {
+    const CO2 = "oa-co-fresh";
+    await db.insert(schema.companies).values({ id: CO2, name: "Fresh Co", kind: "customer" } as never);
+    const fresh = new Hono<AppEnv>().use("*", async (c, next) => {
+      c.set("companyId", CO2);
+      c.set("requestId", "oa-req2");
+      c.set("user", { id: "oa-admin2", role: "admin", email: "b@oa.test", name: "B" } as never);
+      return next();
+    });
+    fresh.route("/integrations", integrationsRoutes);
+    const r = await fresh.request("/integrations");
+    expect(r.status).toBe(200);
+    const list = ((await r.json()) as any).integrations as { provider: string; status: string }[];
+    expect(list.map((i) => i.provider).sort()).toEqual(Object.keys(realOauth.PROVIDERS).sort());
+    expect(list.every((i) => i.status === "disconnected")).toBe(true);
+    // a second read creates nothing more
+    const again = ((await (await fresh.request("/integrations")).json()) as any).integrations;
+    expect(again.length).toBe(list.length);
+    const rows = await db.select().from(schema.integrations).where(eq(schema.integrations.companyId, CO2));
+    expect(rows.length).toBe(list.length);
+  });
+});
