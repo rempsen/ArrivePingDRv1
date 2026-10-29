@@ -12,7 +12,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { sdb } from "../../api/database";
 import * as schema from "../../api/database/schema";
-import { q, qboFetch, qboQuery } from "./client";
+import { q, qboFetch, qboQuery, QboError } from "./client";
 import type { Customer, Vendor } from "./entities";
 
 export type BillMode = "arriveping" | "subtrade";
@@ -140,6 +140,24 @@ export async function claimMapping(companyId: string, kind: LinkKind, localId: s
 
 type Resolved = { qboId: string; shadow?: true } | { issue: string };
 
+/**
+ * QuickBooks keeps one namespace for customers, vendors and employees: a
+ * vendor cannot be called exactly what an existing customer is called
+ * (Intuit fault 6240). Create under the name asked for; if it is taken, create
+ * under a distinguishing one and tell the bookkeeper, rather than stop the job.
+ */
+async function createNamed<T extends { Id: string }>(companyId: string, path: "/vendor" | "/customer", key: "Vendor" | "Customer", body: Record<string, unknown>, suffix: string, about: string): Promise<T> {
+  try {
+    return (await qboFetch<Record<string, T>>(companyId, path, { method: "POST", body }))[key]!;
+  } catch (e) {
+    if (!(e instanceof QboError && e.code === "6240")) throw e;
+    const alt = `${String(body.DisplayName).slice(0, 100 - suffix.length)}${suffix}`;
+    const made = (await qboFetch<Record<string, T>>(companyId, path, { method: "POST", body: { ...body, DisplayName: alt } }))[key]!;
+    await raiseIssue(companyId, "name_in_use", `QuickBooks already uses the name "${body.DisplayName}" for another record, so ${about} was created as "${alt}". Rename it in QuickBooks if you prefer; the link follows the record, not the name.`, { detail: { requested: body.DisplayName, created: alt, qboId: made.Id, existing: /Id=(\d+)/.exec(e.detail)?.[1] ?? "" }, resolved: true });
+    return made;
+  }
+}
+
 export interface ResolveOpts {
   /** Shadow mode: say what would be created, create nothing, save no link. */
   shadow?: boolean;
@@ -167,8 +185,7 @@ export async function resolveVendor(companyId: string, rider: { id: string; user
       await raiseIssue(companyId, "shadow", `Shadow mode: would create vendor "${name}" for technician ${rider.name}.`, { detail: { riderId: rider.id, payload: body }, resolved: true });
       return { qboId: SHADOW_ID, shadow: true };
     }
-    const created = await qboFetch<{ Vendor: Vendor }>(companyId, "/vendor", { method: "POST", body });
-    vendor = created.Vendor;
+    vendor = await createNamed<Vendor>(companyId, "/vendor", "Vendor", body, " (vendor)", `technician ${name}'s vendor`);
   }
   await setMapping(companyId, "vendor", rider.id, vendor.Id, { syncToken: vendor.SyncToken });
   return { qboId: vendor.Id };
@@ -183,8 +200,10 @@ export async function resolveCustomer(companyId: string, job: { customerId: stri
   // first, so a link lost to a reconnect finds the record again; then the
   // bare name the bookkeeper may have used.
   const displayName = [name, job.address.trim()].filter(Boolean).join(" - ").slice(0, 100);
-  let hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(displayName)}`);
-  if (!hits.length && displayName !== name) hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(name)}`);
+  // Inactive customers are included: a customer the bookkeeper retired is
+  // still that customer, and QuickBooks would refuse a new one with its name.
+  let hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(displayName)} AND Active IN (true, false)`);
+  if (!hits.length && displayName !== name) hits = await qboQuery<Customer>(companyId, `SELECT * FROM Customer WHERE DisplayName = ${q(name)} AND Active IN (true, false)`);
   if (hits.length > 1) {
     await raiseIssue(companyId, "customer_ambiguous", `More than one QuickBooks customer is called "${name}". Pick one on the Integrations page.`, {
       detail: { customerId: job.customerId, candidates: hits.map((h) => ({ id: h.Id, name: h.DisplayName })) },
@@ -203,12 +222,16 @@ export async function resolveCustomer(companyId: string, job: { customerId: stri
       await raiseIssue(companyId, "shadow", `Shadow mode: would create customer "${displayName}".`, { detail: { customerId: job.customerId, payload: body }, resolved: true });
       return { qboId: SHADOW_ID, shadow: true };
     }
-    const created = await qboFetch<{ Customer: Customer }>(companyId, "/customer", { method: "POST", body });
-    customer = created.Customer;
-    await raiseIssue(companyId, "customer_created", `Created QuickBooks customer "${displayName}".`, {
+    customer = await createNamed<Customer>(companyId, "/customer", "Customer", body, " (customer)", `customer ${name}`);
+    await raiseIssue(companyId, "customer_created", `Created QuickBooks customer "${customer.DisplayName ?? displayName}".`, {
       detail: { customerId: job.customerId, qboId: customer.Id },
       resolved: true,
     });
+  }
+  if (customer.Active === false && !opts.shadow) {
+    const r = await qboFetch<{ Customer: Customer }>(companyId, "/customer", { method: "POST", body: { Id: customer.Id, SyncToken: customer.SyncToken, Active: true, sparse: true } });
+    customer = r.Customer;
+    await raiseIssue(companyId, "customer_reactivated", `QuickBooks customer "${customer.DisplayName ?? name}" was inactive; it was made active again for this job.`, { detail: { customerId: job.customerId, qboId: customer.Id }, resolved: true });
   }
   await setMapping(companyId, "customer", job.customerId, customer.Id, { syncToken: customer.SyncToken });
   return { qboId: customer.Id };

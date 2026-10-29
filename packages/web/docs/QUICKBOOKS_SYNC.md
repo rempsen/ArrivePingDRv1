@@ -41,7 +41,12 @@ Tables: `qbo_links`, `qbo_issues` (migration `0034`).
    - **Purchase tax code** (BMD: GST only), **default item** for unmapped
      templates, optional **parent customer** for customers ArrivePing creates.
    - **Technicians → Vendors** and **Templates → Items** mappings. Unmapped
-     technicians are matched by exact name, then created as Vendors.
+     technicians are matched by exact name, then created as Vendors. QuickBooks
+     keeps one namespace for customers, vendors and employees, so a technician
+     whose name is already a customer (the owner, say) is created as
+     "Name (vendor)" and a resolved `name_in_use` issue says so; customers
+     likewise get " (customer)". A customer the bookkeeper made inactive is
+     reused and reactivated rather than duplicated.
    - **Shadow mode** (default on): everything is logged under *Issues* as
      "would create…" and nothing is written. Turn it off to go live.
    - **Sync jobs scheduled from** — fixed to the day QuickBooks was first

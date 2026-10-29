@@ -73,6 +73,12 @@ const ISSUE_LABEL: Record<string, string> = {
   sync_failed: "QuickBooks refused",
   po_cancel_review: "Cancelled job has a bill",
   bill_removed: "Bill removed in QuickBooks",
+  po_reassign_review: "Reassigned job has a bill",
+  no_pay: "Nothing to price yet",
+  name_in_use: "Name already used in QuickBooks",
+  customer_reactivated: "Customer reactivated",
+  realm_changed: "Different QuickBooks company",
+  sweep_failed: "Sweep skipped a record",
   shadow: "Shadow mode",
 };
 

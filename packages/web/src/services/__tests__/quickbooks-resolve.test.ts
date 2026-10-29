@@ -21,7 +21,9 @@ const CO = "qr-co";
 type Call = { url: URL; method: string; body: any };
 let calls: Call[] = [];
 let vendorsByName: Record<string, { Id: string; DisplayName: string }[]> = {};
-let customersByName: Record<string, { Id: string; DisplayName: string }[]> = {};
+let customersByName: Record<string, { Id: string; DisplayName: string; Active?: boolean }[]> = {};
+/** Names QuickBooks already uses for some other record (a customer, vendor or employee): a create with them is refused with 6240. */
+let takenNames: Record<string, string> = {};
 let nextId = 500;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -39,10 +41,18 @@ beforeAll(async () => {
     calls.push({ url: u, method: init?.method ?? "GET", body });
     const sql = u.searchParams.get("query") ?? "";
     const name = /DisplayName = '((?:[^'\\]|\\.)*)'/.exec(sql)?.[1]?.replace(/\\'/g, "'") ?? "";
+    const includeInactive = /Active IN \(true, ?false\)/i.test(sql);
     if (sql.startsWith("SELECT * FROM Vendor")) return json({ QueryResponse: { Vendor: vendorsByName[name] ?? [] } });
-    if (sql.startsWith("SELECT * FROM Customer")) return json({ QueryResponse: { Customer: customersByName[name] ?? [] } });
-    if (u.pathname.endsWith("/vendor") && init?.method === "POST") return json({ Vendor: { Id: String(nextId++), SyncToken: "0", ...body } });
-    if (u.pathname.endsWith("/customer") && init?.method === "POST") return json({ Customer: { Id: String(nextId++), SyncToken: "0", ...body } });
+    if (sql.startsWith("SELECT * FROM Customer")) return json({ QueryResponse: { Customer: (customersByName[name] ?? []).filter((c) => includeInactive || c.Active !== false) } });
+    const dup = (n: string) => json({ Fault: { Error: [{ code: "6240", Message: "Duplicate Name Exists Error", Detail: `The name supplied already exists. : Id=${takenNames[n]}` }], type: "ValidationFault" } }, 400);
+    if (u.pathname.endsWith("/vendor") && init?.method === "POST") {
+      if (body.Id) return json({ Vendor: { ...body, SyncToken: String(Number(body.SyncToken) + 1) } });
+      return takenNames[body.DisplayName] ? dup(body.DisplayName) : json({ Vendor: { Id: String(nextId++), SyncToken: "0", ...body } });
+    }
+    if (u.pathname.endsWith("/customer") && init?.method === "POST") {
+      if (body.Id) return json({ Customer: { ...body, SyncToken: String(Number(body.SyncToken) + 1) } });
+      return takenNames[body.DisplayName] ? dup(body.DisplayName) : json({ Customer: { Id: String(nextId++), SyncToken: "0", ...body } });
+    }
     return json({ Fault: { Error: [{ code: "999", Message: `unexpected ${u.pathname}` }] } }, 400);
   }) as typeof fetch);
 });
@@ -52,6 +62,7 @@ beforeEach(async () => {
   calls = [];
   vendorsByName = {};
   customersByName = {};
+  takenNames = {};
   await db.delete(schema.qboLinks).where(eq(schema.qboLinks.companyId, CO));
   await db.delete(schema.qboIssues).where(eq(schema.qboIssues.companyId, CO));
 });
@@ -97,6 +108,42 @@ describe("resolveVendor", () => {
     vendorsByName["O'Brien Electric"] = [{ Id: "9", DisplayName: "O'Brien Electric" }];
     expect(await resolveVendor(CO, { ...rider, name: "O'Brien Electric" })).toEqual({ qboId: "9" });
     expect(calls[0]!.url.searchParams.get("query")).toContain("O\\'Brien Electric");
+  });
+});
+
+describe("names QuickBooks already uses", () => {
+  const rider = { id: "rider-dan", userId: "u-dan", name: "Dan Rosenblat", email: "dan@bmd.test" };
+
+  it("creates the technician's vendor under a distinguishing name when a customer already has it", async () => {
+    takenNames["Dan Rosenblat"] = "523"; // BMD's owner is a customer in BMD's books
+    const out = await resolveVendor(CO, rider);
+    expect("qboId" in out).toBe(true);
+    const creates = calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/vendor"));
+    expect(creates.map((c) => c.body.DisplayName)).toEqual(["Dan Rosenblat", "Dan Rosenblat (vendor)"]);
+    expect((await links("vendor"))[0]!.qboId).toBe(String((out as { qboId: string }).qboId));
+    const [i] = await issues();
+    expect(i!.kind).toBe("name_in_use");
+    expect(i!.status).toBe("resolved");
+    expect(i!.message).toContain('"Dan Rosenblat (vendor)"');
+  });
+
+  it("links the job to a customer QuickBooks had made inactive instead of refusing", async () => {
+    customersByName["Noni Rosenblat"] = [{ Id: "610", DisplayName: "Noni Rosenblat", Active: false }];
+    takenNames["Noni Rosenblat - 40 Mountbatten Ave"] = "610";
+    const out = await resolveCustomer(CO, { customerId: "cust-noni", customerName: "Noni Rosenblat", address: "40 Mountbatten Ave" });
+    expect(out).toEqual({ qboId: "610" });
+    expect(calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/customer") && !c.body.Id).length).toBe(0);
+    const reactivate = calls.find((c) => c.method === "POST" && c.body?.Id === "610");
+    expect(reactivate?.body.Active).toBe(true);
+    expect((await links("customer"))[0]!.qboId).toBe("610");
+  });
+
+  it("creates the customer under a distinguishing name when a vendor already has it", async () => {
+    takenNames["Acme Flooring - 1 Main St"] = "77";
+    const out = await resolveCustomer(CO, { customerId: "cust-acme", customerName: "Acme Flooring", address: "1 Main St" });
+    expect("qboId" in out).toBe(true);
+    const creates = calls.filter((c) => c.method === "POST" && c.url.pathname.endsWith("/customer"));
+    expect(creates.map((c) => c.body.DisplayName)).toEqual(["Acme Flooring - 1 Main St", "Acme Flooring - 1 Main St (customer)"]);
   });
 });
 
