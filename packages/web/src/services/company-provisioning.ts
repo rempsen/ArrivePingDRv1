@@ -637,7 +637,9 @@ export async function provisionCompany(
       ? {
           billingCustomerId: opts.billing.customerId,
           billingSubscriptionId: opts.billing.subscriptionId,
-          billingStatus: opts.billing.status,
+          // "none" until the very end: the signup status check reads the
+          // real status as "this company is finished" (see signupState).
+          billingStatus: "none",
           billingTrialEndsAt: opts.billing.trialEndsAt,
           billingSeats: 1,
         }
@@ -1078,6 +1080,9 @@ export async function provisionCompany(
     })`,
     companyId: slug,
   });
+
+  // Last step: the company is finished. Self-serve signup polls for this.
+  if (opts?.billing) await db.update(schema.companies).set({ billingStatus: opts.billing.status }).where(eq(schema.companies.id, slug));
 
   const [row] = await db.select().from(schema.companies).where(eq(schema.companies.id, slug));
   if (!row) throw Err.internal("Company vanished immediately after insert");
