@@ -11,6 +11,15 @@
 
 export const SITE_BLOCK_CHARS = 3_500;
 
+/**
+ * How long one signup writer may take before it gives up and the caller uses
+ * its preset / generic fallback. They run at the same time during signup, and
+ * the whole signup has to answer before the edge proxy gives up (~100 s).
+ */
+export const SCOUT_TIMEOUT_MS = 45_000;
+/** The notification-copy writer uses the slower reasoning model. */
+export const SCOUT_REASONING_TIMEOUT_MS = 65_000;
+
 /** Verbatim-excerpt block for a scout prompt, or "" when there's nothing. */
 export function siteBlock(excerpts: string | null | undefined, max = SITE_BLOCK_CHARS): string {
   const text = typeof excerpts === "string" ? excerpts.trim() : "";

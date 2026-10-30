@@ -541,6 +541,17 @@ export function scoutedTeamProfile(brand: Record<string, any>): Record<string, u
   return out;
 }
 
+/**
+ * Start `run` now and hand back a getter that awaits it later. Attaches a
+ * no-op handler so a failure before anyone awaits it isn't an unhandled
+ * rejection; awaiting the getter still throws it.
+ */
+function early<T>(run: () => Promise<T>): () => Promise<T> {
+  const p = run();
+  p.catch(() => {});
+  return () => p;
+}
+
 export async function provisionCompany(
   b: CompanyCreateInput,
   actor: ProvisionActor,
@@ -553,6 +564,13 @@ export async function provisionCompany(
      * alone. Without this an existing email is refused.
      */
     existingAdminVerified?: boolean;
+    /**
+     * Self-serve: the trial subscription already started for this company.
+     * Written with the company row itself, so a signup retried while this
+     * one is still running finds it by its Stripe customer instead of making
+     * a second company.
+     */
+    billing?: { customerId: string; subscriptionId: string; status: string; trialEndsAt: Date };
   },
 ): Promise<ProvisionResult> {
   const source = opts?.source ?? "superadmin";
@@ -615,6 +633,15 @@ export async function provisionCompany(
     industryOther: resolvedIndustry === "other" ? industryOther : "",
     status: "active",
     createdBy: actor.id ?? "",
+    ...(opts?.billing
+      ? {
+          billingCustomerId: opts.billing.customerId,
+          billingSubscriptionId: opts.billing.subscriptionId,
+          billingStatus: opts.billing.status,
+          billingTrialEndsAt: opts.billing.trialEndsAt,
+          billingSeats: 1,
+        }
+      : {}),
   });
   const t = tdb(slug);
 
@@ -694,6 +721,84 @@ export async function provisionCompany(
     return pages.length ? buildExcerpts(pages) || null : null;
   })();
 
+  const servicesArr: string[] = Array.isArray(brand.services)
+    ? brand.services
+    : typeof brand.services === "string" && brand.services.trim()
+      ? brand.services.split(/[\n,;|]/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+
+  // The AI writers below (notification copy, templates, services, catalog,
+  // options) don't depend on each other, so they all start now and each
+  // section awaits its own. One after another they took long enough that the
+  // self-serve signup request outlived the edge proxy (Cloudflare answers
+  // with its HTML error page after ~100 s), and the page showed that page as
+  // the error. Each writer also has its own time limit and falls back to the
+  // preset / generic copy when it runs out (see SCOUT_TIMEOUT_MS). The writes
+  // still happen in the same order as before. Only the intake-form writer
+  // waits, since it names the services the library section inserts.
+  const workerNoun = str(brand.workerNoun, preset?.workerNoun ?? "Technician");
+  const customerNoun = str(brand.customerNoun, preset?.customerNoun ?? "Customer");
+  const scoutInput = {
+    name,
+    industry: resolvedIndustry || null,
+    industryOther: resolvedIndustry === "other" ? industryOther : null,
+    services: servicesArr,
+    description: str(brand.description) || null,
+    website: str(b.website) || null,
+    siteExcerpts,
+    knowledge: icpKnowledge,
+  };
+  const wantServices = Boolean(preset || servicesArr.length);
+  const wantCatalog = Boolean(preset?.id || servicesArr.length);
+  const copyP = early(() =>
+    scoutNotificationCopy({
+      name,
+      industry: resolvedIndustry || null,
+      industryOther: resolvedIndustry === "other" ? industryOther : null,
+      website: str(b.website) || null,
+      description: str(brand.description) || str(brand.tagline) || null,
+      services: servicesArr,
+      workerNoun,
+      workerNounPlural: str(brand.workerNounPlural, preset?.workerNounPlural ?? "Technicians"),
+      customerNoun,
+      jobNoun: str(brand.jobNoun, preset?.jobNoun ?? "Job"),
+      brandColor: str(brand.primaryColor, "#06B6D4"),
+      siteExcerpts,
+      knowledge: icpKnowledge,
+    }),
+  );
+  const tplsP = early(() =>
+    scoutStarterTemplates({
+      name,
+      industry: resolvedIndustry || null,
+      industryOther: resolvedIndustry === "other" ? industryOther : null,
+      services: servicesArr,
+      description: str(brand.description) || str(brand.tagline) || null,
+      website: str(b.website) || null,
+      workerNoun,
+      customerNoun,
+      brandColor: str(brand.primaryColor, "#06B6D4"),
+      siteExcerpts,
+      knowledge: icpKnowledge,
+    }),
+  );
+  const servicesP = wantServices
+    ? early(() =>
+        scoutStarterServices({
+          name,
+          industry: resolvedIndustry || null,
+          industryOther: resolvedIndustry === "other" ? industryOther : null,
+          services: servicesArr,
+          description: str(brand.description) || str(brand.tagline) || null,
+          website: str(b.website) || null,
+          siteExcerpts,
+          knowledge: icpKnowledge,
+        }),
+      )
+    : null;
+  const catalogP = wantCatalog ? early(() => scoutStarterCatalog(scoutInput)) : null;
+  const optionsP = preset?.id ? early(() => scoutStarterOptionCatalog(scoutInput)) : null;
+
   // 2b) auto-provision branded notifications/email/SMS identity so every
   //     message this tenant sends carries their logo, color & contact footer.
   await provisionNotificationBranding({
@@ -716,25 +821,7 @@ export async function provisionCompany(
   //     still runs with no overrides, which is exactly today's generic behavior.
   let notificationCopyBranded = 0;
   try {
-    const copyMap = await scoutNotificationCopy({
-      name,
-      industry: resolvedIndustry || null,
-      industryOther: resolvedIndustry === "other" ? industryOther : null,
-      website: str(b.website) || null,
-      description: str(brand.description) || str(brand.tagline) || null,
-      services: Array.isArray(brand.services)
-        ? brand.services
-        : typeof brand.services === "string" && brand.services.trim()
-          ? brand.services.split(/[\n,;|]/).map((s: string) => s.trim()).filter(Boolean)
-          : [],
-      workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
-      workerNounPlural: str(brand.workerNounPlural, preset?.workerNounPlural ?? "Technicians"),
-      customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
-      jobNoun: str(brand.jobNoun, preset?.jobNoun ?? "Job"),
-      brandColor: str(brand.primaryColor, "#06B6D4"),
-      siteExcerpts,
-      knowledge: icpKnowledge,
-    });
+    const copyMap = await copyP();
     notificationCopyBranded = Object.keys(copyMap).length;
     await seedNotificationRules(slug, copyMap as any);
     console.log(`[provisioning] seeded notification rules for "${slug}" — ${notificationCopyBranded} branded (${source})`);
@@ -743,31 +830,13 @@ export async function provisionCompany(
     await seedNotificationRules(slug).catch((e2) => console.error("[provisioning] fallback notification seeding also failed", e2));
   }
 
-  const servicesArr: string[] = Array.isArray(brand.services)
-    ? brand.services
-    : typeof brand.services === "string" && brand.services.trim()
-      ? brand.services.split(/[\n,;|]/).map((s: string) => s.trim()).filter(Boolean)
-      : [];
-
   // 2d) auto-seed 2-3 industry-appropriate WORK-ORDER templates (the Form
   //     Builder / task_templates) so the tenant's builder isn't empty —
   //     residential / commercial / service workflows tailored to their trade.
   //     AI-generated, best-effort, non-blocking; falls back to generics.
   let templatesSeeded = 0;
   try {
-    const tpls = await scoutStarterTemplates({
-      name,
-      industry: resolvedIndustry || null,
-      industryOther: resolvedIndustry === "other" ? industryOther : null,
-      services: servicesArr,
-      description: str(brand.description) || str(brand.tagline) || null,
-      website: str(b.website) || null,
-      workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
-      customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
-      brandColor: str(brand.primaryColor, "#06B6D4"),
-      siteExcerpts,
-      knowledge: icpKnowledge,
-    });
+    const tpls = await tplsP();
     for (const tpl of tpls) {
       await t.insert(schema.taskTemplates, {
         name: tpl.name,
@@ -817,18 +886,9 @@ export async function provisionCompany(
   let servicesSeeded = 0;
   // What the intake forms below pick their services from.
   const seededLibrary: Array<{ id: string; name: string; category: string }> = [];
-  if (preset || servicesArr.length) {
+  if (servicesP) {
     try {
-      const tailored = await scoutStarterServices({
-        name,
-        industry: resolvedIndustry || null,
-        industryOther: resolvedIndustry === "other" ? industryOther : null,
-        services: servicesArr,
-        description: str(brand.description) || str(brand.tagline) || null,
-        website: str(b.website) || null,
-        siteExcerpts,
-        knowledge: icpKnowledge,
-      });
+      const tailored = await servicesP();
       for (const s of tailored) {
         const [row] = await t.insert(schema.services, {
           name: s.name,
@@ -863,8 +923,8 @@ export async function provisionCompany(
       services: servicesArr,
       description: str(brand.description) || str(brand.tagline) || null,
       website: str(b.website) || null,
-      workerNoun: str(brand.workerNoun, preset?.workerNoun ?? "Technician"),
-      customerNoun: str(brand.customerNoun, preset?.customerNoun ?? "Customer"),
+      workerNoun,
+      customerNoun,
       siteExcerpts,
       knowledge: icpKnowledge,
       library: seededLibrary,
@@ -920,20 +980,10 @@ export async function provisionCompany(
   //     only renames/drops/adds rows). For "other" with a real services
   //     list the scout builds a starter catalog from the website alone.
   //     Best-effort, non-blocking; any failure = plain preset.
-  const scoutInput = {
-    name,
-    industry: resolvedIndustry || null,
-    industryOther: resolvedIndustry === "other" ? industryOther : null,
-    services: servicesArr,
-    description: str(brand.description) || null,
-    website: str(b.website) || null,
-    siteExcerpts,
-    knowledge: icpKnowledge,
-  };
   let catalogSeeded = 0;
-  if (preset?.id || servicesArr.length) {
+  if (catalogP) {
     try {
-      const tailored = await scoutStarterCatalog(scoutInput);
+      const tailored = await catalogP();
       catalogSeeded = await seedCatalogForCompany(slug, preset?.id ?? "", tailored);
       if (catalogSeeded > 0)
         console.log(`[provisioning] seeded ${catalogSeeded} catalog items (${preset?.id ?? "scraped, no preset"}) for "${slug}" (${source})`);
@@ -945,9 +995,9 @@ export async function provisionCompany(
   // 2g) auto-seed the OPTIONS/TIER CATALOG (schema.optionCategories) — the
   //     industry preset, tailored the same way. Best-effort, non-blocking.
   let optionCategoriesSeeded = 0;
-  if (preset?.id) {
+  if (optionsP && preset?.id) {
     try {
-      const tailored = await scoutStarterOptionCatalog(scoutInput);
+      const tailored = await optionsP();
       optionCategoriesSeeded = await seedOptionCatalogForCompany(slug, preset.id, tailored);
       if (optionCategoriesSeeded > 0)
         console.log(`[provisioning] seeded ${optionCategoriesSeeded} option categories (${preset.id}) for "${slug}" (${source})`);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { api } from "../lib/api";
 import { ApiError } from "../lib/api-error";
+import { isGatewayFailure, waitForSignup, type SignupStatus } from "../lib/signup-wait";
 import { authClient, captureToken } from "../lib/auth";
 import { Logo } from "../components/brand";
 import { Field, inputCls } from "../components/modal";
@@ -334,29 +335,47 @@ export default function SignupCompanyPage() {
         address: address.trim() || null,
         email: contactEmail.trim() || null,
       };
-      const res = await (api.public as any).onboarding.signup.$post({
-        json: {
-          name: name.trim(),
-          website: site || undefined,
-          industry: industry || undefined,
-          industryOther: industry === "other" ? industryOther : undefined,
-          contactEmail: contactEmail.trim() || undefined,
-          phone: phone.trim() || undefined,
-          adminName: `${firstName.trim()} ${lastName.trim()}`.trim(),
-          adminFirstName: firstName.trim(),
-          adminLastName: lastName.trim(),
-          adminPhone: adminPhone.trim() || undefined,
-          adminEmail,
-          // An existing login keeps its own password; the server checks the
-          // session instead and never sets it.
-          adminPassword: signedIn ? existingPw : adminPassword,
-          brand: reviewedBrand,
-          billingCustomerId: billing?.customerId,
-          billingSetupIntentId: billing?.setupIntentId,
-        },
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error((d as any)?.message || "Signup failed");
+      const json = {
+        name: name.trim(),
+        website: site || undefined,
+        industry: industry || undefined,
+        industryOther: industry === "other" ? industryOther : undefined,
+        contactEmail: contactEmail.trim() || undefined,
+        phone: phone.trim() || undefined,
+        adminName: `${firstName.trim()} ${lastName.trim()}`.trim(),
+        adminFirstName: firstName.trim(),
+        adminLastName: lastName.trim(),
+        adminPhone: adminPhone.trim() || undefined,
+        adminEmail,
+        // An existing login keeps its own password; the server checks the
+        // session instead and never sets it.
+        adminPassword: signedIn ? existingPw : adminPassword,
+        brand: reviewedBrand,
+        billingCustomerId: billing?.customerId,
+        billingSetupIntentId: billing?.setupIntentId,
+      };
+      // Setting up the company can outlast the edge proxy, which then answers
+      // with its own HTML error page while the server finishes the job. With
+      // a card on file the server can say where the signup got to, so wait
+      // for it instead of showing that page (or starting over). 202 = an
+      // earlier attempt with this card is still being set up.
+      const customerId = billing?.customerId;
+      const wait = () =>
+        waitForSignup({
+          check: async () => {
+            const r = await (api.public as any).onboarding.signup.status.$post({ json: { billingCustomerId: customerId, adminEmail } });
+            return (await r.json()) as SignupStatus;
+          },
+        });
+      let d: any;
+      try {
+        const res = await (api.public as any).onboarding.signup.$post({ json });
+        d = await res.json();
+        if (res.status === 202 && customerId) d = await wait();
+      } catch (e) {
+        if (!customerId || !isGatewayFailure(e)) throw e;
+        d = await wait();
+      }
       // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
       hubspotIdentify(adminEmail);
       setProvisionResult((d as any)?.seeded ?? null);

@@ -80,6 +80,10 @@ export function messageFromBody(body: unknown, status: number): string {
     if (typeof b.message === "string") return b.message;
     if (typeof b.error === "string") return b.error;
   }
+  // An HTML page (Cloudflare's timeout / bad-gateway page) is never a message
+  // for a person: it once landed on the signup page as raw markup.
+  if (typeof body === "string" && /^\s*(<!doctype|<html|<!--|<\?xml)/i.test(body))
+    return status >= 500 ? `The server didn't answer in time (${status}). Please try again in a moment.` : `Request failed (${status})`;
   if (typeof body === "string" && body.trim()) return body.trim().slice(0, 300);
   return `Request failed (${status})`;
 }

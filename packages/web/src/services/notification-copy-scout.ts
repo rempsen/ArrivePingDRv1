@@ -30,7 +30,7 @@ import { log } from "../api/lib/logger";
 import type { NvcEvent, Recipient } from "./dispatch";
 import { TEMPLATE_VARS } from "./dispatch";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock } from "./scout-prompt";
+import { siteBlock, SCOUT_REASONING_TIMEOUT_MS } from "./scout-prompt";
 
 export interface IcpKnowledgeForCopy {
   summary?: string | null;
@@ -151,6 +151,7 @@ export async function scoutNotificationCopy(input: NotificationCopyInput): Promi
 
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_REASONING_TIMEOUT_MS),
       // Deep reasoning model: 12 messages have to read as one consistent
       // brand voice, grounded in the ICP research's tone/notification
       // refinement, without drifting into generic customer-service filler

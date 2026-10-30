@@ -125,6 +125,66 @@ const SelfServeSignupBody = CompanyCreateBody.omit({
   billingSetupIntentId: optText(80),
 });
 
+const SignupStatusBody = z.object({
+  billingCustomerId: shortText("Payment", 80),
+  adminEmail: emailField("Email"),
+});
+const onboardingStatusLimiter = rateLimit({
+  name: "onboarding-signup-status",
+  limit: 120,
+  windowMs: 60 * 60_000,
+  keyFn: keyByIp,
+});
+
+/** How long a company with no admin yet counts as "still being set up". */
+export const SIGNUP_PENDING_MS = 15 * 60_000;
+
+export type SignupState =
+  | { kind: "none" }
+  | { kind: "pending" }
+  | { kind: "stalled" }
+  | { kind: "taken" }
+  | { kind: "done"; body: Record<string, unknown> };
+
+/**
+ * Where a signup paid for by this Stripe customer has got to. The company
+ * row carries the customer from the moment it's inserted, and the admin
+ * login is made near the end of provisioning, so: no company = not started
+ * (or it failed and was unwound), a company without an admin = still being
+ * set up (or stuck, once it's old), an admin with this email = done.
+ */
+export async function signupState(billingCustomerId: string, adminEmail: string, now = new Date()): Promise<SignupState> {
+  const [co] = await db
+    .select({ id: schema.companies.id, name: schema.companies.name, trialEndsAt: schema.companies.billingTrialEndsAt, createdAt: schema.companies.createdAt })
+    .from(schema.companies)
+    .where(eq(schema.companies.billingCustomerId, billingCustomerId));
+  if (!co) return { kind: "none" };
+  const admins = await sdb
+    .select({ id: schema.user.id, email: schema.user.email })
+    .from(schema.memberships)
+    .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
+    .where(and(eq(schema.memberships.companyId, co.id), eq(schema.memberships.role, "admin")));
+  const mine = admins.find((a) => a.email.trim().toLowerCase() === adminEmail.trim().toLowerCase());
+  if (mine)
+    return {
+      kind: "done",
+      body: {
+        companySlug: co.id,
+        companyName: co.name,
+        admin: mine,
+        seeded: null,
+        trialEndsAt: co.trialEndsAt ? co.trialEndsAt.toISOString() : null,
+        alreadyCreated: true,
+      },
+    };
+  if (admins.length) return { kind: "taken" };
+  const age = now.getTime() - new Date(co.createdAt ?? now).getTime();
+  return age < SIGNUP_PENDING_MS ? { kind: "pending" } : { kind: "stalled" };
+}
+
+const PENDING_MESSAGE = "We're still setting up your workspace. This can take a couple of minutes.";
+const STALLED_MESSAGE = "Your workspace didn't finish setting up. Please contact support@arriveping.com and we'll sort it out; your card won't be charged during the trial.";
+
 const EmailCheckBody = z.object({ email: emailField("Email") });
 const onboardingEmailLimiter = rateLimit({
   name: "onboarding-email-check",
@@ -201,6 +261,20 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     }
   })
 
+  // POST /api/public/onboarding/signup/status — what the signup page polls
+  // when its signup request didn't come back cleanly (the edge proxy timed
+  // out or the connection dropped while the server kept working). Answers
+  // from the database, so it works whichever server instance did the work.
+  .post("/signup/status", onboardingStatusLimiter, jsonBody(SignupStatusBody), async (c) => {
+    const { billingCustomerId, adminEmail } = c.req.valid("json");
+    const st = await signupState(billingCustomerId, adminEmail);
+    if (st.kind === "done") return c.json({ state: "done", ...st.body }, 200);
+    if (st.kind === "pending") return c.json({ state: "pending", message: PENDING_MESSAGE }, 200);
+    if (st.kind === "stalled") return c.json({ state: "stalled", message: STALLED_MESSAGE }, 200);
+    if (st.kind === "taken") return c.json({ state: "taken", message: "This card is already used by another ArrivePing company." }, 200);
+    return c.json({ state: "none" }, 200);
+  })
+
   // POST /api/public/onboarding/email/check — before the card step. When the
   // email already has a login (a customer or technician of another company),
   // the page asks them to sign in with it; the new company is then added to
@@ -243,29 +317,11 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     // customer already has a company. Hand that back instead of making a
     // second one on the same subscription.
     if (billingCustomerId) {
-      const [done] = await db
-        .select({ id: schema.companies.id, name: schema.companies.name, trialEndsAt: schema.companies.billingTrialEndsAt })
-        .from(schema.companies)
-        .where(eq(schema.companies.billingCustomerId, billingCustomerId));
-      if (done) {
-        const [admin] = await sdb
-          .select({ id: schema.user.id, email: schema.user.email })
-          .from(schema.memberships)
-          .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
-          .where(and(eq(schema.memberships.companyId, done.id), eq(schema.memberships.role, "admin"), sql`lower(${schema.user.email}) = ${b.adminEmail.trim().toLowerCase()}`));
-        if (!admin) return c.json({ message: "This card is already used by another ArrivePing company." }, 409);
-        return c.json(
-          {
-            companySlug: done.id,
-            companyName: done.name,
-            admin,
-            seeded: null,
-            trialEndsAt: done.trialEndsAt ? done.trialEndsAt.toISOString() : null,
-            alreadyCreated: true,
-          },
-          200,
-        );
-      }
+      const st = await signupState(billingCustomerId, b.adminEmail);
+      if (st.kind === "done") return c.json(st.body, 200);
+      if (st.kind === "taken") return c.json({ message: "This card is already used by another ArrivePing company." }, 409);
+      if (st.kind === "pending") return c.json({ pending: true, message: PENDING_MESSAGE }, 202);
+      if (st.kind === "stalled") return c.json({ code: "signup_stalled", message: STALLED_MESSAGE }, 409);
     }
 
     // Self-serve can't be asked to pick another slug on a collision, so take
@@ -302,23 +358,29 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     // 2) the tenant
     let result: Awaited<ReturnType<typeof provisionCompany>>;
     try {
-      result = await provisionCompany({ ...b, slug, plan: "starter" }, {}, { source: "self_serve", existingAdminVerified: !!existing });
+      result = await provisionCompany(
+        { ...b, slug, plan: "starter" },
+        {},
+        {
+          source: "self_serve",
+          existingAdminVerified: !!existing,
+          billing: billing?.ok ? { customerId: billing.customerId, subscriptionId: billing.subscriptionId, status: billing.status, trialEndsAt: billing.trialEndsAt } : undefined,
+        },
+      );
     } catch (e) {
-      if (billing?.ok) await cancelSubscriptionQuietly(billing.subscriptionId);
+      if (billing?.ok) {
+        await cancelSubscriptionQuietly(billing.subscriptionId);
+        // A half-made company must not look "still being set up" to a retry.
+        await db
+          .update(schema.companies)
+          .set({ billingCustomerId: null, billingSubscriptionId: null, billingStatus: "canceled" })
+          .where(eq(schema.companies.billingCustomerId, billing.customerId))
+          .catch(() => {});
+      }
       throw e;
     }
     const companyId = result.company.id;
     if (billing?.ok) {
-      await db
-        .update(schema.companies)
-        .set({
-          billingCustomerId: billing.customerId,
-          billingSubscriptionId: billing.subscriptionId,
-          billingStatus: billing.status,
-          billingTrialEndsAt: billing.trialEndsAt,
-          billingSeats: 1,
-        })
-        .where(eq(schema.companies.id, companyId));
       // Belt and braces: keep Stripe's metadata pointing at the real tenant id.
       if (companyId !== slug) {
         await getStripe()

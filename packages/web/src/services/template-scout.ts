@@ -31,7 +31,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { EMPTY_RATE_MODEL, type RateModel } from "../shared/pricing";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock, sourcePriority } from "./scout-prompt";
+import { siteBlock, sourcePriority, SCOUT_TIMEOUT_MS } from "./scout-prompt";
 
 /** Field types supported by the builder canvas (mirror builder.tsx PALETTE). */
 const FIELD_TYPES = [
@@ -323,6 +323,7 @@ export async function scoutStarterTemplates(input: TemplateScoutInput): Promise<
 
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_TIMEOUT_MS),
       model: gateway(MODELS.text),
       schema: TemplateSchema,
       prompt: `You are onboarding a field-service / trade business into a dispatch platform and must design its starter WORK-ORDER TEMPLATES — the on-site forms a ${noun} fills out while doing a job (NOT the public lead-capture forms).
