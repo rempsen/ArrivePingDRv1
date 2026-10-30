@@ -37,7 +37,11 @@ export interface WaitOpts {
   everyMs?: number;
   /** Give up after this long in total. */
   maxMs?: number;
-  /** "none" this many times in a row = the signup never got going. */
+  /**
+   * "none" this many times in a row = the signup never got going. Generous:
+   * if the connection dropped early, the first request may still be talking
+   * to Stripe before it inserts the company row.
+   */
   noneLimit?: number;
   now?: () => number;
 }
@@ -50,7 +54,7 @@ export async function waitForSignup(o: WaitOpts): Promise<Record<string, unknown
   const every = o.everyMs ?? 5_000;
   const now = o.now ?? Date.now;
   const until = now() + (o.maxMs ?? 5 * 60_000);
-  const noneLimit = o.noneLimit ?? 4;
+  const noneLimit = o.noneLimit ?? 18;
   let nones = 0;
   for (;;) {
     await sleep(every);
