@@ -149,13 +149,20 @@ export type SignupState =
 /**
  * Where a signup paid for by this Stripe customer has got to. The company
  * row carries the customer from the moment it's inserted, and the admin
- * login is made near the end of provisioning, so: no company = not started
- * (or it failed and was unwound), a company without an admin = still being
- * set up (or stuck, once it's old), an admin with this email = done.
+ * keeps billing status "none" until provisioning's very last step, so: no
+ * company = not started (or it failed and was unwound), a company still at
+ * "none" = being set up (or stuck, once it's old), finished with an admin
+ * with this email = done, with someone else's = the card is taken.
  */
 export async function signupState(billingCustomerId: string, adminEmail: string, now = new Date()): Promise<SignupState> {
   const [co] = await db
-    .select({ id: schema.companies.id, name: schema.companies.name, trialEndsAt: schema.companies.billingTrialEndsAt, createdAt: schema.companies.createdAt })
+    .select({
+      id: schema.companies.id,
+      name: schema.companies.name,
+      trialEndsAt: schema.companies.billingTrialEndsAt,
+      billingStatus: schema.companies.billingStatus,
+      createdAt: schema.companies.createdAt,
+    })
     .from(schema.companies)
     .where(eq(schema.companies.billingCustomerId, billingCustomerId));
   if (!co) return { kind: "none" };
@@ -165,7 +172,8 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
     .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
     .where(and(eq(schema.memberships.companyId, co.id), eq(schema.memberships.role, "admin")));
   const mine = admins.find((a) => a.email.trim().toLowerCase() === adminEmail.trim().toLowerCase());
-  if (mine)
+  const finished = co.billingStatus !== "none";
+  if (mine && finished)
     return {
       kind: "done",
       body: {
@@ -177,7 +185,7 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
         alreadyCreated: true,
       },
     };
-  if (admins.length) return { kind: "taken" };
+  if (admins.length && !mine) return { kind: "taken" };
   const age = now.getTime() - new Date(co.createdAt ?? now).getTime();
   return age < SIGNUP_PENDING_MS ? { kind: "pending" } : { kind: "stalled" };
 }
