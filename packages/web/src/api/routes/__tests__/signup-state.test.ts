@@ -37,13 +37,15 @@ const NOW = new Date("2026-10-30T20:00:00Z");
 
 beforeAll(async () => {
   for (const t of [schema.companies, schema.user, schema.memberships]) await ensureTable(t as unknown as PgTable);
-  const co = (id: string, cus: string, createdAt: Date, billingStatus: string) =>
-    db.insert(schema.companies).values({ id, name: id.toUpperCase(), billingCustomerId: cus, billingStatus, billingTrialEndsAt: new Date("2026-11-29T00:00:00Z"), createdAt } as any);
+  // Every one is "trialing": a Stripe webhook may set that before provisioning
+  // finishes, so it must not count as finished.
+  const co = (id: string, cus: string, createdAt: Date, provisioningDone: boolean) =>
+    db.insert(schema.companies).values({ id, name: id.toUpperCase(), billingCustomerId: cus, billingStatus: "trialing", provisioningDone, billingTrialEndsAt: new Date("2026-11-29T00:00:00Z"), createdAt } as any);
   const recent = new Date(NOW.getTime() - 60_000);
-  await co("ss-done", "cus_done", recent, "trialing");
-  await co("ss-wip", "cus_wip", recent, "none");
-  await co("ss-late", "cus_late", recent, "none"); // admin made, last steps still running
-  await co("ss-old", "cus_old", new Date(NOW.getTime() - SIGNUP_PENDING_MS - 1), "none");
+  await co("ss-done", "cus_done", recent, true);
+  await co("ss-wip", "cus_wip", recent, false);
+  await co("ss-late", "cus_late", recent, false); // admin made, last steps still running
+  await co("ss-old", "cus_old", new Date(NOW.getTime() - SIGNUP_PENDING_MS - 1), false);
   await db.insert(schema.user).values([
     { id: "ss-u1", name: "Pat", email: "Pat@Example.com", emailVerified: true, role: "admin", companyId: "ss-done", createdAt: NOW, updatedAt: NOW } as any,
   ]);

@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "provisioning_done" boolean DEFAULT true NOT NULL;
