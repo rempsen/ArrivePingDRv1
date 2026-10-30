@@ -26,7 +26,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { INTAKE_FIELD_CATALOG } from "../api/routes/forms";
 import { log } from "../api/lib/logger";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock, sourcePriority } from "./scout-prompt";
+import { siteBlock, sourcePriority, SCOUT_TIMEOUT_MS } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 /** Render an IcpKnowledge block for prompt injection, or "" when empty. */
@@ -332,6 +332,7 @@ ${SERVICE_PICK_RULES}
 
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_TIMEOUT_MS),
       model: gateway(MODELS.text),
       schema: formSchema(names),
       prompt: `You are onboarding a service business into a dispatch & booking platform and must design its starter customer intake forms (the public web forms prospects fill out to request work).
@@ -433,6 +434,7 @@ export async function suggestFormServices(input: {
   const nameEnum = z.enum(names as [string, ...string[]]);
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_TIMEOUT_MS),
       model: gateway(MODELS.text),
       schema: z.object({
         serviceNames: z.array(nameEnum).describe("The services this form offers (exact names from the SERVICE LIBRARY)."),

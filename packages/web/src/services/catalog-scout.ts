@@ -32,7 +32,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { CATALOG_PRESETS, type CatalogPresetItem } from "./catalog-presets";
 import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-catalog-presets";
-import { siteBlock } from "./scout-prompt";
+import { siteBlock, SCOUT_TIMEOUT_MS } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 export interface CatalogScoutInput {
@@ -136,6 +136,7 @@ export async function scoutStarterCatalog(input: CatalogScoutInput): Promise<Cat
 
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_TIMEOUT_MS),
       model: gateway(MODELS.text),
       schema: CatalogEditSchema,
       prompt: `You are onboarding a service business into a field-service platform and must tailor its starter PRICE CATALOG — the priced products, services and bundles their office quotes from — so it matches what THIS business actually sells.
@@ -275,6 +276,7 @@ export async function scoutStarterOptionCatalog(input: CatalogScoutInput): Promi
 
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_TIMEOUT_MS),
       model: gateway(MODELS.text),
       schema: OptionEditSchema,
       prompt: `You are onboarding a service business into a field-service platform and must tailor its starter OPTIONS & TIERS — the good/better/best upgrade groups a customer picks from on a quote — to what THIS business actually offers.

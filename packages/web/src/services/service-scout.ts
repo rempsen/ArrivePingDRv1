@@ -25,7 +25,7 @@ import { z } from "zod";
 import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock } from "./scout-prompt";
+import { siteBlock, SCOUT_TIMEOUT_MS } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 export interface ScoutedService {
@@ -95,6 +95,7 @@ export async function scoutStarterServices(
 
   try {
     const { object } = await generateObject({
+      abortSignal: AbortSignal.timeout(SCOUT_TIMEOUT_MS),
       model: gateway(MODELS.text),
       schema: ServiceSchema,
       prompt: `You are onboarding a service business into a field-service dispatch platform and must build its SERVICE LIBRARY — the list of bookable services customers can request.
