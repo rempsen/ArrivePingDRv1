@@ -1590,6 +1590,10 @@ export const companies = pgTable("companies", {
   billingStatus: text("billing_status").notNull().default("none"), // none | trialing | active | past_due | canceled | unpaid
   billingTrialEndsAt: timestamp("billing_trial_ends_at", { mode: "date", withTimezone: true }),
   billingSeats: integer("billing_seats").notNull().default(0),
+  // False while self-serve signup is still setting this company up; set true
+  // by provisionCompany's last step. The signup status check reads it (not a
+  // billing field, which Stripe webhooks write at any time).
+  provisioningDone: boolean("provisioning_done").notNull().default(true),
   // HubSpot CRM mirror (services/hubspot-sync.ts): the Company and Deal that
   // represent this tenant in NVC360's HubSpot, the fingerprint of what was
   // last pushed (so unchanged tenants cost no API calls) and when. NULL id =

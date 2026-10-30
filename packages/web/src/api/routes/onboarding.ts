@@ -149,9 +149,9 @@ export type SignupState =
 /**
  * Where a signup paid for by this Stripe customer has got to. The company
  * row carries the customer from the moment it's inserted, and the admin
- * keeps billing status "none" until provisioning's very last step, so: no
- * company = not started (or it failed and was unwound), a company still at
- * "none" = being set up (or stuck, once it's old), finished with an admin
+ * has provisioning_done = false until provisioning's very last step, so: no
+ * company = not started (or it failed and was unwound), one not done yet =
+ * being set up (or stuck, once it's old), finished with an admin
  * with this email = done, with someone else's = the card is taken.
  */
 export async function signupState(billingCustomerId: string, adminEmail: string, now = new Date()): Promise<SignupState> {
@@ -160,7 +160,7 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
       id: schema.companies.id,
       name: schema.companies.name,
       trialEndsAt: schema.companies.billingTrialEndsAt,
-      billingStatus: schema.companies.billingStatus,
+      provisioningDone: schema.companies.provisioningDone,
       createdAt: schema.companies.createdAt,
     })
     .from(schema.companies)
@@ -172,7 +172,7 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
     .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
     .where(and(eq(schema.memberships.companyId, co.id), eq(schema.memberships.role, "admin")));
   const mine = admins.find((a) => a.email.trim().toLowerCase() === adminEmail.trim().toLowerCase());
-  const finished = co.billingStatus !== "none";
+  const finished = co.provisioningDone;
   if (mine && finished)
     return {
       kind: "done",
