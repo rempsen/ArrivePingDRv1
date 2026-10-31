@@ -41,6 +41,7 @@ const TermsPage = lazyRoute(() => import("./pages/terms"));
 const FeaturesPage = lazyRoute(() => import("./pages/marketing/features"));
 const SupportPage = lazyRoute(() => import("./pages/support"));
 const SupportArticlePage = lazyRoute(() => import("./pages/support-article"));
+const SupportVideosPage = lazyRoute(() => import("./pages/support-videos"));
 const CustomerApp = lazyRoute(() => import("./pages/customer"));
 const RiderApp = lazyRoute(() => import("./pages/rider"));
 const AdminApp = lazyRoute(() => import("./pages/admin"));
@@ -146,6 +147,7 @@ function App() {
           <Route path="/terms" component={TermsPage} />
           <Route path="/features" component={FeaturesPage} />
           <Route path="/support" component={SupportPage} />
+          <Route path="/support/videos" component={SupportVideosPage} />
           <Route path="/support/:slug" component={SupportArticlePage} />
           <Route path="/sign-in">{() => <AuthPage mode="sign-in" />}</Route>
           <Route path="/sign-up">{() => <AuthPage mode="sign-up" />}</Route>

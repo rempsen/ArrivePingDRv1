@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HelpShell, ContactCard } from "../site/components/HelpShell";
 import { articles, articlesIn, categories, categoryById, popularSlugs, support } from "../site/support/articles";
-import { searchArticles } from "../site/support/search";
+import { searchArticles, searchVideos } from "../site/support/search";
+import { VideoCard, VideoDialogProvider, useVideoDialog } from "../site/components/HelpVideo";
+import { clock, liveVideos, videoByKey } from "../site/support/videos";
 
 /**
  * Help Center hub — https://arriveping.com/support
@@ -14,8 +16,10 @@ import { searchArticles } from "../site/support/search";
 export default function SupportPage() {
   return (
     <HelpShell path="/support">
+      <VideoDialogProvider>
       <main id="main" tabIndex={-1} className="help">
         <Hero />
+        <WatchAndLearn />
         <section className="help__section container" aria-labelledby="help-cats-h">
           <div className="help__section-head">
             <h2 id="help-cats-h">What do you want to get done?</h2>
@@ -113,7 +117,74 @@ export default function SupportPage() {
           </div>
         </section>
       </main>
+      </VideoDialogProvider>
     </HelpShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Watch and learn                                                      */
+/* ------------------------------------------------------------------ */
+
+/** The four quick how-tos shown beside the walkthrough: the first-week path. */
+const QUICK = ["sign-up", "first-look", "create-a-job", "schedule-and-dispatch"];
+
+function WatchAndLearn() {
+  const { open } = useVideoDialog();
+  const walk = videoByKey.walkthrough;
+  if (!walk) return null;
+  const quick = QUICK.map((k) => videoByKey[k]).filter(Boolean);
+  const chapters = (walk.chapters ?? []).slice(1);
+  return (
+    <section className="help__section container" aria-labelledby="help-watch-h">
+      <div className="help__section-head hv-head">
+        <div>
+          <h2 id="help-watch-h">Watch and learn</h2>
+          <p>Short videos on real ArrivePing screens. Start with the full walkthrough, or jump straight to one task.</p>
+        </div>
+        <a className="hv-all" href="/support/videos">
+          All {liveVideos.length} videos →
+        </a>
+      </div>
+      <div className="hv-feature">
+        <div className="hv-feature__main">
+          <button type="button" className="hv-feature__poster" onClick={() => open(walk.key)} aria-label={`Play the full walkthrough: ${walk.title} (${clock(walk.seconds)})`}>
+            <img src={walk.poster} alt="" width={960} height={540} decoding="async" />
+            <span className="hv-poster__play" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24">
+                <path d="M8 5.5v13l11-6.5z" fill="currentColor" />
+              </svg>
+            </span>
+            <span className="hv-feature__cap">
+              <span className="eyebrow">Full walkthrough · {clock(walk.seconds)}</span>
+              <strong>{walk.title}</strong>
+            </span>
+          </button>
+          <div className="hv-chips" aria-label="Jump to a chapter of the walkthrough">
+            {chapters.slice(0, 5).map((c) => (
+              <button key={c.at} type="button" className="hv-chip" onClick={() => open(walk.key, c.at)}>
+                <span className="tnum">{clock(c.at)}</span> {c.title}
+              </button>
+            ))}
+            {chapters.length > 5 && (
+              <button type="button" className="hv-chip hv-chip--more" onClick={() => open(walk.key)}>
+                +{chapters.length - 5} more chapters
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="hv-feature__side">
+          <p className="legal__toc-label">Your first week</p>
+          <ul className="hv-rows">
+            {quick.map((v) => (
+              <li key={v.key}>
+                <VideoCard video={v} variant="row" />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -139,6 +210,8 @@ function Hero() {
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const results = useMemo(() => searchArticles(q), [q]);
+  const videoHits = useMemo(() => searchVideos(q).slice(0, 2), [q]);
+  const { open: openVideo } = useVideoDialog();
 
   // ⌘K / Ctrl+K focuses the search, like every help center people already use.
   useEffect(() => {
@@ -185,8 +258,17 @@ function Hero() {
 
         <div id="help-results" className="help-results" aria-live="polite">
           {open ? (
-            results.length ? (
+            results.length || videoHits.length ? (
               <ul>
+                {videoHits.map((v) => (
+                  <li key={`v-${v.key}`}>
+                    <button type="button" className="help-results__video" onClick={() => openVideo(v.key)}>
+                      <span className="help-results__cat">Video · {clock(v.seconds)}</span>
+                      <strong>{v.title}</strong>
+                      <span>{v.summary}</span>
+                    </button>
+                  </li>
+                ))}
                 {results.map((a) => (
                   <li key={a.slug}>
                     <a href={`/support/${a.slug}`}>
