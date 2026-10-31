@@ -1275,7 +1275,7 @@ export const entries: KbEntry[] = [
         steps: [
           "Open the join link.",
           "If asked, press \"Sign in to continue\" and sign in as the invited email.",
-          "Open the join link again and press \"Accept & join {company}\".",
+          "You come back to the invite; press \"Accept & join {company}\".",
           "You're taken into that company; switch companies any time from the menu.",
         ],
         note: "Joining doesn't give the new company access to your work at any other company.",
@@ -1304,10 +1304,6 @@ export const entries: KbEntry[] = [
       {
         problem: "\"This invite belongs to a different account\"",
         fix: "You're signed in as a different login. Sign out and sign in as the invited email.",
-      },
-      {
-        problem: "After signing in I didn't land back on the invite",
-        fix: "Sign in opens your usual home page. Open the join link again to accept.",
       },
     ],
     keywords: ["join company", "second company", "existing account", "multiple companies", "add company"],

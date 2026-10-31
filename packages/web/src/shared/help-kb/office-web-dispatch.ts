@@ -695,7 +695,7 @@ export const entries: KbEntry[] = [
     controls: [
       { label: "Back to Jobs", does: "Returns to the {jobs} list." },
       { label: "Download PDF", does: "Downloads the {job} as a PDF." },
-      { label: "Edit job", does: "Not-yet-completed {jobs}: opens the {job} form. Shown to admins and dispatchers." },
+      { label: "Edit job", does: "Not-yet-completed {jobs}: opens the {job} form. Shown to anyone with edit permission on {jobs}." },
       { label: "Edit anyway", does: "Completed {jobs}, admins only: opens the form to correct a genuine mistake." },
       { label: "Archive", does: "Moves the {job} to the archive after confirmation and returns to the list." },
       { label: "Timeline", does: "Scheduled, Assigned, Started driving, Arrived on site and Completed times, plus Drive time, Time on site and Mileage (there and back)." },
@@ -728,7 +728,7 @@ export const entries: KbEntry[] = [
     fixes: [
       { problem: "\"Couldn't load this job report.\"", fix: "The report didn't load (wrong link, or the {job} isn't in this company). Go back to {jobs} and open it again." },
       { problem: "\"No GPS route recorded for this job…\"", fix: "Either the {job} predates route tracking, or its location history has since been purged." },
-      { problem: "There's no Edit job button", fix: "On this page Edit job shows only for admin and dispatcher roles; Edit anyway (completed {jobs}) is admin-only. Others can use Edit from the {jobs} list if their role allows." },
+      { problem: "There's no Edit job button", fix: "Edit job needs edit permission on {jobs}; ask an admin to add it to your role. Edit anyway (on completed {jobs}) is admin-only." },
       { problem: "\"Couldn't archive this job. Please try again.\"", fix: "The archive request failed. Try again." },
     ],
     keywords: ["job details", "job report", "work order details", "timeline", "photos", "mileage", "route", "pdf"],
@@ -749,7 +749,7 @@ export const entries: KbEntry[] = [
       { label: "Search people, jobs, messages…", does: "Filters conversations by name, {job} or message text." },
       { label: "All / Unread / {customers} / {workers} / Broadcasts", does: "Filters the list; the number is how many threads." },
       { label: "Conversation row", does: "Opens the thread and marks it read." },
-      { label: "Open {job}", does: "On a {customer} thread, goes to the {jobs} page." },
+      { label: "Open {job}", does: "On a {customer} thread, opens that {job}." },
       { label: "Reply to …", does: "Type and press Enter (or Send reply). A reply on a {customer} thread is also texted to the {customer} with their tracking link, if they have a phone number." },
     ],
     tasks: [
@@ -791,7 +791,7 @@ export const entries: KbEntry[] = [
       "Where {customer} requests to cancel or reschedule from their tracking page land. Nothing changes on the {job} until someone here approves it.",
     controls: [
       { label: "Needs a decision / All / Approved / Declined / Self-serve", does: "Filters requests. Self-serve shows changes the {customer} made themselves (\"Done by customer\")." },
-      { label: "#{job number}", does: "Link to the {jobs} page." },
+      { label: "#{job number}", does: "Opens that {job}." },
       { label: "Approve cancellation", does: "Opens a confirmation; approving cancels the {job} and notifies the {customer}." },
       { label: "Approve new time", does: "Opens a confirmation; approving moves the appointment to the requested time and notifies everyone." },
       { label: "Decline", does: "Opens a confirmation; the appointment stays as booked and your note is what the {customer} is told." },
