@@ -90,7 +90,15 @@ export function VideoDialogProvider({ children }: { children: ReactNode }) {
 
   const open = useCallback((key: string, start = 0) => {
     if (!videoByKey[key]) return;
-    if (!dlg.current?.open) opener.current = document.activeElement as HTMLElement | null;
+    const d = dlg.current;
+    if (d?.open) {
+      // Chapter or "Up next" from lower in the dialog: bring the player back
+      // into view so it doesn't start playing off-screen on short viewports.
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      d.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    } else {
+      opener.current = document.activeElement as HTMLElement | null;
+    }
     setState({ key, start });
     setQuery(key);
   }, []);
