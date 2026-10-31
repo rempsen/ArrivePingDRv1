@@ -7,17 +7,15 @@ updated: "2026-10-31"
 author: "Dan Rosenblat"
 category: "growth"
 tags: ["software adoption", "software implementation", "small business software", "free trial", "ai setup", "field service management software", "training", "how-to videos"]
-image: ""
-imageAlt: ""
+image: "/blog/img/software-adoption-cost-and-complexity-0.webp"
+imageAlt: "An electrician in a yellow hard hat closing a neatly wired panel on an unfinished commercial job site"
 ---
 
 <!--
-  Cover: category cover (no photo yet). Rule from docs/blog-publishing.md:
-  the next real photo should have a person in it and avoid golden hour,
-  phone-in-right-hand, doorways, rooftop HVAC and empty workbenches. A good
-  pick for this post: a dispatcher at a small office desk, or an electrician
-  or plumber indoors, overcast or artificial light, Pexels, credited here.
-  Inline images are the real YouTube thumbnails of our own tutorials, built
+  Cover: generated 2026-10-31 with ElevenLabs (bytedance-seedream-5-pro),
+  editorial-photo prompt per docs/blog-publishing.md, cropped from a wider
+  2048x1152 frame to 1600x900. No real person depicted; no logos or text.
+  Inline images are the help centre's own posters for our tutorials, built
   from real ArrivePing screens (demo workspace, with permission).
 -->
 
