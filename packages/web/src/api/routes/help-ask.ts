@@ -20,7 +20,7 @@ import type { AppEnv } from "../env";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-import { and, desc, eq, gte, or, lt } from "drizzle-orm";
+import { and, desc, eq, gte, or, lt, sql } from "drizzle-orm";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { requireAuth, requirePlatform } from "../middleware/auth";
@@ -188,20 +188,50 @@ export const helpAppRoutes = new Hono<AppEnv>()
     return answer(c, audienceFor(role), c.req.valid("json"));
   });
 
-/** Control Hub: what people asked, the ones the assistant couldn't answer (or got a thumbs down) first. */
+/** The newest questions the hub lists in full; the totals and topics always cover the whole period. */
+export const HUB_LIST_LIMIT = 1000;
+/** Unanswered questions sent for the topic grouping; past this the page says it's grouping the newest ones. */
+export const HUB_GAP_LIMIT = 20_000;
+
+/**
+ * Control Hub: what people asked, and what the assistant couldn't answer.
+ * `stats` counts every question in the period (SQL, not the capped list);
+ * `gaps` is every unanswered question's text and matches, for the topic
+ * grouping; `questions` is the newest HUB_LIST_LIMIT, `truncated` when there
+ * are more.
+ */
 export const helpHubRoutes = new Hono<AppEnv>().get("/help-questions", requirePlatform("staff"), async (c) => {
-  const onlyGaps = c.req.query("gaps") === "1";
   const days = Math.min(90, Math.max(1, Number(c.req.query("days")) || 30));
   const since = new Date(Date.now() - days * 24 * 60 * 60_000);
   const q = schema.helpQuestions;
+  const inPeriod = gte(q.createdAt, since);
   const gap = or(eq(q.handedOff, true), lt(q.rating, 0), eq(q.failed, true));
-  const rows = await db
-    .select()
+  const n = (x: unknown) => Number(x ?? 0);
+  const [agg] = await db
+    .select({
+      asked: sql<number>`count(*)`,
+      gaps: sql<number>`count(*) filter (where ${q.handedOff} or ${q.rating} < 0 or ${q.failed})`,
+      handedOff: sql<number>`count(*) filter (where ${q.handedOff})`,
+      thumbsDown: sql<number>`count(*) filter (where ${q.rating} < 0)`,
+      thumbsUp: sql<number>`count(*) filter (where ${q.rating} > 0)`,
+      failed: sql<number>`count(*) filter (where ${q.failed})`,
+    })
     .from(q)
-    .where(onlyGaps ? and(gte(q.createdAt, since), gap) : gte(q.createdAt, since))
+    .where(inPeriod);
+  const stats = {
+    asked: n(agg?.asked),
+    gaps: n(agg?.gaps),
+    handedOff: n(agg?.handedOff),
+    thumbsDown: n(agg?.thumbsDown),
+    thumbsUp: n(agg?.thumbsUp),
+    failed: n(agg?.failed),
+  };
+  const gaps = await db
+    .select({ question: q.question, matched: q.matched })
+    .from(q)
+    .where(and(inPeriod, gap))
     .orderBy(desc(q.createdAt))
-    .limit(1000);
-  const total = rows.length;
-  const gaps = rows.filter((r) => r.handedOff || r.rating < 0 || r.failed).length;
-  return c.json({ days, total, gaps, questions: rows });
+    .limit(HUB_GAP_LIMIT);
+  const questions = await db.select().from(q).where(inPeriod).orderBy(desc(q.createdAt)).limit(HUB_LIST_LIMIT);
+  return c.json({ days, stats, gaps, gapsTruncated: stats.gaps > gaps.length, questions, truncated: stats.asked > questions.length });
 });

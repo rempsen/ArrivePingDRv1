@@ -11,7 +11,7 @@ import { Download, Search } from "lucide-react";
 import { Card, Segmented, Skeleton, Stat, downloadCsv, fmt, selectCls } from "../analytics-ui";
 import { HubLayout, EmptyNote } from "./hub-ui";
 import { hub } from "./hub-data";
-import { filterQuestions, gapTopics, helpStats, isGap, matchLabel, matchedIds, PLATFORM_LABEL, SOURCE_LABEL, type HelpQuestion } from "./help-gaps";
+import { filterQuestions, gapTopics, isGap, matchLabel, matchedIds, PLATFORM_LABEL, selfServed, SOURCE_LABEL, type GapQuestion, type HelpCounts, type HelpQuestion } from "./help-gaps";
 
 const DAYS = [7, 30, 90] as const;
 
@@ -22,11 +22,13 @@ export default function HubHelpQuestions() {
   const [search, setSearch] = useState("");
   const q = useQuery({
     queryKey: ["hub", "help-questions", days],
-    queryFn: () => hub<{ days: number; questions: HelpQuestion[] }>(`/help-questions?days=${days}`),
+    queryFn: () => hub<{ days: number; stats: HelpCounts; gaps: GapQuestion[]; gapsTruncated: boolean; questions: HelpQuestion[]; truncated: boolean }>(`/help-questions?days=${days}`),
   });
   const all = useMemo(() => q.data?.questions ?? [], [q.data]);
-  const stats = useMemo(() => helpStats(all), [all]);
-  const topics = useMemo(() => gapTopics(all), [all]);
+  // Totals and topics cover the whole period; the list is the newest questions.
+  const stats = q.data?.stats ?? { asked: 0, gaps: 0, handedOff: 0, thumbsDown: 0, thumbsUp: 0, failed: 0 };
+  const topics = useMemo(() => gapTopics(q.data?.gaps ?? []), [q.data]);
+  const filtering = Boolean(source || search.trim());
   const rows = useMemo(() => filterQuestions(all, { onlyGaps: view === "gaps", source, search }), [all, view, source, search]);
 
   return (
@@ -72,7 +74,7 @@ export default function HubHelpQuestions() {
           <Card pad={false} className="mb-6">
             <div className="grid grid-cols-2 divide-white/[0.05] sm:grid-cols-3 lg:grid-cols-6 lg:divide-x">
               <Stat label="Questions asked" value={fmt.int(stats.asked)} />
-              <Stat label="Answered without us" value={fmt.pct(stats.selfServed)} hint="Not handed to support, no thumbs down, no failure" />
+              <Stat label="Answered without us" value={fmt.pct(selfServed(stats))} hint="Not handed to support, no thumbs down, no failure" />
               <Stat label="Handed to support" value={fmt.int(stats.handedOff)} />
               <Stat label="Thumbs down" value={fmt.int(stats.thumbsDown)} />
               <Stat label="Thumbs up" value={fmt.int(stats.thumbsUp)} />
@@ -81,7 +83,11 @@ export default function HubHelpQuestions() {
           </Card>
 
           {topics.length > 0 && (
-            <Card title="Where the help falls short" caption="Unanswered questions, grouped by the screen they were about. Biggest first." className="mb-6">
+            <Card title="Where the help falls short" caption={
+                q.data?.gapsTruncated
+                  ? `The newest ${fmt.int(q.data.gaps.length)} of ${fmt.int(stats.gaps)} unanswered questions, grouped by the screen they were about. Biggest first.`
+                  : "Unanswered questions, grouped by the screen they were about. Biggest first."
+              } className="mb-6">
               <ul className="grid gap-3 md:grid-cols-2">
                 {topics.map((t) => (
                   <li key={t.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
@@ -127,8 +133,23 @@ export default function HubHelpQuestions() {
             </label>
           </div>
 
+          {q.data?.truncated && (
+            <p className="mb-3 text-[12px] text-slate-500">
+              Listing the newest {fmt.int(all.length)} of {fmt.int(stats.asked)} questions. The totals and topics above count all of them.
+            </p>
+          )}
           {rows.length === 0 ? (
-            <EmptyNote>{view === "gaps" && !all.length ? "No questions yet in this period." : view === "gaps" ? "Every question in this period was answered." : "Nothing matches."}</EmptyNote>
+            <EmptyNote>
+              {filtering
+                ? "No questions match these filters."
+                : !all.length
+                  ? "No questions yet in this period."
+                  : view === "gaps"
+                    ? stats.gaps > 0
+                      ? `None of the newest ${fmt.int(all.length)} questions went unanswered. The older unanswered ones are counted above.`
+                      : "Every question in this period was answered."
+                    : "Nothing matches."}
+            </EmptyNote>
           ) : (
             <Card pad={false}>
               <ol className="divide-y divide-white/[0.05]">

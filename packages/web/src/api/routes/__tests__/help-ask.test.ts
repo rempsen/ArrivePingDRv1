@@ -195,12 +195,24 @@ describe("what the model is given", () => {
 });
 
 describe("GET /api/hub/help-questions", () => {
-  it("is for platform staff, and lists the gaps", async () => {
+  it("is for platform staff; totals and gaps cover the whole period, the list is capped", async () => {
     expect((await app.request("/hub/help-questions", { headers: { "X-Test-Role": "admin" } })).status).toBe(403);
-    const res = await app.request("/hub/help-questions?gaps=1", { headers: { "X-Test-Role": "superadmin", "X-Test-Platform": "staff" } });
+    const res = await app.request("/hub/help-questions?days=30", { headers: { "X-Test-Role": "superadmin", "X-Test-Platform": "staff" } });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { gaps: number; questions: { handedOff: boolean; rating: number; failed: boolean }[] };
-    expect(body.questions.length).toBeGreaterThan(0);
-    expect(body.questions.every((q) => q.handedOff || q.rating < 0 || q.failed)).toBe(true);
+    const body = (await res.json()) as {
+      stats: { asked: number; gaps: number; handedOff: number; thumbsDown: number };
+      gaps: { question: string }[];
+      questions: unknown[];
+      truncated: boolean;
+    };
+    const rows = await db.select().from(schema.helpQuestions);
+    expect(body.stats.asked).toBe(rows.length);
+    expect(body.stats.gaps).toBe(rows.filter((r) => r.handedOff || r.rating < 0 || r.failed).length);
+    expect(body.stats.handedOff).toBe(rows.filter((r) => r.handedOff).length);
+    expect(body.gaps.length).toBe(body.stats.gaps);
+    expect(body.gaps.some((g) => g.question === "Can I get a refund for October?")).toBe(true);
+    expect(body.questions.length).toBe(rows.length);
+    expect(body.truncated).toBe(false);
+    expect((body as { gapsTruncated?: boolean }).gapsTruncated).toBe(false);
   });
 });

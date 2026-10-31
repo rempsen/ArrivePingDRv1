@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { filterQuestions, gapTopics, helpStats, isGap, matchLabel, type HelpQuestion } from "../pages/admin/hub/help-gaps";
+import { filterQuestions, gapTopics, isGap, matchLabel, selfServed, type HelpQuestion } from "../pages/admin/hub/help-gaps";
 import { KB } from "../../shared/help-kb";
 
 const screen = KB.find((e) => e.surface === "office-web")!;
@@ -30,13 +30,13 @@ describe("help questions in the Control Hub", () => {
     expect(rows.map(isGap)).toEqual([true, true, false, true, true]);
   });
 
-  test("stats", () => {
-    expect(helpStats(rows)).toEqual({ asked: 5, gaps: 4, handedOff: 2, thumbsDown: 1, thumbsUp: 1, failed: 1, selfServed: 0.2 });
-    expect(helpStats([]).selfServed).toBeNull();
+  test("share answered without support", () => {
+    expect(selfServed({ asked: 5, gaps: 4, handedOff: 2, thumbsDown: 1, thumbsUp: 1, failed: 1 })).toBe(0.2);
+    expect(selfServed({ asked: 0, gaps: 0, handedOff: 0, thumbsDown: 0, thumbsUp: 0, failed: 0 })).toBeNull();
   });
 
   test("gaps grouped by the screen ranked first, biggest first", () => {
-    const t = gapTopics(rows);
+    const t = gapTopics(rows.filter(isGap));
     expect(t[0]).toMatchObject({ id: screen.id, label: screen.title, count: 2 });
     expect(t[0]!.examples).toEqual(["Refund please", "Why is billing wrong"]);
     expect(t.find((x) => x.id === "(none)")).toMatchObject({ label: "Nothing matched", count: 2 });
