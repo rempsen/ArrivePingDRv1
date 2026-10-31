@@ -94,6 +94,22 @@ export const invitesRoutes = new Hono<AppEnv>()
         companyId: cid,
         membershipId: membership!.id,
       });
+      // Their technician profile here, as Add technician makes (routes/riders.ts):
+      // without it they don't show on the Technicians page as "Invite pending",
+      // and the office has nowhere to find them.
+      const t = tx(c);
+      const already = await t.selectOne(schema.riders, eq(schema.riders.userId, exists.id));
+      if (!already) {
+        const palette = ["#06b6d4", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#3b82f6"];
+        await t.insert(schema.riders, {
+          userId: exists.id,
+          phone: b.phone ?? exists.phone ?? "",
+          skillClass: b.skillClass || "General",
+          vehicle: "Van",
+          color: palette[Math.floor(Math.random() * palette.length)],
+          status: "available",
+        });
+      }
       return c.json(
         {
           existingAccount: true,
