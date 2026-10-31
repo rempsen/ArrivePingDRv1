@@ -4,6 +4,7 @@ import { articles, articlesIn, categories, categoryById, popularSlugs, support }
 import { searchArticles, searchVideos } from "../site/support/search";
 import { VideoCard, VideoDialogProvider, useVideoDialog } from "../site/components/HelpVideo";
 import { clock, liveVideos, videoByKey } from "../site/support/videos";
+import { HelpAskThread, useAskAvailable, useHelpAsk } from "../site/components/HelpAsk";
 
 /**
  * Help Center hub — https://arriveping.com/support
@@ -212,6 +213,14 @@ function Hero() {
   const results = useMemo(() => searchArticles(q), [q]);
   const videoHits = useMemo(() => searchVideos(q).slice(0, 2), [q]);
   const { open: openVideo } = useVideoDialog();
+  // Ask ArrivePing: Enter asks the AI (when it's on); typing still searches the articles as you go.
+  const canAsk = useAskAvailable();
+  const ask = useHelpAsk();
+  const submit = (text: string) => {
+    if (!canAsk || !text.trim()) return;
+    void ask.ask(text);
+    setQ("");
+  };
 
   // ⌘K / Ctrl+K focuses the search, like every help center people already use.
   useEffect(() => {
@@ -233,9 +242,19 @@ function Hero() {
       <div className="container help-hero__inner">
         <span className="eyebrow">Help Center</span>
         <h1 className="help-hero__title">How can we help?</h1>
-        <p className="help-hero__lede">Search for a topic, or browse by what you're trying to get done.</p>
+        <p className="help-hero__lede">
+          {canAsk
+            ? "Ask anything about ArrivePing and get the steps, button by button. Or browse by what you're trying to get done."
+            : "Search for a topic, or browse by what you're trying to get done."}
+        </p>
 
-        <form className="help-search" onSubmit={(e) => e.preventDefault()}>
+        <form
+          className="help-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit(q);
+          }}
+        >
           <svg className="help-search__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
             <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -246,15 +265,24 @@ function Hero() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search for answers"
+            placeholder={canAsk ? "Ask a question…" : "Search for answers"}
             autoComplete="off"
-            aria-label="Search help articles"
+            maxLength={500}
+            aria-label={canAsk ? "Ask a question or search the help articles" : "Search help articles"}
             aria-controls="help-results"
           />
-          <kbd className="help-search__kbd" aria-hidden="true">
-            ⌘K
-          </kbd>
+          {canAsk && q.trim().length > 1 ? (
+            <button type="submit" className="help-search__ask" disabled={ask.busy}>
+              Ask
+            </button>
+          ) : (
+            <kbd className="help-search__kbd" aria-hidden="true">
+              ⌘K
+            </kbd>
+          )}
         </form>
+
+        <HelpAskThread ask={ask} />
 
         <div id="help-results" className="help-results" aria-live="polite">
           {open ? (
@@ -281,19 +309,31 @@ function Hero() {
               </ul>
             ) : (
               <p className="help-results__empty">
+                {canAsk ? (
+                  <>No guides match “{q}” by name. Press Enter to ask, and we'll find the steps.</>
+                ) : (
+                  <>
                 No guides match “{q}” yet. Email{" "}
                 <a href={`mailto:${support.email}?subject=${encodeURIComponent(`Help: ${q}`)}`} className="legal__link">
                   {support.email}
                 </a>{" "}
                 and we'll answer, then write the guide.
+                  </>
+                )}
               </p>
             )
-          ) : (
+          ) : ask.turns.length ? null : (
             <p className="help-hero__suggested">
               Try:{" "}
               {SUGGESTED.map((s, i) => (
                 <span key={s.slug}>
-                  <a href={`/support/${s.slug}`}>{s.label}</a>
+                  {canAsk ? (
+                    <button type="button" className="help-hero__try" onClick={() => submit(s.label)}>
+                      {s.label}
+                    </button>
+                  ) : (
+                    <a href={`/support/${s.slug}`}>{s.label}</a>
+                  )}
                   {i < SUGGESTED.length - 1 ? " · " : ""}
                 </span>
               ))}

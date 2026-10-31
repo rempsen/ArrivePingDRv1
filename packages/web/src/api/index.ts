@@ -77,6 +77,7 @@ import { setupDemoRoutes } from "./routes/setup-demo";
 import { punchlistRoutes } from "./routes/punchlist";
 import { onboardingRoutes, onboardingPublicRoutes } from "./routes/onboarding";
 import { guideAskRoutes } from "./routes/guide-ask";
+import { helpAppRoutes, helpHubRoutes, helpPublicRoutes } from "./routes/help-ask";
 import { demoHealth } from "../services/demo-refresh";
 
 
@@ -224,6 +225,8 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/api/public/forms", publicFormsRoutes)
   // PUBLIC Help Center "Send us a message" — posts to the support Slack channel + emails support@.
   .route("/api/public/support-message", supportMessageRoutes)
+  // PUBLIC Help Center "Ask ArrivePing" — anyone; IP rate limit + a daily ceiling (routes/help-ask.ts).
+  .route("/api/public/help", helpPublicRoutes)
   // PUBLIC homepage "contact me" choice — saves the lead, pushes it to HubSpot, emails contact@.
   .route("/api/public/contact-request", contactRequestRoutes)
   // PUBLIC nvc360.com contact + support forms — HubSpot lead/ticket, team inbox (support also Slack).
@@ -448,7 +451,10 @@ const app = new Hono<{ Variables: Variables }>()
   .route("/mobile-release", mobileReleaseRoutes)
   .route("/punchlist", punchlistRoutes)
   .route("/onboarding", onboardingRoutes)
-  .route("/guide", guideAskRoutes);
+  .route("/guide", guideAskRoutes)
+  // "Ask ArrivePing" in the mobile apps (office and technician), and the Hub's list of what people asked.
+  .route("/help", helpAppRoutes)
+  .route("/hub", helpHubRoutes);
 
 export type AppType = typeof app;
 export default app;
