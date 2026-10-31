@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { isTrackedPath, trackRoute } from "./site/lib/hubspot-tracking";
+import { trackPixelRoute } from "./site/lib/meta-pixel";
 import { CookieConsent } from "./site/components/CookieConsent";
 import Index from "./pages/index";
 import AuthPage from "./pages/auth";
@@ -116,10 +117,20 @@ function RouteFallback() {
   );
 }
 
-/** HubSpot tracking and its cookie notice, on the marketing pages and signup only (site/lib/hubspot-tracking.ts). */
+/** HubSpot tracking, the Meta pixel and their cookie notice, on the marketing pages and signup only (site/lib/hubspot-tracking.ts, meta-pixel.ts). */
 function MarketingTracking() {
   const [path] = useLocation();
-  useEffect(() => trackRoute(path), [path]);
+  useEffect(() => {
+    trackRoute(path);
+    trackPixelRoute(path);
+    // Consent given on this page (the notice): load the trackers now, not on the next route.
+    const onConsent = () => {
+      trackRoute(path);
+      trackPixelRoute(path);
+    };
+    window.addEventListener("ap-consent", onConsent);
+    return () => window.removeEventListener("ap-consent", onConsent);
+  }, [path]);
   return isTrackedPath(path) ? <CookieConsent /> : null;
 }
 

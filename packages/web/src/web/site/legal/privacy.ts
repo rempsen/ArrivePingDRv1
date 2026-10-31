@@ -13,7 +13,7 @@ import type { LegalDoc } from "./types";
 export const privacy: LegalDoc = {
   eyebrow: "Legal",
   title: "Privacy Policy",
-  updated: "October 18, 2026",
+  updated: "October 31, 2026",
   path: "/privacy",
   intro: [
     "10161758 Manitoba Ltd. dba NVC360 (\"arriveping.com by NVC360\", \"we\", \"us\", or \"our\") is committed to protecting the privacy of our clients, users, and website visitors (collectively, \"you\", \"yours\", or \"user(s)\"). This Privacy Policy explains how we collect, use, disclose, and safeguard your organization's data (your \"Data\") and any information you provide us about an identifiable individual (your \"Personal Information\") when you use the arriveping.com by NVC360 platform, mobile app, website (arriveping.com), and any associated services (collectively, the \"Services\")."
@@ -321,7 +321,7 @@ export const privacy: LegalDoc = {
             "**Essential Cookies:** Required for the Services to function. Cannot be disabled.",
             "**Preference Cookies:** Used to remember your settings and preferences.",
             "**Analytics Cookies:** HubSpot's cookies, used on our marketing website to understand how visitors find and use it (pages visited, how you arrived). Only with your consent; see below.",
-            "**Marketing Cookies:** The same HubSpot cookies also connect your visits to a sign-up or a request to be contacted, so we can follow up. They are covered by the same consent."
+            "**Marketing Cookies:** The same HubSpot cookies also connect your visits to a sign-up or a request to be contacted, so we can follow up. The Meta pixel (Facebook and Instagram) records which marketing pages were visited so that we can show ArrivePing to similar audiences on those platforms and measure whether an ad led to a sign-up. Both are covered by the same consent."
           ]
         },
         {
@@ -330,7 +330,7 @@ export const privacy: LegalDoc = {
         },
         {
           type: "p",
-          text: "They're set only if you choose \"Accept\" in the cookie notice; until then, and if you choose \"Decline\", they're off. You can change your choice at any time with \"Cookie preferences\" in the website footer; turning them off removes HubSpot's cookies. If your browser sends a Global Privacy Control signal, we treat it as declining. You can also block or delete cookies in your browser settings. Note that disabling essential cookies may affect platform functionality."
+          text: "They're set only if you choose \"Accept\" in the cookie notice; until then, and if you choose \"Decline\", they're off. You can change your choice at any time with \"Cookie preferences\" in the website footer; turning them off removes HubSpot's cookies and stops the Meta pixel. If your browser sends a Global Privacy Control signal, we treat it as declining. You can also block or delete cookies in your browser settings. Note that disabling essential cookies may affect platform functionality."
         }
       ]
     },
