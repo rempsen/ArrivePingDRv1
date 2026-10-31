@@ -414,7 +414,7 @@ export const emailTemplates = {
       d.kind === "field"
         ? [
             step(1, "Set your password", "Use the button below. The link works for " + d.expiresDays + " days."),
-            step(2, "Get the ArrivePing app", (stores ? "Download it for your phone:<br/>" + stores : "Search for <b>ArrivePing</b> in the App Store or Google Play.")),
+            step(2, "Get the ArrivePing app", (stores ? "Download it for your phone:<br/>" + stores : "Search for <b>ArrivePing</b> in the App Store.")),
             step(3, "Sign in", `Use <b>${esc(d.email)}</b> and your new password. A short tour and a practice job show you around.`),
           ]
         : [
@@ -436,7 +436,7 @@ export const emailTemplates = {
       `1. Set your password (link works for ${d.expiresDays} days): ${d.setPasswordUrl}`,
       ...(d.kind === "field"
         ? [
-            `2. Get the ArrivePing app: ${[d.appStoreUrl, d.playStoreUrl].filter(Boolean).join(" · ") || "search for ArrivePing in the App Store or Google Play"}`,
+            `2. Get the ArrivePing app: ${[d.appStoreUrl, d.playStoreUrl].filter(Boolean).join(" · ") || "search for ArrivePing in the App Store"}`,
             `3. Sign in on the app with ${d.email}. A short tour and a practice job show you around.`,
           ]
         : [`2. Sign in at ${d.signInUrl} with ${d.email}.`, "3. Take the short tour: it shows you where jobs, the scheduler and the live map are."]),

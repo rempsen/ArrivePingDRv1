@@ -8,6 +8,7 @@ import { SiteFooter } from "../../site/components/SiteFooter";
 import { ClosingCTA, OurStory, Pricing } from "../../site/sections";
 import { brand } from "../../site/config";
 import { TradeCards } from "../../site/components/TradeCards";
+import { AppStoreBadge } from "../../site/components/AppStoreBadge";
 import { TradeDay, TradeFeatures, TradeHero, TradeStats } from "../../site/live/TradeParts";
 import { landingByPath, type Cell, type LandingPage, type Section } from "../../site/content/landing";
 import { seoByPath } from "../../site/seo/pages";
@@ -121,6 +122,10 @@ function GenericBody({ page }: { page: LandingPage }) {
             </a>
           </div>
           <p className="lp-hero__fine">Free for 30 days · Then from US$49 a month · No setup fee, no contract</p>
+          <div className="lp-hero__app">
+            <AppStoreBadge height={40} />
+            <span>Technician app for iPhone and iPad</span>
+          </div>
         </div>
       </header>
 

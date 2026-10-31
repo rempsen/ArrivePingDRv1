@@ -32,6 +32,15 @@
   font-size: 14px;
   color: var(--ink-muted);
 }
+.site .lp-hero__app {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
 
 .site .lp-crumbs ol {
   display: flex;

@@ -329,6 +329,15 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+.site .lv-hero__app {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  font-size: 14px;
+  color: #d3dde8;
+}
 .site .lv-hero__ctas .btn--secondary {
   background: rgb(5 8 15 / 40%);
   border-color: rgb(255 255 255 / 22%);
