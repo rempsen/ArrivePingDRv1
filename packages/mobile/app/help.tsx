@@ -28,6 +28,8 @@ export default function HelpScreen() {
   const [q, setQ] = useState("");
   const scroll = useRef<ScrollView>(null);
   const abort = useRef<AbortController | null>(null);
+  // Set synchronously, so a double tap can't start two answers before React re-renders.
+  const inFlight = useRef(false);
   const busy = turns.some((t) => !t.done);
 
   useEffect(() => () => abort.current?.abort(), []);
@@ -36,7 +38,8 @@ export default function HelpScreen() {
 
   async function ask(text: string) {
     const question = text.trim().slice(0, HELP_LIMITS.question);
-    if (!question || busy) return;
+    if (!question || inFlight.current) return;
+    inFlight.current = true;
     setQ("");
     const history = turns
       .filter((t) => t.done && !t.error)
@@ -77,6 +80,8 @@ export default function HelpScreen() {
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       patch(i, (t) => ({ ...t, done: true, error: "Couldn't reach ArrivePing. Check your connection and try again." }));
+    } finally {
+      inFlight.current = false;
     }
   }
 

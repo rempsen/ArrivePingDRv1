@@ -37,12 +37,17 @@ export function useHelpAsk() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const busy = turns.some((t) => !t.done);
   const abort = useRef<AbortController | null>(null);
+  // Set synchronously, so a double click can't start two answers before React re-renders.
+  const inFlight = useRef(false);
+  // Leaving the page stops the answer (and the model) mid-stream.
+  useEffect(() => () => abort.current?.abort(), []);
 
   const patch = (i: number, f: (t: Turn) => Turn) => setTurns((ts) => ts.map((t, n) => (n === i ? f(t) : t)));
 
   async function ask(question: string) {
     const q = question.trim().slice(0, HELP_ASK_LIMITS.question);
-    if (!q || busy) return;
+    if (!q || inFlight.current) return;
+    inFlight.current = true;
     const history = turns
       .filter((t) => t.done && !t.error)
       .slice(-3)
@@ -75,6 +80,8 @@ export function useHelpAsk() {
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       patch(i, (t) => ({ ...t, done: true, error: "We couldn't reach Ask. Check your connection and try again." }));
+    } finally {
+      inFlight.current = false;
     }
   }
 
@@ -87,6 +94,7 @@ export function useHelpAsk() {
 
   function reset() {
     abort.current?.abort();
+    inFlight.current = false;
     setTurns([]);
   }
 

@@ -3,7 +3,7 @@
  * right screen for the questions people actually ask.
  */
 import { describe, expect, test } from "bun:test";
-import { KB, kbById, kbEntryText, kbOutline, searchKb } from "../help-kb";
+import { KB, kbAllowed, kbById, kbEntryText, kbOutline, searchKb } from "../help-kb";
 import { articles } from "../../web/site/support/articles";
 import { PAGE_ACCESS } from "../office-pages";
 
@@ -89,6 +89,17 @@ describe("search finds the right screen", () => {
   test("a technician's search stays in the technician app", () => {
     const ids = searchKb("How do I reschedule a job?", { surfaces: ["tech-app", "account"], roles: ["technician", "anyone"] }).map((e) => e.id);
     expect(ids.every((id) => id.startsWith("tech-app.") || id.startsWith("account."))).toBe(true);
+  });
+  test("a signed-in person only gets screens they can open", () => {
+    const dispatcher = { admin: false, permissions: ["work_orders:view", "work_orders:edit", "scheduler:view"] };
+    const hits = searchKb("How do I add a service to my price catalog?", { access: dispatcher });
+    expect(hits.every((e) => kbAllowed(e, dispatcher))).toBe(true);
+    expect(hits.some((e) => e.permission === "catalog:view")).toBe(false);
+    expect(kbOutline({ access: dispatcher })).not.toContain("office-web.setup.billing-downsize");
+    expect(kbAllowed({ ...KB[0]!, permission: "admin" }, dispatcher)).toBe(false);
+    expect(kbAllowed({ ...KB[0]!, permission: "work_orders:view or scheduler:view" }, { admin: false, permissions: ["scheduler:view"] })).toBe(true);
+    expect(kbAllowed({ ...KB[0]!, permission: "catalog:view" }, { admin: false, permissions: ["catalog:edit"] })).toBe(true);
+    expect(kbAllowed({ ...KB[0]!, permission: "catalog:view" }, { admin: true, permissions: [] })).toBe(true);
   });
   test("nothing for an empty question", () => {
     expect(searchKb("the and of")).toEqual([]);

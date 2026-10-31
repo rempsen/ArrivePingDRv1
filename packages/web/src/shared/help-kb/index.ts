@@ -3,6 +3,7 @@
  * "Ask ArrivePing" uses to pick what the model reads in full.
  */
 import { searchTerms } from "../../web/site/support/search";
+import { permAllows } from "../office-pages";
 import type { KbEntry, KbRole, KbSurface } from "./types";
 import { entries as officeWebDispatch } from "./office-web-dispatch";
 import { entries as officeWebPeople } from "./office-web-people";
@@ -62,11 +63,34 @@ const INDEX: Indexed[] = KB.map((e) => ({
   ),
 }));
 
+/** What one signed-in office person can open. */
+export interface KbAccess {
+  admin: boolean;
+  permissions: Iterable<string>;
+}
+
+/**
+ * Can this person use this screen? "admin" screens are for admins; "a or b"
+ * needs either; a permission key needs that permission (edit implies view).
+ * Anything else written there is a note, not a rule.
+ */
+export function kbAllowed(e: KbEntry, access: KbAccess): boolean {
+  const need = (e.permission ?? "").trim();
+  if (!need || access.admin) return true;
+  if (need === "admin" || need === "superadmin") return false;
+  const keys = need.split(/\s+or\s+/).map((k) => k.trim());
+  if (!keys.every((k) => /^[a-z_]+:[a-z_]+$/.test(k))) return true;
+  const perms = [...access.permissions];
+  return keys.some((k) => permAllows(perms, k));
+}
+
 export interface KbSearchOpts {
   /** Only these apps (e.g. the office dashboard's assistant skips the customer pages' internals). */
   surfaces?: KbSurface[];
   /** Only screens these roles use ("anyone" screens always pass). */
   roles?: KbRole[];
+  /** Only screens this person can open (the office dashboard passes their permissions). */
+  access?: KbAccess;
   limit?: number;
 }
 
@@ -78,6 +102,7 @@ export function searchKb(q: string, opts: KbSearchOpts = {}): KbEntry[] {
   const scored = INDEX.filter(({ e }) => {
     if (opts.surfaces && !opts.surfaces.includes(e.surface)) return false;
     if (opts.roles && !e.roles.includes("anyone") && !e.roles.some((r) => opts.roles!.includes(r))) return false;
+    if (opts.access && !kbAllowed(e, opts.access)) return false;
     return true;
   })
     .map((x) => {
@@ -120,7 +145,7 @@ export function kbEntryText(e: KbEntry): string {
 
 /** Every screen in one line each, so the model knows what exists even when it isn't retrieved in full. */
 export function kbOutline(opts: KbSearchOpts = {}): string {
-  return KB.filter((e) => !opts.surfaces || opts.surfaces.includes(e.surface))
+  return KB.filter((e) => (!opts.surfaces || opts.surfaces.includes(e.surface)) && (!opts.access || kbAllowed(e, opts.access)))
     .map((e) => `- ${e.id}: ${e.title} — ${e.path}`)
     .join("\n");
 }

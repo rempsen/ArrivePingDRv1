@@ -23,7 +23,7 @@ import { CHAPTERS, interpolate, type Role, type Terms } from "../web/guide/regis
 import { articles, type Article } from "../web/site/support/articles";
 import { searchArticles } from "../web/site/support/search";
 import { ASK_PAGES, type AskAction } from "../shared/guide-ask";
-import { kbEntryText, kbOutline, searchKb, type KbEntry } from "../shared/help-kb";
+import { kbEntryText, kbOutline, searchKb, type KbAccess, type KbEntry } from "../shared/help-kb";
 
 export type AskTurn = { role: "user" | "assistant"; text: string };
 
@@ -85,11 +85,11 @@ export function retrieveArticles(question: string, history: AskTurn[] = [], limi
 }
 
 /** Screens from the screen map handed to the model in full (office staff can ask about any app). */
-export function retrieveScreens(question: string, history: AskTurn[] = [], limit = 5): KbEntry[] {
+export function retrieveScreens(question: string, history: AskTurn[] = [], limit = 5, access?: KbAccess): KbEntry[] {
   const lastUser = [...history].reverse().find((t) => t.role === "user")?.text ?? "";
-  const primary = searchKb(`${question} dashboard`, { limit });
+  const primary = searchKb(`${question} dashboard`, { limit, access });
   if (primary.length >= limit || !lastUser) return primary;
-  const extra = searchKb(`${lastUser} ${question}`, { limit }).filter((e) => !primary.includes(e));
+  const extra = searchKb(`${lastUser} ${question}`, { limit, access }).filter((e) => !primary.includes(e));
   return [...primary, ...extra].slice(0, limit);
 }
 
@@ -108,9 +108,11 @@ export function buildAskSystem(opts: { role: Role; permissions?: string[]; terms
   const pageLines = pages.map((p) => `- ${p.route}: ${t(p.label)}`).join("\n");
   const articleLines = articles.map((a) => `- ${a.slug}: ${a.title}. ${a.summary}`).join("\n");
   const fullText = top.map((a) => `<article slug="${a.slug}">\n${a.title}\n${articleText(a)}\n</article>`).join("\n\n");
-  const screens = retrieveScreens(opts.question, opts.history);
+  // Only screens this person can open, the same rule as the pages and tours above.
+  const access: KbAccess = { admin: role === "admin", permissions: opts.permissions ?? DEFAULT_ROLE_PERMS[role] ?? [] };
+  const screens = retrieveScreens(opts.question, opts.history, 5, access);
   const screenText = screens.map((e) => t(kbEntryText(e))).join("\n\n");
-  const outline = t(kbOutline());
+  const outline = t(kbOutline({ access }));
 
   return `You are the in-app help assistant for ArrivePing, a dispatch and live-ETA app for field-service companies. The person asking works in the office of one of those companies.
 
