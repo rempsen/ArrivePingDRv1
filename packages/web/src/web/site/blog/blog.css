@@ -536,3 +536,51 @@
     min-height: 44px;
   }
 }
+
+/* Tutorial cards inside a post: the help centre's own poster images, linking
+   to its player (/support/videos?v=…), so nothing is requested from YouTube
+   until the reader presses play. Selectors carry .post__body so they beat the
+   generic .site .post__body a link styling. */
+.site .post__videos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-block: 1.6em;
+}
+.site .post__body .post__video {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--surface);
+  text-decoration: none;
+  color: var(--ink-secondary);
+  font-size: 0.92em;
+  line-height: 1.4;
+  transition: border-color var(--time-fast) var(--ease-standard);
+}
+.site .post__body .post__video:hover,
+.site .post__body .post__video:focus-visible {
+  border-color: var(--accent);
+}
+.site .post__body .post__video img {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.site .post__body .post__video span {
+  padding: 0 14px 14px;
+}
+.site .post__body .post__video strong {
+  display: block;
+  color: var(--ink);
+}
+@media (max-width: 639px) {
+  .site .post__videos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
