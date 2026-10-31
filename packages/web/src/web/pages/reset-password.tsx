@@ -4,6 +4,7 @@ import { authClient } from "../lib/auth";
 import { Logo } from "../components/brand";
 import { Loader } from "../components/loader";
 import { Lock, ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
+import { brand } from "../site/config";
 
 export default function ResetPasswordPage() {
   const [, navigate] = useLocation();
@@ -116,11 +117,22 @@ export default function ResetPasswordPage() {
               </h2>
               <p className="mt-2 text-slate-400">
                 {welcome === "field"
-                  ? "Now get the ArrivePing app from the App Store or Google Play and sign in with your email and this password."
+                  ? "Now get the ArrivePing app from the App Store and sign in with your email and this password."
                   : welcome
                     ? "Taking you to sign in…"
                     : "Your password has been reset. Redirecting you to sign in…"}
               </p>
+              {welcome === "field" && (
+                <a
+                  href={brand.urls.appStore}
+                  target="_blank"
+                  rel="noopener"
+                  className="mt-6 inline-block"
+                  aria-label="Download ArrivePing on the App Store"
+                >
+                  <img src="/img/app-store-badge.svg" alt="Download on the App Store" height={48} width={144} />
+                </a>
+              )}
             </div>
           ) : (
             <>

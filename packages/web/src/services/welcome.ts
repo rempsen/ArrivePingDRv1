@@ -161,7 +161,8 @@ export async function sendWelcome(
         roleLabel,
         setPasswordUrl: link.url,
         signInUrl: `${SITE()}/sign-in`,
-        appStoreUrl: process.env.APP_STORE_URL?.trim() || undefined,
+        // The iOS app is live; APP_STORE_URL can still override (e.g. a regional link).
+        appStoreUrl: process.env.APP_STORE_URL?.trim() || "https://apps.apple.com/app/arriveping/id6776464675",
         playStoreUrl: process.env.PLAY_STORE_URL?.trim() || undefined,
         expiresDays: WELCOME_LINK_DAYS,
       },

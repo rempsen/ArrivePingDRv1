@@ -2,6 +2,7 @@ import { useState } from "react";
 import { brand, closing, faqs, monthlyPrice, pricing, stats, story } from "../config";
 import { TradeCards } from "../components/TradeCards";
 import { ContactAsk } from "../components/ContactAsk";
+import { AppStoreBadge } from "../components/AppStoreBadge";
 import { useAnchorNav } from "../components/SiteHeader";
 import { CountUp, handleSpotlight } from "../motion/effects";
 
@@ -254,6 +255,10 @@ export function ClosingCTA() {
           <p className="closing__contact">
             {closing.help} <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
           </p>
+          <div className="closing__app">
+            <span>Technicians: get the ArrivePing app</span>
+            <AppStoreBadge height={44} />
+          </div>
         </div>
         <div data-reveal="" data-reveal-delay="1">
           <div className="form-card trial-card">

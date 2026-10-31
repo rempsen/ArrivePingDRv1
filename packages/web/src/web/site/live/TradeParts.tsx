@@ -4,6 +4,7 @@ import type { LandingPage, TradeContent } from "../content/landing";
 import { usePlayback } from "../motion/playback";
 import { SmsScreen } from "./CustomerView";
 import { PauseButton, useLivePlay } from "./shared";
+import { AppStoreBadge } from "../components/AppStoreBadge";
 
 /**
  * Trade pages (HVAC, plumbing, electrical, installers, property maintenance,
@@ -89,6 +90,10 @@ export function TradeHero({ page, crumbs }: { page: LandingPage; crumbs: ReactNo
               </svg>
               Free for 30 days with as many users as you like, then from US$49 a month. Nothing is charged until day 30, and you can
               cancel any time.
+            </p>
+            <p className="lv-hero__app">
+              <span>Your technicians use the ArrivePing app for iPhone and iPad.</span>
+              <AppStoreBadge height={40} />
             </p>
           </div>
         </div>

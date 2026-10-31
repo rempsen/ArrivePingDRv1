@@ -2,6 +2,7 @@ import { useState } from "react";
 import { brand, footer } from "../config";
 import { openConsent } from "../lib/hubspot-tracking";
 import { useAnchorNav } from "./SiteHeader";
+import { AppStoreBadge } from "./AppStoreBadge";
 
 /**
  * One footer column. On desktop it is a plain heading + list. On phones
@@ -55,6 +56,25 @@ export function SiteFooter() {
               <img src={brand.logoLight} alt={brand.lockup} width={220} height={40} />
             </div>
             <p>{footer.description}</p>
+            <div className="footer__app">
+              <span className="footer__app-label">Technician app for iPhone and iPad</span>
+              <AppStoreBadge height={40} />
+            </div>
+            <ul className="footer__social" aria-label="ArrivePing on social media">
+              {footer.social.map((s) => (
+                <li key={s.network}>
+                  <a href={s.href} target="_blank" rel="noopener" aria-label={s.label} title={s.label}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.6 31.6 0 0 0 0 12a31.6 31.6 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1 31.6 31.6 0 0 0 .5-5.8 31.6 31.6 0 0 0-.5-5.8zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z"
+                      />
+                    </svg>
+                    <span>YouTube</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
           {footer.columns.map((col) => (
             <FooterColumn key={col.heading} heading={col.heading} links={col.links} />

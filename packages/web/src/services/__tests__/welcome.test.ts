@@ -108,7 +108,7 @@ describe("sendWelcome", () => {
     // The company's own word for its field staff.
     expect(m.html).toContain("an <b>installer</b>");
     expect(m.html).toMatch(/https:\/\/app\.example\.test\/reset-password\?token=[A-Za-z0-9_-]+&amp;welcome=field|https:\/\/app\.example\.test\/reset-password\?token=[A-Za-z0-9_-]+&welcome=field/);
-    expect(m.html).toContain("Search for <b>ArrivePing</b> in the App Store or Google Play");
+    expect(m.html).toContain('href="https://apps.apple.com/app/arriveping/id6776464675"');
     expect(m.html).toContain("marcus@wl.test");
     expect(m.text).toContain("1. Set your password");
     const [mem] = await db.select().from(schema.memberships).where(eq(schema.memberships.id, "m-wl-tech"));
