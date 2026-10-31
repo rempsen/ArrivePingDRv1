@@ -213,5 +213,6 @@ describe("GET /api/hub/help-questions", () => {
     expect(body.gaps.some((g) => g.question === "Can I get a refund for October?")).toBe(true);
     expect(body.questions.length).toBe(rows.length);
     expect(body.truncated).toBe(false);
+    expect((body as { gapsTruncated?: boolean }).gapsTruncated).toBe(false);
   });
 });

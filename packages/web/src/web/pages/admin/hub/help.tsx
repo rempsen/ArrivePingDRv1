@@ -22,7 +22,7 @@ export default function HubHelpQuestions() {
   const [search, setSearch] = useState("");
   const q = useQuery({
     queryKey: ["hub", "help-questions", days],
-    queryFn: () => hub<{ days: number; stats: HelpCounts; gaps: GapQuestion[]; questions: HelpQuestion[]; truncated: boolean }>(`/help-questions?days=${days}`),
+    queryFn: () => hub<{ days: number; stats: HelpCounts; gaps: GapQuestion[]; gapsTruncated: boolean; questions: HelpQuestion[]; truncated: boolean }>(`/help-questions?days=${days}`),
   });
   const all = useMemo(() => q.data?.questions ?? [], [q.data]);
   // Totals and topics cover the whole period; the list is the newest questions.
@@ -83,7 +83,11 @@ export default function HubHelpQuestions() {
           </Card>
 
           {topics.length > 0 && (
-            <Card title="Where the help falls short" caption="Unanswered questions, grouped by the screen they were about. Biggest first." className="mb-6">
+            <Card title="Where the help falls short" caption={
+                q.data?.gapsTruncated
+                  ? `The newest ${fmt.int(q.data.gaps.length)} of ${fmt.int(stats.gaps)} unanswered questions, grouped by the screen they were about. Biggest first.`
+                  : "Unanswered questions, grouped by the screen they were about. Biggest first."
+              } className="mb-6">
               <ul className="grid gap-3 md:grid-cols-2">
                 {topics.map((t) => (
                   <li key={t.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
@@ -141,7 +145,9 @@ export default function HubHelpQuestions() {
                 : !all.length
                   ? "No questions yet in this period."
                   : view === "gaps"
-                    ? "Every question in this period was answered."
+                    ? stats.gaps > 0
+                      ? `None of the newest ${fmt.int(all.length)} questions went unanswered. The older unanswered ones are counted above.`
+                      : "Every question in this period was answered."
                     : "Nothing matches."}
             </EmptyNote>
           ) : (

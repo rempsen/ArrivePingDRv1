@@ -190,6 +190,8 @@ export const helpAppRoutes = new Hono<AppEnv>()
 
 /** The newest questions the hub lists in full; the totals and topics always cover the whole period. */
 export const HUB_LIST_LIMIT = 1000;
+/** Unanswered questions sent for the topic grouping; past this the page says it's grouping the newest ones. */
+export const HUB_GAP_LIMIT = 20_000;
 
 /**
  * Control Hub: what people asked, and what the assistant couldn't answer.
@@ -229,7 +231,7 @@ export const helpHubRoutes = new Hono<AppEnv>().get("/help-questions", requirePl
     .from(q)
     .where(and(inPeriod, gap))
     .orderBy(desc(q.createdAt))
-    .limit(20_000);
+    .limit(HUB_GAP_LIMIT);
   const questions = await db.select().from(q).where(inPeriod).orderBy(desc(q.createdAt)).limit(HUB_LIST_LIMIT);
-  return c.json({ days, stats, gaps, questions, truncated: stats.asked > questions.length });
+  return c.json({ days, stats, gaps, gapsTruncated: stats.gaps > gaps.length, questions, truncated: stats.asked > questions.length });
 });
