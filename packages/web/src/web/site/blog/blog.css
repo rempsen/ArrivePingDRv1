@@ -537,16 +537,17 @@
   }
 }
 
-/* Tutorial cards inside a post: real video thumbnails that open the help
-   centre player (/support/videos?v=…), so no third-party embed loads with
-   the page. */
+/* Tutorial cards inside a post: the help centre's own poster images, linking
+   to its player (/support/videos?v=…), so nothing is requested from YouTube
+   until the reader presses play. Selectors carry .post__body so they beat the
+   generic .site .post__body a link styling. */
 .site .post__videos {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-block: 1.6em;
 }
-.site .post__video {
+.site .post__body .post__video {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -560,8 +561,8 @@
   line-height: 1.4;
   transition: border-color var(--time-fast) var(--ease-standard);
 }
-.site .post__video:hover,
-.site .post__video:focus-visible {
+.site .post__body .post__video:hover,
+.site .post__body .post__video:focus-visible {
   border-color: var(--accent);
 }
 .site .post__body .post__video img {
@@ -571,10 +572,10 @@
   aspect-ratio: 16 / 9;
   object-fit: cover;
 }
-.site .post__video span {
+.site .post__body .post__video span {
   padding: 0 14px 14px;
 }
-.site .post__video strong {
+.site .post__body .post__video strong {
   display: block;
   color: var(--ink);
 }

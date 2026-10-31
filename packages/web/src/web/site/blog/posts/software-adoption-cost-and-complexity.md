@@ -54,31 +54,31 @@ Complexity is the barrier that regret surveys keep pointing at, and it has three
 
 ## Watch: the tutorials that do the heavy lifting
 
-These are the videos new customers start with. Each is a minute or so, built from real app screens, and opens in the help centre player with chapters and a link to the written guide.
+These are the videos new customers start with. Each is built from real app screens and opens in the help centre player. The full walkthrough is chaptered so you can jump to one screen; the shorter videos link to their written guides.
 
 <div class="post__videos">
   <a class="post__video" href="/support/videos?v=walkthrough">
-    <img src="https://i.ytimg.com/vi/QlrH0HIwS60/hqdefault.jpg" alt="Video thumbnail: ArrivePing, start to finish. The Scheduler with four technicians and a drag-and-drop dispatch toast." loading="lazy" decoding="async">
+    <img src="/media/support-videos/walk.webp" alt="Video thumbnail: ArrivePing, start to finish. The Scheduler with four technicians and a drag-and-drop dispatch toast." loading="lazy" decoding="async">
     <span><strong>ArrivePing, start to finish</strong> 7:51 · sign-up to first dispatched job, with 13 chapters</span>
   </a>
   <a class="post__video" href="/support/videos?v=sign-up">
-    <img src="https://i.ytimg.com/vi/OWtKoV08Kjc/hqdefault.jpg" alt="Video thumbnail: Sign up and let the AI build your workspace from your website." loading="lazy" decoding="async">
+    <img src="/media/support-videos/h01.webp" alt="Video thumbnail: Sign up and let the AI build your workspace from your website." loading="lazy" decoding="async">
     <span><strong>Sign up: AI builds your workspace from your website</strong> the setup agent reading a site and creating services, catalog and forms</span>
   </a>
   <a class="post__video" href="/support/videos?v=create-a-job">
-    <img src="https://i.ytimg.com/vi/RR1tO_z3FqU/hqdefault.jpg" alt="Video thumbnail: Create a job in under a minute, the New Job form with customer, service and address." loading="lazy" decoding="async">
+    <img src="/media/support-videos/h04.webp" alt="Video thumbnail: Create a job in under a minute, the New Job form with customer, service and address." loading="lazy" decoding="async">
     <span><strong>Create a job in under a minute</strong> customer, service, template, address, create</span>
   </a>
   <a class="post__video" href="/support/videos?v=schedule-and-dispatch">
-    <img src="https://i.ytimg.com/vi/47mFBgJ6PQA/hqdefault.jpg" alt="Video thumbnail: Schedule and dispatch with drag and drop in the Scheduler." loading="lazy" decoding="async">
+    <img src="/media/support-videos/h05.webp" alt="Video thumbnail: Schedule and dispatch with drag and drop in the Scheduler." loading="lazy" decoding="async">
     <span><strong>Schedule and dispatch with drag and drop</strong> move a job, and the customer and technician hear about it in seconds</span>
   </a>
   <a class="post__video" href="/support/videos?v=on-my-way-text">
-    <img src="https://i.ytimg.com/vi/_K-4fQI29zU/hqdefault.jpg" alt="Video thumbnail: How the on-my-way text and live ETA work, the customer's tracking page." loading="lazy" decoding="async">
+    <img src="/media/support-videos/onmyway.webp" alt="Video thumbnail: How the on-my-way text and live ETA work, the customer's tracking page." loading="lazy" decoding="async">
     <span><strong>How the on-my-way text and live ETA work</strong> Start Driving, the customer's live page, I've Arrived</span>
   </a>
   <a class="post__video" href="/support/videos?v=notifications">
-    <img src="https://i.ytimg.com/vi/4SxC2lMvKxQ/hqdefault.jpg" alt="Video thumbnail: Notifications and automation, who hears what and when." loading="lazy" decoding="async">
+    <img src="/media/support-videos/h11.webp" alt="Video thumbnail: Notifications and automation, who hears what and when." loading="lazy" decoding="async">
     <span><strong>Notifications and automation: who hears what, and when</strong> the rules behind every text, email and alert</span>
   </a>
 </div>
