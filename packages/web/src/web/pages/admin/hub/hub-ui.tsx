@@ -28,6 +28,7 @@ const SECTIONS: { to: string; label: string; need?: keyof HubMe["can"] }[] = [
   { to: "/admin/hub/demos", label: "Demos" },
   { to: "/admin/hub/leads", label: "Leads & sales" },
   { to: "/admin/hub/ops", label: "Operations", need: "seeAudit" },
+  { to: "/admin/hub/help", label: "Help questions", need: "seeAudit" },
   { to: "/admin/hub/audit", label: "Audit", need: "seeAudit" },
   { to: "/admin/hub/team", label: "Team", need: "seeAudit" },
 ];
