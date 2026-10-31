@@ -13,7 +13,7 @@ import type { LegalDoc } from "./types";
 export const privacy: LegalDoc = {
   eyebrow: "Legal",
   title: "Privacy Policy",
-  updated: "October 18, 2026",
+  updated: "October 31, 2026",
   path: "/privacy",
   intro: [
     "10161758 Manitoba Ltd. dba NVC360 (\"arriveping.com by NVC360\", \"we\", \"us\", or \"our\") is committed to protecting the privacy of our clients, users, and website visitors (collectively, \"you\", \"yours\", or \"user(s)\"). This Privacy Policy explains how we collect, use, disclose, and safeguard your organization's data (your \"Data\") and any information you provide us about an identifiable individual (your \"Personal Information\") when you use the arriveping.com by NVC360 platform, mobile app, website (arriveping.com), and any associated services (collectively, the \"Services\")."

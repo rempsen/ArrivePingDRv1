@@ -40,8 +40,8 @@ export function CookieConsent() {
       <p className="consent__title">Cookies</p>
       <p className="consent__text">
         {gpc
-          ? "Your browser asks sites not to track you (Global Privacy Control), so analytics cookies stay off."
-          : "We use analytics cookies to see how people find and use ArrivePing. Essential cookies are always on."}
+          ? "Your browser asks sites not to track you (Global Privacy Control), so analytics and marketing cookies stay off."
+          : "We use analytics cookies to see how people find and use ArrivePing, and a Meta (Facebook/Instagram) pixel so we can reach similar businesses there. Essential cookies are always on."}
         {!gpc && current && ` Right now they're ${current === "granted" ? "on" : "off"}.`}{" "}
         <a href="/privacy#cookies-and-tracking-technologies" className="consent__link">
           Privacy policy

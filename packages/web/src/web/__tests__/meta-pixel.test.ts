@@ -15,8 +15,8 @@ const w = dom.window as unknown as Window & typeof globalThis;
 (globalThis as any).Event = w.Event;
 (globalThis as any).CustomEvent = w.CustomEvent;
 
-const consent = await import("../hubspot-tracking");
-const pixel = await import("../meta-pixel");
+const consent = await import("../site/lib/hubspot-tracking");
+const pixel = await import("../site/lib/meta-pixel");
 
 const scripts = () => [...w.document.querySelectorAll("script")].map((s) => s.getAttribute("src") ?? "");
 
