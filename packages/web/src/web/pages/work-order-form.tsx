@@ -81,6 +81,8 @@ export default function WorkOrderForm({ companyId, slug, cfg, services }: { comp
       if (r.ok && d.ok) {
         setUnlocked(true);
         sessionStorage.setItem(storageKey, c);
+      } else if (d.reason === "no_code") {
+        setCodeErr("This form has no access code set yet. Ask your office admin to set one in the form editor.");
       } else if (!silent) {
         setCodeErr("Incorrect access code");
       }

@@ -586,10 +586,15 @@ function CompanySettingsTab() {
 
   const save = useMutation({
     mutationFn: async () => {
+      // apiFetch throws an ApiError carrying the server's message on any
+      // non-2xx, and the app-wide mutation handler (lib/query-client.ts)
+      // shows it as an error toast, so a failed save is never silent.
       const res = await api.settings.$put({ json: form });
-      if (!res.ok) throw new Error("Save failed");
       return res.json();
     },
+    // Don't leave an earlier "Saved" on the button while a new save runs
+    // (or after it fails).
+    onMutate: () => setSaved(false),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["tenant-brand"] });

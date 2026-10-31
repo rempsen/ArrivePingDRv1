@@ -1397,11 +1397,25 @@ function Invites() {
     if (skillClasses.length && !skillClasses.some((c) => c.toLowerCase() === form.skillClass.toLowerCase())) setForm((f) => ({ ...f, skillClass: skillClasses[0]! }));
   }, [skillClasses, form.skillClass]);
   const [copied, setCopied] = useState<string | null>(null);
+  // Set when the email already had a login: the server invites them to join
+  // with that login instead of creating an invite row, so nothing new shows in
+  // the list below and this explains where they went.
+  const [notice, setNotice] = useState("");
 
   const list = useQuery({ queryKey: ["invites"], queryFn: async () => (await api.invites.$get()).json() });
   const create = useMutation({
     mutationFn: async () => (await api.invites.$post({ json: form })).json(),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invites"] }); setModal(false); setForm({ name: "", email: "", phone: "", skillClass: "General" }); },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["invites"] });
+      const r = data as { existingAccount?: boolean; message?: string };
+      if (r.existingAccount) {
+        qc.invalidateQueries({ queryKey: ["riders"] });
+        qc.invalidateQueries({ queryKey: ["team"] });
+        setNotice(`${r.message ?? "That email already has an ArrivePing login."} They won't appear in this list: find them as invited on the ${nounPlural} page, and they can sign in with their existing login to accept.`);
+      } else setNotice("");
+      setModal(false);
+      setForm({ name: "", email: "", phone: "", skillClass: "General" });
+    },
   });
   const resend = useMutation({ mutationFn: async (id: string) => (await api.invites[":id"].resend.$post({ param: { id } })).json() });
   const revoke = useMutation({
@@ -1419,6 +1433,12 @@ function Invites() {
         <p className="text-sm text-slate-400">Invite-only onboarding. {nounPlural} get an email + SMS link to set their password and go active.</p>
         <BtnPrimary onClick={() => setModal(true)}><UserPlus className="h-4 w-4" /> Invite {noun.toLowerCase()}</BtnPrimary>
       </div>
+      {notice && (
+        <div className="flex items-start gap-3 rounded-xl border border-cyan-glow/20 bg-cyan-glow/5 px-4 py-3 text-sm text-slate-300">
+          <p className="flex-1">{notice}</p>
+          <button onClick={() => setNotice("")} aria-label="Dismiss" className="text-slate-500 hover:text-white"><X className="h-4 w-4" /></button>
+        </div>
+      )}
       {invites.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center text-sm text-slate-500">No invites sent yet.</div>
       ) : (

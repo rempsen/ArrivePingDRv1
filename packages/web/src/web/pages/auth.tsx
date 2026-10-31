@@ -15,18 +15,23 @@ import {
   Bot,
 } from "lucide-react";
 import { homeFor } from "../lib/home";
+import { nextFromSearch } from "../lib/safe-next";
 
 type Role = string;
 
 // Public sign-up is client-only. Technicians join via admin invite (/join/:token).
 
 
-function dest(role: Role) {
-  return homeFor(role);
+/** After auth: the page that sent them here (?next=, same-site paths only), else their home. */
+function dest(role: Role, next: string | null) {
+  return next ?? homeFor(role);
 }
 
 export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
   const isSignUp = mode === "sign-up";
+  // e.g. /sign-in?next=/join-company/<id> from an invite. Unsafe values are dropped.
+  const next = nextFromSearch(window.location.search);
+  const nextQs = next ? `?next=${encodeURIComponent(next)}` : "";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -59,7 +64,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
             onSuccess: (ctx) => {
               captureToken(ctx);
               // navigate AFTER token is written to localStorage
-              window.location.assign(dest(role));
+              window.location.assign(dest(role, next));
             },
           },
         );
@@ -79,7 +84,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
             onSuccess: (ctx) => {
               captureToken(ctx);
               const r = ((ctx.data?.user as any)?.role ?? "customer") as Role;
-              window.location.assign(dest(r));
+              window.location.assign(dest(r, next));
             },
           },
         );
@@ -204,7 +209,7 @@ export default function AuthPage({ mode }: { mode: "sign-in" | "sign-up" }) {
           <p className="mt-5 text-center text-sm text-slate-500">
             {isSignUp ? "Already have an account? " : "New to ArrivePing? "}
             <Link
-              to={isSignUp ? "/sign-in" : "/sign-up"}
+              to={`${isSignUp ? "/sign-in" : "/sign-up"}${nextQs}`}
               className="inline-flex min-h-[32px] items-center px-1 font-semibold text-cyan-glow hover:underline"
             >
               {isSignUp ? "Sign in" : "Create one"}

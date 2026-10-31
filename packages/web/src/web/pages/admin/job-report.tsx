@@ -20,6 +20,7 @@ import { apiHeaders } from "../../lib/api";
 import { money, fmtDate } from "../../lib/utils";
 import { distanceLabel, fmtDistance, parseDistanceUnit, perKmToUnit } from "../../../shared/units";
 import { useAuth } from "../../hooks/use-auth";
+import { useAccess } from "../../hooks/use-access";
 import { useConfirm } from "../../components/confirm-dialog";
 import { RouteHistoryMap } from "../../components/route-history-map";
 import { WorkOrderModal } from "../../components/work-order-modal";
@@ -161,16 +162,19 @@ export default function JobReportPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { role } = useAuth();
-  const isOffice = role === "admin" || role === "superadmin" || role === "dispatcher";
+  // "Edit job" follows the person's real permissions at this company (managers
+  // and project managers often have work_orders:edit), not a fixed role list.
+  const { can } = useAccess();
+  const canEdit = can("work_orders:edit");
   const canEditAnyway = role === "admin" || role === "superadmin";
-  // Archiving is the same soft-delete already offered on the Jobs list for
-  // every staff role that can see it there (admin/superadmin/dispatcher) — a
+  // Archiving is the same soft-delete the Jobs list offers, with the same
+  // permission (work_orders:delete) — a
   // finished, no-longer-relevant job (a test booking, a duplicate) had no way
   // off this page short of "Edit anyway", which only edits fields and can't
   // touch status. This gives the office an actual way to get it out of the
   // active list from wherever they're looking at it, without hard-deleting
   // the record — it can still be restored from the archive.
-  const canArchive = isOffice;
+  const canArchive = can("work_orders:delete");
   const [editOpen, setEditOpen] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -262,7 +266,7 @@ export default function JobReportPage() {
           >
             <Download className="h-3.5 w-3.5" /> Download PDF
           </button>
-          {!isCompleted && isOffice && (
+          {!isCompleted && canEdit && (
             <button
               onClick={() => setEditOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-deep"

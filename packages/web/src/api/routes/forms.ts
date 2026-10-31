@@ -47,12 +47,18 @@ const slugify = (s: string) =>
 const genAccessCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 /**
- * Platform-wide default PIN for a brand-new work-order intake form, across
- * every tenant. Every tenant's admin can still change it per-form from the
- * form editor's "Shared access code (PIN)" field (or click Generate for a
- * random one) — this is only what a form starts with before anyone edits it.
+ * A work-order form is gated only by its shared PIN, and the public routes
+ * refuse every request when the stored PIN is blank. So a work-order form must
+ * never be saved without one. (There used to be a platform-wide "123456"
+ * fallback here; a guessable PIN shared by every tenant is no gate at all.)
+ * Returns the message to show, or null when the PIN is acceptable.
  */
-const DEFAULT_ACCESS_CODE = "123456";
+export const WORK_ORDER_PIN_REQUIRED =
+  "A work-order form needs a shared access code (PIN). Enter one or click Generate, then save.";
+export function workOrderPinProblem(formType: string, accessCode: unknown): string | null {
+  if (formType !== "work_order") return null;
+  return String(accessCode ?? "").trim() ? null : WORK_ORDER_PIN_REQUIRED;
+}
 
 /**
  * Normalize stored fields to the rich shape. Backward-compatible with the old
@@ -201,6 +207,8 @@ export const formsRoutes = new Hono<AppEnv>()
       ? normalizeFields(b.fields)
       : (formType === "work_order" ? [] : INTAKE_FIELD_CATALOG.map((f) => ({ ...f })));
     const sections = normalizeSections(b.sections);
+    const pinProblem = workOrderPinProblem(formType, b.accessCode);
+    if (pinProblem) return c.json({ message: pinProblem }, 400);
 
     const [row] = await tx(c).insert(schema.intakeForms, {
       slug,
@@ -218,7 +226,7 @@ export const formsRoutes = new Hono<AppEnv>()
       active: b.active === false ? false : true,
       createdBy: me?.id ?? "",
       formType,
-      accessCode: formType === "work_order" ? (b.accessCode ? String(b.accessCode) : DEFAULT_ACCESS_CODE) : "",
+      accessCode: formType === "work_order" ? String(b.accessCode).trim() : "",
       allowTechAssign: b.allowTechAssign === false ? false : true,
       updatedAt: new Date(),
     });
@@ -249,9 +257,21 @@ export const formsRoutes = new Hono<AppEnv>()
     if (b.active != null) patch.active = !!b.active;
     if (b.slug != null) patch.slug = slugify(String(b.slug));
     if (b.formType != null) patch.formType = b.formType === "work_order" ? "work_order" : "lead";
-    if (b.accessCode != null) patch.accessCode = String(b.accessCode);
+    if (b.accessCode != null) patch.accessCode = String(b.accessCode).trim();
     if (b.allowTechAssign != null) patch.allowTechAssign = !!b.allowTechAssign;
     if (b.regenerateAccessCode) patch.accessCode = genAccessCode();
+
+    // Refuse a save that would leave a work-order form with no PIN (clearing
+    // it, or switching a PIN-less form to work-order). Forms that already
+    // have a PIN and don't touch it pass untouched.
+    if (patch.accessCode !== undefined || patch.formType !== undefined) {
+      const [cur] = await tx(c).select(schema.intakeForms, eq(schema.intakeForms.id, id));
+      if (!cur) return c.json({ message: "not found" }, 404);
+      const nextType = String(patch.formType ?? cur.formType);
+      const nextCode = patch.accessCode !== undefined ? patch.accessCode : cur.accessCode;
+      const pinProblem = workOrderPinProblem(nextType, nextCode);
+      if (pinProblem) return c.json({ message: pinProblem }, 400);
+    }
 
     const [row] = await tx(c).update(schema.intakeForms, patch, eq(schema.intakeForms.id, id));
     if (!row) return c.json({ message: "not found" }, 404);

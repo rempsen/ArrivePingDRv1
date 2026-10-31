@@ -7,6 +7,7 @@ import { FullLoader } from "../../components/loader";
 import { CategoryManagerButton } from "../../components/category-manager";
 import { StoredImage } from "../../components/stored-image";
 import { money, dismiss } from "../../lib/utils";
+import { UserFacingError, errorMessage, errorStatus } from "../../lib/api-error";
 import {
   Plus,
   X,
@@ -400,6 +401,7 @@ function CatalogModal({
   const isEdit = !!row.id;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
   // Cascading category → item picker for assembly components: pick a
   // category first to narrow a big catalog down, then pick the item —
   // two small text dropdowns instead of one long list or a photo grid.
@@ -445,8 +447,17 @@ function CatalogModal({
         taxable: form.taxable !== false,
         components: form.components ?? [],
       };
-      if (isEdit) return api.catalog[":id"].$patch({ param: { id: row.id! }, json: payload as any });
-      return api.catalog.$post({ json: payload as any });
+      // form.id, not row.id: uploading a picture on a new item creates it
+      // first, so a later Save must update that item rather than add a twin.
+      // The api client rejects on a non-2xx; re-throw as a UserFacingError so
+      // the server's message ("Markup can't exceed 1000%") shows in this
+      // dialog, which stays open, instead of only in a toast behind it.
+      try {
+        if (form.id) return await api.catalog[":id"].$patch({ param: { id: form.id }, json: payload as any });
+        return await api.catalog.$post({ json: payload as any });
+      } catch (e) {
+        throw new UserFacingError(errorMessage(e), { status: errorStatus(e), cause: e });
+      }
     },
     onSuccess: onDone,
   });
@@ -456,38 +467,55 @@ function CatalogModal({
   }
 
   async function uploadImage(file: File) {
+    setUploadErr("");
     let id = form.id;
     // need an item to attach the image to — create first if new
     if (!id) {
-      const res = await api.catalog.$post({
-        json: {
-          kind: form.kind,
-          name: form.name || "Untitled",
-          sku: form.sku,
-          category: form.category,
-          description: form.description,
-          unit: form.unit,
-          unitCost: Number(form.unitCost) || 0,
-          markupPct: Number(form.markupPct) || 0,
-          priceMode: form.priceMode,
-          unitPrice: Number(form.unitPrice) || 0,
-          taxable: form.taxable !== false,
-          components: form.components ?? [],
-        } as any,
-      });
+      let res;
+      try {
+        res = await api.catalog.$post({
+          json: {
+            kind: form.kind,
+            name: form.name || "Untitled",
+            sku: form.sku,
+            category: form.category,
+            description: form.description,
+            unit: form.unit,
+            unitCost: Number(form.unitCost) || 0,
+            markupPct: Number(form.markupPct) || 0,
+            priceMode: form.priceMode,
+            unitPrice: Number(form.unitPrice) || 0,
+            taxable: form.taxable !== false,
+            components: form.components ?? [],
+          } as any,
+        });
+      } catch (e) {
+        setUploadErr(`Couldn't upload the picture: the item couldn't be saved first. ${errorMessage(e)}`);
+        return;
+      }
       const created: any = await res.json();
       id = created.item?.id;
+      if (!id) {
+        setUploadErr("Couldn't upload the picture: the item couldn't be saved first. Please try again.");
+        return;
+      }
       setForm((f) => ({ ...f, id }));
     }
     const fd = new FormData();
     fd.append("file", file);
-    const r = await fetch(`/api/catalog/${id}/image`, {
-      method: "POST",
-      headers: apiHeaders(),
-      body: fd,
-    });
-    const j = await r.json();
-    if (j.url) setForm((f) => ({ ...f, image: j.url }));
+    try {
+      const r = await fetch(`/api/catalog/${id}/image`, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: fd,
+      });
+      const j: any = await r.json().catch(() => ({}));
+      if (r.ok && j.url) setForm((f) => ({ ...f, image: j.url }));
+      else if (r.status === 413) setUploadErr("Picture upload failed: that file is too large (max 15MB).");
+      else setUploadErr(`Picture upload failed: ${j.message || j.error?.message || `the server returned ${r.status}`}.`);
+    } catch {
+      setUploadErr("Picture upload failed: can't reach the server. Check your connection and try again.");
+    }
   }
 
   const isAssembly = form.kind === "assembly";
@@ -630,6 +658,7 @@ function CatalogModal({
                   {uploading ? "Uploading…" : "Upload"}
                 </button>
               </div>
+              {uploadErr && <p role="alert" className="mt-1.5 text-xs font-semibold text-rose-400">{uploadErr}</p>}
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input aria-label="Taxable"
@@ -806,7 +835,12 @@ function CatalogModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-white/5 px-5 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-white/5 px-5 py-4">
+          {save.isError && (
+            <p role="alert" className="mr-auto text-sm font-semibold text-rose-400">
+              Not saved: {(save.error as Error).message}
+            </p>
+          )}
           <button onClick={onClose} className="rounded-full px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white/5">
             Cancel
           </button>

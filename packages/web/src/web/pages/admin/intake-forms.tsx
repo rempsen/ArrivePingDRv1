@@ -74,9 +74,17 @@ async function jget<T>(url: string): Promise<T> {
 }
 async function jsend<T>(url: string, method: string, body?: unknown): Promise<T> {
   const r = await fetch(url, { method, headers: authHeaders(), body: body ? JSON.stringify(body) : undefined });
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) {
+    // Show the server's own message ({ message }) rather than raw JSON.
+    const text = await r.text();
+    let msg = text;
+    try { msg = JSON.parse(text)?.message || text; } catch { /* plain-text body */ }
+    throw new Error(msg || `Request failed (${r.status})`);
+  }
   return r.json();
 }
+/** Random 6-digit PIN, same shape the server's Generate uses. */
+const randomPin = () => String(Math.floor(100000 + Math.random() * 900000));
 type Svc = { id: string; name: string; category: string };
 const uid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 9)}`;
 const slugFromLabel = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32) || "field";
@@ -324,7 +332,10 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
   const editing = !!form;
   const formType = form?.formType ?? newFormType;
   const isWorkOrder = formType === "work_order";
-  const [accessCode, setAccessCode] = useState(form?.accessCode ?? "");
+  // A new work-order form starts with a random PIN (shown in the field below)
+  // rather than a blank one; the admin can change it or click Generate.
+  const [accessCode, setAccessCode] = useState(form ? form.accessCode ?? "" : isWorkOrder ? randomPin() : "");
+  const pinMissing = isWorkOrder && !accessCode.trim();
   const [allowTechAssign, setAllowTechAssign] = useState(form?.allowTechAssign ?? true);
   const [title, setTitle] = useState(form?.title ?? (isWorkOrder ? "Create Work Order" : "Request Service"));
   const [intro, setIntro] = useState(form?.intro ?? "");
@@ -341,9 +352,11 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/forms/logo", { method: "POST", body: fd, credentials: "include", headers: apiHeaders() });
-      const d = await res.json();
+      const d = await res.json().catch(() => ({}));
       if (res.ok && d.url) setLogoUrl(d.url);
       else toast({ kind: "error", key: "logo-upload", message: d.message || "Logo upload failed" });
+    } catch {
+      toast({ kind: "error", key: "logo-upload", message: "Logo upload failed. Check your connection and try again." });
     } finally {
       setLogoUploading(false);
     }
@@ -488,7 +501,7 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
       footer={
         <>
           <BtnGhost onClick={onClose}>Cancel</BtnGhost>
-          <BtnPrimary disabled={!title.trim() || saveM.isPending} onClick={() => saveM.mutate()}>
+          <BtnPrimary disabled={!title.trim() || pinMissing || saveM.isPending} onClick={() => saveM.mutate()}>
             {saveM.isPending ? "Saving…" : editing ? "Save changes" : "Create form"}
           </BtnPrimary>
         </>
@@ -516,13 +529,14 @@ function FormEditor({ form, newFormType, publicKeys, onKeysChanged, onClose, onS
                 <div className="flex items-center gap-2">
                   <input aria-label="Access code" className={`${inputCls} font-mono tracking-widest`} value={accessCode}
                     onChange={(e) => setAccessCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="123456" />
+                    placeholder="e.g. 482915" aria-invalid={pinMissing} />
                   <button type="button"
-                    onClick={() => setAccessCode(String(Math.floor(100000 + Math.random() * 900000)))}
+                    onClick={() => setAccessCode(randomPin())}
                     className="shrink-0 rounded-lg border border-white/10 px-2.5 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5">
                     Generate
                   </button>
                 </div>
+                {pinMissing && <p role="alert" className="mt-1 text-xs font-semibold text-rose-400">Enter a PIN or click Generate. Staff can't open this form without one.</p>}
               </Field>
               <div className="flex items-end pb-1">
                 <label className="flex items-center gap-2 text-sm text-slate-300">
