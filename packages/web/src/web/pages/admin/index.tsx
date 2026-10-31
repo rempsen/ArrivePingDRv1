@@ -47,6 +47,7 @@ const HubDemosPage = lazyRoute(() => import("./hub/demos"));
 const HubLeadsPage = lazyRoute(() => import("./hub/leads"));
 const HubOpsPage = lazyRoute(() => import("./hub/ops"));
 const HubAuditPage = lazyRoute(() => import("./hub/audit"));
+const HubHelpPage = lazyRoute(() => import("./hub/help"));
 const HubTeamPage = lazyRoute(() => import("./hub/team"));
 
 function AdminNotFound() {
@@ -138,6 +139,7 @@ export default function AdminApp() {
           <Route path="/admin/hub/demos" component={HubDemosPage} />
           <Route path="/admin/hub/leads" component={HubLeadsPage} />
           <Route path="/admin/hub/ops" component={HubOpsPage} />
+          <Route path="/admin/hub/help" component={HubHelpPage} />
           <Route path="/admin/hub/audit" component={HubAuditPage} />
           <Route path="/admin/hub/team" component={HubTeamPage} />
           <Route>

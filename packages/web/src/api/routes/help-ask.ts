@@ -200,7 +200,7 @@ export const helpHubRoutes = new Hono<AppEnv>().get("/help-questions", requirePl
     .from(q)
     .where(onlyGaps ? and(gte(q.createdAt, since), gap) : gte(q.createdAt, since))
     .orderBy(desc(q.createdAt))
-    .limit(500);
+    .limit(1000);
   const total = rows.length;
   const gaps = rows.filter((r) => r.handedOff || r.rating < 0 || r.failed).length;
   return c.json({ days, total, gaps, questions: rows });
