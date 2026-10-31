@@ -1,6 +1,8 @@
 import { useRoute } from "wouter";
 import { HelpShell, ArticleBlocks, ContactCard } from "../site/components/HelpShell";
 import { articleBySlug, articlesIn, categoryById } from "../site/support/articles";
+import { LiteVideo } from "../site/components/HelpVideo";
+import { clock, videoForGuide } from "../site/support/videos";
 
 /** One help article — https://arriveping.com/support/:slug */
 export default function SupportArticlePage() {
@@ -29,6 +31,7 @@ export default function SupportArticlePage() {
 
   const cat = categoryById[a.category];
   const siblings = articlesIn(a.category).filter((x) => x.slug !== a.slug);
+  const video = videoForGuide(a.slug);
 
   return (
     <HelpShell path={`/support/${a.slug}`}>
@@ -47,6 +50,16 @@ export default function SupportArticlePage() {
               <p className="help-article__summary">{a.summary}</p>
               <p className="small">Last updated {a.updated}</p>
             </header>
+            {video && (
+              <figure className="hv-inline">
+                <LiteVideo video={video} />
+                <figcaption>
+                  <span className="hv-inline__tag">Watch · {clock(video.seconds)}</span>
+                  <span>{video.title}</span>
+                  <a href="/support/videos">All videos</a>
+                </figcaption>
+              </figure>
+            )}
             <div className="help-article__content legal__section">
               <ArticleBlocks blocks={a.blocks} />
             </div>

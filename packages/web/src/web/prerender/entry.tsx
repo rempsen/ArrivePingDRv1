@@ -15,6 +15,7 @@ import TermsPage from "../pages/terms";
 import FeaturesPage from "../pages/marketing/features";
 import SupportPage from "../pages/support";
 import SupportArticlePage from "../pages/support-article";
+import SupportVideosPage from "../pages/support-videos";
 import { LandingRoute } from "../pages/marketing/landing";
 import { CONTENT_UPDATED, landingByPath, landingPages } from "../site/content/landing";
 import { seoPages } from "../site/seo/pages";
@@ -34,6 +35,7 @@ const fixed: Record<string, ComponentType> = {
   "/terms": TermsPage,
   "/features": FeaturesPage,
   "/support": SupportPage,
+  "/support/videos": SupportVideosPage,
 };
 
 export function render(path: string): { body: string; head: string } {

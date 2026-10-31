@@ -12,7 +12,8 @@ import { authorFor } from "../blog/meta";
 import { landingPages, type LandingPage } from "../content/landing";
 import { featuresMeta } from "../content/features";
 import { articles } from "../support/articles";
-import { absolute, breadcrumbs, faqPage, graph, ORG_ID, organization, SITE_ID, SITE_URL, softwareApplication, webPage, website, type JsonLd } from "./schema";
+import { liveVideos, videoForGuide } from "../support/videos";
+import { absolute, breadcrumbs, faqPage, graph, ORG_ID, organization, SITE_ID, SITE_URL, softwareApplication, videoObject, webPage, website, type JsonLd } from "./schema";
 
 export type SeoPage = {
   path: string;
@@ -260,8 +261,28 @@ const supportArticlePages: SeoPage[] = articles.map((a) => ({
       { name: "Help Center", path: "/support" },
       { name: a.title, path: `/support/${a.slug}` },
     ]),
+    ...(videoForGuide(a.slug) ? [videoObject(videoForGuide(a.slug)!)] : []),
   ]),
 }));
+
+const VIDEOS_SUMMARY =
+  "Short ArrivePing video guides on real screens: sign up, the AI setup chat, creating and dispatching jobs, booking forms, notifications, your team and more.";
+const supportVideosPage: SeoPage = {
+  ...legal("/support/videos", "Video guides", VIDEOS_SUMMARY),
+  label: "Video guides",
+  section: "Company",
+  priority: 0.5,
+  changefreq: "monthly",
+  jsonLd: graph([
+    webPage("/support/videos", "Video guides | ArrivePing", VIDEOS_SUMMARY, "CollectionPage"),
+    breadcrumbs([
+      { name: "ArrivePing", path: "/" },
+      { name: "Help Center", path: "/support" },
+      { name: "Video guides", path: "/support/videos" },
+    ]),
+    ...liveVideos.map(videoObject),
+  ]),
+};
 
 export const seoPages: SeoPage[] = [
   home,
@@ -273,6 +294,7 @@ export const seoPages: SeoPage[] = [
   legal("/privacy", "Privacy Policy", "How arriveping.com by NVC360 collects, uses, discloses and safeguards your data and personal information, including technician location information."),
   legal("/terms", "Terms of Service", "The terms that govern use of the arriveping.com by NVC360 platform, mobile app and website."),
   { ...legal("/support", "Help Center", "ArrivePing help: set up your company, the technician app, dispatch, customer notifications, billing, account deletion and troubleshooting. Email support@nvc360.com."), label: "Help Center", section: "Company", priority: 0.5, changefreq: "weekly" },
+  supportVideosPage,
   ...supportArticlePages,
 ];
 

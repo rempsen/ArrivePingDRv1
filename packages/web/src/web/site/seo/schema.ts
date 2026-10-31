@@ -153,3 +153,27 @@ export function breadcrumbs(trail: { name: string; path: string }[]): JsonLd {
 }
 
 export const graph = (nodes: JsonLd[]): JsonLd => ({ "@context": "https://schema.org", "@graph": nodes });
+
+/** schema.org VideoObject for a Help Center video (embedded on our pages, hosted on YouTube). */
+export function videoObject(v: {
+  youtubeId: string;
+  title: string;
+  summary: string;
+  seconds: number;
+  poster: string;
+  uploaded: string;
+}): JsonLd {
+  return {
+    "@type": "VideoObject",
+    "@id": `https://www.youtube.com/watch?v=${v.youtubeId}`,
+    name: v.title,
+    description: v.summary,
+    thumbnailUrl: absolute(v.poster),
+    uploadDate: v.uploaded,
+    duration: `PT${Math.floor(v.seconds / 60)}M${Math.round(v.seconds % 60)}S`,
+    embedUrl: `https://www.youtube-nocookie.com/embed/${v.youtubeId}`,
+    url: `https://www.youtube.com/watch?v=${v.youtubeId}`,
+    inLanguage: "en",
+    publisher: { "@id": ORG_ID },
+  };
+}

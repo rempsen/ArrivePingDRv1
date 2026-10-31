@@ -1,4 +1,5 @@
 import { articles, type Article } from "./articles";
+import { liveVideos, type HelpVideo } from "./videos";
 
 /**
  * Tiny ranked search over Help Center titles, summaries, keywords and body
@@ -79,4 +80,25 @@ export function searchArticles(q: string, limit = 7): Article[] {
     .filter((x) => x.score > 0)
     .sort((x, y) => y.score - x.score);
   return scored.slice(0, limit).map((x) => x.a);
+}
+
+/**
+ * Videos for the same query. Stricter than articles (titles and summaries
+ * only, and most of the words must match) so a video only shows up when it
+ * is clearly about what was asked.
+ */
+export function searchVideos(q: string): HelpVideo[] {
+  const terms = searchTerms(q);
+  if (!terms.length) return [];
+  return liveVideos
+    .map((v) => {
+      const title = v.title.toLowerCase();
+      const text = `${title} ${v.summary.toLowerCase()}`;
+      const matched = terms.filter((t) => text.includes(t)).length;
+      const inTitle = terms.filter((t) => title.includes(t)).length;
+      return { v, ok: inTitle > 0 && matched >= Math.ceil(terms.length / 2), score: matched * 2 + inTitle };
+    })
+    .filter((x) => x.ok)
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.v);
 }
