@@ -33,6 +33,10 @@ export const brand = {
     /** The live ArrivePing iOS app (iPhone + iPad). No country code, so Apple sends each visitor to their own store. */
     appStore: "https://apps.apple.com/app/arriveping/id6776464675",
     youtube: "https://www.youtube.com/@arriveping",
+    facebook: "https://www.facebook.com/arriveping",
+    instagram: "https://www.instagram.com/arriveping",
+    linkedin: "https://www.linkedin.com/company/arriveping",
+    x: "https://x.com/arriveping",
   },
 } as const;
 
@@ -814,5 +818,11 @@ export const footer = {
   legal: `© ${new Date().getFullYear()} ArrivePing. All Rights Reserved.`,
   maker: { label: "An NVC360 product", href: "https://nvc360.com" },
   /** Social profiles shown as icon links under the footer description. */
-  social: [{ label: "ArrivePing on YouTube", network: "youtube", href: brand.urls.youtube }],
+  social: [
+    { label: "ArrivePing on YouTube", network: "youtube", href: brand.urls.youtube },
+    { label: "ArrivePing on Facebook", network: "facebook", href: brand.urls.facebook },
+    { label: "ArrivePing on Instagram", network: "instagram", href: brand.urls.instagram },
+    { label: "ArrivePing on LinkedIn", network: "linkedin", href: brand.urls.linkedin },
+    { label: "ArrivePing on X", network: "x", href: brand.urls.x },
+  ],
 };

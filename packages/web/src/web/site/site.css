@@ -1509,17 +1509,21 @@
 .site .footer__social {
   margin-top: 18px !important;
   display: flex !important;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .site .footer__social a {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   color: var(--ink-secondary);
 }
 .site .footer__social a:hover {
   color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
 }
 .site .footer__social svg {
   flex-shrink: 0;
