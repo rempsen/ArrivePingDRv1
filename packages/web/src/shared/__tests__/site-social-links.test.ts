@@ -17,7 +17,7 @@ describe("footer social links", () => {
     expect(by.facebook).toBe("https://www.facebook.com/arriveping");
     expect(by.instagram).toBe("https://www.instagram.com/arriveping");
     expect(by.linkedin).toBe("https://www.linkedin.com/company/arriveping");
-    expect(by.x).toBe("https://x.com/arriveping");
+    expect(by.x).toBe("https://x.com/ArrivePing_HQ");
   });
 
   it("has an icon for every network it lists", () => {

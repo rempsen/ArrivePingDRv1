@@ -36,7 +36,7 @@ export const brand = {
     facebook: "https://www.facebook.com/arriveping",
     instagram: "https://www.instagram.com/arriveping",
     linkedin: "https://www.linkedin.com/company/arriveping",
-    x: "https://x.com/arriveping",
+    x: "https://x.com/ArrivePing_HQ",
   },
 } as const;
 
