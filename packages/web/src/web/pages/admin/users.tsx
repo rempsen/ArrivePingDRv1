@@ -18,6 +18,7 @@ import {
   ConfirmModal,
 } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
+import { toast } from "../../components/toast";
 import { TagPicker } from "../../components/tag-picker";
 import { AttachmentManager } from "../../components/attachment-manager";
 import { CustomFieldsForm } from "../../components/custom-fields";
@@ -184,6 +185,10 @@ export default function AdminClients() {
   const [detail, setDetail] = useState<DirectoryRow | null>(null);
   const [err, setErr] = useState("");
   const [form, setForm] = useState({ ...EMPTY_ADD_FORM });
+  // Which login the add modal creates. A dispatcher is internal staff, so it
+  // goes through POST /team (which accepts the "dispatcher" role) rather than
+  // POST /admin/users (clients, plus admin-tier accounts for superadmins only).
+  const [addKind, setAddKind] = useState<"customer" | "dispatcher">("customer");
   const [ask, setAsk] = useState<AskState | null>(null);
   const [askErr, setAskErr] = useState("");
 
@@ -300,14 +305,27 @@ export default function AdminClients() {
   };
 
   const create = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ message?: string; welcomeSent?: boolean }> => {
+      if (addKind === "dispatcher") {
+        const name = [form.firstName, form.lastName].filter(Boolean).join(" ").trim();
+        const res = await api.team.$post({
+          json: { name, email: form.email, password: form.password || undefined, phone: form.phone, role: "dispatcher" },
+        });
+        return res.json();
+      }
       const res = await api.admin.users.$post({ json: form });
       const data = await res.json();
       if (!res.ok) throw new Error((data as any).message || "Failed");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidateDirectory(qc);
+      if (addKind === "dispatcher") qc.invalidateQueries({ queryKey: ["team"] });
+      // An email that already has a login is invited rather than created; the
+      // server says so (and whether the invitation email went out).
+      if (data.message) toast({ kind: "info", message: data.message });
+      else if (data.welcomeSent === false)
+        toast({ kind: "warning", message: "Dispatcher added, but the welcome email didn't go out. Use “Email a sign-in link” on their profile in Team." });
       setShowAdd(false);
       setForm({ ...EMPTY_ADD_FORM });
       setErr("");
@@ -322,10 +340,15 @@ export default function AdminClients() {
       if (!res.ok) throw new Error((data as any).message || "Failed");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       invalidateDirectory(qc);
       setDelUser(null);
+      // Someone who also works for another company is only removed from this
+      // one; their login stays. Say so instead of implying it was deleted.
+      if ((data as { deletedAccount?: boolean }).deletedAccount === false && (data as { message?: string }).message)
+        toast({ kind: "info", message: (data as { message: string }).message });
     },
+    // The global mutation handler shows the server's message as an error toast.
     onError: () => setDelUser(null),
   });
 
@@ -353,7 +376,9 @@ export default function AdminClients() {
               label: "Add Dispatcher",
               icon: UserPlus,
               onClick: () => {
-                setForm((f) => ({ ...f, role: "admin" }));
+                setAddKind("dispatcher");
+                setForm((f) => ({ ...f, role: "customer" }));
+                setErr("");
                 setShowAdd(true);
               },
             }
@@ -361,7 +386,9 @@ export default function AdminClients() {
               label: `Add ${customerNoun}`,
               icon: UserPlus,
               onClick: () => {
+                setAddKind("customer");
                 setForm((f) => ({ ...f, role: "customer" }));
+                setErr("");
                 setShowAdd(true);
               },
             };
@@ -906,8 +933,8 @@ export default function AdminClients() {
       <Modal
         open={showAdd}
         onClose={() => setShowAdd(false)}
-        title={form.role === "admin" ? "Add Dispatcher" : `Add ${customerNoun}`}
-        subtitle={`Create a ${form.role === "admin" ? "dispatcher" : customerNoun.toLowerCase()} login`}
+        title={addKind === "dispatcher" ? "Add Dispatcher" : `Add ${customerNoun}`}
+        subtitle={`Create a ${addKind === "dispatcher" ? "dispatcher" : customerNoun.toLowerCase()} login`}
         footer={
           <>
             <BtnGhost onClick={() => setShowAdd(false)}>Cancel</BtnGhost>
@@ -956,7 +983,7 @@ export default function AdminClients() {
               <input aria-label="+1 416 555 9999" className={inputCls} value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+1 416 555 9999" />
             </Field>
-            {form.role === "customer" ? (
+            {addKind === "customer" ? (
               <Field label="Account type">
                 <select aria-label="Account type" className={inputCls} value={form.customerType}
                   onChange={(e) => setForm({ ...form, customerType: e.target.value as NewUserForm["customerType"] })}>
@@ -971,7 +998,7 @@ export default function AdminClients() {
             )}
           </div>
 
-          {form.role === "customer" && (
+          {addKind === "customer" && (
             <div className="space-y-3 border-t border-white/10 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Company</p>
               <div className="grid grid-cols-2 gap-3">

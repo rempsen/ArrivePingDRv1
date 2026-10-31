@@ -3,6 +3,7 @@ import { money } from "../../lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { FullLoader } from "../../components/loader";
+import { toast } from "../../components/toast";
 import { PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
 import { Modal, Field, inputCls, BtnPrimary, BtnGhost } from "../../components/modal";
@@ -48,7 +49,14 @@ export default function AdminPayouts() {
       });
       return res.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payouts"] }); setGenOpen(false); },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["payouts"] });
+      setGenOpen(false);
+      // Nothing to pay is a normal outcome, but closing the dialog with no word
+      // looked like the button did nothing. (Errors toast via the global handler.)
+      if (!(data as { created?: number }).created)
+        toast({ kind: "info", message: `No new payouts: no completed ${jobPlural.toLowerCase()} in that period that haven't already been paid out.` });
+    },
   });
 
   const pay = useMutation({

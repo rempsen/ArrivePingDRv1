@@ -337,7 +337,10 @@ export const publicFormsRoutes = new Hono<AppEnv>()
       return c.json({ message: "Form not found" }, 404);
     const b = await parseBody(c, z.object({ code: z.string().max(128).optional() }));
     const code = (b.code ?? "").trim();
-    const ok = !!form.accessCode && code === form.accessCode;
+    // A form saved with no PIN can never be unlocked; say so instead of
+    // telling staff their (correct) code is wrong.
+    if (!form.accessCode) return c.json({ ok: false, reason: "no_code" }, 401);
+    const ok = code === form.accessCode;
     return c.json({ ok }, ok ? 200 : 401);
   })
 

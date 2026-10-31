@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { toast } from "../../components/toast";
 import { useConfirm } from "../../components/confirm-dialog";
 import { DialogPanel } from "../../components/dialog-panel";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiHeaders } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
@@ -22,6 +22,7 @@ import { TechAvatar } from "../../components/tech-avatar";
 import { WorkOrderModal } from "../../components/work-order-modal";
 import { EmptyState } from "../../components/empty-state";
 import { useAccess } from "../../hooks/use-access";
+import { readJobsUrl } from "../../lib/jobs-url";
 
 const QUICK = [
   { key: "", label: "All" },
@@ -32,6 +33,7 @@ const QUICK = [
   { key: "completed", label: "Completed" },
   { key: "cancelled", label: "Cancelled" },
 ];
+const QUICK_KEYS = QUICK.map((x) => x.key).filter(Boolean);
 
 type ExpCol = { key: string; label: string; kind?: string; group: string };
 
@@ -87,10 +89,9 @@ export default function AdminWorkOrders() {
   const { can } = useAccess();
   const canArchive = can("work_orders:delete");
   const canExport = can("reports:export");
-  const initialStatus =
-    (typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("status")) ||
-    "";
+  // ?status / ?q / ?open from links elsewhere (lib/jobs-url.ts).
+  const urlSearch = useSearch();
+  const initialUrl = useRef(readJobsUrl(urlSearch, QUICK_KEYS)).current;
 
   const [assignFor, setAssignFor] = useState<any>(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -129,21 +130,39 @@ export default function AdminWorkOrders() {
     }
   };
 
-  const [quick, setQuick] = useState(
-    QUICK.some((x) => x.key === initialStatus) ? initialStatus : "",
-  );
-  const [qInput, setQInput] = useState("");
-  const [q, setQ] = useState("");
+  const [quick, setQuick] = useState(initialUrl.quick);
+  const [qInput, setQInput] = useState(initialUrl.q);
+  const [q, setQ] = useState(initialUrl.q);
   const [filters, setFilters] = useState<typeof EMPTY>({
     ...EMPTY,
-    status: initialStatus && QUICK.some((x) => x.key === initialStatus) ? [] : [],
+    status: initialUrl.statusList,
   });
+
   const [showFilters, setShowFilters] = useState(false);
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [sort, setSort] = useState("scheduledAt");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
+
+  // ?open=<id> opens that job the same way a row tap does (its report page),
+  // whether or not it's on the current page of results; ?q=<text> fills the
+  // search box. Both are then taken off the URL (replace, not push) so Back
+  // or a refresh doesn't reopen the job or reset the search.
+  useEffect(() => {
+    const u = readJobsUrl(urlSearch, QUICK_KEYS);
+    if (u.open) {
+      navigate(`/admin/jobs/${encodeURIComponent(u.open)}/report`, { replace: true });
+      return;
+    }
+    if (u.q) {
+      setQInput(u.q);
+      setQ(u.q);
+      setPage(1);
+      navigate(`/admin/work-orders${u.rest}`, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSearch]);
 
   // debounce free-text search
   useEffect(() => {

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "../../lib/api";
 import { ok } from "../../lib/api-ok";
+import { ACTIVE_STATUSES } from "../../lib/jobs-url";
 import { FullLoader } from "../../components/loader";
 import { StatusBadge, PageWrap } from "../../components/brand";
 import { PageHead } from "./shell";
@@ -205,7 +206,9 @@ export default function AdminDashboard() {
       icon: Activity,
       iconTint: "bg-brand/10 text-brand",
       topBorder: "border-t-brand/50",
-      to: "/admin/work-orders?status=active",
+      // Same statuses the API counts as active (api/routes/admin.ts); the
+      // Jobs page reads a comma list into its Status filter.
+      to: `/admin/work-orders?status=${ACTIVE_STATUSES.join(",")}`,
       hint: s.activeBookings === 0 ? "Nothing in progress" : undefined,
     },
     {

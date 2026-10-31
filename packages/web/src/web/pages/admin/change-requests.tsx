@@ -190,7 +190,7 @@ export default function AdminChangeRequests() {
                       </span>
                       {r.booking && (
                         <Link
-                          to={`/admin/work-orders?q=${r.booking.shortId}`}
+                          to={`/admin/work-orders?open=${encodeURIComponent(r.booking.id)}`}
                           className="text-xs font-semibold text-brand hover:underline"
                         >
                           #{r.booking.shortId}
