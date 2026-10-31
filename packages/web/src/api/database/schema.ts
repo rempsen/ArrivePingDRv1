@@ -2206,3 +2206,28 @@ export const platformAudit = pgTable(
     actorIdx: index("platform_audit_actor_idx").on(t.actorId, t.createdAt),
   }),
 );
+
+// "Ask ArrivePing" questions from the public Help Center and the mobile apps
+// (api/routes/help-ask.ts). Platform-wide, not tenant data: no company id and
+// no asker identity, only what was asked, what the assistant drew on and how
+// it went, so support can see which questions the help material doesn't
+// answer yet (handed_off, or a thumbs down) and fill the gaps.
+export const helpQuestions = pgTable(
+  "help_questions",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    source: text("source").notNull(), // public | office | technician
+    platform: text("platform").notNull().default(""), // web | ios | android
+    question: text("question").notNull(),
+    // Screen ids and article slugs handed to the model, comma-separated.
+    matched: text("matched").notNull().default(""),
+    answerChars: integer("answer_chars").notNull().default(0),
+    // The assistant offered to pass it to support (it couldn't answer).
+    handedOff: boolean("handed_off").notNull().default(false),
+    failed: boolean("failed").notNull().default(false),
+    // The asker's thumbs: 1 helpful, -1 not helpful, 0 no vote.
+    rating: integer("rating").notNull().default(0),
+    createdAt: now(),
+  },
+  (t) => ({ createdIdx: index("help_questions_created_idx").on(t.createdAt) }),
+);

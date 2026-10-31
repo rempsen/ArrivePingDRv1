@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
-import { ArrowLeft, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Wrench, Browser } from "phosphor-react-native";
+import { ArrowLeft, SignOut, FileText, ShieldCheck, Lifebuoy, CaretRight, Wrench, Browser, Sparkle } from "phosphor-react-native";
 import { authClient, clearToken } from "../../lib/auth";
 import { unregisterPushToken } from "../../lib/push";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
@@ -206,6 +206,11 @@ export default function OfficeProfile() {
         </Card>
 
         <Card>
+          <Pressable onPress={() => router.push("/help")} style={s.linkRow} accessibilityRole="button" accessibilityLabel="Ask ArrivePing">
+            <Sparkle color={C.brand} size={18} weight="fill" />
+            <Text style={s.linkTxt}>Ask ArrivePing</Text>
+            <CaretRight color={C.muted} size={16} />
+          </Pressable>
           <Pressable onPress={() => Linking.openURL(webUrl("/admin")).catch(() => {})} style={s.linkRow} accessibilityRole="link" accessibilityLabel="Open the web console">
             <Browser color={C.sub} size={18} />
             <Text style={s.linkTxt}>Open the web console</Text>

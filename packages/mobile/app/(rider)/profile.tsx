@@ -2,17 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import {
-  CalendarBlank,
-  Camera,
-  CaretRight,
-  FileText,
-  Lifebuoy,
-  ShieldCheck,
-  SignOut,
-  Signpost,
-  SquaresFour,
-} from "phosphor-react-native";
+import { CalendarBlank, Camera, CaretRight, FileText, Lifebuoy, ShieldCheck, SignOut, Signpost, SquaresFour, Sparkle } from "phosphor-react-native";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -545,6 +535,11 @@ export default function Profile() {
         </Card>
 
         <Card>
+          <Pressable onPress={() => router.push("/help")} style={s.linkRow} accessibilityRole="button" accessibilityLabel="Ask ArrivePing">
+            <Sparkle color={C.brand} size={18} weight="fill" />
+            <Text style={s.linkTxt}>Ask ArrivePing</Text>
+            <CaretRight color={C.muted} size={16} />
+          </Pressable>
           <Text style={s.cardTitle}>About &amp; legal</Text>
           {(
             [

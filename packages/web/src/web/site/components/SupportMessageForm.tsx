@@ -28,6 +28,16 @@ function validate(f: Fields): Errors {
   return e;
 }
 
+const PREFILL_EVENT = "arriveping:support-prefill";
+
+/**
+ * Fill in this form's message (Ask ArrivePing's "Ask our support team"),
+ * then bring the form into view and focus the name field.
+ */
+export function prefillSupportMessage(message: string) {
+  window.dispatchEvent(new CustomEvent(PREFILL_EVENT, { detail: message }));
+}
+
 export function SupportMessageForm() {
   const uid = useId();
   const id = (k: string) => `${uid}-${k}`;
@@ -36,6 +46,22 @@ export function SupportMessageForm() {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const formRef = useRef<HTMLFormElement>(null);
   const doneRef = useRef<HTMLDivElement>(null);
+
+  // "Ask our support team" from Ask ArrivePing: drop the question in and bring the form up.
+  useEffect(() => {
+    const on = (ev: Event) => {
+      const message = String((ev as CustomEvent<string>).detail ?? "").slice(0, MESSAGE_MAX);
+      setStatus({ kind: "idle" });
+      setF((prev) => ({ ...prev, message }));
+      requestAnimationFrame(() => {
+        formRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+        formRef.current?.querySelector<HTMLElement>(`#${CSS.escape(id("name"))}`)?.focus({ preventScroll: true });
+      });
+    };
+    window.addEventListener(PREFILL_EVENT, on);
+    return () => window.removeEventListener(PREFILL_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Move focus to the confirmation once it renders, so keyboard and screen-reader users land on it.
   useEffect(() => {

@@ -71,6 +71,9 @@ const GLOBAL_TABLES = new Set<string>([
   // this entry a future tdb() call against it would fail closed (throw),
   // not leak — but it belongs in the allow-list for clarity.
   "icp_knowledge_base",
+  // "Ask ArrivePing" questions (public Help Center + apps): platform support
+  // data with no company or asker attached, read only by the Control Hub.
+  "help_questions",
 ]);
 
 /** Drizzle exposes the SQL table name via this internal symbol. */

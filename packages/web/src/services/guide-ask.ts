@@ -23,6 +23,7 @@ import { CHAPTERS, interpolate, type Role, type Terms } from "../web/guide/regis
 import { articles, type Article } from "../web/site/support/articles";
 import { searchArticles } from "../web/site/support/search";
 import { ASK_PAGES, type AskAction } from "../shared/guide-ask";
+import { kbEntryText, kbOutline, searchKb, type KbEntry } from "../shared/help-kb";
 
 export type AskTurn = { role: "user" | "assistant"; text: string };
 
@@ -83,6 +84,15 @@ export function retrieveArticles(question: string, history: AskTurn[] = [], limi
   return [...primary, ...extra].slice(0, limit);
 }
 
+/** Screens from the screen map handed to the model in full (office staff can ask about any app). */
+export function retrieveScreens(question: string, history: AskTurn[] = [], limit = 5): KbEntry[] {
+  const lastUser = [...history].reverse().find((t) => t.role === "user")?.text ?? "";
+  const primary = searchKb(`${question} dashboard`, { limit });
+  if (primary.length >= limit || !lastUser) return primary;
+  const extra = searchKb(`${lastUser} ${question}`, { limit }).filter((e) => !primary.includes(e));
+  return [...primary, ...extra].slice(0, limit);
+}
+
 export function buildAskSystem(opts: { role: Role; permissions?: string[]; terms: Terms; question: string; history?: AskTurn[] }): string {
   const { role, terms } = opts;
   const t = (s: string) => interpolate(s, terms);
@@ -98,12 +108,16 @@ export function buildAskSystem(opts: { role: Role; permissions?: string[]; terms
   const pageLines = pages.map((p) => `- ${p.route}: ${t(p.label)}`).join("\n");
   const articleLines = articles.map((a) => `- ${a.slug}: ${a.title}. ${a.summary}`).join("\n");
   const fullText = top.map((a) => `<article slug="${a.slug}">\n${a.title}\n${articleText(a)}\n</article>`).join("\n\n");
+  const screens = retrieveScreens(opts.question, opts.history);
+  const screenText = screens.map((e) => t(kbEntryText(e))).join("\n\n");
+  const outline = t(kbOutline());
 
   return `You are the in-app help assistant for ArrivePing, a dispatch and live-ETA app for field-service companies. The person asking works in the office of one of those companies.
 
 How to answer:
-- Use only the help material below. If it doesn't cover the question, say you're not sure and suggest emailing support@nvc360.com (it's at the bottom of the Guide). Never guess at features, prices, limits or settings.
-- Be brief: at most three short sentences, in plain words, with no headings or lists. Use the exact menu names from the material, for example Setup → Notifications.
+- Use only the help material below: the screen map (every screen of every ArrivePing app, its buttons and how-tos, written from the app itself), the tours and the help articles. If it doesn't cover the question, say you're not sure and suggest emailing support@nvc360.com (it's at the bottom of the Guide). Never guess at features, buttons, prices, limits or settings.
+- For a how-to, start with one short line saying where it's done (the menu path), then numbered steps, one action each, with the exact button or menu name in **bold** as it appears on screen. At most 8 steps, no headings. For a quick fact, answer in one or two plain sentences.
+- They're in the office dashboard on a computer or iPad. If something is also (or only) done in the phone app or the technician app, say so in one line.
 - This company calls a job a "${terms.job}", a technician a "${terms.worker}" and a customer a "${terms.customer}". Use those words.
 - Always answer in words first. Then, when one fits, offer a next step with a tool: start_tour to show them on screen, open_page to take them there, or show_article for the full article. Use at most two tools and don't mention them in your answer; they appear as buttons under it.
 - You can only explain and point the way. You can't see or change their ${terms.jobs}, ${terms.customers}, team, settings or account, so never say you did something. If they ask you to do something, tell them where to do it.
@@ -115,6 +129,12 @@ ${chapterLines}
 
 Pages this person can open (open_page):
 ${pageLines}
+
+Every screen in ArrivePing (id — title — where it is):
+${outline}
+
+The screens that best match this question, in full:
+${screenText || "(none matched)"}
 
 Every help article (show_article):
 ${articleLines}
@@ -164,7 +184,7 @@ export function streamAsk(opts: { role: Role; permissions?: string[]; terms: Ter
     system: buildAskSystem(opts),
     messages,
     tools: askTools(opts.role, opts.permissions),
-    maxOutputTokens: 500,
+    maxOutputTokens: 900,
     temperature: 0.2,
     abortSignal: opts.abortSignal,
     // The route logs and reports errors itself (as an SSE error event).

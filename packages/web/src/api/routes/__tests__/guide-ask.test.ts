@@ -9,7 +9,7 @@
  *  - What reaches the model: the company's labels and the help material, no
  *    tenant data, and no tool that can run anything.
  */
-import { describe, it, expect, beforeEach, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { Hono } from "hono";
 import { MockLanguageModelV3 } from "ai/test";
 import { simulateReadableStream } from "ai";
@@ -75,6 +75,12 @@ async function events(res: Response) {
 }
 
 const savedKey = process.env.AI_GATEWAY_API_KEY;
+// The role-permission defaults take a few seconds to load from the in-memory
+// database the first time; load them here so the first test isn't timing that.
+beforeAll(async () => {
+  const { loadRoleDefaults } = await import("../../middleware/auth");
+  await loadRoleDefaults();
+}, 30_000);
 beforeEach(() => {
   process.env.AI_GATEWAY_API_KEY = "test-key";
 });

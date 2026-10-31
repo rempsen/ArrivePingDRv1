@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Answer } from "../lib/answer-text";
 import { trackGuide } from "./events";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -154,29 +155,6 @@ export function useAsk(terms: Terms) {
   return { turns, ask, reset, busy: turns.some((t) => t.status === "streaming") };
 }
 
-/** The answer's own markup: paragraphs and **bold**. Links are shown as text; the buttons are the way out. */
-function formatAnswer(text: string): ReactNode {
-  return text
-    .split(/\n{2,}/)
-    .filter((p) => p.trim())
-    .map((p, i) => {
-      const clean = p.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
-      const parts = clean.split(/\*\*([^*]+)\*\*/g);
-      return (
-        <p key={i} className={i ? "mt-2" : undefined}>
-          {parts.map((s, j) =>
-            j % 2 ? (
-              <strong key={j} className="text-white">
-                {s}
-              </strong>
-            ) : (
-              s
-            ),
-          )}
-        </p>
-      );
-    });
-}
 
 function pageLabel(route: string, terms: Terms): string {
   const label = ASK_PAGES.find((p) => p.route === route)?.label ?? route;
@@ -225,7 +203,7 @@ export function AskConversation({
               <div className="min-w-0 flex-1" aria-busy={t.status === "streaming"}>
                 {t.answer ? (
                   <div className="text-sm leading-relaxed text-slate-300" data-testid="ask-answer">
-                    {formatAnswer(t.answer)}
+                    <Answer text={t.answer} cls={{ p: "mt-2 first:mt-0", ol: "mt-2 list-decimal space-y-1 pl-5", ul: "mt-2 list-disc space-y-1 pl-5", strong: "text-white" }} />
                   </div>
                 ) : t.status === "streaming" ? (
                   <p className="text-sm text-slate-500">
