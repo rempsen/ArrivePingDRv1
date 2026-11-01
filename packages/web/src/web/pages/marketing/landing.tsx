@@ -10,6 +10,7 @@ import { brand } from "../../site/config";
 import { TradeCards } from "../../site/components/TradeCards";
 import { AppStoreBadge } from "../../site/components/AppStoreBadge";
 import { TradeDay, TradeFeatures, TradeHero, TradeStats } from "../../site/live/TradeParts";
+import { GeoSectionBlock } from "../../site/components/GeoSections";
 import { landingByPath, type Cell, type LandingPage, type Section } from "../../site/content/landing";
 import { seoByPath } from "../../site/seo/pages";
 import { usePageMeta } from "../../site/seo/head";
@@ -371,6 +372,8 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
           </div>
         </section>
       );
+    default:
+      return <GeoSectionBlock section={s} page={page} />;
   }
 }
 

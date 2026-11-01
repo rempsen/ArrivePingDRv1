@@ -13,6 +13,9 @@
 
 import { construction, delivery, electrical, hvac, plumbing, property } from "./trades";
 import { monthlyPrice } from "../config";
+import { compareMorePages } from "./compare-more";
+import { toolPages } from "./tools";
+import type { GeoSection } from "./geo-sections";
 
 export const COMPETITORS_VERIFIED = "October 7, 2026";
 
@@ -45,7 +48,8 @@ export type Section =
   | { kind: "choose"; id?: string; title: string; ours: { title: string; items: string[] }; theirs: { title: string; items: string[] } }
   | { kind: "pricing" }
   | { kind: "story" }
-  | { kind: "trades"; title: string; body?: string };
+  | { kind: "trades"; title: string; body?: string }
+  | GeoSection;
 
 /** Rich content for a trade page (HVAC, plumbing…), rendered in the homepage's design language. */
 export type TradeContent = {
@@ -1011,6 +1015,8 @@ export const landingPages: LandingPage[] = [
   onfleet,
   routific,
   about,
+  ...compareMorePages,
+  ...toolPages,
 ];
 
 export const landingByPath: Record<string, LandingPage> = Object.fromEntries(landingPages.map((p) => [p.path, p]));
