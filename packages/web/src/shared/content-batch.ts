@@ -44,9 +44,29 @@ export const LIMITS: Record<Platform, number> = { linkedin: 3000, facebook: 5000
 
 const URL_RE = /https?:\/\/\S+/g;
 
-/** Length of a post as X counts it: each URL is 23 characters. */
+/**
+ * twitter-text v3 weighting: code points in these ranges count 1, everything
+ * else (CJK, most symbols) counts 2, and each emoji grapheme counts 2.
+ * https://github.com/twitter/twitter-text/blob/master/config/v3.json
+ */
+const X_LIGHT_RANGES: [number, number][] = [[0, 4351], [8192, 8205], [8208, 8223], [8242, 8247]];
+const EMOJI_RE = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
+
+/** Length of a post as X counts it: each URL is 23, emoji and CJK are 2. */
 export function xLength(text: string): number {
-  return [...text.replace(URL_RE, "")].length + (text.match(URL_RE)?.length ?? 0) * 23;
+  let n = (text.match(URL_RE)?.length ?? 0) * 23;
+  for (const { segment } of graphemes.segment(text.replace(URL_RE, ""))) {
+    if (EMOJI_RE.test(segment)) {
+      n += 2;
+      continue;
+    }
+    for (const ch of segment) {
+      const cp = ch.codePointAt(0) ?? 0;
+      n += X_LIGHT_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi) ? 1 : 2;
+    }
+  }
+  return n;
 }
 
 const dateFmt = new Intl.DateTimeFormat("en-CA", {
