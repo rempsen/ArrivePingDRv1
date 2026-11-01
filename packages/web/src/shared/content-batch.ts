@@ -22,6 +22,8 @@ export interface BatchPost {
   text: string;
   /** Path under public/, e.g. /social/2026-11-b1/beat-03.png (served from arriveping.com). */
   image?: string;
+  /** Alt text for the image (sent to Buffer as image_alttext). */
+  imageAlt?: string;
   /** The arriveping.com page this post sends people to. */
   link?: string;
   /** The theme this post belongs to (shared across platforms). */

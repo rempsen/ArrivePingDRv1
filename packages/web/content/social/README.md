@@ -26,7 +26,7 @@ Buffer        publishes on time
 Batch ids: `YYYY-MM-bN` (lower case), e.g. `2026-11-b1`. One batch = 3 weeks.
 
 ## Buffer (via the Zapier MCP connector, app `BufferCLIAPI`)
-- Action: `buffer_add_to_queue`, `method: "schedule"`, `dynamic_properties: { text, attachment: "image", image: <https URL>, image_alttext, scheduled_at: <dueAt> }`.
+- Action: `buffer_add_to_queue`, `method: "schedule"`, `dynamic_properties: { text, attachment: "image", image: <https URL>, image_alttext: <imageAlt, or a one-line description>, scheduled_at: <dueAt> }`.
 - Organization `NVC360` = `69a86d2c18704eb604bfce94`.
 - Channels:
   - X @ArrivePing_HQ — `6ae76bb8e29c69a17129ab10`
