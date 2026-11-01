@@ -27,6 +27,9 @@ Batch ids: `YYYY-MM-bN` (lower case), e.g. `2026-11-b1`. One batch = 3 weeks.
 
 ## Buffer (via the Zapier MCP connector, app `BufferCLIAPI`)
 - Action: `buffer_add_to_queue`, `method: "schedule"`, `dynamic_properties: { text, attachment: "image", image: <https URL>, image_alttext: <imageAlt, or a one-line description>, scheduled_at: <dueAt> }`.
+- Pass `connection_id: "020a9d42-51cc-8712-bbc3-7948dd8e24dd"` on every Buffer call: Buffer has no default Zapier connection, so calls without it fail.
+- **Instagram:** add `ig_post_type: "post"` to `dynamic_properties`. Without it Buffer treats the post as a video and rejects it ("Required field Video is missing").
+- Reading the queue (`buffer_new_queue_item`) failed through Zapier on 2026-11-01. If it fails, do not create posts: a rerun without the duplicate check would double-post.
 - Organization `NVC360` = `69a86d2c18704eb604bfce94`.
 - Channels:
   - X @ArrivePing_HQ — `6ae76bb8e29c69a17129ab10`
