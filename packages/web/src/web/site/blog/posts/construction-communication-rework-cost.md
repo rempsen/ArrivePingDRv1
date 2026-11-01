@@ -1,5 +1,6 @@
 ---
 title: "The $31 Billion Problem: How Poor Field Communication Drains Construction Profits"
+seoTitle: "The $31 Billion Problem: Poor Communication in Construction"
 slug: "construction-communication-rework-cost"
 description: "PlanGrid and FMI tie $31.3B a year in U.S. construction rework to miscommunication. Where field communication breaks down, what it costs, and how to fix it."
 date: "2026-04-07"
@@ -142,7 +143,7 @@ This real-time visibility addresses the lagging data problem that construction m
 
 ### 3. Automating Client Communication
 
-When a crew heads out, ArrivePing sends the client an [on-my-way text or email](/customer-notifications) with a link to a live tracking page showing the crew’s progress and ETA, plus buttons to text or call. If the job runs late, the client gets a running-late notice. No app or account is needed on the client’s side. The client knows when you’re coming — without calling your office.
+When a crew heads out, ArrivePing sends the client an [on-my-way text or email](/on-my-way-text-software) with a link to a live tracking page showing the crew’s progress and ETA, plus buttons to text or call. If the job runs late, the client gets a running-late notice. No app or account is needed on the client’s side. The client knows when you’re coming — without calling your office.
 
 For construction clients managing project timelines, site access, and other trades, this is not just a convenience — it is a professional standard that builds trust and reduces the inbound call volume that pulls your team off productive work.
 
@@ -160,7 +161,7 @@ There is no new hardware and no capital expenditure. An AI setup agent builds yo
 
 ### The Bottom Line
 
-The PlanGrid / FMI finding that **48% of rework traces back to miscommunication and poor project data** is exactly the gap ArrivePing was built to close. And if it doesn’t make your dispatch day calmer within the first month, you get a refund.
+The PlanGrid / FMI finding that **48% of rework traces back to miscommunication and poor project data** is exactly the gap ArrivePing was built to close. Try it free for 30 days with as many users as you like; nothing is charged until day 30, and you can cancel before then and pay nothing.
 
 ---
 

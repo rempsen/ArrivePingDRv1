@@ -1,5 +1,6 @@
 ---
 title: "The “Uber Effect”: How Convenience and Communication Kill Price Sensitivity in Field Service"
+seoTitle: "The Uber Effect: Convenience Kills Price Sensitivity"
 slug: "uber-effect-field-service-price-sensitivity"
 description: "Why customers left waiting focus on price, what research on waiting and convenience shows, and how live tracking shifts attention from the invoice to service."
 date: "2026-03-18"

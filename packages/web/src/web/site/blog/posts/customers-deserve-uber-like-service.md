@@ -1,5 +1,6 @@
 ---
 title: "Don’t Your Customers Deserve the Same Customer Service as Uber?"
+seoTitle: "Don’t Your Customers Deserve Uber-Level Service?"
 slug: "customers-deserve-uber-like-service"
 description: "Why live tracking and proactive updates from apps like Uber reset what homeowners expect from contractors, and what the research says about loyalty and price."
 date: "2026-05-28"
@@ -62,7 +63,7 @@ ArrivePing was built by the team at NVC360, who ran more than 800 field technici
 
 ### The “Uber-Style” Client Experience
 
-With ArrivePing, the “four-hour window” no longer leaves customers in the dark. When the technician heads out, your customer automatically gets an [on-my-way text or email](/customer-notifications) with a link to a live tracking page showing the technician’s progress and ETA, plus buttons to text or call. If the job slips, a running-late notice goes out on its own. There’s no app for the customer to download. This eliminates “where are you?” phone calls, reduces customer anxiety, and establishes immediate trust before the technician even steps out of the truck.
+With ArrivePing, the “four-hour window” no longer leaves customers in the dark. When the technician heads out, your customer automatically gets an [on-my-way text or email](/on-my-way-text-software) with a link to a live tracking page showing the technician’s progress and ETA, plus buttons to text or call. If the job slips, a running-late notice goes out on its own. There’s no app for the customer to download. This eliminates “where are you?” phone calls, reduces customer anxiety, and establishes immediate trust before the technician even steps out of the truck.
 
 ### Unmatched Job Transparency
 

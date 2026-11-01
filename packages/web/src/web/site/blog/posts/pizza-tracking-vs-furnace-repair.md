@@ -1,5 +1,6 @@
 ---
 title: "Why Your $25 Pizza Has Better Tracking Than Your $5,000 Furnace Repair"
+seoTitle: "Why Your Pizza Has Better Tracking Than a $5,000 Repair"
 slug: "pizza-tracking-vs-furnace-repair"
 description: "Why a $25 pizza is easier to follow than a $5,000 furnace repair, and how live tracking and automatic on-my-way texts close the gap for service companies."
 date: "2026-03-05"
@@ -42,7 +43,7 @@ Imagine this scenario with ArrivePing:
 
 1. **The Request:** Your furnace dies. You book a repair through the company’s online form.
 2. **The Dispatch:** Your job lands on the company’s schedule with a time window, and the closest available technician with the right skills is assigned.
-3. **The Arrival:** When the tech heads your way, you get a [text](/customer-notifications): “John is on his way! Track his arrival here.” You see John’s real-time location and ETA on a map, with buttons to text or call him.
+3. **The Arrival:** When the tech heads your way, you get a [text](/on-my-way-text-software): “John is on his way! Track his arrival here.” You see John’s real-time location and ETA on a map, with buttons to text or call him.
 4. **The Service:** John’s arrival is logged automatically. He photographs the faulty part, attaches it to the job, and walks you through the fix.
 5. **The Completion:** You receive the invoice from the same system, and John is off to his next job.
 

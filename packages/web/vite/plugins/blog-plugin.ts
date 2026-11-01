@@ -15,7 +15,9 @@ import { todayInSiteZone } from "./site-date";
  *
  * Post files start with frontmatter, one `key: <JSON value>` per line:
  *   title, slug, description, date, updated, author, category, tags, image,
- *   imageAlt, legacyUrl (optional), draft (optional, true hides the post).
+ *   imageAlt, legacyUrl (optional), draft (optional, true hides the post),
+ *   seoTitle (optional: a <title> of 60 characters or less when the post title
+ *   is longer; the page's H1 and every visible title stay the post title).
  */
 
 const POSTS_DIR = "src/web/site/blog/posts";
@@ -25,6 +27,8 @@ const BODY_PREFIX = "virtual:blog-body/";
 
 export type PostMeta = {
   title: string;
+  /** Optional short <title> (60 characters or less); the visible H1 stays `title`. */
+  seoTitle?: string;
   slug: string;
   description: string;
   date: string;
@@ -146,6 +150,7 @@ function parse(file: string): Post {
   const words = body.replace(/[#*_>`[\]()!|-]/g, " ").split(/\s+/).filter(Boolean).length;
   const meta: PostMeta = {
     title: String(fm.title),
+    ...(fm.seoTitle ? { seoTitle: String(fm.seoTitle) } : {}),
     slug: String(fm.slug),
     description: String(fm.description),
     date: String(fm.date),

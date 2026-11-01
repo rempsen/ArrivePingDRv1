@@ -1,5 +1,6 @@
 ---
 title: "From Phone Tag to Peace of Mind: Redefine your client experience"
+seoTitle: "From Phone Tag to Peace of Mind: Redefine Client Experience"
 slug: "from-phone-tag-to-peace-of-mind"
 description: "Why vague service windows and phone tag cost trades businesses customers, and how live ETAs, tracking links and automated texts change the client experience."
 date: "2026-01-07"
@@ -111,7 +112,7 @@ Price and technical skill matter—but in a crowded market, **how you communicat
 
 ArrivePing isn’t a generic project management tool or an overcomplicated enterprise system. It’s a **purpose-built platform designed specifically for the realities of mobile service businesses**:
 
-- **Easy for field teams to use** (iOS and Android technician app with one-tap accept and on-the-way status)
+- **Easy for field teams to use** (technician app for iPhone and iPad, or the web version on Android, with one-tap accept and on-the-way status)
 - **Powerful for managers** (live map, dispatch board, and automatic assignment you can override)
 - **Simple, graduated pricing** (from $49 USD a month for the Starter plan, which includes one dispatch user and two drivers; drivers 3–29 are $30 each and 30+ are $25 each—see [pricing](/pricing))
 - **Works alongside your existing tools** (exports, webhooks, Zapier and Make; no need to rip-and-replace your accounting or CRM)

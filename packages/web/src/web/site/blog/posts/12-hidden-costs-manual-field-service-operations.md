@@ -1,5 +1,6 @@
 ---
 title: "The 12 Hidden Costs of “Wait-and-See” Field Service: Why Manual Operations Are Leaking Your Margins"
+seoTitle: "12 Hidden Costs of Manual Field Service Operations"
 slug: "12-hidden-costs-manual-field-service-operations"
 description: "Twelve ways manual scheduling, paper work orders and reactive customer communication drain field service margins, with industry data and practical fixes."
 date: "2026-06-26"
@@ -26,7 +27,7 @@ When you give a customer a four-hour arrival window, you are essentially telling
 
 The Data: 79% of customers expect a response or update within 24 hours ([Ever-Help](https://www.ever-help.com/blog/90-customer-service-statistics-for-2026)), but more importantly, 97% of customers expect a return call from a contractor within a week, with 54% preferring a call back within two days ([Roofing Contractor](https://www.roofingcontractor.com/articles/99486-2024-homeowner-roofing-survey)).
 
-The ArrivePing Solution: An automatic [on-my-way text or email](/customer-notifications) with a live tracking link and ETA—just like tracking an Uber—eliminates the uncertainty. Proactive communication like this cuts down the “where is my tech?” calls and gives customers a reason to trust your timing.
+The ArrivePing Solution: An automatic [on-my-way text or email](/on-my-way-text-software) with a live tracking link and ETA—just like tracking an Uber—eliminates the uncertainty. Proactive communication like this cuts down the “where is my tech?” calls and gives customers a reason to trust your timing.
 
 ## 2. The Cost of Missed Appointments and No-Shows
 
@@ -94,7 +95,7 @@ If your technicians are still carrying clipboards, they are operating in the pas
 
 The Data: Over 90% of construction firms rely on smartphones ([Autodesk](https://www.autodesk.com/blogs/construction/construction-industry-statistics/#Usage)). Mobile technology has become table stakes.
 
-The ArrivePing Solution: The ArrivePing technician app for iOS and Android puts job details, one-tap accept and on-the-way status on the phone your technicians already carry.
+The ArrivePing Solution: The ArrivePing technician app for iPhone and iPad (or the web version in an Android phone's browser) puts job details, one-tap accept and on-the-way status on the phone your technicians already carry.
 
 ## 10. The Cost of Uncaptured Data
 

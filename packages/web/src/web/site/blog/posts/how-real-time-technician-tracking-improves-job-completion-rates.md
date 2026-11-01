@@ -1,5 +1,6 @@
 ---
 title: "How Real-Time Technician Tracking Improves Job Completion Rates"
+seoTitle: "How Real-Time Tech Tracking Improves Job Completion Rates"
 slug: "how-real-time-technician-tracking-improves-job-completion-rates"
 description: "How live technician tracking lifts first-time fix and job completion rates: earlier dispatcher action, closest-tech assignment and customers who are home."
 date: "2026-03-14"
@@ -53,7 +54,7 @@ But it goes well beyond a map pin. The platform surfaces the operational informa
 - Job status on the dispatch board — en route, on-site, complete — so dispatchers can read the entire day at a glance
 - Automated text and email notifications sent directly to customers when a technician is on the way
 - Scheduling and a dispatch board, with automatic assignment that dispatchers can override when the day changes
-- Status updates from technicians in the field through the iOS and Android app, without a call to the office
+- Status updates from technicians in the field through the iPhone and iPad app (or the web version on Android), without a call to the office
 
 The result is a feedback loop — operational information your team can act on in real time, not after the fact.
 

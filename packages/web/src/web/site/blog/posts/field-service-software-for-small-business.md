@@ -1,5 +1,6 @@
 ---
 title: "Field Service Software for Small Business: A 2026 Buyer's Guide for 3–10 Tech Shops"
+seoTitle: "Field Service Software for Small Business: 2026 Guide"
 slug: "field-service-software-for-small-business"
 description: "How a 3–10 tech HVAC, plumbing or electrical shop should choose field service software in 2026: must-haves, free plans, list prices and a one-week test."
 date: "2026-10-21"
@@ -106,7 +107,7 @@ It can make sense for a small company that plans to grow fast, runs a full-time 
 
 ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It began as a tool built for a specialty subcontractor running more than 800 field technicians, and it's built around the part of a small shop's day that goes wrong most: who goes where, when they get there and what the customer is told.
 
-Dispatchers get a live map and a schedule, and ArrivePing can assign each work order to the closest qualified technician, ranked by distance, skills, availability and workload, with a dispatcher able to override any time ([dispatch software](/dispatch-software)). Technicians use the iOS or Android app on the phone they already carry, so there's no GPS hardware to buy. When a tech starts driving, the customer gets a text with a live tracking page showing who's coming and the ETA, in every plan ([customer notifications](/customer-notifications)). There are pages for [HVAC](/hvac-dispatch-software), [plumbing](/plumbing-dispatch-software) and [electrical](/electrical-dispatch-software) teams.
+Dispatchers get a live map and a schedule, and ArrivePing can assign each work order to the closest qualified technician, ranked by distance, skills, availability and workload, with a dispatcher able to override any time ([dispatch software](/dispatch-software)). Technicians use the phone they already carry (the iPhone and iPad app, or ArrivePing in an Android phone's web browser), so there's no GPS hardware to buy. When a tech starts driving, the customer gets a text with a live tracking page showing who's coming and the ETA, in every plan ([customer notifications](/customer-notifications)). There are pages for [HVAC](/hvac-dispatch-software), [plumbing](/plumbing-dispatch-software) and [electrical](/electrical-dispatch-software) teams.
 
 Pricing is published: $49 a month covers one dispatcher and two technicians, and technicians 3 to 29 are $30 each, so 1 dispatcher and 4 techs is $109 a month ([pricing](/pricing)). There's no contract, and the 30-day free trial includes as many users as you like; a card goes on file and nothing is charged until day 30. An AI setup agent builds your workspace from your website, and most teams dispatch their first job within an hour. Your data exports as CSV, Excel, PDF or JSON, and connects through webhooks, Zapier, Make or an MCP server for AI agents.
 
