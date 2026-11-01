@@ -162,8 +162,10 @@ function isAppRoute(pathname: string): boolean {
 //  - only on the live arriveping.com host, so local and preview servers never submit;
 //  - only the URLs whose prerendered content changed since the last submitted
 //    build (manifest hashes, remembered in Redis), plus URLs that were removed;
-//  - with nothing to compare against (no Redis, or the first run), only the
-//    sitemap URL, once per process;
+//  - with nothing to compare against (no Redis, or the first run), every public
+//    URL in the manifest (capped at IndexNow's 10,000), once per deploy per
+//    process: a page the engines have never been told about is the bigger loss
+//    than resubmitting a few unchanged ones;
 //  - a non-2xx response is an error: logged, not recorded as done, retried later.
 const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
 const SITEMAP_URL = `${SITE}/sitemap.xml`;
@@ -175,8 +177,9 @@ export function planIndexNow(
   manifest: PageManifest,
   previous: Record<string, string> | null,
 ): { urls: string[]; reason: "changed" | "no-previous-build" | "no-hashes" } {
-  if (!manifest.pages?.length) return { urls: [SITEMAP_URL], reason: "no-hashes" };
-  if (!previous) return { urls: [SITEMAP_URL], reason: "no-previous-build" };
+  const all = (manifest.pages?.length ? manifest.pages.map((p) => p.url) : manifest.urls ?? []).slice(0, 10_000);
+  if (!manifest.pages?.length) return { urls: all.length ? all : [SITEMAP_URL], reason: "no-hashes" };
+  if (!previous) return { urls: all, reason: "no-previous-build" };
   const current = new Set(manifest.pages.map((p) => p.url));
   const changed = manifest.pages.filter((p) => previous[p.url] !== p.hash).map((p) => p.url);
   const removed = Object.keys(previous).filter((u) => !current.has(u));

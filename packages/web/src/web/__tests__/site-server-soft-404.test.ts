@@ -131,9 +131,10 @@ describe("IndexNow plan", () => {
     expect(plan.urls).toEqual([]);
   });
 
-  it("falls back to the sitemap alone with nothing to compare against", () => {
-    expect(site.planIndexNow(manifest, null).urls).toEqual([`${SITE}/sitemap.xml`]);
-    expect(site.planIndexNow({ ...manifest, pages: undefined }, { x: "y" }).urls).toEqual([`${SITE}/sitemap.xml`]);
+  it("submits every public URL when there is nothing to compare against (no Redis, or the first run)", () => {
+    expect(site.planIndexNow(manifest, null)).toEqual({ urls: manifest.urls, reason: "no-previous-build" });
+    expect(site.planIndexNow({ ...manifest, pages: undefined }, { x: "y" }).urls).toEqual(manifest.urls);
+    expect(site.planIndexNow({ ...manifest, urls: [], pages: undefined }, null).urls).toEqual([`${SITE}/sitemap.xml`]);
   });
 
   it.skipIf(Boolean(process.env.REDIS_URL))("treats a non-2xx answer as a failure and retries later", async () => {
@@ -146,7 +147,8 @@ describe("IndexNow plan", () => {
     }) as unknown as typeof fetch;
     expect(await site.submitIndexNow({ fetchImpl: rejecting })).toBe(false);
     expect(calls).toBe(1);
-    expect(JSON.parse(body).urlList).toEqual([`${SITE}/sitemap.xml`]);
+    // No Redis, first run: every public page in the test manifest is submitted.
+    expect(JSON.parse(body).urlList).toEqual([`${SITE}/`, `${SITE}/support/free-trial`]);
 
     const accepting = (async () => {
       calls++;
