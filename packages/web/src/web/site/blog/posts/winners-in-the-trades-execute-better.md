@@ -1,5 +1,6 @@
 ---
 title: "Winners in the Trades Will Not Just Grow Faster. They Will Execute Better."
+seoTitle: "Winners in the Trades Execute Better, Not Just Grow Faster"
 slug: "winners-in-the-trades-execute-better"
 description: "Why trades companies that measure technician productivity, dispatch efficiency, marketing ROI and retention will protect margins better than growth alone."
 date: "2026-05-19"
@@ -122,7 +123,7 @@ The next generation of field service technology must do more than store informat
 
 That operating layer should make it easy to know where technicians are, what job status has changed, what customers have been told, what work is ready to invoice, what issues require attention, and where overhead is being created unnecessarily. It should reduce the number of times a dispatcher has to manually update a customer. It should reduce the number of calls asking for status. It should make the service experience feel modern without forcing the customer to learn a complicated portal.
 
-This is the practical value of ArrivePing. It gives field service and specialty trades companies a live map of their technicians and sends customers [on-my-way texts with a live tracking page](/customer-notifications), with no customer app or account required. The aim is not technology for its own sake. It is fewer communication gaps, less wasted overhead, better customer confidence, and a more scalable operating rhythm.
+This is the practical value of ArrivePing. It gives field service and specialty trades companies a live map of their technicians and sends customers [on-my-way texts with a live tracking page](/on-my-way-text-software), with no customer app or account required. The aim is not technology for its own sake. It is fewer communication gaps, less wasted overhead, better customer confidence, and a more scalable operating rhythm.
 
 ## The “Uber-Like” Experience in Action
 

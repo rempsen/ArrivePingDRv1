@@ -5,7 +5,7 @@ import { useReveal } from "../site/motion/use-reveal";
 import { scrollToAnchor, useHeaderOffset } from "../site/motion/use-scrollspy";
 import { SiteHeader } from "../site/components/SiteHeader";
 import { SiteFooter } from "../site/components/SiteFooter";
-import { Audiences, Pricing, FAQ, OurStory, ClosingCTA } from "../site/sections";
+import { Audiences, Pricing, FAQ, OurStory, ClosingCTA, WhatIs } from "../site/sections";
 import { HomeHero } from "../site/live/HomeHero";
 import { CustomerView } from "../site/live/CustomerView";
 import { DispatchStory } from "../site/live/DispatchStory";
@@ -15,6 +15,7 @@ import { OfficeView } from "../site/live/OfficeView";
 import { Integrations } from "../site/live/Integrations";
 import { usePageMeta } from "../site/seo/head";
 import "../site/site.css";
+import "../site/landing.css";
 import "../site/live/live.css";
 import "../site/live/opening.css";
 import "../site/live/lower.css";
@@ -72,6 +73,7 @@ function Page() {
       <SiteHeader ref={headerRef} dashboardHref={dashboardHref} />
       <main id="main" tabIndex={-1}>
         <HomeHero />
+        <WhatIs />
         <CustomerView />
         <DispatchStory />
         <TechApp />

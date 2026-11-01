@@ -1,5 +1,6 @@
 ---
 title: "No Call, No Show: What a Missed Service Appointment Really Costs"
+seoTitle: "No Call, No Show: What a Missed Service Appointment Costs"
 slug: "no-call-no-show-cost-of-a-missed-service-appointment"
 description: "A missed or silent appointment costs the customer a day and costs you the customer. The data on waiting, no-shows and reviews, plus a five-moment fix."
 date: "2026-10-13"

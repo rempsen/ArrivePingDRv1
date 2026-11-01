@@ -1,5 +1,6 @@
 ---
 title: "How to Become a Preferred Vendor: Why Convenience and Frictionless Communication Kill Price Sensitivity"
+seoTitle: "How to Become a Preferred Vendor: Convenience Beats Price"
 slug: "become-a-preferred-vendor"
 description: "Research from PwC, 6sense and Gartner on why convenience and low-effort communication win repeat work, and how field service teams can lower price pushback."
 date: "2026-04-05"
@@ -153,7 +154,7 @@ That’s what ArrivePing was built to provide. It comes from the team at NVC360,
 
 ### 1. The Uber-Like Client Experience — Automated
 
-When a technician heads out, ArrivePing automatically sends the client an [on-my-way text or email](/customer-notifications). The message includes a link to a [live tracking](/blog/live-tracking-promise-of-transparency-trust-and-efficiency) page that shows the technician’s progress and ETA, with buttons to text or call. If the job slips, the client gets a running-late notice. The client knows who is coming, when they’ll arrive, and how to reach them — without making a single call to your office, and without downloading an app.
+When a technician heads out, ArrivePing automatically sends the client an [on-my-way text or email](/on-my-way-text-software). The message includes a link to a [live tracking](/blog/live-tracking-promise-of-transparency-trust-and-efficiency) page that shows the technician’s progress and ETA, with buttons to text or call. If the job slips, the client gets a running-late notice. The client knows who is coming, when they’ll arrive, and how to reach them — without making a single call to your office, and without downloading an app.
 
 This is the single highest-leverage client experience improvement a field service business can make — and ArrivePing delivers it automatically, on every job, without any additional effort from your team.
 
@@ -165,7 +166,7 @@ Internally, this eliminates the friction that creates inconsistency. Externally,
 
 ### 3. Complete Job Information on Every Device
 
-Every work order carries the job type, priority, time window, required skills, access notes, and photos — all in the technician app on iOS or Android. No chasing paperwork. No calling the office to confirm job details. No arriving on-site without the context needed to do the job right the first time.
+Every work order carries the job type, priority, time window, required skills, access notes, and photos — all in the technician app on iPhone and iPad, or in the web version on Android. No chasing paperwork. No calling the office to confirm job details. No arriving on-site without the context needed to do the job right the first time.
 
 This matters because **companies with a first-time fix rate above 70% achieve customer retention rates of 86%** ([Fiesa](https://fiesa.app/blogs/strategies-to-elevate-first-time-fix-rate-in-your-fsm-business); [CompareSoft](https://comparesoft.com/field-service-management-software/first-time-fix-rate-ftfr/)). First-time fix rates depend heavily on how well technicians are informed before they arrive. Complete work orders help close that gap.
 

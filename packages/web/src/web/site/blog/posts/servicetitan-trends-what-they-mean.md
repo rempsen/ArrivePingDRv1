@@ -1,5 +1,6 @@
 ---
 title: "What’s Trending in ServiceTitan Right Now — And What It Means for Your Field Service Business"
+seoTitle: "ServiceTitan Trends and What They Mean for Your Business"
 slug: "servicetitan-trends-what-they-mean"
 description: "ServiceTitan's FY2025 results, its 2025 Residential Services and AI reports, and the ST-72 release, read for what they signal to HVAC and plumbing operators."
 date: "2026-02-03"
@@ -181,9 +182,9 @@ ArrivePing is purpose-built for **live field-to-client transparency.**
 | Need | What ArrivePing does |
 | --- | --- |
 | **Live technician tracking** | A live map of technicians, using location from the technician app on their phone |
-| **Client-facing ETA notifications** | Automatic [on-my-way texts or emails](/customer-notifications) with a link to a live tracking page showing progress and ETA, plus running-late notices when a job slips |
+| **Client-facing ETA notifications** | Automatic [on-my-way texts or emails](/on-my-way-text-software) with a link to a live tracking page showing progress and ETA, plus running-late notices when a job slips |
 | **Client contact** | Text and call buttons on the tracking page, with no customer app or account required |
-| **No-hardware setup** | Runs on technicians’ existing phones (iOS and Android); no vehicle GPS hardware |
+| **No-hardware setup** | Runs on technicians’ existing phones (iPhone and iPad app; Android in the web browser); no vehicle GPS hardware |
 | **Working with your existing stack** | Works alongside your accounting and CRM tools, with exports, calendar feeds, webhooks, Zapier and Make |
 
 ArrivePing’s model is **not** to force you to rip out the system your office already runs on. It works alongside your existing tools and adds a real-time visibility and communication layer to the client experience. If you are weighing it against other platforms, see the [comparison page](/compare).

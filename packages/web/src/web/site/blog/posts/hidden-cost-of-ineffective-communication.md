@@ -1,5 +1,6 @@
 ---
 title: "The Hidden Cost of Ineffective Communication in Field Services"
+seoTitle: "The Hidden Cost of Poor Communication in Field Services"
 slug: "hidden-cost-of-ineffective-communication"
 description: "What poor communication costs field service and construction teams in lost hours, rework and delays, and how automated updates cut office-to-field calls."
 date: "2026-03-20"
@@ -46,7 +47,7 @@ Furthermore, custom work orders give technicians the details they need—job typ
 
 Consider a busy HVAC company managing 50 technicians. Before adopting modern technology, dispatchers spent hours calling techs to get ETAs, while customers waited in frustrating four-hour windows.
 
-With ArrivePing, the experience is entirely different. When a technician heads out, the system automatically sends the client an [on-my-way text and email](/customer-notifications) with a link to a live tracking page and ETA. The customer can follow their technician’s approach on a map, exactly like tracking an Uber, and can text or call with one tap.
+With ArrivePing, the experience is entirely different. When a technician heads out, the system automatically sends the client an [on-my-way text and email](/on-my-way-text-software) with a link to a live tracking page and ETA. The customer can follow their technician’s approach on a map, exactly like tracking an Uber, and can text or call with one tap.
 
 This automated, nonverbal communication achieves three critical things:
 

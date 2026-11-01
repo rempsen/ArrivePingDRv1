@@ -1,5 +1,6 @@
 ---
 title: "How Much Does Field Service Software Cost? Prices for a 4-, 12- and 28-Person Team"
+seoTitle: "Field Service Software Cost: Prices for 4, 12 and 28 Techs"
 slug: "field-service-software-cost"
 description: "What field service software costs in 2026: list prices for 4-, 12- and 28-person teams, who counts as a user, GPS add-ons and the fees plan prices leave out."
 date: "2026-10-18"

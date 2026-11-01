@@ -16,17 +16,58 @@ export type Chapter = {
 
 export const featuresMeta = {
   path: "/features",
-  title: "ArrivePing Features: Work Orders, Live Tracking, Auto Time & Payments",
+  title: "ArrivePing Features: Work Orders, Live Tracking & Payments",
   description:
-    "Every ArrivePing feature in one place: custom work orders, GPS tracking of the drive, mileage and travel time, automatic on-site time, photos, signatures, Stripe payments, customer texts and exports.",
+    "Every ArrivePing feature by job stage: work orders, auto-dispatch, live ETA texts, mileage, geofenced time on site, signatures and payments. Sign up free.",
   summary:
     "A tour of ArrivePing features by stage of the job: create the work order, track the drive and the visit with automatic geofence time, capture the work, keep customers informed, price the job and pay your team, start with AI-built workflows and your customers imported, and export your data.",
 };
 
 export const hero = {
   eyebrow: "Features",
-  title: "Everything a job needs, from the first call to the final payment.",
+  title: "ArrivePing features: everything a job needs, from the first call to the final payment.",
   lede: "ArrivePing follows one job the whole way: created, dispatched, driven to, worked, signed off, paid and exported. Here is what it does at each step, and what you can track.",
+};
+
+/** The answer-first passage under the hero (what answer engines lift), and where to go next. */
+export const featuresAnswer = {
+  q: "What does ArrivePing do?",
+  a: "ArrivePing runs a job from booking to payment. You create a work order with your own fields and assign it by hand or automatically to the closest qualified person. The customer gets an on-my-way text with a live ETA. The app records the drive, mileage and time on site, captures photos, voice notes and a signature, takes card payment through Stripe, and exports everything to CSV, Excel, PDF or JSON.",
+  next: [
+    { label: "Field service management software", href: "/field-service-software" },
+    { label: "Dispatch software", href: "/dispatch-software" },
+    { label: "Technician GPS tracking", href: "/fleet-tracking" },
+    { label: "On-my-way texts", href: "/on-my-way-text-software" },
+    { label: "Customer notifications", href: "/customer-notifications" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+  ],
+};
+
+/** Shown on the page and emitted as FAQPage structured data (seo/pages.ts), from this one list. */
+export const featureFaqs = [
+  {
+    q: "Does ArrivePing track mileage and travel time?",
+    a: "Yes. The app records the route driven to and from each job, the mileage there and back in kilometres or miles, and the travel time, and saves them on the job.",
+  },
+  {
+    q: "How is time on site recorded?",
+    a: "A GPS geofence around the job address starts the on-site clock when the technician arrives and stops it when they leave. You set the radius in feet or metres; the default auto-arrive radius is 150 metres.",
+  },
+  {
+    q: "Can technicians take payment on site?",
+    a: "Yes, through your own Stripe account. When the work order calls for it, the technician taps Take payment and the customer pays by card, Apple Pay or Google Pay. ArrivePing takes no cut.",
+  },
+  {
+    q: "Can I export my data?",
+    a: "Yes. Every report, and your raw jobs, technicians, customers and invoices, exports to CSV, Excel, PDF or JSON.",
+  },
+];
+
+/** The mid-page signup band, shown after the "Inform" chapter. */
+export const featuresMidCta = {
+  title: "Try every feature free for 30 days.",
+  body: "As many users as you like. A card is required, nothing is charged until day 30, and you can cancel any time before then.",
+  after: "inform",
 };
 
 export const chapters: Chapter[] = [

@@ -1,5 +1,6 @@
 ---
 title: "The Silent Drain: How “Phone Tag” is Costing Your Field Service Business"
+seoTitle: "The Silent Drain: How Phone Tag Costs Field Service Firms"
 slug: "the-silent-drain-how-phone-tag-is-costing-your-field-service-business"
 description: "Why phone tag between office, technician and customer costs field service businesses time and leads, and how automatic ETAs and live tracking cut those calls."
 date: "2026-01-21"
@@ -48,7 +49,7 @@ The impact on first-time fix rates matters just as much. When technicians arrive
 
 Imagine a scenario where a customer books a service appointment, and once the technician heads out, they can follow along just like tracking an Uber ride or a pizza delivery. This is the “Uber-like” experience that ArrivePing brings to field service.
 
-With ArrivePing, far fewer calls bounce between the office, technicians, and homeowners. When a job is dispatched, the technician receives all the necessary details in the technician app on their phone. When they head out, the customer receives an automatic [on-my-way text or email](/customer-notifications) with a link to a live tracking page showing the technician’s progress and ETA. If a job slips, a running-late notice goes out automatically, so the office doesn’t have to make multiple calls.
+With ArrivePing, far fewer calls bounce between the office, technicians, and homeowners. When a job is dispatched, the technician receives all the necessary details in the technician app on their phone. When they head out, the customer receives an automatic [on-my-way text or email](/on-my-way-text-software) with a link to a live tracking page showing the technician’s progress and ETA. If a job slips, a running-late notice goes out automatically, so the office doesn’t have to make multiple calls.
 
 This communication flow means:
 

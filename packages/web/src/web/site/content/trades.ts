@@ -1,4 +1,20 @@
 import type { LandingPage, TradeContent } from "./landing";
+import { pricingBands, STARTER_PRICE } from "../config";
+
+/** Prices in copy come from the pricing config, never typed by hand. */
+const P = STARTER_PRICE;
+const [GROW, FLEET] = pricingBands;
+/** "from US$49 a month", for answers and metas. */
+const FROM = `from US$${P} a month`;
+
+/** The "Learn more" links every industry page shares: up to the hub and the money page. */
+const up = (pricingLabel: string) => [
+  { label: pricingLabel, href: "/pricing" },
+  { label: "Field service management software", href: "/field-service-software" },
+];
+
+/** Technicians' devices, said the same way everywhere (no public Android app yet). */
+const PHONES = "the phones they already carry: the ArrivePing app on iPhone and iPad, or ArrivePing in an Android phone's web browser";
 
 /**
  * Trade pages, from the October 2026 industry research (scratch briefs, one per
@@ -16,7 +32,7 @@ const media = (key: string, film = false): TradeContent["media"] => ({
 /** The same offer on every trade page, in the trade's own word for the field team. */
 const priceFaq = (q: string, noun: string, plural: string) => ({
   q,
-  a: `Start with a 30-day free trial for as many users as you like. Your card is kept on file and nothing is charged until day 30; cancel before then and you pay nothing. After that it's US$49 a month for one dispatcher and two ${plural}, US$30 a month for each ${noun} from 3 to 29, and US$25 from the 30th. No setup fee, no contract.`,
+  a: `Start with a 30-day free trial for as many users as you like. Your card is kept on file and nothing is charged until day 30; cancel before then and you pay nothing. After that it's US$${P} a month for one dispatcher and two ${plural}, US$${GROW.rate} a month for each ${noun} from ${GROW.from} to ${GROW.to}, and US$${FLEET.rate} from the ${FLEET.from}th. No setup fee, no contract.`,
 });
 
 const ONE_HOUR = {
@@ -32,17 +48,23 @@ export const hvac: LandingPage = {
   path: "/hvac-dispatch-software",
   label: "HVAC dispatch software",
   meta: {
-    title: "HVAC Dispatch Software with Live ETAs | ArrivePing",
-    description:
-      "Send the right licensed tech to every no-heat or no-cool call and text customers a live ETA. No GPS hardware. Try ArrivePing free for 30 days.",
+    title: "HVAC Dispatch Software with Live Customer ETAs | ArrivePing",
+    description: `Send the right licensed HVAC tech to every no-heat or no-cool call and text customers a live ETA. No GPS hardware. 30 days free, then US$${P}/mo. Sign up free.`,
   },
   eyebrow: "HVAC & mechanical",
-  h1: "Send the right HVAC tech. Keep customers posted.",
+  h1: "HVAC dispatch software that sends the right tech and keeps customers posted.",
   lede: "Match no-heat and no-cool calls to a qualified, nearby technician and text customers a live ETA, all from the phones your crew already carries.",
   answer: {
     q: "What should HVAC dispatch software do?",
-    a: "HVAC dispatch software should show every open call and technician on one board and suggest the best tech by licenses, skills, distance and workload. It should text customers a live ETA once the tech starts driving, record arrival automatically, require checklist items before a job closes, and keep photos and signatures with each job.",
+    a: `HVAC dispatch software should show every open call and technician on one board, suggest the best tech by license, skills, distance and workload, and text the customer a live ETA once the tech starts driving. It should log arrival automatically and require checklist items, photos and signatures before a job closes. ArrivePing does all of this on the phones your techs already carry, ${FROM}.`,
   },
+  next: [
+    ...up("HVAC dispatch software pricing"),
+    { label: "Automatic dispatch by license and distance", href: "/dispatch-software" },
+    { label: "On-my-way texts", href: "/on-my-way-text-software" },
+    { label: "Housecall Pro alternative", href: "/compare/housecall-pro" },
+  ],
+  faqTitle: "HVAC dispatch software FAQs",
   trade: {
     media: media("hvac"),
     proof: ["Suggests the best tech by skills and distance", "Live ETA link, no customer app", "Arrival and on-site time logged automatically"],
@@ -103,12 +125,12 @@ export const hvac: LandingPage = {
       ],
     },
   },
-  sections: [{ kind: "trades", title: "Other trades on ArrivePing." }],
+  sections: [{ kind: "trades", title: "ArrivePing for other industries" }],
   faqs: [
     priceFaq("How much does HVAC dispatch software cost?", "technician", "technicians"),
     {
       q: "Do I need GPS trackers in my service vans?",
-      a: "No. ArrivePing runs on the iPhone, iPad or Android phone your techs already carry. Techs tap Start Driving and the customer's ETA updates live. Location is shared only while a tech is on shift, and arrival checks in automatically within 150 metres of the address.",
+      a: `No. ArrivePing runs on ${PHONES}. Techs tap Start Driving and the customer's ETA updates live. Location is shared only while a tech is on shift, and arrival checks in automatically within 150 metres of the address.`,
     },
     {
       q: "Can customers see where my technician is all day?",
@@ -126,8 +148,16 @@ export const hvac: LandingPage = {
       q: "Can it handle seasonal tune-ups?",
       a: "Yes, visit by visit. Build spring and fall tune-up templates with required checklist items, price each tune-up in your service catalog, and capture photos and the customer's signature on every visit. Import your maintenance customers from a spreadsheet to get started.",
     },
+    {
+      q: "Can I keep equipment details on an HVAC job?",
+      a: "Yes. Custom fields carry the furnace model, filter size, refrigerant type and access notes such as lockbox or roof-hatch details with each work order.",
+    },
+    {
+      q: "Can property managers get proof of the visit?",
+      a: "Yes. On-site time, photos and signatures stay with each job and export to CSV, Excel or PDF.",
+    },
   ],
-  related: ["/plumbing-dispatch-software", "/electrical-dispatch-software", "/on-my-way-text-software", "/compare/housecall-pro"],
+  related: ["/plumbing-dispatch-software", "/electrical-dispatch-software", "/dispatch-software", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -140,15 +170,22 @@ export const plumbing: LandingPage = {
   meta: {
     title: "Plumbing Dispatch Software with Live ETAs | ArrivePing",
     description:
-      "Dispatch burst pipes and booked jobs to the nearest licensed plumber and text customers a live ETA. Try free for 30 days, then from US$49/mo.",
+      `Dispatch burst pipes and booked jobs to the nearest licensed plumber and text customers a live ETA. No GPS hardware. Sign up free: 30 days, then from US$${P}/mo.`,
   },
   eyebrow: "Plumbing",
-  h1: "Send the right plumber and keep customers posted.",
+  h1: "Plumbing dispatch software that sends the right plumber and keeps customers posted.",
   lede: "Put burst pipes and booked jobs on one board, match each to a nearby licensed plumber, and text customers a live ETA.",
   answer: {
     q: "What should plumbing dispatch software do?",
-    a: "Plumbing dispatch software should put emergencies and booked jobs on one board, match each job to the nearest available plumber with the right license, and tell customers who is coming and when. Look for live ETA texts that need no app, automatic arrival check-in, checklist items you can make required, photos and signatures on the job, and location sharing only while on shift.",
+    a: `Plumbing dispatch software should put emergencies and booked jobs on one board, match each job to the nearest available plumber with the right license, and tell the customer who is coming and when. Look for live ETA texts with no customer app, automatic arrival check-in, required checklist items, and photos and signatures on the job. ArrivePing does this ${FROM}, with no GPS hardware.`,
   },
+  next: [
+    ...up("Plumbing dispatch pricing"),
+    { label: "Automatic dispatch", href: "/dispatch-software" },
+    { label: "Property maintenance software", href: "/property-maintenance-software" },
+    { label: "Jobber alternative", href: "/compare/jobber" },
+  ],
+  faqTitle: "Plumbing dispatch software FAQs",
   trade: {
     media: media("plumbing"),
     proof: ["Live ETA text, no customer app", "Suggests the nearest qualified, available plumber", "Automatic check-in within 150 m"],
@@ -209,7 +246,7 @@ export const plumbing: LandingPage = {
       ],
     },
   },
-  sections: [{ kind: "trades", title: "Other trades on ArrivePing." }],
+  sections: [{ kind: "trades", title: "ArrivePing for other industries" }],
   faqs: [
     priceFaq("How much does plumbing dispatch software cost?", "plumber", "plumbers"),
     {
@@ -218,7 +255,7 @@ export const plumbing: LandingPage = {
     },
     {
       q: "Do I need GPS trackers in my vans?",
-      a: "No. ArrivePing runs on the iPhone, iPad or Android phone your plumbers already carry. Location is shared only while a plumber is on shift. Customers see it only after the plumber starts driving to their job, and it disappears on arrival. Arrival is recorded automatically within 150 m.",
+      a: `No. ArrivePing runs on ${PHONES}. Location is shared only while a plumber is on shift. Customers see it only after the plumber starts driving to their job, and it disappears on arrival. Arrival is recorded automatically within 150 m.`,
     },
     {
       q: "How do I make sure only licensed plumbers get gas or backflow jobs?",
@@ -232,8 +269,16 @@ export const plumbing: LandingPage = {
       q: "How long does setup take, and can I import my customers?",
       a: "Paste your website into the AI setup agent and it builds your branding, services, priced catalog, job templates, request forms and customer texts. Teams typically dispatch their first job within the first hour. Import customers and plumbers from a spreadsheet, and export to CSV, Excel, PDF or JSON.",
     },
+    {
+      q: "Can I keep shutoff locations and tenant contacts on the job?",
+      a: "Yes. Custom fields and access notes give the plumber shutoff locations, lockbox instructions and tenant contacts before they arrive.",
+    },
+    {
+      q: "Can I send a property manager a job report?",
+      a: "Yes. Export the job, with photos, the signature and on-site time, to PDF, CSV or Excel.",
+    },
   ],
-  related: ["/hvac-dispatch-software", "/property-maintenance-software", "/on-my-way-text-software", "/compare/jobber"],
+  related: ["/hvac-dispatch-software", "/property-maintenance-software", "/on-my-way-text-software", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -246,15 +291,22 @@ export const electrical: LandingPage = {
   meta: {
     title: "Electrician Scheduling & Dispatch Software | ArrivePing",
     description:
-      "Send the right licensed electrician, text customers a live ETA and log arrivals automatically. No GPS hardware. Try ArrivePing free for 30 days.",
+      "Match each call to the right licensed electrician, text customers a live ETA and log arrival automatically. No GPS hardware. Sign up free; 30 days on us.",
   },
   eyebrow: "Electrical",
-  h1: "Send the right electrician and keep customers posted.",
+  h1: "Electrician dispatch software that sends the right license and keeps customers posted.",
   lede: "Match each call to a qualified, nearby tech, text customers a live ETA, and log arrival automatically on the phones your crew carries.",
   answer: {
     q: "What should electrician dispatch software do?",
-    a: "Electrician dispatch software should match each call to an available, nearby technician with the right license and skills, put no-power emergencies ahead of routine work, text the customer a live ETA once the tech starts driving, log arrival and on-site time automatically, and keep photos, checklists and signatures with the job.",
+    a: `Electrician dispatch software should match each call to a nearby, available electrician with the right license level, put no-power emergencies ahead of routine installs, and text the customer a live ETA once the electrician starts driving. It should log arrival and on-site time automatically and keep photos, readings and signatures with the job. ArrivePing does this on the phones your crew already carries, ${FROM}.`,
   },
+  next: [
+    ...up("Electrician dispatch pricing"),
+    { label: "Automatic dispatch by license", href: "/dispatch-software" },
+    { label: "Installer and subcontractor scheduling", href: "/construction-trades" },
+    { label: "ServiceTitan alternative", href: "/compare/servicetitan" },
+  ],
+  faqTitle: "Electrician dispatch software FAQs",
   trade: {
     media: media("electrical"),
     proof: ["Suggests by license, distance and workload", "Live ETA link, no customer app", "Arrival logged automatically within 150 m"],
@@ -320,11 +372,11 @@ export const electrical: LandingPage = {
       ],
     },
   },
-  sections: [{ kind: "trades", title: "Other trades on ArrivePing." }],
+  sections: [{ kind: "trades", title: "ArrivePing for other industries" }],
   faqs: [
     {
       q: "What is the best scheduling app for a small electrical company?",
-      a: "The one your electricians will actually open. ArrivePing runs on the iPhone, iPad or Android phone they already carry. Paste your website and the AI setup agent builds your services, priced catalog, job templates and customer texts in minutes; the first job is typically dispatched within an hour.",
+      a: `The one your electricians will actually open. ArrivePing runs on ${PHONES}. Paste your website and the AI setup agent builds your services, priced catalog, job templates and customer texts in minutes; the first job is typically dispatched within an hour.`,
     },
     {
       q: "Can I assign jobs by license level, like journeyman or apprentice?",
@@ -343,8 +395,16 @@ export const electrical: LandingPage = {
       a: "Not natively yet: QuickBooks and Xero are on our roadmap. Today you can export your data as CSV, Excel, PDF or JSON, or send job events through webhooks to Zapier or Make. Custom integrations are welcome on every plan, and included with Fleet.",
     },
     priceFaq("How much does dispatch software for electricians cost?", "electrician", "electricians"),
+    {
+      q: "Can subcontracted electricians use it?",
+      a: "Yes. A subcontracted electrician can sit on your roster and on other contractors' rosters too, and is dispatched like your own crew.",
+    },
+    {
+      q: "Can a checklist require readings before a job closes?",
+      a: "Yes. Panel and EV templates can require readings and labelling before the job can be completed.",
+    },
   ],
-  related: ["/hvac-dispatch-software", "/construction-trades", "/on-my-way-text-software", "/compare/servicetitan"],
+  related: ["/hvac-dispatch-software", "/construction-trades", "/on-my-way-text-software", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -357,15 +417,22 @@ export const construction: LandingPage = {
   meta: {
     title: "Installer & Subcontractor Scheduling Software | ArrivePing",
     description:
-      "Schedule installers by skill and distance, track installers between job sites, and text homeowners a live ETA. No GPS hardware. Try it free for 30 days.",
+      "Schedule installers by skill and distance, track them between sites without GPS hardware, and text homeowners or supervisors a live ETA. Sign up free.",
   },
   eyebrow: "Installers & specialty subcontractors",
-  h1: "Get the right installer to every site.",
+  h1: "Installer scheduling software that gets the right installer to every site.",
   lede: "Assign installers by skill and distance, track them between job sites, and text customers a live ETA from the phones they already carry.",
   answer: {
     q: "What should dispatch software for installers do?",
-    a: "Dispatch software for installers should match each job to a qualified, available installer by skill and distance. It should carry site access notes and time windows, and track installers between sites without hardware. It should text the homeowner or site supervisor a live ETA, and record photos, checklists and sign-off as the work is completed.",
+    a: `Dispatch software for installers and specialty subcontractors should match each job to a qualified, available installer by skill and distance, carry site access notes and time windows, and track installers between sites without hardware. It should text the homeowner or site supervisor a live ETA and record photos, required checklists and sign-off at close-out. ArrivePing does this ${FROM}.`,
   },
+  next: [
+    ...up("Installer scheduling pricing"),
+    { label: "Automatic dispatch by skill", href: "/dispatch-software" },
+    { label: "Electrical dispatch", href: "/electrical-dispatch-software" },
+    { label: "The team that ran 800+ field technicians", href: "/about" },
+  ],
+  faqTitle: "Installer scheduling FAQs",
   trade: {
     media: media("construction"),
     proof: ["Automatic check-in within 150 m of the site", "Required checklist items before close-out", "One installer, several companies' rosters"],
@@ -440,7 +507,7 @@ export const construction: LandingPage = {
         "ArrivePing began as the system our founding team built for National Interiors, a Winnipeg specialty subcontractor with more than 800 field technicians. Dispatchers tied to the phone, crews at the wrong site and hours that didn't add up were daily problems. ArrivePing is the tool we wanted, rebuilt by NVC360 for every trade.",
       ],
     },
-    { kind: "trades", title: "Other trades on ArrivePing." },
+    { kind: "trades", title: "ArrivePing for other industries" },
   ],
   faqs: [
     priceFaq("How much does installer scheduling software cost?", "installer", "installers"),
@@ -464,8 +531,16 @@ export const construction: LandingPage = {
       q: "How do we track deficiency items to close-out?",
       a: "Build job templates with checklist items, and mark some as required so the job can't be completed without them. Installers add photos and capture a signature on the job. Export to CSV, Excel or PDF for the GC, or connect your systems through webhooks to Zapier or Make.",
     },
+    {
+      q: "Can a site supervisor see when the installer is coming?",
+      a: "Yes. When the installer taps Start Driving, the supervisor or homeowner gets a text with a live ETA and can call, text or message the installer from that page.",
+    },
+    {
+      q: "How much training do installers need?",
+      a: "Very little: accept the job, tap Start Driving, arrive (check-in is automatic within 150 m by default) and tap Complete Job.",
+    },
   ],
-  related: ["/electrical-dispatch-software", "/dispatch-software", "/fleet-tracking", "/about"],
+  related: ["/electrical-dispatch-software", "/dispatch-software", "/fleet-tracking", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -478,15 +553,22 @@ export const property: LandingPage = {
   meta: {
     title: "Property Maintenance Dispatch Software | ArrivePing",
     description:
-      "Dispatch in-house techs and vendors, text residents a live ETA, and keep photos, checklists and on-site times with every work order. Try it free, 30 days.",
+      "Dispatch in-house techs and vendors, text residents a live ETA, and keep photos, checklists and on-site times on every work order. Sign up free for 30 days.",
   },
   eyebrow: "Property maintenance",
-  h1: "Residents know exactly when maintenance is coming.",
+  h1: "Property maintenance dispatch software: residents know exactly when you're coming.",
   lede: "Dispatch in-house techs and vendors from one board, text residents a live ETA, and keep photos, checklists and on-site times with every work order.",
   answer: {
     q: "What should property maintenance dispatch software do?",
-    a: "Property maintenance dispatch software should turn resident requests into prioritized work orders and match each job to the right in-house tech or vendor by skill and distance. It should text residents a live ETA, and keep access notes, entry details, photos, required checklists and on-site times with each job, so managers can show what happened in every unit.",
+    a: `Property maintenance dispatch software should turn resident requests into prioritized work orders, match each to the right in-house tech or vendor by skill and distance, and text residents a live ETA. It should keep entry notes, photos, required checklists and on-site times with every job, so managers can show what happened in each unit. ArrivePing does this ${FROM}, with no resident app.`,
   },
+  next: [
+    ...up("Maintenance software pricing"),
+    { label: "Customer notification software", href: "/customer-notifications" },
+    { label: "Automatic dispatch", href: "/dispatch-software" },
+    { label: "Plumbing dispatch", href: "/plumbing-dispatch-software" },
+  ],
+  faqTitle: "Property maintenance software FAQs",
   trade: {
     media: media("property"),
     proof: ["Live ETA text, no resident app", "Automatic check-in records time on site", "Required checklist steps before jobs close"],
@@ -552,7 +634,7 @@ export const property: LandingPage = {
       ],
     },
   },
-  sections: [{ kind: "trades", title: "Other trades on ArrivePing." }],
+  sections: [{ kind: "trades", title: "ArrivePing for other industries" }],
   faqs: [
     {
       q: "How much notice do we need before maintenance enters a unit?",
@@ -575,8 +657,16 @@ export const property: LandingPage = {
       a: "Not with a built-in connector today. You can import from spreadsheets and export to CSV, Excel, PDF or JSON, and send job events through calendar feeds, webhooks to Zapier or Make, or an MCP server. Custom integrations are welcome on every plan, and included with Fleet along with live onboarding.",
     },
     priceFaq("What does it cost for a maintenance team?", "technician", "technicians"),
+    {
+      q: "Can residents submit maintenance requests online?",
+      a: "Yes. Online request forms land as work orders in the queue, with the resident's access notes attached.",
+    },
+    {
+      q: "Can we prove when a technician was in a unit?",
+      a: "Yes. Automatic check-in records arrival and time on site, and photos and messages stay with the work order.",
+    },
   ],
-  related: ["/plumbing-dispatch-software", "/customer-notifications", "/dispatch-software", "/canada"],
+  related: ["/plumbing-dispatch-software", "/customer-notifications", "/dispatch-software", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -587,17 +677,24 @@ export const delivery: LandingPage = {
   path: "/delivery-dispatch-software",
   label: "Delivery & installation software",
   meta: {
-    title: "Delivery Scheduling Software with Live ETAs | ArrivePing",
+    title: "Delivery Dispatch Software with Live ETAs | ArrivePing",
     description:
-      "Schedule delivery windows, assign the right driver and text customers a live ETA link. Photos and signatures as proof of delivery. Try free for 30 days.",
+      "Book delivery windows for furniture, appliances and installs, assign the right driver and text a live ETA link. Photo and signature proof. Sign up free.",
   },
   eyebrow: "Delivery & installation",
-  h1: "Every customer knows when your truck arrives.",
+  h1: "Delivery dispatch software: every customer knows when your truck arrives.",
   lede: "Book delivery windows, assign the right driver, and text customers a live ETA link so they're home, ready and not calling the office.",
   answer: {
     q: "What should delivery dispatch software do?",
-    a: "For appointment-based deliveries, dispatch software should show every order's time window on one board and assign the right driver by distance, skills and workload. When the truck leaves, it should text the customer a live ETA link and send late notices. It should also record arrival automatically and capture photos and a signature as proof of delivery.",
+    a: `For appointment deliveries such as furniture, appliances and installs, dispatch software should show every order's time window on one board, assign the right driver by distance, skills and workload, and text the customer a live ETA link when the truck leaves. It should send late notices, log arrival automatically and capture photos and a signature as proof of delivery. ArrivePing does this ${FROM}.`,
   },
+  next: [
+    ...up("Delivery dispatch pricing"),
+    { label: "Driver GPS tracking", href: "/fleet-tracking" },
+    { label: "On-my-way texts", href: "/on-my-way-text-software" },
+    { label: "Onfleet alternative", href: "/compare/onfleet" },
+  ],
+  faqTitle: "Delivery dispatch software FAQs",
   trade: {
     media: media("delivery"),
     proof: ["Live ETA link, no customer app", "Automatic arrival check-in within 150 m", "Photos and a signature as proof of delivery"],
@@ -667,13 +764,13 @@ export const delivery: LandingPage = {
     {
       kind: "prose",
       eyebrow: "Fit",
-      title: "Appointment deliveries, not parcel routing.",
+      title: "Is ArrivePing a route optimizer?",
       paragraphs: [
-        "ArrivePing is at its best when each delivery or install is an appointment the customer is waiting for: a sofa, a fridge, a jobsite drop, a courier run with a promised window. It picks who goes and keeps the customer informed about when they'll arrive.",
+        "No. ArrivePing is at its best when each delivery or install is an appointment the customer is waiting for: a sofa, a fridge, a jobsite drop, a courier run with a promised window. It picks who goes and keeps the customer informed about when they'll arrive.",
         "It doesn't sequence hundreds of parcel stops per driver. If that's your main problem, a dedicated route optimizer such as Onfleet or Routific is the better tool.",
       ],
     },
-    { kind: "trades", title: "Other trades on ArrivePing." },
+    { kind: "trades", title: "ArrivePing for other industries" },
   ],
   faqs: [
     {
@@ -694,9 +791,17 @@ export const delivery: LandingPage = {
     },
     {
       q: "Do my drivers need GPS trackers in the trucks?",
-      a: "No. Drivers use the iPhone, iPad or Android phone they already carry to accept jobs, tap Start Driving and complete the job, and arrival check-in is automatic within 150 m. Location is shared only while they're on shift, and customers see it only while that driver is heading to them.",
+      a: `No. Drivers accept jobs, tap Start Driving and complete the job on ${PHONES}. Arrival check-in is automatic within 150 m. Location is shared only while they're on shift, and customers see it only while that driver is heading to them.`,
     },
-    priceFaq("How much does delivery scheduling software cost?", "driver", "drivers"),
+    priceFaq("How much does delivery dispatch software cost?", "driver", "drivers"),
+    {
+      q: "Does it work for furniture and appliance delivery?",
+      a: "Yes. It suits appointment deliveries where the customer is waiting, such as a sofa, a fridge with a hookup or a jobsite drop, with time windows, access notes and proof of delivery on every order.",
+    },
+    {
+      q: "Can I use contract drivers?",
+      a: "Yes. Subcontracted drivers and installers can be on several companies' rosters and still use one app.",
+    },
   ],
-  related: ["/fleet-tracking", "/on-my-way-text-software", "/compare/onfleet", "/compare/routific"],
+  related: ["/fleet-tracking", "/on-my-way-text-software", "/compare/onfleet", "/pricing"],
 };

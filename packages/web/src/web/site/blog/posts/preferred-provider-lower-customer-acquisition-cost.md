@@ -1,5 +1,6 @@
 ---
 title: "Become the Preferred Provider: How Loyalty Cuts Customer Acquisition Cost"
+seoTitle: "Become the Preferred Provider and Cut Acquisition Cost"
 slug: "preferred-provider-lower-customer-acquisition-cost"
 description: "Repeat customers and referrals cost far less than new ones. The data on loyalty, waiting and texting, and a playbook for becoming the provider people call."
 date: "2026-10-09"

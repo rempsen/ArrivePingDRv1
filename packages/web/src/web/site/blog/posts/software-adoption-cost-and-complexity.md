@@ -1,5 +1,6 @@
 ---
 title: "Cost and Complexity Stop Most Software Projects. Here's How to Remove Both."
+seoTitle: "Software Adoption Cost and Complexity: How to Remove Both"
 slug: "software-adoption-cost-and-complexity"
 description: "Surveys of thousands of small businesses blame the same two things when software stalls: cost and complexity. How to remove both, with the tutorials."
 date: "2026-10-31"
@@ -38,7 +39,7 @@ Cost isn't just the subscription. For field service software it usually includes
 - **No contract and nothing to buy up front.** Plans are billed monthly and you add or remove drivers month to month. After the trial, Starter is $49 a month for one dispatcher and two drivers, with every further driver priced on the same published schedule.
 - **No setup project.** The setup is done by software, not by a consultant on an hourly rate, which is the part most quotes leave out.
 
-If it doesn't make your dispatch day calmer within the first month, we refund it.
+If it isn't right for your team, cancel before day 30 and you pay nothing. After that you're billed monthly and can cancel any time.
 
 ## What does "removing the complexity barrier" look like?
 

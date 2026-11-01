@@ -6,11 +6,11 @@
  * not indexable.
  */
 import { posts } from "virtual:blog-index";
-import { faqs as homeFaqs } from "../config";
+import { faqs as homeFaqs, STARTER_PRICE } from "../config";
 import { blogCategories, categoryBySlug } from "../blog/categories";
 import { authorFor } from "../blog/meta";
 import { landingPages, type LandingPage } from "../content/landing";
-import { featuresMeta } from "../content/features";
+import { featureFaqs, featuresMeta } from "../content/features";
 import { articles } from "../support/articles";
 import { liveVideos, videoForGuide } from "../support/videos";
 import { absolute, breadcrumbs, faqPage, graph, ORG_ID, organization, SITE_ID, SITE_URL, softwareApplication, videoObject, webPage, website, type JsonLd } from "./schema";
@@ -35,9 +35,23 @@ export type SeoPage = {
   article?: { published: string; modified: string; section: string; tags: string[]; author: string };
 };
 
-const HOME_TITLE = "ArrivePing: Field Service Software with Live Tech Tracking";
-const HOME_DESCRIPTION =
-  "Field service software for HVAC, plumbing, electrical and trade teams. Auto-dispatch the closest qualified tech and text customers a live ETA. From $49/mo.";
+/** Brand plus the three pillars; "field service management software" belongs to /field-service-software. */
+const HOME_TITLE = "ArrivePing: Dispatch, Live Tracking & Customer ETA Texts";
+const HOME_DESCRIPTION = `See your whole team on a live map, assign every job and text customers a live ETA. For any business that sends people to customers. From US$${STARTER_PRICE}/mo. Sign up free.`;
+
+/** Search results cut titles at about 60 characters. */
+const MAX_TITLE = 60;
+
+/**
+ * The <title> for a page whose visible heading may be longer: an explicit short
+ * SEO title when there is one, else "<heading> | ArrivePing" when that fits,
+ * else the heading alone. The visible H1 never changes.
+ */
+export function fitTitle(heading: string, seoTitle?: string, suffix = " | ArrivePing"): string {
+  if (seoTitle) return seoTitle;
+  if (heading.length + suffix.length <= MAX_TITLE) return `${heading}${suffix}`;
+  return heading;
+}
 
 const home: SeoPage = {
   path: "/",
@@ -45,7 +59,7 @@ const home: SeoPage = {
   title: HOME_TITLE,
   description: HOME_DESCRIPTION,
   summary:
-    "Overview of ArrivePing: live map of technicians and drivers, custom work orders, automatic assignment by proximity and skill, technician app, and Uber-style customer tracking links with live ETA.",
+    "Overview of ArrivePing, field service software by NVC360 (Winnipeg, Canada) for any business that sends people to customers: live map of technicians and drivers, custom work orders, automatic assignment by proximity and skill, technician app, and customer tracking links with a live ETA.",
   section: "Product",
   priority: 1,
   changefreq: "weekly",
@@ -105,6 +119,7 @@ const features: SeoPage = {
       { name: "Features", path: featuresMeta.path },
     ]),
     softwareApplication(),
+    faqPage(featuresMeta.path, featureFaqs),
   ]),
 };
 
@@ -125,7 +140,7 @@ const legal = (path: string, label: string, summary: string): SeoPage => ({
 
 const BLOG_TITLE = "Field Service Blog: Dispatch, Tracking & ETAs | ArrivePing";
 const BLOG_DESCRIPTION =
-  "Practical articles on dispatch, technician tracking, on-my-way texts and running a profitable field service business, from the team that ran 800+ technicians.";
+  "Sourced articles on dispatch, technician tracking, on-my-way texts and field service costs, by NVC360's founder. Start with the 2026 buyer's guide.";
 const latest = posts[0]?.updated ?? undefined;
 
 const blogIndex: SeoPage = {
@@ -163,7 +178,7 @@ const blogCategoryPages: SeoPage[] = blogCategories
   .filter((c) => posts.some((p) => p.category === c.slug))
   .map((c) => {
     const path = `/blog/category/${c.slug}`;
-    const title = `${c.label}: Field Service Articles | ArrivePing Blog`;
+    const title = fitTitle(`${c.label}: Field Service Blog`);
     const list = posts.filter((p) => p.category === c.slug);
     return {
       path,
@@ -201,7 +216,8 @@ const blogPostPages: SeoPage[] = posts.map((p) => {
   const path = `/blog/${p.slug}`;
   const cat = categoryBySlug[p.category];
   const author = authorFor(p.author);
-  const title = p.title.length <= 52 ? `${p.title} | ArrivePing` : p.title;
+  // A long post title keeps its H1; the <title> uses the post's short `seoTitle` (see docs/blog-publishing.md).
+  const title = fitTitle(p.title, p.seoTitle);
   const image = p.image ? absolute(p.image) : `${SITE_URL}/og-image.png?v=2`;
   return {
     path,
@@ -250,12 +266,14 @@ const blogPostPages: SeoPage[] = posts.map((p) => {
 });
 
 const supportArticlePages: SeoPage[] = articles.map((a) => ({
-  ...legal(`/support/${a.slug}`, a.title, a.summary),
+  ...legal(`/support/${a.slug}`, a.title, a.description ?? a.summary),
+  title: fitTitle(a.title, a.seoTitle),
+  summary: a.summary,
   section: "Company",
   priority: 0.4,
   changefreq: "monthly",
   jsonLd: graph([
-    webPage(`/support/${a.slug}`, `${a.title} | ArrivePing Help`, a.summary),
+    webPage(`/support/${a.slug}`, fitTitle(a.title, a.seoTitle), a.description ?? a.summary),
     breadcrumbs([
       { name: "ArrivePing", path: "/" },
       { name: "Help Center", path: "/support" },
@@ -264,6 +282,10 @@ const supportArticlePages: SeoPage[] = articles.map((a) => ({
     ...(videoForGuide(a.slug) ? [videoObject(videoForGuide(a.slug)!)] : []),
   ]),
 }));
+
+const SUPPORT_TITLE = "ArrivePing Help Center: Setup, Dispatch & App Guides";
+const SUPPORT_DESCRIPTION =
+  "Guides and short videos for ArrivePing: set up your company, invite your team, dispatch jobs, edit customer texts, billing and exports. New? Sign up free.";
 
 const VIDEOS_SUMMARY =
   "Short ArrivePing video guides on real screens: sign up, the AI setup chat, creating and dispatching jobs, booking forms, notifications, your team and more.";
@@ -292,8 +314,16 @@ export const seoPages: SeoPage[] = [
   ...blogCategoryPages,
   ...blogPostPages,
   legal("/privacy", "Privacy Policy", "How arriveping.com by NVC360 collects, uses, discloses and safeguards your data and personal information, including technician location information."),
-  legal("/terms", "Terms of Service", "The terms that govern use of the arriveping.com by NVC360 platform, mobile app and website."),
-  { ...legal("/support", "Help Center", "ArrivePing help: set up your company, the technician app, dispatch, customer notifications, billing, account deletion and troubleshooting. Email support@nvc360.com."), label: "Help Center", section: "Company", priority: 0.5, changefreq: "weekly" },
+  legal("/terms", "Terms of Service", "The terms of service that govern use of the arriveping.com by NVC360 dispatch platform, technician mobile app and website. Read them before you sign up."),
+  {
+    ...legal("/support", "Help Center", SUPPORT_DESCRIPTION),
+    title: SUPPORT_TITLE,
+    label: "Help Center",
+    section: "Company",
+    priority: 0.5,
+    changefreq: "weekly",
+    jsonLd: graph([webPage("/support", SUPPORT_TITLE, SUPPORT_DESCRIPTION), breadcrumbs([{ name: "ArrivePing", path: "/" }, { name: "Help Center", path: "/support" }])]),
+  },
   supportVideosPage,
   ...supportArticlePages,
 ];

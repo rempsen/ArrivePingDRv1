@@ -2,6 +2,8 @@
 declare module "virtual:blog-index" {
   export type PostMeta = {
     title: string;
+    /** Optional short <title> (60 characters or less); the visible H1 stays `title`. */
+    seoTitle?: string;
     slug: string;
     description: string;
     date: string;
