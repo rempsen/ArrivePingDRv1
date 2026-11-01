@@ -1,5 +1,6 @@
 ---
 title: "Pizza Gets Real-Time ETAs. Why Doesn’t Your $5,000 HVAC Repair?"
+seoTitle: "Pizza Gets Real-Time ETAs. Why Doesn’t Your HVAC Repair?"
 slug: "end-the-4-hour-service-window"
 description: "A $15 pizza comes with live tracking while a $5,000 HVAC repair comes with a four-hour window. Why field service fell behind and what closing the gap takes."
 date: "2026-01-08"
@@ -191,6 +192,6 @@ The pizza has arrived. The technician is still somewhere in a four-hour window. 
 
 ## About ArrivePing
 
-ArrivePing by NVC360 brings real-time arrival updates to field service. When a technician heads out, the customer gets an [on-my-way text with a live tracking link](/customer-notifications) and ETA, with no app to download. It was built in Winnipeg by a team that ran 800+ field technicians, and it is available now.
+ArrivePing by NVC360 brings real-time arrival updates to field service. When a technician heads out, the customer gets an [on-my-way text with a live tracking link](/on-my-way-text-software) and ETA, with no app to download. It was built in Winnipeg by a team that ran 800+ field technicians, and it is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

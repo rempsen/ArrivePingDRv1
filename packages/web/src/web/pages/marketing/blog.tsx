@@ -24,11 +24,21 @@ export function BlogIndexRoute() {
         <div className="container">
           <Crumbs trail={[{ label: "Home", path: "/" }, { label: "Blog", path: "/blog" }]} />
           <span className="eyebrow">Blog</span>
-          <h1 className="lp-hero__title">The ArrivePing blog</h1>
+          <h1 className="lp-hero__title">Field service blog: dispatch, tracking and customer updates</h1>
           <p className="lede lp-hero__lede">
-            Practical writing on dispatch, technician tracking, customer communication and running a more profitable field
-            service business, from the NVC360 team that ran more than 800 field technicians.
+            Practical, sourced articles for businesses that send people to customers: dispatch and scheduling, technician and
+            driver tracking, on-my-way texts, field service software costs and running a more profitable service business. Written
+            by Dan Rosenblat, founder and CEO of NVC360, the Winnipeg company that makes ArrivePing, with sources linked in each
+            post.
           </p>
+          <div className="lp-hero__cta">
+            <a className="btn btn--primary" href="/get-started">
+              Sign up free
+            </a>
+            <a className="btn btn--secondary" href="/blog/field-service-software-for-small-business">
+              Start with the 2026 buyer's guide
+            </a>
+          </div>
         </div>
       </header>
       <CategoryNav active="" />

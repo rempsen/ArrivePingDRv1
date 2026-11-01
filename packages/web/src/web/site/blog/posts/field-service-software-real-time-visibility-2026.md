@@ -1,5 +1,6 @@
 ---
 title: "2026 Field Service Software: Why Real-Time Visibility Is Now the Competitive Advantage"
+seoTitle: "Why Real-Time Visibility Is the 2026 Field Service Edge"
 slug: "field-service-software-real-time-visibility-2026"
 description: "Why live technician tracking, accurate ETAs and proactive client updates now matter more than feature lists, with market, labour and customer data for 2026."
 date: "2026-05-13"
@@ -104,7 +105,7 @@ This is where field service software directly influences customer satisfaction. 
 
 Many field service offices lose time to repetitive communication. Dispatchers confirm appointments, answer status calls, ask technicians for location updates, explain delays, and reassure customers. Those tasks matter, but they should not require constant manual effort.
 
-Salesforce’s finding that technicians believe AI could handle a meaningful share of administrative tasks reinforces the broader direction: field teams need systems that remove avoidable admin from the day. ArrivePing’s [automated on-my-way texts and ETA updates](/customer-notifications) are aligned with that need.
+Salesforce’s finding that technicians believe AI could handle a meaningful share of administrative tasks reinforces the broader direction: field teams need systems that remove avoidable admin from the day. ArrivePing’s [automated on-my-way texts and ETA updates](/on-my-way-text-software) are aligned with that need.
 
 ### 3. Give Managers a Real-Time View of the Field
 

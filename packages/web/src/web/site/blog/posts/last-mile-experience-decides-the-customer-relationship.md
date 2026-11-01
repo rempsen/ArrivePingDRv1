@@ -1,5 +1,6 @@
 ---
 title: "The Last Mile Is the Only Mile the Customer Sees"
+seoTitle: "The Last Mile Is the Only Mile Your Customer Ever Sees"
 slug: "last-mile-experience-decides-the-customer-relationship"
 description: "Product, price and service can all be right and one bad arrival still loses the customer. The research on the last mile, and how a live ETA fixes it."
 date: "2026-10-15"

@@ -1,5 +1,6 @@
 ---
 title: "AI-Powered Dispatch Software: Control Costs, Earn Loyalty, Become the Preferred Provider in 2026"
+seoTitle: "AI-Powered Dispatch Software: Control Costs, Earn Loyalty"
 slug: "ai-powered-dispatch-software"
 description: "How connecting dispatch, technician context and proactive customer updates cuts the cost of schedule changes and makes you the provider customers prefer."
 date: "2026-09-18"

@@ -1,5 +1,6 @@
 ---
 title: "Enhancing Customer Satisfaction Through Real-Time ETA Updates"
+seoTitle: "How Real-Time ETA Updates Improve Customer Satisfaction"
 slug: "enhancing-customer-satisfaction-through-real-time-eta-updates"
 description: "What delivery and appointment research says about real-time ETA updates: customers want them, and they cut no-shows and support calls and help retention."
 date: "2025-10-08"
@@ -54,7 +55,7 @@ In an era where customer expectations are continually evolving, staying ahead re
 
 ## How ArrivePing Helps
 
-Automated, real-time ETA updates are no longer optional for service businesses that want to thrive in a customer-driven market. ArrivePing, built by NVC360 in Winnipeg, sends each customer an [on-my-way text or email](/customer-notifications) when their technician heads out, with a link to a live tracking page showing the technician’s progress and ETA. Customers can text or call from that page, there’s no app to download, and if a job slips they get a running-late notice automatically. On the office side, a live map and dispatch board show where every technician is, so dispatchers can act on delays before customers have to ask.
+Automated, real-time ETA updates are no longer optional for service businesses that want to thrive in a customer-driven market. ArrivePing, built by NVC360 in Winnipeg, sends each customer an [on-my-way text or email](/on-my-way-text-software) when their technician heads out, with a link to a live tracking page showing the technician’s progress and ETA. Customers can text or call from that page, there’s no app to download, and if a job slips they get a running-late notice automatically. On the office side, a live map and dispatch board show where every technician is, so dispatchers can act on delays before customers have to ask.
 
 Investing in this kind of transparency is a strategic move that pays off in customer retention, brand reputation, and overall profitability.
 

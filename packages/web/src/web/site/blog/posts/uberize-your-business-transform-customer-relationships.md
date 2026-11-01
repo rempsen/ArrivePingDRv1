@@ -1,5 +1,6 @@
 ---
 title: "ArrivePing Will Uberize Your Business and Transform Relationships"
+seoTitle: "Uberize Your Business and Transform Customer Relationships"
 slug: "uberize-your-business-transform-customer-relationships"
 description: "How Uber-style expectations apply to field service, and how live tracking, on-my-way texts and automatic assignment help technicians and customers alike."
 date: "2025-12-10"
@@ -47,7 +48,7 @@ Field staff mark themselves on the way with a tap, and every technician appears 
 Customers can track their technician, just like tracking an Uber driver, on a live tracking page with no app or account. Location is shared only while the technician is travelling to that appointment. Anxiety is reduced, and customers feel in control.
 
 **Automated ETAs and Notifications**  
-An [on-my-way text or email](/customer-notifications) goes out when the technician heads out, with a link to the tracking page and the ETA. If a job slips, a running-late notice goes out automatically. This keeps customers informed without anyone in the office picking up the phone.
+An [on-my-way text or email](/on-my-way-text-software) goes out when the technician heads out, with a link to the tracking page and the ETA. If a job slips, a running-late notice goes out automatically. This keeps customers informed without anyone in the office picking up the phone.
 
 **Branded Communication**  
 Every update carries your brand, reinforcing professionalism and customer trust.

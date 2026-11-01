@@ -188,13 +188,13 @@ It was built by the team at NVC360 from the experience of operating a specialty 
 Every active technician appears on a [live map](/fleet-tracking), using location from the technician app on their phone — no vehicle GPS hardware. Dispatchers see the full picture at a glance without calling around for status updates, and can reassign jobs from the dispatch board.
 
 **2. Automated Client ETA Notifications**  
-When a technician heads out, ArrivePing sends the client an [on-my-way text or email](/customer-notifications) with a link to a live tracking page showing the technician’s progress and ETA, plus buttons to text or call. Clients can follow their technician much like an Uber, with no app or account to set up. If a job slips, a running-late notice goes out. Instead of waiting out a 4-hour window, clients know when to expect the knock at the door, which means fewer “where is my tech?” calls into the office.
+When a technician heads out, ArrivePing sends the client an [on-my-way text or email](/on-my-way-text-software) with a link to a live tracking page showing the technician’s progress and ETA, plus buttons to text or call. Clients can follow their technician much like an Uber, with no app or account to set up. If a job slips, a running-late notice goes out. Instead of waiting out a 4-hour window, clients know when to expect the knock at the door, which means fewer “where is my tech?” calls into the office.
 
 **3. Job Details That Travel With the Work Order**  
 Each work order carries the job type, priority, time window, required skills, access notes and photos. Instructions travel with the work order — not through someone’s personal text thread.
 
 **4. Technician App & Job Closure**  
-Technicians see job details on their phone (iOS and Android), accept with one tap, and mark themselves on the way. Arrival is geofenced and on-site time is clocked automatically. Job photos are attached to the record, and invoicing runs from the same job.
+Technicians see job details on their phone (the iPhone and iPad app, or ArrivePing in an Android phone's web browser), accept with one tap, and mark themselves on the way. Arrival is geofenced and on-site time is clocked automatically. Job photos are attached to the record, and invoicing runs from the same job.
 
 **5. Works Alongside Your Existing Tools**  
 ArrivePing works alongside your existing accounting and CRM tools, with exports (CSV, Excel, PDF, JSON), calendar feeds, webhooks, Zapier and Make. An AI setup agent builds your workspace from your company website, and most teams dispatch their first job within an hour. There is no hardware to install.

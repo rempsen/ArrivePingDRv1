@@ -56,7 +56,7 @@ Even 10 missed calls a week, at $100 profit each, equals **$52,000 in lost annua
 
 ### B. Always-On, Human Communication
 
-- Answer or return calls quickly, and let automated [on-my-way texts and tracking links](/customer-notifications) handle routine status questions so the phone line stays free for new business.
+- Answer or return calls quickly, and let automated [on-my-way texts and tracking links](/on-my-way-text-software) handle routine status questions so the phone line stays free for new business.
 - Customers value responsiveness above all else.
 
 ### C. Local Expertise & Support

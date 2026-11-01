@@ -124,7 +124,7 @@ export function HomeHero() {
               </a>
             </div>
             <p className="lv-hero__app">
-              <span>Your technicians use the ArrivePing app for iPhone and iPad.</span>
+              <span>Your technicians use the ArrivePing app for iPhone and iPad. On Android, they use ArrivePing in the phone's web browser.</span>
               <AppStoreBadge height={40} />
             </p>
           </div>

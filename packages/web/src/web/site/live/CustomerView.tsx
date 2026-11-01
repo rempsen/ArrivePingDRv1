@@ -62,7 +62,7 @@ export function CustomerView() {
         <p className="ap-cv__cap">{customerView.caption}</p>
 
         <div className="ap-cv__why" data-reveal="">
-          <h3 className="ap-cv__whyhead">Why homeowners care</h3>
+          <h3 className="ap-cv__whyhead">Why customers care</h3>
           <p className="ap-cv__lede">{customerView.whyLede}</p>
           <ul className="ap-cv__stats">
             {customerView.stats.map((st) => (

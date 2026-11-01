@@ -1,5 +1,6 @@
 ---
 title: "The Uber Effect: Why Your Customers Demand Real-Time Service (and How to Deliver It)"
+seoTitle: "The Uber Effect: Why Customers Demand Real-Time Service"
 slug: "uber-effect-real-time-service"
 description: "How rideshare-style tracking reset field service expectations, why smaller firms face a technology gap, and what a real-time service visit looks like."
 date: "2026-03-03"

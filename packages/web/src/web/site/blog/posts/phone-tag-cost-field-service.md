@@ -1,5 +1,6 @@
 ---
 title: "Stop the Ringing: How Phone Tag is Costing Your Field Service Business Millions"
+seoTitle: "How Phone Tag Is Costing Your Field Service Business"
 slug: "phone-tag-cost-field-service"
 description: "Phone tag between the office, technicians and customers eats paid hours. Where that time goes, what it costs, and how automatic updates replace the calls."
 date: "2026-03-31"

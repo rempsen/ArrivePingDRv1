@@ -16,7 +16,7 @@ const AUTHORS: Record<string, Author> = {
     role: "Founder & CEO, NVC360",
     initials: "DR",
     bio: "Dan is the founder and CEO of NVC360, the Winnipeg software company behind ArrivePing. He built the first version of the software for National Interiors, a specialty subcontractor running more than 800 field technicians, and founded NVC360 after that business was sold to turn the tool into a platform.",
-    url: "https://arriveping.com/about",
+    url: "https://arriveping.com/about#dan-rosenblat",
   },
 };
 

@@ -1,5 +1,6 @@
 ---
 title: "Do You Need GPS Trackers in Your Service Vans? Phone vs. Vehicle Tracking"
+seoTitle: "Do You Need GPS Trackers in Service Vans? Phone vs Vehicle"
 slug: "phone-vs-vehicle-gps-tracking"
 description: "Phone app or a GPS tracker in every van? What each tracks, what it costs, the privacy rules in Canada and the U.S., and how a service business should choose."
 date: "2026-10-17"
