@@ -50,7 +50,8 @@ const URL_RE = /https?:\/\/\S+/g;
  * https://github.com/twitter/twitter-text/blob/master/config/v3.json
  */
 const X_LIGHT_RANGES: [number, number][] = [[0, 4351], [8192, 8205], [8208, 8223], [8242, 8247]];
-const EMOJI_RE = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+/** Pictographs, flags and keycap sequences (e.g. "1\u20E3") all count as one 2-weight emoji. */
+const EMOJI_RE = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
 const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
 
 /** Length of a post as X counts it: each URL is 23, emoji and CJK are 2. */

@@ -29,15 +29,15 @@ const template = "file://" + join(WEB, "content/social/render/post-template.html
 
 // Playwright is deliberately not a repo dependency: the Claude cloud sessions
 // that run the drafter ship a pre-installed Playwright + Chromium, and a second
-// copy would not find that browser. Elsewhere, install it once (see below).
+// copy would not find that browser. Elsewhere, install it locally with --no-save (see below).
 let chromium: typeof import("playwright").chromium;
 try {
   ({ chromium } = await import("playwright"));
 } catch {
   console.error(
-    "Playwright is not available. Install it outside the repo, e.g.\n" +
-      "  bun add -g playwright && bunx playwright install chromium\n" +
-      "then run this script again.",
+    "Playwright is not available. From packages/web, install it without\n" +
+      "touching package.json or the lockfile, then run this script again:\n" +
+      "  bun add --no-save playwright && bunx playwright install chromium",
   );
   process.exit(1);
 }

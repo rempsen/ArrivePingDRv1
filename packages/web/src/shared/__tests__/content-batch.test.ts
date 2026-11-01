@@ -45,6 +45,8 @@ describe("xLength", () => {
     expect(xLength("ok 👍")).toBe(3 + 2);
     expect(xLength("👨‍👩‍👧")).toBe(2);
     expect(xLength("日本")).toBe(4);
+    expect(xLength("1\u20e3")).toBe(2);
+    expect(xLength("1\ufe0f\u20e3 go")).toBe(5);
     expect(xLength("café — “quotes”")).toBe(15);
   });
 });
