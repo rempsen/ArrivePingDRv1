@@ -18,7 +18,7 @@
  */
 import { brand, faqs as homeFaqs, hero, pricingBands, STARTER_DRIVERS, STARTER_PRICE } from "../site/config";
 import { landingPages, type LandingPage, type Section } from "../site/content/landing";
-import { chapters, featuresMeta } from "../site/content/features";
+import { chapters, featureFaqs, featuresMeta } from "../site/content/features";
 import { articles, categories as helpCategories, support } from "../site/support/articles";
 import {
   absolute,
@@ -346,7 +346,7 @@ export function buildLlmsFullTxt(posts: readonly LlmsPost[]): string {
   // Questions answered word for word on several pages are written out once.
   type QA = { q: string; a: string };
   const keyOf = (f: QA) => `${f.q}\n${f.a}`;
-  const allFaqs: QA[][] = [homeFaqs.map((f) => ({ q: f.q, a: f.a })), ...landingPages.map((p) => p.faqs)];
+  const allFaqs: QA[][] = [homeFaqs.map((f) => ({ q: f.q, a: f.a })), featureFaqs.map((f) => ({ q: f.q, a: f.a })), ...landingPages.map((p) => p.faqs)];
   const counts = new Map<string, number>();
   for (const list of allFaqs) for (const k of new Set(list.map(keyOf))) counts.set(k, (counts.get(k) ?? 0) + 1);
   const isCommon = (f: QA) => (counts.get(keyOf(f)) ?? 0) > 1;
@@ -402,7 +402,10 @@ export function buildLlmsFullTxt(posts: readonly LlmsPost[]): string {
       `URL: ${absolute(featuresMeta.path)}`,
       t(featuresMeta.summary),
       ...chapters.map((c) => `### ${c.label}: ${c.title}\n\n${t(c.promise)}\n\n${bullets(c.tiles.map((x) => t(`**${x.title}**: ${x.text}`)))}`),
-    ].join("\n\n");
+      faqBlock(featureFaqs),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
   const help = [
     "## Help Center",

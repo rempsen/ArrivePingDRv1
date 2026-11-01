@@ -9,7 +9,7 @@
  *    directly (a redirect fails), or that carries noindex (meta or header);
  *  - any <lastmod> is in the future (America/Winnipeg) or not YYYY-MM-DD;
  *  - a page lacks exactly one <h1>, a canonical equal to its URL, a <title>
- *    (over 75 characters fails), a meta description (over 200 fails), or
+ *    of at most 65 characters, a meta description of 70–170 characters, or
  *    JSON-LD; or a JSON-LD block doesn't parse or lacks @context/@type;
  *  - the Organization or SoftwareApplication markup is wrong (see below);
  *  - a made-up URL (/support/…, /blog/…, /compare/…) doesn't return 404 + noindex;
@@ -21,8 +21,9 @@
  *    paragraphs, or claim an Android app while ANDROID_APP_LIVE is false;
  *  - the declared og:image size isn't the image's real size.
  *
- * Warns (exit 0) for titles outside 30–65 characters, descriptions outside
- * 70–170, and Android claims in page copy, so copy fixes can land separately.
+ * Warns (exit 0) for titles under 30 characters (the short legal and video
+ * pages) and for an Android claim in the Terms of Service, which is legal text
+ * the owner updates.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -40,33 +41,8 @@ const warnings: string[] = [];
 const fail = (msg: string) => problems.push(msg);
 const warn = (msg: string) => warnings.push(msg);
 
-/**
- * Pages already over the hard limits when this check was added (1 Nov 2026).
- * They warn instead of failing until the copy PR shortens them (seoTitle /
- * metaDescription); any other page over the limit fails. Remove entries as
- * they are fixed: an entry that is back under the limit is reported.
- */
-const KNOWN_LONG_TITLE = new Set([
-  "/blog/base-hit-software-small-business",
-  "/blog/field-service-software-for-small-business",
-  "/blog/field-service-software-cost",
-  "/blog/ai-powered-dispatch-software",
-  "/blog/12-hidden-costs-manual-field-service-operations",
-  "/blog/field-service-software-real-time-visibility-2026",
-  "/blog/real-time-technician-tracking-field-service-benefits",
-  "/blog/ai-divide-in-construction",
-  "/blog/construction-communication-rework-cost",
-  "/blog/become-a-preferred-vendor",
-  "/blog/phone-tag-cost-field-service",
-  "/blog/uber-effect-field-service-price-sensitivity",
-  "/blog/uber-effect-real-time-service",
-  "/blog/uberize-your-field-service-business",
-  "/blog/servicetitan-trends-what-they-mean",
-  "/support/industry-terms",
-  "/support/assignment-rules",
-  "/support/address-not-found",
-]);
-const KNOWN_LONG_DESCRIPTION = new Set(["/canada", "/compare/onfleet"]);
+/** Pages whose Android wording is legal text the owner must change; they warn instead of failing. */
+const ANDROID_COPY_OWNER_ACTION = new Set(["/terms"]);
 
 /** Stale or broken phrases that must never ship. */
 const BANNED = /launching november|book a demo|\[email(?:&#160;|&nbsp;| | )protected\]/i;
@@ -201,15 +177,12 @@ for (const { loc, lastmod } of entries) {
 
   const title = decode(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "");
   if (title.length < 10) fail(`${loc}: missing or very short <title>`);
-  else if (title.length > 75) (KNOWN_LONG_TITLE.has(urlPath) ? warn : fail)(`${loc}: title is ${title.length} characters (over 75): "${title}"`);
-  else if (title.length < 30 || title.length > 65) warn(`${loc}: title is ${title.length} characters (aim for 30–65)`);
-  if (KNOWN_LONG_TITLE.has(urlPath) && title.length <= 75) warn(`${urlPath}: title is now ${title.length} characters; remove it from KNOWN_LONG_TITLE`);
+  else if (title.length > 65) fail(`${loc}: title is ${title.length} characters (over 65; add a short seoTitle): "${title}"`);
+  else if (title.length < 30) warn(`${loc}: title is ${title.length} characters (aim for 30–65)`);
 
   const description = decode(html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? "");
   if (description.length < 50) fail(`${loc}: missing or very short meta description`);
-  else if (description.length > 200) (KNOWN_LONG_DESCRIPTION.has(urlPath) ? warn : fail)(`${loc}: description is ${description.length} characters (over 200)`);
-  else if (description.length < 70 || description.length > 170) warn(`${loc}: description is ${description.length} characters (aim for 70–170)`);
-  if (KNOWN_LONG_DESCRIPTION.has(urlPath) && description.length <= 200) warn(`${urlPath}: description is now ${description.length} characters; remove it from KNOWN_LONG_DESCRIPTION`);
+  else if (description.length < 70 || description.length > 170) fail(`${loc}: description is ${description.length} characters (keep it to 70–170)`);
 
   const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
   if (canonical !== loc) fail(`${loc}: canonical is ${canonical ?? "missing"}`);
@@ -220,7 +193,7 @@ for (const { loc, lastmod } of entries) {
   if (banned) fail(`${loc}: contains the stale phrase "${banned}"`);
   if (!ANDROID_APP_LIVE) {
     const claim = visibleText(html).match(new RegExp(`[^.]{0,40}(?:${ANDROID_CLAIM.source})[^.]{0,20}`, "i"))?.[0];
-    if (claim) warn(`${loc}: page copy claims Android while ANDROID_APP_LIVE is false: "…${claim.trim()}…"`);
+    if (claim) (ANDROID_COPY_OWNER_ACTION.has(urlPath) ? warn : fail)(`${loc}: page copy claims Android while ANDROID_APP_LIVE is false: "…${claim.trim()}…"`);
   }
 
   const ogImage = decode(html.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? "");
