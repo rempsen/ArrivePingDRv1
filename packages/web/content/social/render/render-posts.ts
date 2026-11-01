@@ -13,7 +13,6 @@
  * Images inside `html` must be REAL app screenshots from public/img/site/app/
  * (reference them as ../../../public/img/site/app/<file>.webp). Never draw mock UI.
  */
-import { chromium } from "playwright";
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -27,6 +26,21 @@ if (!file) {
 }
 const cards = JSON.parse(readFileSync(resolve(WEB, file), "utf8")) as Card[];
 const template = "file://" + join(WEB, "content/social/render/post-template.html");
+
+// Playwright is deliberately not a repo dependency: the Claude cloud sessions
+// that run the drafter ship a pre-installed Playwright + Chromium, and a second
+// copy would not find that browser. Elsewhere, install it once (see below).
+let chromium: typeof import("playwright").chromium;
+try {
+  ({ chromium } = await import("playwright"));
+} catch {
+  console.error(
+    "Playwright is not available. Install it outside the repo, e.g.\n" +
+      "  bun add -g playwright && bunx playwright install chromium\n" +
+      "then run this script again.",
+  );
+  process.exit(1);
+}
 
 const browser = await chromium.launch();
 try {

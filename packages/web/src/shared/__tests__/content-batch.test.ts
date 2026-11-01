@@ -40,6 +40,13 @@ describe("xLength", () => {
   it("counts every URL as 23 characters, like X does", () => {
     expect(xLength("abc https://arriveping.com/a-very-long-path-that-is-longer-than-twenty-three")).toBe(4 + 23);
   });
+
+  it("weights emoji and CJK as 2, like twitter-text", () => {
+    expect(xLength("ok 👍")).toBe(3 + 2);
+    expect(xLength("👨‍👩‍👧")).toBe(2);
+    expect(xLength("日本")).toBe(4);
+    expect(xLength("café — “quotes”")).toBe(15);
+  });
 });
 
 describe("localDate", () => {
