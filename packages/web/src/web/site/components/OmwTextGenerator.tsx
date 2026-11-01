@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { describeSms, generateTexts, OMW_DEFAULTS, TONES, TRADES, type OmwInput, type OmwTexts, type Tone, type TradeKey } from "../tools/omw-text";
+import { cleanEta, describeSms, generateTexts, OMW_DEFAULTS, TONES, TRADES, type OmwInput, type OmwTexts, type Tone, type TradeKey } from "../tools/omw-text";
 
 /**
  * The on-my-way text generator. Runs entirely in the browser: no form, no
@@ -12,6 +12,13 @@ export function OmwTextGenerator() {
   // The ETA field keeps what was typed (even "" mid-edit); the texts use the cleaned number.
   const [etaText, setEtaText] = useState(String(OMW_DEFAULTS.eta));
   const texts = generateTexts(input);
+  // While typing, say so if the texts use a different number than the box shows
+  // (over 240 minutes, or a fraction): what's copied must match what's on screen.
+  const typedEta = Number(etaText);
+  const etaNote =
+    etaText.trim() !== "" && Number.isFinite(typedEta) && typedEta >= 1 && typedEta !== input.eta
+      ? `The texts use ${input.eta} minutes (whole minutes, 1 to 240).`
+      : "";
   const set = <K extends keyof OmwInput>(k: K, v: OmwInput[K]) => setInput((p) => ({ ...p, [k]: v }));
 
   const cards: { key: keyof OmwTexts; title: string; when: string }[] = [
@@ -81,12 +88,20 @@ export function OmwTextGenerator() {
               max={240}
               step={1}
               value={etaText}
+              aria-describedby={etaNote ? `${id}-eta-note` : undefined}
               onChange={(e) => {
                 setEtaText(e.target.value);
                 const n = Number(e.target.value);
-                if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 1) set("eta", n);
+                if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= 1) set("eta", cleanEta(n));
               }}
+              // Leaving the field shows the value the texts actually use.
+              onBlur={() => setEtaText(String(input.eta))}
             />
+            {etaNote && (
+              <output id={`${id}-eta-note`} className="geo-field__hint">
+                {etaNote}
+              </output>
+            )}
           </div>
         </div>
         <div className="geo-checks">

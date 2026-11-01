@@ -19,7 +19,13 @@ export function NoShowCalculator() {
     const v = e.target.value;
     setRaw((p) => ({ ...p, [k]: v }));
     const n = Number(v);
-    setInput((p) => ({ ...p, [k]: v.trim() === "" || !Number.isFinite(n) ? 0 : n }));
+    // Negative numbers count as zero, everywhere the value is shown or used.
+    setInput((p) => ({ ...p, [k]: v.trim() === "" || !Number.isFinite(n) ? 0 : Math.max(0, n) }));
+  };
+  // Leaving a field with a negative or invalid number shows the value the maths uses.
+  const onBlurNum = (k: NumKey) => () => {
+    const n = Number(raw[k]);
+    if (raw[k].trim() !== "" && (!Number.isFinite(n) || n < 0)) setRaw((p) => ({ ...p, [k]: String(input[k]) }));
   };
   const onUnit = (u: DistanceUnit) => {
     const next = convertUnit(input, u);
@@ -68,6 +74,7 @@ export function NoShowCalculator() {
                   step={f.step}
                   value={raw[f.k]}
                   onChange={onNum(f.k)}
+                  onBlur={onBlurNum(f.k)}
                   aria-labelledby={`${id}-${f.k}-l`}
                   aria-describedby={`${id}-${f.k}-hint`}
                 />
