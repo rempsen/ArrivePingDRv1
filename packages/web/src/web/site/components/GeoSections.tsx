@@ -54,7 +54,7 @@ export function GeoSectionBlock({ section: s, page }: { section: GeoSection; pag
       return (
         <section className="section section--divided" id={s.id}>
           <div className="container">
-            <div className="geo-shots">
+            <div className={`geo-shots${s.shots.every((x) => x.phone) ? " geo-shots--side" : ""}`}>
               <div className="lp-prose geo-rich" data-reveal="">
                 {s.eyebrow && <span className="eyebrow">{s.eyebrow}</span>}
                 <h2 className="h-section">{s.title}</h2>

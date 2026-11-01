@@ -29,12 +29,12 @@ export function NoShowCalculator() {
   const per = input.unit === "mi" ? "mile" : "km";
 
   const fields: { k: NumKey; label: string; hint: string; step: number; prefix?: string }[] = [
-    { k: "hourlyRate", label: "Technician loaded rate ($ per hour)", hint: "Wage plus payroll taxes, benefits and overhead.", step: 1, prefix: "$" },
-    { k: "driveMinutes", label: "Drive minutes for the wasted trip", hint: "There and on to the next stop.", step: 5 },
-    { k: "onSiteMinutes", label: "Minutes lost at the door", hint: "Knocking, calling, waiting.", step: 5 },
-    { k: "distance", label: `Distance driven (${input.unit === "mi" ? "miles" : "km"})`, hint: "For the same trip.", step: 1 },
+    { k: "hourlyRate", label: "Loaded rate ($ per hour)", hint: "Wage plus taxes, benefits, overhead.", step: 1, prefix: "$" },
+    { k: "driveMinutes", label: "Drive minutes", hint: "There and on to the next stop.", step: 5 },
+    { k: "onSiteMinutes", label: "Minutes at the door", hint: "Knocking, calling, waiting.", step: 5 },
+    { k: "distance", label: `Distance (${input.unit === "mi" ? "miles" : "km"})`, hint: "Driven for the same trip.", step: 1 },
     { k: "vehicleRate", label: `Vehicle cost ($ per ${per})`, hint: "Fuel, wear, insurance, depreciation.", step: 0.01, prefix: "$" },
-    { k: "perMonth", label: "Customer-not-home trips per month", hint: "Your own count, across the team.", step: 1 },
+    { k: "perMonth", label: "Wasted trips per month", hint: "Customer not home, team-wide.", step: 1 },
   ];
 
   return (

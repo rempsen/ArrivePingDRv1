@@ -249,6 +249,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 12px;
 }
+/* Inputs in a row line up even when one label wraps. */
+.site .geo-calc-grid .geo-field {
+  grid-template-rows: auto auto 1fr;
+}
 .site .geo-result {
   border-color: rgb(56 189 248 / 35%);
   background: linear-gradient(180deg, rgb(14 165 233 / 9%), var(--surface));
@@ -388,6 +392,9 @@
   line-height: 1.5;
   color: var(--ink-secondary);
 }
+.site .geo-pick ul {
+  list-style: disc;
+}
 .site .geo-pick__choose {
   margin-top: 16px !important;
   font-size: 13px !important;
@@ -469,9 +476,30 @@
   line-height: 1.55;
 }
 
+/* Phone screenshots sit beside the text on wide screens. */
+@media (min-width: 901px) {
+  .site .geo-shots--side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 48px;
+    align-items: start;
+  }
+  .site .geo-shots--side .geo-shots__row {
+    margin-top: 0;
+    flex-wrap: nowrap;
+  }
+  .site .geo-shots--side .geo-shot--phone {
+    flex: 0 0 240px;
+  }
+}
 @media (max-width: 900px) {
   .site .geo-tool {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .site .geo-matrix tbody th {
+    width: auto;
   }
 }
 @media (max-width: 560px) {
@@ -485,9 +513,15 @@
   .site .geo-calc-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* Two phone screens side by side rather than one very tall column. */
+  .site .geo-shots__row {
+    gap: 12px;
+  }
   .site .geo-shot--phone {
-    flex: 1 1 100%;
-    max-width: 320px;
-    margin-inline: auto;
+    flex: 1 1 0;
+    max-width: 280px;
+  }
+  .site .geo-shot figcaption {
+    font-size: 12.5px;
   }
 }

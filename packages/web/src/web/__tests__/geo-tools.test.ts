@@ -64,8 +64,10 @@ describe("no-show cost calculator", () => {
 describe("on-my-way text generator", () => {
   it("writes the three default texts the page prerenders", () => {
     const t = generateTexts(OMW_DEFAULTS);
+    // The default on-my-way text fits one segment, placeholder link included.
+    expect(smsInfo(t.onMyWay).segments).toBe(1);
     expect(t.onMyWay).toBe(
-      "Hi! Jordan from Prairie Comfort HVAC is on the way and should be there in about 20 minutes. Follow along live: [tracking link] If you can, clear a path to the furnace or AC unit.",
+      "Hi! Jordan from Prairie Comfort HVAC is on the way, about 20 minutes out. Follow along live: [tracking link] Please clear a path to the furnace or AC.",
     );
     expect(t.runningLate).toBe(
       "Hi, quick update from Prairie Comfort HVAC: Jordan is running a little behind and should reach you in about 20 minutes. Sorry to keep you waiting. Live status: [tracking link] Reply if that time no longer works.",
@@ -90,13 +92,13 @@ describe("on-my-way text generator", () => {
   });
 
   it("says 1 minute, not 1 minutes", () => {
-    expect(generateTexts({ ...OMW_DEFAULTS, eta: 1 }).onMyWay).toContain("about 1 minute.");
+    expect(generateTexts({ ...OMW_DEFAULTS, eta: 1 }).onMyWay).toContain("about 1 minute out.");
   });
 
   it("falls back to placeholders and sane ETAs when fields are blank or odd", () => {
     const t = generateTexts({ ...OMW_DEFAULTS, company: "  ", tech: "\n", eta: Number.NaN });
     expect(t.onMyWay).toContain("[tech name] from [your company]");
-    expect(t.onMyWay).toContain("about 20 minutes");
+    expect(t.onMyWay).toContain("about 20 minutes out");
     expect(cleanEta("0")).toBe(OMW_DEFAULTS.eta);
     expect(cleanEta(-3)).toBe(OMW_DEFAULTS.eta);
     expect(cleanEta(12.6)).toBe(13);

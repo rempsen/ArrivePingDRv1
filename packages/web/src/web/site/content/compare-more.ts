@@ -12,7 +12,7 @@
  */
 import type { Cell, LandingPage } from "./landing";
 import type { Pick } from "./geo-sections";
-import { monthlyPrice } from "../config";
+import { monthlyPrice, pricingBands, STARTER_PRICE } from "../config";
 
 export const COMPARE_MORE_VERIFIED = "November 1, 2026";
 
@@ -33,7 +33,11 @@ const SRC = {
   glympseProCost: { label: "What is the cost to use Glympse PRO? (help centre)", href: "https://support.glympse.com/faq/what-is-the-cost-to-use-glympse-pro/" },
   jobberPricing: { label: "Jobber pricing", href: "https://www.getjobber.com/pricing/" },
   jobberGps: { label: "Jobber GPS tracking", href: "https://www.getjobber.com/features/gps-tracking-app/" },
-  jobberComms: { label: "Jobber customer communication", href: "https://www.getjobber.com/features/customer-communication-management/" },
+  jobberForce: {
+    label: "Jobber product update: Force Fleet Tracking live tracking links in On My Way texts (Aug 21, 2025)",
+    href: "https://productupdates.getjobber.com/102703-force-fleet-tracking-integration-enhances-on-my-way-texts-with-live-tracking-links",
+  },
+  jobberForceHelp: { label: "Jobber help centre: Jobber and Force Fleet Tracking", href: "https://help.getjobber.com/en/articles/jobber-and-force-fleet-tracking/" },
   hcpPricing: { label: "Housecall Pro pricing", href: "https://www.housecallpro.com/pricing/" },
   hcpGps: { label: "Housecall Pro vehicle GPS tracking", href: "https://www.housecallpro.com/features/vehicle-gps-tracking/" },
   kickservPricing: { label: "Kickserv pricing", href: "https://www.kickserv.com/pricing" },
@@ -49,8 +53,11 @@ const src = (s: { label: string; href: string }, text: string): Cell => ({ text,
 /* Shared ArrivePing facts                                               */
 /* ------------------------------------------------------------------ */
 
-const AP_PRICE: Cell = { text: "$49/mo incl. 1 dispatcher + 2 drivers; then $30 per driver, $25 from driver 30 (graduated)", href: "/pricing" };
-const AP_PRICE_SHORT: Cell = { text: "$49/mo incl. 1 dispatcher + 2 drivers", href: "/pricing" };
+/** Prices in copy come from the pricing config, never typed by hand. */
+const P = STARTER_PRICE;
+const [GROW, FLEET] = pricingBands;
+const AP_PRICE: Cell = { text: `$${P}/mo incl. 1 dispatcher + 2 drivers; then $${GROW.rate} per driver, $${FLEET.rate} from driver ${FLEET.from} (graduated)`, href: "/pricing" };
+const AP_PRICE_SHORT: Cell = { text: `$${P}/mo incl. 1 dispatcher + 2 drivers`, href: "/pricing" };
 const AP_TRIAL = "30 days, as many users as you want; card on file, nothing charged until day 30";
 const AP_TRACKING = "In every plan: an on-my-way text with a live tracking page, ETA and text or call buttons";
 const AP_LOCATION = "The technician app on the phone; no devices to buy or install";
@@ -59,7 +66,7 @@ const TEN = monthlyPrice(10).total;
 
 const PRICE_FAQ = {
   q: "How much does ArrivePing cost?",
-  a: `US$49 a month includes one dispatcher and two drivers. Drivers 3 to 29 are $30 each and every driver from 30 on is $25, so a dispatcher and five drivers is $${FIVE} a month and ten drivers is $${TEN}. The 30-day free trial includes as many users as you want; your card is kept on file and nothing is charged until day 30. Cancel any time.`,
+  a: `US$${P} a month includes one dispatcher and two drivers. Drivers ${GROW.from} to ${GROW.to} are $${GROW.rate} each and every driver from ${FLEET.from} on is $${FLEET.rate}, so a dispatcher and five drivers is $${FIVE} a month and ten drivers is $${TEN.toLocaleString("en-US")}. The 30-day free trial includes as many users as you want; your card is kept on file and nothing is charged until day 30. Cancel any time.`,
 };
 
 const HARDWARE_FAQ = {
@@ -117,7 +124,7 @@ const arrivy: LandingPage = {
   meta: {
     title: "ArrivePing vs Arrivy: Pricing, Live ETAs and Setup Compared",
     description:
-      "ArrivePing vs Arrivy: $49/mo for 1 dispatcher + 2 drivers vs $50/user with a 3-user minimum. Live customer ETAs, route planning and trials, with sources.",
+      `ArrivePing vs Arrivy: $${P}/mo for 1 dispatcher + 2 drivers vs $50/user with a 3-user minimum. Live customer ETAs, route planning and trials, with sources.`,
   },
   eyebrow: "Arrivy alternative",
   h1: "ArrivePing vs Arrivy",
@@ -125,8 +132,15 @@ const arrivy: LandingPage = {
     "ArrivePing and Arrivy are different, unrelated companies: ArrivePing is made by NVC360 in Winnipeg, Manitoba, and Arrivy is made by Arrivy Inc. Both give customers live arrival updates. They differ on price, minimum team size and how much routing and logistics tooling comes with it.",
   answer: {
     q: "Is ArrivePing a good Arrivy alternative?",
-    a: "ArrivePing suits small service teams that want live customer ETAs and automatic dispatch at a published price: $49 a month covers one dispatcher and two drivers, with a 30-day free trial. Arrivy's Premium plan is $50 per user per month with a three-user minimum, and its SMS notifications are listed on Custom plans priced on request. Arrivy is the stronger choice if you need route planning or delivery and warehouse workflows.",
+    a: `ArrivePing suits small service teams that want live customer ETAs and automatic dispatch at a published price: $${P} a month covers one dispatcher and two drivers, with a 30-day free trial. Arrivy's Premium plan is $50 per user per month with a three-user minimum, and its SMS notifications are listed on Custom plans priced on request. Arrivy is the stronger choice if you need route planning or delivery and warehouse workflows.`,
   },
+  next: [
+    { label: "All field service software comparisons", href: "/compare" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "Every ArrivePing feature", href: "/features" },
+  ],
+  faqTitle: "ArrivePing vs Arrivy: FAQs",
   sections: [
     {
       kind: "table",
@@ -135,7 +149,7 @@ const arrivy: LandingPage = {
       rows: [
         { label: "Company", cells: ["NVC360, Winnipeg, Manitoba, Canada", "Arrivy Inc., a separate company"] },
         { label: "Published starting price", cells: [AP_PRICE, src(SRC.arrivyPricing, "Premium: $50/user; \"starts with a minimum of 3 users\"; Enterprise and Custom plans: \"Contact Us\"")] },
-        { label: "Smallest monthly bill", cells: ["$49 (1 dispatcher + 2 drivers)", src(SRC.arrivyPricing, "$150 on Premium (3 users × $50)")] },
+        { label: "Smallest monthly bill", cells: [`$${P} (1 dispatcher + 2 drivers)`, src(SRC.arrivyPricing, "$150 on Premium (3 users × $50)")] },
         { label: "Free trial", cells: [AP_TRIAL, src(SRC.arrivyPricing, "14 days, no credit card required")] },
         { label: "Customer live map and ETA", cells: ["Yes, from the moment the technician marks the job on the way until arrival", src(SRC.arrivyCx, "Yes: customers \"see your crew's approach on a live map\", with live ETAs")] },
         { label: "SMS notifications", cells: ["In every plan", src(SRC.arrivyPricing, "\"SMS & Email Notifications\" is listed on the Custom plan cards (Contact Us), not on the Premium card")] },
@@ -149,7 +163,7 @@ const arrivy: LandingPage = {
       title: "Are ArrivePing and Arrivy the same company?",
       paragraphs: [
         "No. ArrivePing (one word) is field service software made by NVC360, a software company in Winnipeg, Manitoba, Canada. Arrivy is a separate product from Arrivy Inc. The names are similar because both products are about arrivals; the companies, apps, accounts and support teams are unrelated.",
-        "If you're comparing them, the practical differences are in the table above: ArrivePing is priced per driver from $49 a month and assigns jobs automatically; Arrivy is priced per user with a three-user minimum and adds route planning and logistics workflows.",
+        `If you're comparing them, the practical differences are in the table above: ArrivePing is priced per driver from $${P} a month and assigns jobs automatically; Arrivy is priced per user with a three-user minimum and adds route planning and logistics workflows.`,
       ],
     },
     {
@@ -167,7 +181,7 @@ const arrivy: LandingPage = {
       ours: {
         title: "Choose ArrivePing if",
         items: [
-          "You want to start at $49 a month, not a three-user minimum",
+          `You want to start at $${P} a month, not a three-user minimum`,
           "Customers keep calling to ask when the technician will arrive",
           "You want each job assigned to the closest qualified technician automatically",
           "You want a self-serve 30-day trial with as many users as you like",
@@ -191,7 +205,7 @@ const arrivy: LandingPage = {
     },
     {
       q: "How much does Arrivy cost?",
-      a: "Arrivy's pricing page listed the Premium plan at $50 per user, starting with a minimum of 3 users, and Enterprise and Custom plans at \"Contact Us\", with a 14-day free trial and no credit card required (checked November 1, 2026). ArrivePing starts at $49 a month for one dispatcher and two drivers.",
+      a: `Arrivy's pricing page listed the Premium plan at $50 per user, starting with a minimum of 3 users, and Enterprise and Custom plans at "Contact Us", with a 14-day free trial and no credit card required (checked November 1, 2026). ArrivePing starts at $${P} a month for one dispatcher and two drivers.`,
     },
     {
       q: "Does Arrivy send live ETA texts?",
@@ -219,7 +233,7 @@ const glympse: LandingPage = {
   meta: {
     title: "Glympse Alternative for Service Businesses | ArrivePing",
     description:
-      "ArrivePing vs Glympse: an ETA link that comes from the job, starts at on the way and ends on arrival, with dispatch included from $49/mo. Sources linked.",
+      `ArrivePing vs Glympse: an ETA link that comes from the job, starts at on the way and ends on arrival, with dispatch included from $${P}/mo. Sources linked.`,
   },
   eyebrow: "Glympse alternative",
   h1: "ArrivePing vs Glympse: an ETA link tied to the job",
@@ -227,8 +241,15 @@ const glympse: LandingPage = {
     "Glympse is a location-sharing platform, from a free personal app to business and enterprise visibility products. ArrivePing is dispatch software for service teams, where the customer's live ETA link comes from the job itself.",
   answer: {
     q: "What's the difference between ArrivePing and Glympse?",
-    a: "Glympse shares a moving location: its free app sends a link that expires on a timer, and Glympse PRO and its enterprise products send customers branded live-map links, priced by volume or users on request. ArrivePing is field service dispatch software: the link is part of the job, opens when the technician taps on the way, stops at arrival, and comes with scheduling and auto-assignment from $49 a month.",
+    a: `Glympse shares a moving location: its free app sends a link that expires on a timer, and Glympse PRO and its enterprise products send customers branded live-map links, priced by volume or users on request. ArrivePing is field service dispatch software: the link is part of the job, opens when the technician taps on the way, stops at arrival, and comes with scheduling and auto-assignment from $${P} a month.`,
   },
+  next: [
+    { label: "All field service software comparisons", href: "/compare" },
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+    { label: "Every ArrivePing feature", href: "/features" },
+  ],
+  faqTitle: "ArrivePing vs Glympse: FAQs",
   sections: [
     {
       kind: "table",
@@ -329,8 +350,12 @@ const PICK = {
       { label: "Starting price", value: src(SRC.jobberPricing, "Core $49/mo for 1 user without commitment; extra users $29/mo each") },
       { label: "Free trial", value: src(SRC.jobberPricing, "14 days on the Grow plan, no credit card") },
       { label: "Team location", value: src(SRC.jobberGps, "GPS waypoints when team members clock in and out; a live map with FleetSharp devices installed in vehicles") },
+      {
+        label: "Customer tracking link",
+        value: src(SRC.jobberForce, "On My Way texts can include a live vehicle link through the Force Fleet Tracking integration: US accounts on Connect or higher, with a GPS tracker in the vehicle and a Force subscription"),
+      },
     ],
-    chooseIf: ["Quotes, invoices and online payments are the main need", "You want a long track record and a large user community", "You already run FleetSharp devices in your vehicles"],
+    chooseIf: ["Quotes, invoices and online payments are the main need", "You want a long track record and a large user community", "You already run FleetSharp or Force Fleet Tracking devices in your vehicles"],
     more: { label: "ArrivePing vs Jobber", href: "/compare/jobber" },
   } satisfies Pick,
   housecallPro: {
@@ -397,7 +422,7 @@ const ROW = {
 
 const TRACK = {
   arriveping: AP_TRACKING,
-  jobber: src(SRC.jobberComms, "Customizable on-my-way text; the feature page doesn't mention a live tracking link or ETA"),
+  jobber: src(SRC.jobberForce, "On My Way texts can include a live vehicle link with the Force Fleet Tracking integration (US, Connect plan or higher, GPS tracker in the vehicle)"),
   housecallPro: src(SRC.hcpGps, "On-my-way text with a live map link, as part of the $20/vehicle/month Vehicle GPS Tracking add-on"),
   kickserv: src(SRC.kickservPricing, "Automated email and text reminders; no live tracking link mentioned"),
   workiz: src(SRC.workizOmw, "On My Way text with an ETA and a live tracking link"),
@@ -425,8 +450,16 @@ const jobberAlternatives: LandingPage = {
     "Jobber is a strong all-in-one tool for quotes, invoices and payments. Teams usually look elsewhere for one of three reasons: the price as the team grows, live customer tracking without vehicle hardware, or automatic dispatch. Here are six options, ArrivePing first, with every price linked to its source.",
   answer: {
     q: "What is a good alternative to Jobber?",
-    a: "If your priority is getting technicians to customers on time, ArrivePing by NVC360 auto-assigns the closest qualified technician and texts customers a live tracking link from the tech's phone, from $49 a month for one dispatcher and two drivers. For a broad all-in-one, look at Housecall Pro or Workiz; for low published team pricing, Kickserv; for large contractors, ServiceTitan; for route planning, Arrivy.",
+    a: `If your priority is getting technicians to customers on time, ArrivePing by NVC360 auto-assigns the closest qualified technician and texts customers a live tracking link from the tech's phone, from $${P} a month for one dispatcher and two drivers. For a broad all-in-one, look at Housecall Pro or Workiz; for low published team pricing, Kickserv; for large contractors, ServiceTitan; for route planning, Arrivy.`,
   },
+  next: [
+    { label: "ArrivePing vs Jobber, side by side", href: "/compare/jobber" },
+    { label: "All alternatives and comparisons", href: "/alternatives" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "Every ArrivePing feature", href: "/features" },
+  ],
+  faqTitle: "Jobber alternatives: FAQs",
   sections: [
     {
       kind: "matrix",
@@ -461,7 +494,7 @@ const jobberAlternatives: LandingPage = {
       kind: "rich",
       title: "Is there a cheaper alternative to Jobber?",
       paragraphs: [
-        `It depends on headcount. Jobber Core is $49 a month for one user, with extra users at $29 a month each, and Jobber's 5-user Connect plan is $199 a month without commitment or $149 billed annually. ArrivePing is $49 a month for one dispatcher and two drivers, then $30 for each driver from 3 to 29, so a dispatcher and five drivers is $${FIVE} a month. Kickserv's Start plan is $60 a month for five users.`,
+        `It depends on headcount. Jobber Core is $49 a month for one user, with extra users at $29 a month each, and Jobber's 5-user Connect plan is $199 a month without commitment or $149 billed annually. ArrivePing is $${P} a month for one dispatcher and two drivers, then $${GROW.rate} for each driver from ${GROW.from} to ${GROW.to}, so a dispatcher and five drivers is $${FIVE} a month. Kickserv's Start plan is $60 a month for five users.`,
         "Compare the price for the team you'll have in a year, and check what's included at that price. In ArrivePing the live tracking link, automatic dispatch and the technician app are in every plan. See [ArrivePing pricing](/pricing) and [every feature](/features).",
       ],
     },
@@ -480,7 +513,7 @@ const jobberAlternatives: LandingPage = {
       bullets: [
         "Quoting, invoicing and online payments are most of what you use it for",
         "Your customers rarely ask where the technician is",
-        "You already run FleetSharp devices and like the vehicle data",
+        "You already run FleetSharp or Force Fleet Tracking devices and like the vehicle data",
         "Your team is one person and Core covers what you need",
       ],
     },
@@ -488,11 +521,11 @@ const jobberAlternatives: LandingPage = {
   faqs: [
     {
       q: "What is the cheapest alternative to Jobber?",
-      a: `Of the tools on this page with published prices (checked November 1, 2026), Jobber Core and ArrivePing both start at $49 a month: Core for one user, ArrivePing for one dispatcher and two drivers. Kickserv's Start plan is $60 a month for five users. The cheapest option depends on your team size and which features you need included.`,
+      a: `Of the tools on this page with published prices (checked November 1, 2026), Jobber Core starts at $49 a month for one user and ArrivePing at $${P} a month for one dispatcher and two drivers. Kickserv's Start plan is $60 a month for five users. The cheapest option depends on your team size and which features you need included.`,
     },
     {
       q: "Is there a Jobber alternative with live GPS tracking and no hardware?",
-      a: "Yes. ArrivePing tracks technicians through the app on their phones and sends customers a live tracking link with the ETA, in every plan. Jobber's GPS page says its live map uses FleetSharp tracking devices installed in vehicles, with GPS waypoints recorded when team members clock in and out.",
+      a: "Yes. ArrivePing tracks technicians through the app on their phones and sends customers a live tracking link with the ETA, in every plan. Jobber's live map uses FleetSharp devices installed in vehicles, and its On My Way texts can include a live link through the Force Fleet Tracking integration, which needs a GPS tracker plugged into the vehicle, a Force subscription and a US account on Connect or higher (checked November 1, 2026).",
     },
     {
       q: "How much does Jobber cost?",
@@ -505,7 +538,7 @@ const jobberAlternatives: LandingPage = {
     PRICE_FAQ,
   ],
   related: ["/compare/jobber", "/alternatives/housecall-pro", "/alternatives", "/pricing", "/on-my-way-text-software"],
-  sources: [SRC.jobberPricing, SRC.jobberGps, SRC.jobberComms, SRC.hcpPricing, SRC.hcpGps, SRC.kickservPricing, SRC.workizPricing, SRC.workizOmw, SRC.stPricing, SRC.stFleet, SRC.arrivyPricing, SRC.arrivyCx],
+  sources: [SRC.jobberPricing, SRC.jobberGps, SRC.jobberForce, SRC.jobberForceHelp, SRC.hcpPricing, SRC.hcpGps, SRC.kickservPricing, SRC.workizPricing, SRC.workizOmw, SRC.stPricing, SRC.stFleet, SRC.arrivyPricing, SRC.arrivyCx],
   verified: COMPARE_MORE_VERIFIED,
 };
 
@@ -528,8 +561,16 @@ const hcpAlternatives: LandingPage = {
     "Housecall Pro is a popular home-services platform with booking, marketing and payments. Its on-my-way text with a live map link is described as part of Vehicle GPS Tracking, a $20 per vehicle per month add-on that plugs into each van. These alternatives handle team location differently.",
   answer: {
     q: "What's a good Housecall Pro alternative for live tracking?",
-    a: "If you want customers to watch the technician arrive without buying a tracker for every van, ArrivePing by NVC360 uses the technician's phone and includes the live tracking link in every plan, from $49 a month. Housecall Pro charges $20 per vehicle per month for Vehicle GPS Tracking, which powers its live-map text. Jobber, Kickserv, Workiz, ServiceTitan and Arrivy are compared below, with sources.",
+    a: `If you want customers to watch the technician arrive without buying a tracker for every van, ArrivePing by NVC360 uses the technician's phone and includes the live tracking link in every plan, from $${P} a month. Housecall Pro charges $20 per vehicle per month for Vehicle GPS Tracking, which powers its live-map text. Jobber, Kickserv, Workiz, ServiceTitan and Arrivy are compared below, with sources.`,
   },
+  next: [
+    { label: "ArrivePing vs Housecall Pro, side by side", href: "/compare/housecall-pro" },
+    { label: "All alternatives and comparisons", href: "/alternatives" },
+    { label: "Fleet tracking without hardware", href: "/fleet-tracking" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+    { label: "Every ArrivePing feature", href: "/features" },
+  ],
+  faqTitle: "Housecall Pro alternatives: FAQs",
   sections: [
     {
       kind: "rich",
@@ -547,7 +588,7 @@ const hcpAlternatives: LandingPage = {
       rows: [
         ROW.arriveping(AP_LOCATION),
         ROW.housecallPro(src(SRC.hcpGps, "Employee GPS from the tech's phone (Essentials); vehicle GPS add-on at $20/vehicle/month with an OBD-II device")),
-        ROW.jobber(src(SRC.jobberGps, "GPS waypoints at clock in and out; a live map with FleetSharp devices installed in vehicles")),
+        ROW.jobber(src(SRC.jobberGps, "GPS waypoints at clock in and out; a live map and live On My Way links need a tracker in each vehicle (FleetSharp, or Force Fleet Tracking in the US)")),
         ROW.kickserv(src(SRC.kickservPricing, "GPS check-ins on Run ($119/mo, 10 users) and Scale")),
         ROW.workiz(src(SRC.workizPricing, "\"Fleet tracking\" and \"Team location tracking\" in every plan; method not stated")),
         ROW.serviceTitan(src(SRC.stFleet, "Fleet Pro, a Pro product: real-time vehicle GPS and geofencing")),
@@ -606,7 +647,7 @@ const hcpAlternatives: LandingPage = {
     PRICE_FAQ,
   ],
   related: ["/compare/housecall-pro", "/alternatives/jobber", "/fleet-tracking", "/pricing", "/on-my-way-text-software"],
-  sources: [SRC.hcpPricing, SRC.hcpGps, SRC.jobberPricing, SRC.jobberGps, SRC.kickservPricing, SRC.workizPricing, SRC.workizOmw, SRC.stPricing, SRC.stFleet, SRC.arrivyPricing, SRC.arrivyCx],
+  sources: [SRC.hcpPricing, SRC.hcpGps, SRC.jobberPricing, SRC.jobberGps, SRC.jobberForce, SRC.jobberForceHelp, SRC.kickservPricing, SRC.workizPricing, SRC.workizOmw, SRC.stPricing, SRC.stFleet, SRC.arrivyPricing, SRC.arrivyCx],
   verified: COMPARE_MORE_VERIFIED,
 };
 
@@ -628,8 +669,15 @@ const alternativesHub: LandingPage = {
     "Shortlists for teams replacing Jobber or Housecall Pro, and side-by-side pages for ServiceTitan, Workiz, Arrivy, Glympse, Onfleet and Routific. Every competitor fact links to that company's own page and shows the date we checked it.",
   answer: {
     q: "What are the best alternatives to Jobber and Housecall Pro?",
-    a: "It depends on what you're fixing. For dispatch and live arrival times, ArrivePing by NVC360 auto-assigns the closest qualified technician and texts customers a live tracking link in every plan, from $49 a month. Kickserv publishes low team prices, Workiz bundles phones and marketing, ServiceTitan suits large contractors, and Arrivy adds route planning. Prices, trials and sources are below.",
+    a: `It depends on what you're fixing. For dispatch and live arrival times, ArrivePing by NVC360 auto-assigns the closest qualified technician and texts customers a live tracking link in every plan, from $${P} a month. Kickserv publishes low team prices, Workiz bundles phones and marketing, ServiceTitan suits large contractors, and Arrivy adds route planning. Prices, trials and sources are below.`,
   },
+  next: [
+    { label: "All side-by-side comparisons", href: "/compare" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "Every ArrivePing feature", href: "/features" },
+  ],
+  faqTitle: "Alternatives: FAQs",
   sections: [
     {
       kind: "cards",
@@ -692,7 +740,7 @@ const alternativesHub: LandingPage = {
     },
     {
       q: "Which field service software includes live customer tracking without hardware?",
-      a: "ArrivePing's tracking link comes from the technician app on the phone, in every plan. Housecall Pro's live map link in the on-my-way text is described as part of its Vehicle GPS Tracking add-on ($20 per vehicle per month, with an OBD-II device), and Jobber's live map uses FleetSharp devices installed in vehicles (checked November 1, 2026).",
+      a: "ArrivePing's tracking link comes from the technician app on the phone, in every plan. Housecall Pro's live map link in the on-my-way text is described as part of its Vehicle GPS Tracking add-on ($20 per vehicle per month, with an OBD-II device), and Jobber's live link in On My Way texts comes through the Force Fleet Tracking integration, with a GPS tracker plugged into each vehicle (checked November 1, 2026).",
     },
     {
       q: "Which alternatives publish their prices?",
@@ -707,7 +755,8 @@ const alternativesHub: LandingPage = {
   sources: [
     SRC.jobberPricing,
     SRC.jobberGps,
-    SRC.jobberComms,
+    SRC.jobberForce,
+    SRC.jobberForceHelp,
     SRC.hcpPricing,
     SRC.hcpGps,
     SRC.kickservPricing,

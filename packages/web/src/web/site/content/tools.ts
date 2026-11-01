@@ -17,6 +17,10 @@
 import type { LandingPage } from "./landing";
 import { generateTexts, tradeFor, type OmwInput } from "../tools/omw-text";
 import { money, NO_SHOW_DEFAULTS, noShowCost } from "../tools/no-show";
+import { STARTER_PRICE } from "../config";
+
+/** Prices in copy come from the pricing config, never typed by hand. */
+const P = STARTER_PRICE;
 
 const toolsParent = { label: "Free tools", path: "/tools" };
 
@@ -86,6 +90,13 @@ const omwGenerator: LandingPage = {
     q: "What should an on-my-way text say?",
     a: "Answer three things in one short text: who is coming, from which company, and roughly when. Add a live tracking link if you have one, and at most one practical ask, such as clearing a path to the furnace. Send it when the technician actually leaves, follow up only if the time slips, and use plain characters: a single emoji cuts an SMS segment from 160 characters to 70.",
   },
+  next: [
+    { label: "All free tools", href: "/tools" },
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "Customer notifications", href: "/customer-notifications" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+  ],
+  faqTitle: "On-my-way texts: FAQs",
   sections: [
     {
       kind: "tool",
@@ -182,7 +193,7 @@ const omwGenerator: LandingPage = {
     },
     {
       q: "Can ArrivePing send these texts automatically?",
-      a: "Yes. ArrivePing sends the on-the-way text when the technician taps Start Driving, a running-late text when a job slips past your threshold and nobody acts, and an arrived text at the door. Plans start at US$49 a month for one dispatcher and two drivers, with a 30-day free trial.",
+      a: `Yes. ArrivePing sends the on-the-way text when the technician taps Start Driving, a running-late text when a job slips past your threshold and nobody acts, and an arrived text at the door. Plans start at US$${P} a month for one dispatcher and two drivers, with a 30-day free trial.`,
     },
   ],
   related: ["/on-my-way-text-software", "/tools/no-show-cost-calculator", "/customer-notifications", "/pricing", "/features"],
@@ -214,6 +225,13 @@ const noShowCalculator: LandingPage = {
     q: "How do you calculate the cost of a no-show?",
     a: `Multiply the technician's loaded hourly rate by the time lost, meaning the drive plus the minutes at the door, then add the vehicle cost for the distance driven. With a $${D.hourlyRate} loaded rate, ${D.driveMinutes} minutes of driving, ${D.onSiteMinutes} minutes at the door and ${D.distance} miles at ${Math.round(D.vehicleRate * 100)} cents a mile, one wasted trip costs about ${money(Math.round(R.perTrip), 0)}. Multiply by your monthly count, then by 12, for the yearly figure.`,
   },
+  next: [
+    { label: "All free tools", href: "/tools" },
+    { label: "On-my-way text generator", href: "/tools/on-my-way-text-generator" },
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+  ],
+  faqTitle: "No-show costs: FAQs",
   sections: [
     {
       kind: "tool",
@@ -268,7 +286,7 @@ const noShowCalculator: LandingPage = {
       title: "How does ArrivePing help the customer be home?",
       paragraphs: [
         "When the technician taps Start Driving, the customer gets a text with a live tracking link and can text or call the technician from that page, so a \"running 10 minutes late, side door is open\" reply reaches the technician before the truck does. If the job slips past its promised time and nobody acts, ArrivePing sends a running-late text with the new time.",
-        "See [on-my-way text software](/on-my-way-text-software), [automatic dispatch](/dispatch-software) and [pricing](/pricing): from US$49 a month, with a 30-day free trial.",
+        `See [on-my-way text software](/on-my-way-text-software), [automatic dispatch](/dispatch-software) and [pricing](/pricing): from US$${P} a month, with a 30-day free trial.`,
       ],
       shots: [SHOT_CONTACT, SHOT_RULES],
     },
@@ -298,7 +316,7 @@ const noShowCalculator: LandingPage = {
     },
     {
       q: "How does ArrivePing reduce customer-not-home trips?",
-      a: "The customer gets a text with a live tracking link when the technician starts driving, can text or call the technician in one tap, and gets a running-late update with a new time if the job slips. That gives them the chance to say they're not home before the truck arrives. Plans start at US$49 a month.",
+      a: `The customer gets a text with a live tracking link when the technician starts driving, can text or call the technician in one tap, and gets a running-late update with a new time if the job slips. That gives them the chance to say they're not home before the truck arrives. Plans start at US$${P} a month.`,
     },
   ],
   related: ["/tools/on-my-way-text-generator", "/on-my-way-text-software", "/dispatch-software", "/pricing", "/features"],
@@ -322,8 +340,15 @@ const toolsHub: LandingPage = {
     "Two free tools that run in your browser, with no signup and nothing saved: write better arrival texts, and put a number on the trips where nobody answers the door.",
   answer: {
     q: "What free tools does ArrivePing offer?",
-    a: "Two, both free and browser-only. The on-my-way text generator writes on-my-way, running-late and arrived texts for your trade and tone, with a character and segment count and a copy button. The no-show cost calculator shows what a customer-not-home trip costs in technician time and vehicle cost, with the formula shown. ArrivePing itself sends those texts automatically, from $49 a month.",
+    a: `Two, both free and browser-only. The on-my-way text generator writes on-my-way, running-late and arrived texts for your trade and tone, with a character and segment count and a copy button. The no-show cost calculator shows what a customer-not-home trip costs in technician time and vehicle cost, with the formula shown. ArrivePing itself sends those texts automatically, from $${P} a month.`,
   },
+  next: [
+    { label: "On-my-way text software", href: "/on-my-way-text-software" },
+    { label: "Every ArrivePing feature", href: "/features" },
+    { label: "ArrivePing pricing", href: "/pricing" },
+    { label: "Alternatives and comparisons", href: "/alternatives" },
+  ],
+  faqTitle: "Free tools: FAQs",
   sections: [
     {
       kind: "cards",
@@ -354,7 +379,7 @@ const toolsHub: LandingPage = {
       title: "How do these tools relate to ArrivePing?",
       paragraphs: [
         "The tools stand on their own: use the texts with any phone or messaging app, and the calculator with your own numbers. ArrivePing is the field service software that does the same jobs automatically: it sends the on-the-way text with a live tracking link when the technician starts driving, warns the customer when a job is running late, and assigns each job to the closest qualified technician.",
-        "See [every feature](/features) and [pricing](/pricing): from US$49 a month for one dispatcher and two drivers, with a 30-day free trial.",
+        `See [every feature](/features) and [pricing](/pricing): from US$${P} a month for one dispatcher and two drivers, with a 30-day free trial.`,
       ],
     },
   ],

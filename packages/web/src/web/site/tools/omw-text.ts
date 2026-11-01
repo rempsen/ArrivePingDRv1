@@ -50,22 +50,22 @@ export type Trade = {
 };
 
 export const TRADES: readonly Trade[] = [
-  { key: "hvac", label: "HVAC (heating and cooling)", person: "technician", service: "heating and cooling", tip: "If you can, clear a path to the furnace or AC unit." },
-  { key: "plumbing", label: "Plumbing", person: "plumber", service: "plumbing", tip: "If you can, clear the area around the fixture." },
-  { key: "electrical", label: "Electrical", person: "electrician", service: "electrical", tip: "If you can, make sure the electrical panel is easy to reach." },
+  { key: "hvac", label: "HVAC (heating and cooling)", person: "technician", service: "heating and cooling", tip: "Please clear a path to the furnace or AC." },
+  { key: "plumbing", label: "Plumbing", person: "plumber", service: "plumbing", tip: "Please clear the area around the fixture." },
+  { key: "electrical", label: "Electrical", person: "electrician", service: "electrical", tip: "Please make sure the panel is easy to reach." },
   { key: "cleaning", label: "Cleaning and maid service", person: "cleaner", service: "cleaning", tip: "Please secure any pets before we arrive." },
-  { key: "delivery", label: "Delivery and installation", person: "driver", service: "delivery", tip: "Please make sure the entrance and the path inside are clear." },
-  { key: "handyman", label: "Handyman and home repair", person: "technician", service: "repair", tip: "If you can, clear the area where we will be working." },
+  { key: "delivery", label: "Delivery and installation", person: "driver", service: "delivery", tip: "Please clear the entrance and the path inside." },
+  { key: "handyman", label: "Handyman and home repair", person: "technician", service: "repair", tip: "Please clear the area where we'll work." },
   { key: "landscaping", label: "Landscaping and lawn care", person: "crew lead", service: "lawn care", tip: "Please unlock any gates to the yard." },
-  { key: "pest", label: "Pest control", person: "technician", service: "pest control", tip: "Please keep pets inside until the treatment is done." },
-  { key: "appliance", label: "Appliance repair", person: "technician", service: "appliance repair", tip: "If you can, clear space around the appliance." },
+  { key: "pest", label: "Pest control", person: "technician", service: "pest control", tip: "Please keep pets inside until we're done." },
+  { key: "appliance", label: "Appliance repair", person: "technician", service: "appliance repair", tip: "Please clear space around the appliance." },
   { key: "general", label: "Other home service", person: "technician", service: "service", tip: "" },
 ];
 
 export const TONES: readonly { key: Tone; label: string; hint: string }[] = [
   { key: "friendly", label: "Friendly", hint: "Warm, with one practical ask" },
   { key: "professional", label: "Professional", hint: "Polite and complete" },
-  { key: "brief", label: "Brief", hint: "Shortest, single segment" },
+  { key: "brief", label: "Brief", hint: "As short as possible" },
 ];
 
 export const LINK_PLACEHOLDER = "[tracking link]";
@@ -123,7 +123,7 @@ export function generateTexts(input: OmwInput): OmwTexts {
     case "friendly":
     default:
       return {
-        onMyWay: `Hi! ${tech} from ${co} is on the way and should be there in about ${minutes(eta)}.${link("Follow along live:")}${t.tip ? ` ${t.tip}` : ""}${stop}`,
+        onMyWay: `Hi! ${tech} from ${co} is on the way, about ${minutes(eta)} out.${link("Follow along live:")}${t.tip ? ` ${t.tip}` : ""}${stop}`,
         runningLate: `Hi, quick update from ${co}: ${tech} is running a little behind and should reach you in about ${minutes(eta)}. Sorry to keep you waiting.${link("Live status:")} Reply if that time no longer works.${stop}`,
         arrived: `Hi! ${tech} from ${co} has arrived for your ${t.service} appointment.${stop}`,
       };
