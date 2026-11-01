@@ -1,0 +1,57 @@
+[
+ {
+  "out": "public/social/2026-11-b0b/beat-1.png",
+  "light": true,
+  "kicker": "One job, three screens",
+  "html": "<h1 style=\"font-size:84px\">Everyone sees the <em>same</em> job.</h1><div class=\"phones\"><figure><img src=\"../../../public/img/site/app/tech-offer.webp\"><figcaption>Office assigns</figcaption></figure><figure><img src=\"../../../public/img/site/app/tech-enroute.webp\"><figcaption>Tech drives</figcaption></figure><figure><img src=\"../../../public/img/site/app/cust-contact.webp\"><figcaption>Customer knows</figcaption></figure></div>",
+  "pill": "Real screens from the app"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-2.png",
+  "light": true,
+  "kicker": "Before and after",
+  "html": "<div class=\"two\"><div class=\"txt\"><p class=\"lead\" style=\"font-size:40px;color:#64748b\">Before</p><h1 style=\"font-size:72px\"><s>Between 8 and 12.</s></h1><p class=\"lead\" style=\"font-size:40px;color:#64748b;margin-top:20px\">After</p><h1 style=\"font-size:72px\"><em>About 3 min out.</em></h1></div><div class=\"shot\" style=\"width:400px\"><img src=\"../../../public/img/site/app/cust-contact.webp\"></div></div>",
+  "pill": "Real screen from the app"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-3.png",
+  "light": true,
+  "kicker": "The tracking link",
+  "html": "<div class=\"two\"><div class=\"shot\" style=\"width:430px\"><img src=\"../../../public/img/site/app/cust-track.webp\"></div><div class=\"txt\"><h1 style=\"font-size:68px\">ETA.<br>Address.<br>Every step of the job.</h1><p class=\"lead\" style=\"font-size:32px\">Opens from the on-my-way text. Nothing to download.</p></div></div>",
+  "pill": "Real screen from the app"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-4.png",
+  "light": true,
+  "kicker": "The week at a glance",
+  "html": "<h1 style=\"font-size:84px\">Plan the week.<br><em>Not just today.</em></h1><div class=\"browser\"><img src=\"../../../public/img/site/app/office-week.webp\" style=\"height:560px\"></div>",
+  "pill": "Real screen from the app"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-5.png",
+  "light": true,
+  "kicker": "Day one",
+  "html": "<div class=\"two\"><div class=\"txt\"><h1 style=\"font-size:72px\">Start from a template, <em>not a blank page.</em></h1><p class=\"lead\" style=\"font-size:32px\">Residential, commercial, maintenance and emergency jobs, ready to edit.</p></div><div class=\"shot\" style=\"width:420px;border-radius:28px\"><img src=\"../../../public/img/site/features/app-start-templates.webp\"></div></div>",
+  "pill": "Real screen from the app"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-6.png",
+  "light": true,
+  "kicker": "What $49 gets you",
+  "html": "<div class=\"big\" style=\"font-size:220px\">$49<small>/month</small></div><div class=\"stack\"><div class=\"row\" style=\"font-size:46px\"><i></i>1 dispatcher</div><div class=\"row\" style=\"font-size:46px\"><i></i>2 technicians</div><div class=\"row\" style=\"font-size:46px\"><i></i>30 days free, no contract</div></div>",
+  "pill": "Add people as you grow"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-7.png",
+  "light": true,
+  "kicker": "Do the math",
+  "html": "<h1>Does $49 a month <em>pay for itself?</em></h1><div class=\"big\" style=\"font-size:200px\">4 min<small>/day</small></div><div class=\"stack\"><div class=\"row\" style=\"font-size:44px\"><i></i>$49 a month</div><div class=\"row\" style=\"font-size:44px\"><i></i>÷ $35 an hour (your number may differ)</div><div class=\"row\" style=\"font-size:44px\"><i></i>= 84 minutes ÷ 21 working days</div></div>",
+  "pill": "Assumption shown, use your own"
+ },
+ {
+  "out": "public/social/2026-11-b0b/beat-8.png",
+  "light": true,
+  "kicker": "Who it's for",
+  "html": "<h1 style=\"font-size:80px\">If your work happens <em>at the customer's door.</em></h1><div class=\"photo\"><img src=\"../../../public/img/site/features/job-after.webp\"></div><div class=\"tags\"><span class=\"tag\">Cleaning</span><span class=\"tag\">Home care</span><span class=\"tag\">Delivery</span><span class=\"tag\">Installers</span><span class=\"tag\">Trades</span></div>"
+ }
+]

@@ -1,0 +1,254 @@
+{
+  "id": "2026-11-b0b",
+  "window": {
+    "start": "2026-11-02",
+    "end": "2026-11-20"
+  },
+  "blogPosts": [
+    "what-should-a-customer-tracking-link-show",
+    "how-long-to-set-up-field-service-software",
+    "does-your-business-need-field-service-software"
+  ],
+  "posts": [
+    {
+      "key": "b0b-01-li",
+      "beat": "what-arriveping-is",
+      "platform": "linkedin",
+      "dueAt": "2026-11-03T08:15:00-06:00",
+      "text": "Every field service job has three people asking questions at different times.\n\nThe office: who's free, and who's closest?\nThe technician: where am I going next, and what's the job?\nThe customer: when will they actually get here?\n\nArrivePing puts one job on three screens. The office assigns it, the tech gets it on their phone, and the moment they tap \"on the way,\" the customer gets a text with a live tracking link.\n\nWe wrote up what that tracking link should and shouldn't show customers, including the privacy line we never cross:\nhttps://arriveping.com/blog/what-should-a-customer-tracking-link-show\n\n#FieldService #CustomerExperience #DispatchSoftware #HomeServices",
+      "image": "/social/2026-11-b0b/beat-1.png",
+      "imageAlt": "Three ArrivePing screens: the technician's job offer, the en-route screen, and the customer's view with a message from the tech",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-01-fa",
+      "beat": "what-arriveping-is",
+      "platform": "facebook",
+      "dueAt": "2026-11-03T11:30:00-06:00",
+      "text": "One job. Three screens. The office assigns it, your tech drives to it, and your customer knows exactly when they'll arrive, without a single \"where are you?\" call.\n\nWhat a good tracking link shows customers (and what it never should): https://arriveping.com/blog/what-should-a-customer-tracking-link-show",
+      "image": "/social/2026-11-b0b/beat-1.png",
+      "imageAlt": "Three ArrivePing screens: the technician's job offer, the en-route screen, and the customer's view with a message from the tech",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-01-in",
+      "beat": "what-arriveping-is",
+      "platform": "instagram",
+      "dueAt": "2026-11-03T12:00:00-06:00",
+      "text": "One job, three screens: the office assigns it, the tech drives to it, the customer knows when they'll arrive. No phone tag. 📍\n\nWhat a good tracking link shows: link in bio.\n\n#fieldservice #hvac #plumbing #electrician #homeservices #smallbusiness #dispatch",
+      "image": "/social/2026-11-b0b/beat-1.png",
+      "imageAlt": "Three ArrivePing screens: the technician's job offer, the en-route screen, and the customer's view with a message from the tech",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-02-li",
+      "beat": "end-of-4-hour-window",
+      "platform": "linkedin",
+      "dueAt": "2026-11-05T08:15:00-06:00",
+      "text": "The service window was never really about service. It exists because the office can't promise what it can't see.\n\nOnce the office can see where every tech is, the promise changes from \"between 8 and 12\" to \"about 3 minutes out,\" sent automatically when the tech heads over.\n\nCustomers don't need the whole day blocked off. They need to know when to be at the door.\n\nThe checklist for what that message and tracking link should include:\nhttps://arriveping.com/blog/what-should-a-customer-tracking-link-show\n\n#FieldService #CustomerService #HomeServices #Dispatch",
+      "image": "/social/2026-11-b0b/beat-2.png",
+      "imageAlt": "Before and after: a crossed-out 8 to 12 window next to the customer's screen showing the tech is about 3 minutes out",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-02-fa",
+      "beat": "end-of-4-hour-window",
+      "platform": "facebook",
+      "dueAt": "2026-11-05T11:30:00-06:00",
+      "text": "Before: \"We'll be there between 8 and 12.\"\nAfter: \"About 3 min out.\"\n\nSame tech, same job. Your customer gets a real heads-up instead of a wasted morning. How to set that up: https://arriveping.com/blog/what-should-a-customer-tracking-link-show",
+      "image": "/social/2026-11-b0b/beat-2.png",
+      "imageAlt": "Before and after: a crossed-out 8 to 12 window next to the customer's screen showing the tech is about 3 minutes out",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-02-in",
+      "beat": "end-of-4-hour-window",
+      "platform": "instagram",
+      "dueAt": "2026-11-05T12:00:00-06:00",
+      "text": "Before: between 8 and 12.\nAfter: about 3 min out. ⏱️\n\nYour customers get their morning back. Link in bio.\n\n#homeservices #fieldservice #customerexperience #hvac #plumbing #cleaningbusiness",
+      "image": "/social/2026-11-b0b/beat-2.png",
+      "imageAlt": "Before and after: a crossed-out 8 to 12 window next to the customer's screen showing the tech is about 3 minutes out",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-03-li",
+      "beat": "what-the-customer-sees",
+      "platform": "linkedin",
+      "dueAt": "2026-11-06T08:15:00-06:00",
+      "text": "What should your customer see when they tap the tracking link?\n\nOur answer, from building one: a live ETA, the address, the tech's name, a way to call or text them, and a timeline of the job so far.\n\nWhat they should not see: the tech's location before they're on the way to that job, or after they've arrived. Tracking only works if your techs trust it as much as your customers do.\n\nThe full checklist, with sources:\nhttps://arriveping.com/blog/what-should-a-customer-tracking-link-show\n\n#FieldService #Privacy #CustomerExperience #TechnicianTracking",
+      "image": "/social/2026-11-b0b/beat-3.png",
+      "imageAlt": "The ArrivePing customer tracking page showing a 3 minute ETA, the destination and the job timeline",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-03-fa",
+      "beat": "what-the-customer-sees",
+      "platform": "facebook",
+      "dueAt": "2026-11-06T11:30:00-06:00",
+      "text": "This is the tracking link your customer opens from the on-my-way text: live ETA, address and every step of the job so far. No app to download.\n\nWhat else it should show (and what it shouldn't): https://arriveping.com/blog/what-should-a-customer-tracking-link-show",
+      "image": "/social/2026-11-b0b/beat-3.png",
+      "imageAlt": "The ArrivePing customer tracking page showing a 3 minute ETA, the destination and the job timeline",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-03-in",
+      "beat": "what-the-customer-sees",
+      "platform": "instagram",
+      "dueAt": "2026-11-06T12:00:00-06:00",
+      "text": "The tracking link, up close: live ETA, address and every step of the job. Opens straight from the text, nothing to download. 📲\n\nFull checklist: link in bio.\n\n#fieldservice #customerexperience #smallbusiness #homeservices #hvac #electrician",
+      "image": "/social/2026-11-b0b/beat-3.png",
+      "imageAlt": "The ArrivePing customer tracking page showing a 3 minute ETA, the destination and the job timeline",
+      "link": "https://arriveping.com/blog/what-should-a-customer-tracking-link-show"
+    },
+    {
+      "key": "b0b-04-li",
+      "beat": "how-it-works",
+      "platform": "linkedin",
+      "dueAt": "2026-11-10T08:15:00-06:00",
+      "text": "Most dispatch tools are built around today. Small teams live in the week.\n\nThe job you push from Tuesday has to land somewhere. The install that runs long eats Thursday morning. ArrivePing's week view shows every tech's days side by side, so you can move work before it collides instead of after.\n\nPlan with visibility. Assign and track. Communicate. That's the core of ArrivePing, and it's quick to get running. How quick, realistically, and what actually takes the time:\nhttps://arriveping.com/blog/how-long-to-set-up-field-service-software\n\n#DispatchSoftware #FieldService #Scheduling #SmallBusiness",
+      "image": "/social/2026-11-b0b/beat-4.png",
+      "imageAlt": "The ArrivePing scheduler week view with every technician's jobs side by side",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-04-fa",
+      "beat": "how-it-works",
+      "platform": "facebook",
+      "dueAt": "2026-11-10T11:30:00-06:00",
+      "text": "Plan the week, not just today. See every tech's schedule side by side and move jobs before they collide.\n\nWondering how long setup takes? Honest timelines: https://arriveping.com/blog/how-long-to-set-up-field-service-software",
+      "image": "/social/2026-11-b0b/beat-4.png",
+      "imageAlt": "The ArrivePing scheduler week view with every technician's jobs side by side",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-04-in",
+      "beat": "how-it-works",
+      "platform": "instagram",
+      "dueAt": "2026-11-10T12:00:00-06:00",
+      "text": "Plan the week, not just today. 🗓️ Every tech's schedule side by side.\n\nHow long setup really takes: link in bio.\n\n#dispatch #scheduling #fieldservice #smallbusiness #hvac #plumbing #contractor",
+      "image": "/social/2026-11-b0b/beat-4.png",
+      "imageAlt": "The ArrivePing scheduler week view with every technician's jobs side by side",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-05-li",
+      "beat": "setup-in-an-hour",
+      "platform": "linkedin",
+      "dueAt": "2026-11-12T08:15:00-06:00",
+      "text": "The slowest part of switching field service software is rarely the software. It's rebuilding your jobs, prices, forms and team from scratch.\n\nArrivePing starts from your website: it reads your trade, services, service area and team and builds your workspace, and you start from job templates you can edit. Most teams are set up in about an hour.\n\nWe broke down what setup really involves, by team size, and how to keep it to days instead of months:\nhttps://arriveping.com/blog/how-long-to-set-up-field-service-software\n\n#FieldService #SmallBusiness #SoftwareAdoption #HomeServices",
+      "image": "/social/2026-11-b0b/beat-5.png",
+      "imageAlt": "ArrivePing saved job templates: residential visit, commercial job, service and maintenance, emergency call",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-05-fa",
+      "beat": "setup-in-an-hour",
+      "platform": "facebook",
+      "dueAt": "2026-11-12T11:30:00-06:00",
+      "text": "Start from a template, not a blank page: residential, commercial, maintenance and emergency jobs, ready to edit. Most teams are set up in about an hour.\n\nWhat setup actually involves: https://arriveping.com/blog/how-long-to-set-up-field-service-software",
+      "image": "/social/2026-11-b0b/beat-5.png",
+      "imageAlt": "ArrivePing saved job templates: residential visit, commercial job, service and maintenance, emergency call",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-05-in",
+      "beat": "setup-in-an-hour",
+      "platform": "instagram",
+      "dueAt": "2026-11-12T12:00:00-06:00",
+      "text": "Day one: start from a template, not a blank page. ⚡ Set up in about an hour.\n\nThe real setup timeline: link in bio.\n\n#fieldservice #smallbusiness #contractor #homeservices #cleaningbusiness #hvac",
+      "image": "/social/2026-11-b0b/beat-5.png",
+      "imageAlt": "ArrivePing saved job templates: residential visit, commercial job, service and maintenance, emergency call",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-06-li",
+      "beat": "pricing",
+      "platform": "linkedin",
+      "dueAt": "2026-11-13T08:15:00-06:00",
+      "text": "$49 a month: one dispatcher and two technicians, with a 30-day free trial and no contract. Add people as you grow.\n\nWe priced it for the three-person shop that has outgrown the whiteboard and the group text but doesn't want an implementation project.\n\nIf you're weighing it up, here's how long setup takes and what to have ready before you start:\nhttps://arriveping.com/blog/how-long-to-set-up-field-service-software\n\n#SmallBusiness #FieldService #HomeServices #Contractors",
+      "image": "/social/2026-11-b0b/beat-6.png",
+      "imageAlt": "ArrivePing pricing: $49 a month for 1 dispatcher and 2 technicians, 30 days free, no contract",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-06-fa",
+      "beat": "pricing",
+      "platform": "facebook",
+      "dueAt": "2026-11-13T11:30:00-06:00",
+      "text": "$49/month: 1 dispatcher + 2 technicians. Add people as you grow. 30 days free, no contract, cancel any time.\n\nWhat setup takes, start to finish: https://arriveping.com/blog/how-long-to-set-up-field-service-software",
+      "image": "/social/2026-11-b0b/beat-6.png",
+      "imageAlt": "ArrivePing pricing: $49 a month for 1 dispatcher and 2 technicians, 30 days free, no contract",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-06-in",
+      "beat": "pricing",
+      "platform": "instagram",
+      "dueAt": "2026-11-13T12:00:00-06:00",
+      "text": "$49/month. 1 dispatcher, 2 technicians, 30 days free. 💬 No contract.\n\nDetails: link in bio.\n\n#smallbusiness #fieldservice #contractor #homeservices #hvac #plumbing",
+      "image": "/social/2026-11-b0b/beat-6.png",
+      "imageAlt": "ArrivePing pricing: $49 a month for 1 dispatcher and 2 technicians, 30 days free, no contract",
+      "link": "https://arriveping.com/blog/how-long-to-set-up-field-service-software"
+    },
+    {
+      "key": "b0b-07-li",
+      "beat": "do-the-math",
+      "platform": "linkedin",
+      "dueAt": "2026-11-17T08:15:00-06:00",
+      "text": "Here's a simple way to check whether $49 a month makes sense for your team.\n\nSay an hour of your time costs about $35 once wages, payroll taxes and overhead are counted. That is an assumption, so swap in your own number. At $35 an hour, $49 a month is 84 minutes. Spread over 21 working days, that's about 4 minutes a day.\n\nFour minutes is one \"where's the tech?\" call you don't have to take, or one customer who is home when you arrive instead of out.\n\nWe wrote up the full math, with every input labelled, plus a five-question test for whether you need field service software at all (and when a spreadsheet is still enough):\nhttps://arriveping.com/blog/does-your-business-need-field-service-software\n\n#SmallBusiness #FieldService #HomeServices #Dispatch",
+      "image": "/social/2026-11-b0b/beat-7.png",
+      "imageAlt": "Break-even math: at an assumed $35 an hour, $49 a month equals 84 minutes, about 4 minutes per working day",
+      "link": "https://arriveping.com/blog/does-your-business-need-field-service-software"
+    },
+    {
+      "key": "b0b-07-fa",
+      "beat": "do-the-math",
+      "platform": "facebook",
+      "dueAt": "2026-11-17T11:30:00-06:00",
+      "text": "Does $49 a month pay for itself? At $35 an hour (swap in your own number), it's 84 minutes a month, about 4 minutes a working day. One avoided \"where are you?\" call a day covers it.\n\nThe full math, plus a 5-question test: https://arriveping.com/blog/does-your-business-need-field-service-software",
+      "image": "/social/2026-11-b0b/beat-7.png",
+      "imageAlt": "Break-even math: at an assumed $35 an hour, $49 a month equals 84 minutes, about 4 minutes per working day",
+      "link": "https://arriveping.com/blog/does-your-business-need-field-service-software"
+    },
+    {
+      "key": "b0b-07-in",
+      "beat": "do-the-math",
+      "platform": "instagram",
+      "dueAt": "2026-11-17T12:00:00-06:00",
+      "text": "$49/month ÷ $35/hour = 84 minutes a month.\nThat's about 4 minutes a working day. 🧮\n\nThe full math (use your own numbers): link in bio.\n\n#smallbusiness #fieldservice #contractor #homeservices #cleaningbusiness #hvac",
+      "image": "/social/2026-11-b0b/beat-7.png",
+      "imageAlt": "Break-even math: at an assumed $35 an hour, $49 a month equals 84 minutes, about 4 minutes per working day",
+      "link": "https://arriveping.com/blog/does-your-business-need-field-service-software"
+    },
+    {
+      "key": "b0b-08-li",
+      "beat": "who-its-for",
+      "platform": "linkedin",
+      "dueAt": "2026-11-19T08:15:00-06:00",
+      "text": "Field service software is usually sold to the trades. But plenty of businesses that aren't trades send people to customers every day: cleaning companies, home care agencies, delivery and installation crews, property managers.\n\nDifferent work, same two questions: the customer wants to know when you'll arrive, and the office wants to know where everyone is.\n\nWe put together a five-question test for whether your business needs field service software yet, including when a spreadsheet and a group text are still enough:\nhttps://arriveping.com/blog/does-your-business-need-field-service-software\n\n#FieldService #HomeCare #CleaningBusiness #PropertyManagement #SmallBusiness",
+      "image": "/social/2026-11-b0b/beat-8.png",
+      "imageAlt": "A technician servicing an outdoor unit, with tags for cleaning, home care, delivery, installers and trades",
+      "link": "https://arriveping.com/blog/does-your-business-need-field-service-software"
+    },
+    {
+      "key": "b0b-08-fa",
+      "beat": "who-its-for",
+      "platform": "facebook",
+      "dueAt": "2026-11-19T11:30:00-06:00",
+      "text": "If your work happens at the customer's door, ArrivePing is for you: cleaning, home care, delivery, installers and the trades.\n\nNot sure you need software yet? Take the 5-question test: https://arriveping.com/blog/does-your-business-need-field-service-software",
+      "image": "/social/2026-11-b0b/beat-8.png",
+      "imageAlt": "A technician servicing an outdoor unit, with tags for cleaning, home care, delivery, installers and trades",
+      "link": "https://arriveping.com/blog/does-your-business-need-field-service-software"
+    },
+    {
+      "key": "b0b-08-in",
+      "beat": "who-its-for",
+      "platform": "instagram",
+      "dueAt": "2026-11-19T12:00:00-06:00",
+      "text": "If your work happens at the customer's door, this is for you. 🚐 Cleaning, home care, delivery, installers, trades.\n\n5-question test: link in bio.\n\n#cleaningbusiness #homecare #delivery #fieldservice #smallbusiness #propertymanagement",
+      "image": "/social/2026-11-b0b/beat-8.png",
+      "imageAlt": "A technician servicing an outdoor unit, with tags for cleaning, home care, delivery, installers and trades",
+      "link": "https://arriveping.com/blog/does-your-business-need-field-service-software"
+    }
+  ]
+}
