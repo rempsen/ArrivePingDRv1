@@ -1,0 +1,32 @@
+{
+  "timezone": "America/Winnipeg",
+  "batchWeeks": 3,
+  "postsPerWeekPerPlatform": { "linkedin": 3, "facebook": 3, "instagram": 3, "x": 4 },
+  "slots": {
+    "linkedin": { "days": ["Tue", "Wed", "Thu"], "time": "08:15" },
+    "facebook": { "days": ["Mon", "Wed", "Fri"], "time": "11:30" },
+    "instagram": { "days": ["Tue", "Thu", "Sat"], "time": "12:00" },
+    "x": { "days": ["Mon", "Tue", "Thu", "Fri"], "time": "09:00" }
+  },
+  "hashtags": { "linkedin": [3, 5], "facebook": [0, 2], "instagram": [5, 10], "x": [0, 2] },
+  "holidays": [
+    "2026-11-11",
+    "2026-12-24",
+    "2026-12-25",
+    "2026-12-26",
+    "2027-01-01",
+    "2027-02-15",
+    "2027-03-26",
+    "2027-05-24",
+    "2027-07-01",
+    "2027-08-02",
+    "2027-09-06",
+    "2027-09-30",
+    "2027-10-11",
+    "2027-11-11",
+    "2027-12-24",
+    "2027-12-25",
+    "2027-12-26"
+  ],
+  "excludedBufferChannels": ["Dan Rosenblat (personal LinkedIn)"]
+}
