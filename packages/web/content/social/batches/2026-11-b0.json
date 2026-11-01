@@ -1,0 +1,79 @@
+{
+  "id": "2026-11-b0",
+  "window": { "start": "2026-11-02", "end": "2026-11-20" },
+  "blogPosts": [],
+  "posts": [
+    {
+      "key": "b0-01-x",
+      "beat": "what-arriveping-is",
+      "platform": "x",
+      "dueAt": "2026-11-03T09:00:00-06:00",
+      "text": "Your customer should know exactly when you'll arrive.\n\nArrivePing plans the day, tracks your techs and texts customers a live ETA and map the moment a tech is on the way. From $49/mo, 30-day free trial.\n\nhttps://arriveping.com",
+      "image": "/social/2026-11-b0/seed-1.png",
+      "link": "https://arriveping.com"
+    },
+    {
+      "key": "b0-02-x",
+      "beat": "end-of-4-hour-window",
+      "platform": "x",
+      "dueAt": "2026-11-05T09:00:00-06:00",
+      "text": "\"We'll be there between 8 and 12.\"\n\nThe 4-hour window was a workaround for not knowing where your people are. Now it's: \"Jordan is 14 minutes away. Track him here.\"\n\nhttps://arriveping.com/#how-it-works",
+      "image": "/social/2026-11-b0/seed-2.png",
+      "link": "https://arriveping.com/#how-it-works"
+    },
+    {
+      "key": "b0-03-x",
+      "beat": "what-the-customer-sees",
+      "platform": "x",
+      "dueAt": "2026-11-06T09:00:00-06:00",
+      "text": "The real screen your customer sees when your tech is on the way: a live map, an ETA that updates as they drive, one tap to call or text. No app to install.\n\nhttps://arriveping.com/customer-notifications",
+      "image": "/social/2026-11-b0/seed-4.png",
+      "link": "https://arriveping.com/customer-notifications"
+    },
+    {
+      "key": "b0-04-x",
+      "beat": "how-it-works",
+      "platform": "x",
+      "dueAt": "2026-11-10T09:00:00-06:00",
+      "text": "Field service in three moves:\n\n1. Plan with visibility.\n2. Assign and track.\n3. Communicate.\n\nOne screen. That's the real scheduler.\n\nhttps://arriveping.com/#how-it-works",
+      "image": "/social/2026-11-b0/seed-3.png",
+      "link": "https://arriveping.com/#how-it-works"
+    },
+    {
+      "key": "b0-05-x",
+      "beat": "setup-in-an-hour",
+      "platform": "x",
+      "dueAt": "2026-11-12T09:00:00-06:00",
+      "text": "Most field service software takes weeks to set up. ArrivePing takes about an hour: paste your website address, it builds your workspace, and you're dispatching the same day.\n\nhttps://arriveping.com/sign-up",
+      "image": "/social/2026-11-b0/seed-6.png",
+      "link": "https://arriveping.com/sign-up"
+    },
+    {
+      "key": "b0-06-x",
+      "beat": "pricing",
+      "platform": "x",
+      "dueAt": "2026-11-13T09:00:00-06:00",
+      "text": "ArrivePing starts at $49 a month, with one dispatcher and two technicians included.\n\n30-day free trial. No contract. Cancel any time.\n\nhttps://arriveping.com/sign-up",
+      "image": "/social/2026-11-b0/seed-5.png",
+      "link": "https://arriveping.com/sign-up"
+    },
+    {
+      "key": "b0-07-x",
+      "beat": "do-the-math",
+      "platform": "x",
+      "dueAt": "2026-11-17T09:00:00-06:00",
+      "text": "One missed appointment can cost you a customer.\n\n$49 a month means your customers never have to guess when you'll show up. If it saves one job, it's paid for itself.\n\nhttps://arriveping.com",
+      "image": "/social/2026-11-b0/seed-7.png",
+      "link": "https://arriveping.com"
+    },
+    {
+      "key": "b0-08-x",
+      "beat": "who-its-for",
+      "platform": "x",
+      "dueAt": "2026-11-19T09:00:00-06:00",
+      "text": "If you send people to customers, ArrivePing is for you.\n\nHVAC. Plumbing. Electrical. Installers. Delivery. Cleaning. Home care. Property maintenance.\n\nhttps://arriveping.com/#who-its-for",
+      "image": "/social/2026-11-b0/seed-8.png",
+      "link": "https://arriveping.com/#who-its-for"
+    }
+  ]
+}
