@@ -11,7 +11,15 @@ import { brand } from "../config";
 import { absolute, SITE_URL } from "./schema";
 import { seoByPath, type SeoPage } from "./pages";
 
-const OG_IMAGE = `${SITE_URL}/og-image.png?v=2`;
+/**
+ * The default social image (public/og-image.png): a real 1200×630 PNG, about
+ * 100 KB. Bump ?v= whenever the file changes so LinkedIn, Slack and X refetch it.
+ */
+const OG_IMAGE = `${SITE_URL}/og-image.png?v=3`;
+export const OG_IMAGE_DEFAULT = { url: OG_IMAGE, width: 1200, height: 630, type: "image/png" } as const;
+const OG_IMAGE_ALT = "ArrivePing logo and the headline \u201cEnd the 4-Hour Service Window\u201d over a dark city map with a glowing route to the customer";
+/** Same file, any ?v= (blog posts without a cover still point at an older ?v=). */
+const isDefaultImage = (url: string) => url.split("?")[0] === OG_IMAGE.split("?")[0];
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -23,8 +31,8 @@ type Tag = { kind: "meta-name" | "meta-prop" | "link"; key: string; value: strin
 
 function tagsFor(p: SeoPage): Tag[] {
   const url = absolute(p.path);
-  const image = p.image ?? OG_IMAGE;
-  const custom = image !== OG_IMAGE;
+  const custom = Boolean(p.image) && !isDefaultImage(p.image!);
+  const image = custom ? p.image! : OG_IMAGE;
   const article: Tag[] = p.article
     ? [
         { kind: "meta-prop", key: "article:published_time", value: p.article.published },
@@ -44,13 +52,22 @@ function tagsFor(p: SeoPage): Tag[] {
     { kind: "meta-prop", key: "og:description", value: p.description },
     { kind: "meta-prop", key: "og:url", value: url },
     { kind: "meta-prop", key: "og:image", value: image },
-    { kind: "meta-prop", key: "og:image:width", value: custom ? "1600" : "1200" },
-    { kind: "meta-prop", key: "og:image:height", value: custom ? "900" : "630" },
-    { kind: "meta-prop", key: "og:image:alt", value: p.imageAlt ?? "ArrivePing: live technician tracking and customer ETAs" },
+    // A page's own image (blog covers vary in size) gets its real width and
+    // height from the prerender step, which reads the file; the default image's are known.
+    ...(custom
+      ? []
+      : ([
+          { kind: "meta-prop", key: "og:image:width", value: String(OG_IMAGE_DEFAULT.width) },
+          { kind: "meta-prop", key: "og:image:height", value: String(OG_IMAGE_DEFAULT.height) },
+          { kind: "meta-prop", key: "og:image:type", value: OG_IMAGE_DEFAULT.type },
+        ] as Tag[])),
+    { kind: "meta-prop", key: "og:image:alt", value: custom ? (p.imageAlt ?? p.title) : OG_IMAGE_ALT },
     { kind: "meta-name", key: "twitter:card", value: "summary_large_image" },
+    { kind: "meta-name", key: "twitter:site", value: `@${brand.urls.x.split("/").pop()}` },
     { kind: "meta-name", key: "twitter:title", value: p.title },
     { kind: "meta-name", key: "twitter:description", value: p.description },
     { kind: "meta-name", key: "twitter:image", value: image },
+    { kind: "meta-name", key: "twitter:image:alt", value: custom ? (p.imageAlt ?? p.title) : OG_IMAGE_ALT },
     { kind: "link", key: "alternate", value: `${SITE_URL}/blog/rss.xml` },
     ...article,
   ];
