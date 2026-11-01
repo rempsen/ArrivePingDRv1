@@ -1,45 +1,153 @@
 /**
  * Post-build SEO sanity check for the public site.
  *
- *   bun run seo:check            # checks ./dist after `vite build`
- *   bun run seo:check --live     # checks https://arriveping.com instead
+ *   bun run seo:check            # checks ./dist after `vite build`, through the real server code
+ *   bun run seo:check --live     # checks https://arriveping.com instead (redirects are never followed)
  *
  * Fails (exit 1) when:
- *  - sitemap.xml is not well-formed or lists a URL with no prerendered page;
+ *  - sitemap.xml is not well-formed or lists a URL that doesn't return 200
+ *    directly (a redirect fails), or that carries noindex (meta or header);
  *  - any <lastmod> is in the future (America/Winnipeg) or not YYYY-MM-DD;
- *  - a prerendered page lacks <h1>, a canonical equal to its sitemap URL,
- *    a <title>, a meta description, or JSON-LD, or carries noindex;
- *  - robots.txt does not reference the sitemap or blocks a public page.
- *  - (--live) any sitemap URL does not return 200.
+ *  - a page lacks exactly one <h1>, a canonical equal to its URL, a <title>
+ *    of at most 65 characters, a meta description of 70–170 characters, or
+ *    JSON-LD; or a JSON-LD block doesn't parse or lacks @context/@type;
+ *  - the Organization or SoftwareApplication markup is wrong (see below);
+ *  - a made-up URL (/support/…, /blog/…, /compare/…) doesn't return 404 + noindex;
+ *  - robots.txt doesn't reference the sitemap, gives any named agent rules that
+ *    differ from "*", or blocks a public page for any agent;
+ *  - a stale phrase appears ("Launching November", "Book a demo", Cloudflare's
+ *    "[email protected]") in a page or the llms files;
+ *  - llms.txt / llms-full.txt are missing, too big, miss key links, repeat
+ *    paragraphs, or claim an Android app while ANDROID_APP_LIVE is false;
+ *  - the declared og:image size isn't the image's real size.
  *
- * Google's "Couldn't fetch" / "has errors" states for a sitemap almost always
- * trace back to one of these, so this runs before we ask Search Console again.
+ * Warns (exit 0) for titles under 30 characters (the short legal and video
+ * pages) and for an Android claim in the Terms of Service, which is legal text
+ * the owner updates.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { ANDROID_APP_LIVE, ANDROID_CLAIM, OPERATING_SYSTEMS, ORG_ID, SOCIAL_PROFILES } from "../src/web/site/seo/schema";
+import { imageSize } from "../vite/plugins/image-size";
 
 const live = process.argv.includes("--live");
 const SITE = "https://arriveping.com";
 const distDir = process.env.WEB_DIST_DIR ?? path.resolve(import.meta.dir, "../dist");
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Winnipeg", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html) arriveping-seo-check";
 
 const problems: string[] = [];
+const warnings: string[] = [];
 const fail = (msg: string) => problems.push(msg);
+const warn = (msg: string) => warnings.push(msg);
 
-async function read(urlPath: string): Promise<{ status: number; text: string }> {
+/** Pages whose Android wording is legal text the owner must change; they warn instead of failing. */
+const ANDROID_COPY_OWNER_ACTION = new Set(["/terms"]);
+
+/** Stale or broken phrases that must never ship. */
+const BANNED = /launching november|book a demo|\[email(?:&#160;|&nbsp;| | )protected\]/i;
+
+type Res = { status: number; text: string; headers: Headers; location: string | null };
+
+// In dist mode every request goes through the real server code (src/site-server.ts)
+// pointed at ./dist, so status codes, redirects and headers are checked too.
+process.env.WEB_DIST_DIR ??= distDir;
+const { serveSite } = live ? { serveSite: null } : await import("../src/site-server");
+
+async function get(urlPath: string): Promise<Res> {
   if (live) {
-    const res = await fetch(`${SITE}${urlPath}`, { headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html) arriveping-seo-check" } });
-    return { status: res.status, text: await res.text() };
+    const res = await fetch(`${SITE}${urlPath}`, { redirect: "manual", headers: { "User-Agent": UA } });
+    return { status: res.status, text: await res.text(), headers: res.headers, location: res.headers.get("location") };
   }
-  const rel = urlPath === "/" ? "_pages/index.html" : /\.(xml|txt)$/.test(urlPath) ? urlPath.slice(1) : `_pages${urlPath}.html`;
-  try {
-    return { status: 200, text: await fs.readFile(path.join(distDir, rel), "utf8") };
-  } catch {
-    return { status: 404, text: "" };
+  const url = new URL(`http://seo-check.local${urlPath}`);
+  const res = await serveSite!(new Request(url), url);
+  return { status: res.status, text: await res.text(), headers: res.headers, location: res.headers.get("location") };
+}
+
+const noindexHeader = (r: Res) => /noindex/i.test(r.headers.get("x-robots-tag") ?? "");
+const decode = (s: string) =>
+  s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+const visibleText = (html: string) =>
+  decode(
+    (html.match(/<body[\s\S]*<\/body>/)?.[0] ?? html)
+      .replace(/<script[\s\S]*?<\/script>/g, " ")
+      .replace(/<style[\s\S]*?<\/style>/g, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " "),
+  );
+
+/* ------------------------------------------------------------------ */
+/* Image sizes (og:image must declare its real size)                    */
+/* ------------------------------------------------------------------ */
+
+const imageCache = new Map<string, Promise<{ width: number; height: number; bytes: number } | null>>();
+function realImage(url: string) {
+  if (!imageCache.has(url)) {
+    imageCache.set(
+      url,
+      (async () => {
+        let bytes: Uint8Array;
+        if (live) {
+          const r = await fetch(url, { headers: { "User-Agent": UA } });
+          if (!r.ok) return null;
+          bytes = new Uint8Array(await r.arrayBuffer());
+        } else {
+          const rel = decodeURIComponent(new URL(url).pathname).replace(/^\/+/, "");
+          bytes = new Uint8Array(await fs.readFile(path.join(distDir, rel)).catch(() => Buffer.alloc(0)));
+          if (!bytes.length) return null;
+        }
+        const size = imageSize(bytes);
+        return size ? { ...size, bytes: bytes.length } : null;
+      })(),
+    );
+  }
+  return imageCache.get(url)!;
+}
+
+/* ------------------------------------------------------------------ */
+/* JSON-LD                                                              */
+/* ------------------------------------------------------------------ */
+
+type Node = Record<string, unknown>;
+function checkJsonLd(loc: string, html: string) {
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
+  if (blocks.length === 0) return fail(`${loc}: no JSON-LD`);
+  for (const raw of blocks) {
+    let data: Node;
+    try {
+      data = JSON.parse(raw) as Node;
+    } catch (e) {
+      fail(`${loc}: JSON-LD does not parse (${(e as Error).message})`);
+      continue;
+    }
+    if (!data["@context"]) fail(`${loc}: JSON-LD block has no @context`);
+    const nodes = Array.isArray(data["@graph"]) ? (data["@graph"] as Node[]) : [data];
+    for (const n of nodes) if (!n["@type"]) fail(`${loc}: JSON-LD node without @type (${JSON.stringify(n).slice(0, 80)}…)`);
+    for (const n of nodes) {
+      if (n["@type"] === "Organization" && n["@id"] === ORG_ID) {
+        if (n.name !== "ArrivePing") fail(`${loc}: Organization ${ORG_ID} is named "${n.name}", expected "ArrivePing"`);
+        if (!n.url || !n.logo) fail(`${loc}: Organization lacks url or logo`);
+        const same = (n.sameAs as string[] | undefined) ?? [];
+        for (const u of SOCIAL_PROFILES) if (!same.includes(u)) fail(`${loc}: Organization sameAs is missing ${u}`);
+        const parent = n.parentOrganization as Node | undefined;
+        if (!parent?.["@id"] || !parent.url) fail(`${loc}: Organization has no parentOrganization (NVC360)`);
+      }
+      if (n["@type"] === "SoftwareApplication") {
+        if (n.operatingSystem !== OPERATING_SYSTEMS) fail(`${loc}: SoftwareApplication operatingSystem "${n.operatingSystem}" ≠ "${OPERATING_SYSTEMS}" (ANDROID_APP_LIVE=${ANDROID_APP_LIVE})`);
+        if (!ANDROID_APP_LIVE && ANDROID_CLAIM.test(JSON.stringify(n))) fail(`${loc}: SoftwareApplication claims Android while ANDROID_APP_LIVE is false`);
+        const offers = ([] as Node[]).concat((n.offers as Node | Node[] | undefined) ?? []);
+        if (!offers.length) fail(`${loc}: SoftwareApplication has no offers`);
+        for (const o of offers) if (!o.price || !o.priceCurrency) fail(`${loc}: SoftwareApplication offer without price/priceCurrency`);
+      }
+    }
   }
 }
 
-const sitemap = await read("/sitemap.xml");
+/* ------------------------------------------------------------------ */
+/* Sitemap and pages                                                    */
+/* ------------------------------------------------------------------ */
+
+const sitemap = await get("/sitemap.xml");
 if (sitemap.status !== 200) fail(`sitemap.xml: HTTP ${sitemap.status}`);
 if (!sitemap.text.startsWith('<?xml version="1.0" encoding="UTF-8"?>')) fail("sitemap.xml: missing XML declaration at byte 0 (BOM or whitespace?)");
 if (!sitemap.text.includes('xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"')) fail("sitemap.xml: wrong or missing namespace");
@@ -57,31 +165,78 @@ for (const { loc, lastmod } of entries) {
   else if (lastmod > today) fail(`${loc}: lastmod ${lastmod} is in the future (today ${today} America/Winnipeg)`);
 
   const urlPath = loc.slice(SITE.length) || "/";
-  const page = await read(urlPath);
+  const page = await get(urlPath);
   if (page.status !== 200) {
-    fail(`${loc}: HTTP ${page.status}`);
+    fail(`${loc}: HTTP ${page.status}${page.location ? ` → ${page.location}` : ""} (sitemap URLs must answer 200 directly)`);
     continue;
   }
+  if (noindexHeader(page)) fail(`${loc}: X-Robots-Tag noindex on a sitemap URL`);
   const html = page.text;
-  if (!/<h1[\s>]/.test(html)) fail(`${loc}: no <h1>`);
-  if (!/<title>[^<]{10,}<\/title>/.test(html)) fail(`${loc}: missing or very short <title>`);
-  if (!/<meta name="description" content="[^"]{50,}"/.test(html)) fail(`${loc}: missing or very short meta description`);
+  const h1s = html.match(/<h1[\s>]/g)?.length ?? 0;
+  if (h1s !== 1) fail(`${loc}: ${h1s} <h1> elements (expected exactly 1)`);
+
+  const title = decode(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? "");
+  if (title.length < 10) fail(`${loc}: missing or very short <title>`);
+  else if (title.length > 65) fail(`${loc}: title is ${title.length} characters (over 65; add a short seoTitle): "${title}"`);
+  else if (title.length < 30) warn(`${loc}: title is ${title.length} characters (aim for 30–65)`);
+
+  const description = decode(html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? "");
+  if (description.length < 50) fail(`${loc}: missing or very short meta description`);
+  else if (description.length < 70 || description.length > 170) fail(`${loc}: description is ${description.length} characters (keep it to 70–170)`);
+
   const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
   if (canonical !== loc) fail(`${loc}: canonical is ${canonical ?? "missing"}`);
   if (/<meta name="robots" content="[^"]*noindex/.test(html)) fail(`${loc}: page is noindex but listed in sitemap`);
-  if (!html.includes('type="application/ld+json"')) fail(`${loc}: no JSON-LD`);
+  checkJsonLd(loc, html);
+
+  const banned = html.match(BANNED)?.[0];
+  if (banned) fail(`${loc}: contains the stale phrase "${banned}"`);
+  if (!ANDROID_APP_LIVE) {
+    const claim = visibleText(html).match(new RegExp(`[^.]{0,40}(?:${ANDROID_CLAIM.source})[^.]{0,20}`, "i"))?.[0];
+    if (claim) (ANDROID_COPY_OWNER_ACTION.has(urlPath) ? warn : fail)(`${loc}: page copy claims Android while ANDROID_APP_LIVE is false: "…${claim.trim()}…"`);
+  }
+
+  const ogImage = decode(html.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? "");
+  const ogW = Number(html.match(/<meta property="og:image:width" content="(\d+)"/)?.[1]);
+  const ogH = Number(html.match(/<meta property="og:image:height" content="(\d+)"/)?.[1]);
+  if (!ogImage) fail(`${loc}: no og:image`);
+  else {
+    const real = await realImage(ogImage);
+    if (!real) fail(`${loc}: og:image ${ogImage} is missing or unreadable`);
+    else {
+      if (real.width !== ogW || real.height !== ogH) fail(`${loc}: og:image is ${real.width}×${real.height} but declared ${ogW || "?"}×${ogH || "?"} (${ogImage})`);
+      if (real.bytes > 600_000) fail(`${loc}: og:image is ${Math.round(real.bytes / 1024)} KB (over 600 KB): ${ogImage}`);
+    }
+  }
 }
 
-const robots = await read("/robots.txt");
+/* ------------------------------------------------------------------ */
+/* Made-up URLs must be real 404s (no soft 404s)                        */
+/* ------------------------------------------------------------------ */
+
+const probe = live ? `zz-seo-check-${Date.now()}` : "zz-seo-check-probe";
+for (const p of [`/support/${probe}`, `/blog/${probe}`, `/blog/category/${probe}`, `/compare/${probe}`, `/${probe}`, `/support/${probe}/deeper`]) {
+  const r = await get(p);
+  if (r.status !== 404) fail(`${p}: made-up URL returned ${r.status}${r.location ? ` → ${r.location}` : ""}, expected 404`);
+  if (!noindexHeader(r)) fail(`${p}: 404 without X-Robots-Tag noindex`);
+}
+
+/* ------------------------------------------------------------------ */
+/* robots.txt                                                           */
+/* ------------------------------------------------------------------ */
+
+const robots = await get("/robots.txt");
 if (robots.status !== 200) fail(`robots.txt: HTTP ${robots.status}`);
 if (!robots.text.includes(`Sitemap: ${SITE}/sitemap.xml`)) fail("robots.txt: no Sitemap line");
-// Googlebot's view of robots.txt: the most specific group that names it (else "*"),
-// longest matching rule wins, Allow beats Disallow on a tie. A bare "Disallow: /"
-// is the most damaging misconfiguration this check exists to catch, so it is a
-// match like any other rule rather than an exception.
-function robotsGroupFor(agent: string, text: string): { allow: string[]; disallow: string[] } {
-  const groups: { agents: string[]; allow: string[]; disallow: string[] }[] = [];
-  let cur: (typeof groups)[number] | null = null;
+
+type Group = { agents: string[]; allow: string[]; disallow: string[] };
+// The groups as a crawler sees them: a run of User-agent lines starts a group;
+// the most specific group naming an agent applies (else "*"); the longest
+// matching rule wins and Allow beats Disallow on a tie. A bare "Disallow: /"
+// is just another rule here, so it is caught like any other.
+function robotsGroups(text: string): Group[] {
+  const groups: Group[] = [];
+  let cur: Group | null = null;
   let lastWasAgent = false;
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/#.*$/, "").trim();
@@ -104,10 +259,7 @@ function robotsGroupFor(agent: string, text: string): { allow: string[]; disallo
     if (key === "allow" && val) cur.allow.push(val);
     if (key === "disallow" && val) cur.disallow.push(val);
   }
-  const named = groups.find((g) => g.agents.includes(agent.toLowerCase()));
-  const star = groups.find((g) => g.agents.includes("*"));
-  const g = named ?? star;
-  return g ? { allow: g.allow, disallow: g.disallow } : { allow: [], disallow: [] };
+  return groups;
 }
 function robotsAllows(p: string, g: { allow: string[]; disallow: string[] }): boolean {
   const matches = (rule: string) => (rule.endsWith("$") ? p === rule.slice(0, -1) : p.startsWith(rule));
@@ -115,23 +267,67 @@ function robotsAllows(p: string, g: { allow: string[]; disallow: string[] }): bo
   const bestDisallow = Math.max(-1, ...g.disallow.filter(matches).map((r) => r.length));
   return bestAllow >= bestDisallow;
 }
-const googleGroup = robotsGroupFor("Googlebot", robots.text);
-for (const { loc } of entries) {
-  const p = loc.slice(SITE.length) || "/";
-  if (!robotsAllows(p, googleGroup)) fail(`${loc}: blocked for Googlebot by robots.txt (group rules: ${googleGroup.disallow.join(", ") || "none"})`);
-}
-if (!robotsAllows("/api/health/demo", googleGroup)) fail("robots.txt: /api/health/demo must stay readable for the demo health check");
-for (const must of ["/admin", "/app", "/api/x", "/api/health", "/t/abc"]) {
-  if (robotsAllows(must, googleGroup)) fail(`robots.txt: private path ${must} is NOT disallowed for Googlebot`);
+const groups = robotsGroups(robots.text);
+const star = groups.find((g) => g.agents.includes("*"));
+if (!star) fail('robots.txt: no "User-agent: *" group');
+const rulesOf = (g: Group) => JSON.stringify([[...g.allow].sort(), [...g.disallow].sort()]);
+for (const g of groups) {
+  if (star && rulesOf(g) !== rulesOf(star)) fail(`robots.txt: the group for ${g.agents.join(", ")} has different rules from "*"`);
+  for (const { loc } of entries) {
+    const p = loc.slice(SITE.length) || "/";
+    if (!robotsAllows(p, g)) fail(`${loc}: blocked by robots.txt for ${g.agents.join(", ")}`);
+  }
+  if (!robotsAllows("/api/health/demo", g)) fail(`robots.txt: /api/health/demo must stay readable (group ${g.agents[0]})`);
+  for (const must of ["/admin", "/app", "/api/x", "/api/health", "/t/abc"]) {
+    if (robotsAllows(must, g)) fail(`robots.txt: private path ${must} is NOT disallowed for ${g.agents[0]}`);
+  }
 }
 
-for (const f of ["/llms.txt", "/llms-full.txt"]) {
-  const r = await read(f);
-  if (r.status !== 200 || r.text.length < 500) fail(`${f}: HTTP ${r.status} or too short`);
-}
+/* ------------------------------------------------------------------ */
+/* llms.txt and llms-full.txt                                           */
+/* ------------------------------------------------------------------ */
 
+const llms = await get("/llms.txt");
+const llmsFull = await get("/llms-full.txt");
+for (const [name, r] of [["/llms.txt", llms], ["/llms-full.txt", llmsFull]] as const) {
+  if (r.status !== 200 || r.text.length < 500) fail(`${name}: HTTP ${r.status} or too short`);
+  if (!noindexHeader(r)) fail(`${name}: should be served with X-Robots-Tag: noindex (fetchable by AI tools, not ranked as a page)`);
+  const banned = r.text.match(BANNED)?.[0];
+  if (banned) fail(`${name}: contains the stale phrase "${banned}"`);
+  if (!ANDROID_APP_LIVE) {
+    const claim = r.text.match(new RegExp(`[^\\n.]{0,40}(?:${ANDROID_CLAIM.source})[^\\n.]{0,20}`, "i"))?.[0];
+    if (claim) fail(`${name}: claims Android while ANDROID_APP_LIVE is false: "…${claim.trim()}…"`);
+  }
+}
+if (llms.text.length > 20_000) fail(`/llms.txt: ${llms.text.length} bytes (keep it under 20 KB; the full text belongs in llms-full.txt)`);
+for (const must of [`${SITE}/get-started`, "https://apps.apple.com/app/arriveping/id6776464675", `${SITE}/pricing`, `${SITE}/support`, "Last updated:", "Arrivy"]) {
+  if (!llms.text.includes(must)) fail(`/llms.txt: missing "${must}"`);
+}
+if (/^## Company$/m.test(llms.text)) fail('/llms.txt: help pages belong under "## Help Center", not "## Company"');
+const corePaths = entries.map((e) => e.loc).filter((u) => !/\/(blog|support)(\/|$)/.test(u) && !/\/(privacy|terms)$/.test(u));
+for (const u of corePaths) if (!llmsFull.text.includes(u)) fail(`/llms-full.txt: no section for ${u}`);
+const paragraphCounts = new Map<string, number>();
+for (const para of llmsFull.text.split(/\n{2,}/)) {
+  const key = para.trim();
+  // Tables and the short "also answered on this page" pointers may repeat; prose may not.
+  if (key.length >= 80 && !key.startsWith("|") && !key.startsWith("Also answered on this page")) paragraphCounts.set(key, (paragraphCounts.get(key) ?? 0) + 1);
+}
+for (const [para, n] of paragraphCounts) if (n > 2) fail(`/llms-full.txt: paragraph repeated ${n} times: "${para.slice(0, 80)}…"`);
+
+/* ------------------------------------------------------------------ */
+
+if (warnings.length) {
+  const shown = warnings.slice(0, 60);
+  console.warn(
+    `seo-check: ${warnings.length} warning(s) (not failing the build):\n` +
+      shown.map((w) => `  ~ ${w}`).join("\n") +
+      (warnings.length > shown.length ? `\n  ~ …and ${warnings.length - shown.length} more` : ""),
+  );
+}
 if (problems.length) {
   console.error(`seo-check: ${problems.length} problem(s) in ${live ? SITE : distDir}\n` + problems.map((p) => `  - ${p}`).join("\n"));
   process.exit(1);
 }
-console.log(`seo-check: OK — ${entries.length} URLs in sitemap, all prerendered, canonical and indexable; no future lastmod; robots.txt consistent (${live ? "live" : "dist"})`);
+console.log(
+  `seo-check: OK — ${entries.length} URLs in sitemap answer 200 directly with one H1, a matching canonical and valid JSON-LD; made-up URLs are 404 + noindex; robots.txt consistent for every agent; llms files accurate (${live ? "live" : "dist"})`,
+);

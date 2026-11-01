@@ -368,7 +368,7 @@
   align-items: flex-end;
   gap: 12px;
   container-type: inline-size;
-  animation: enter-stage 640ms var(--ease-out) 120ms both;
+  animation: site-enter-stage 640ms var(--ease-out) 120ms both;
 }
 .site .lv-stage__cust {
   grid-column: 1 / -1;

@@ -1,7 +1,9 @@
 import { build, type Plugin, type ResolvedConfig } from "vite";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { imageSize } from "./image-size";
 import { todayInSiteZone } from "./site-date";
 
 /**
@@ -15,8 +17,10 @@ import { todayInSiteZone } from "./site-date";
  *   2. renders every page in seoPages to HTML with its own <head>
  *      (title, description, canonical, Open Graph, JSON-LD),
  *   3. writes dist/_pages/<path>.html, which src/server.ts serves first,
- *   4. writes sitemap.xml, robots.txt, llms.txt, llms-full.txt and a manifest
- *      used for IndexNow.
+ *   4. writes sitemap.xml, robots.txt, llms.txt, llms-full.txt, a 404 page and
+ *      a manifest (every public URL with a hash of its content) that the
+ *      server uses to tell real pages from made-up ones and to submit only
+ *      changed URLs to IndexNow.
  *
  * The browser still boots the normal app on top of the HTML (createRoot), so
  * nothing changes for visitors except that the page paints before JS loads.
@@ -30,31 +34,53 @@ const SITE = "https://arriveping.com";
 const PRIVATE = ["/api/", "/admin", "/app", "/rider", "/t/", "/pay/", "/s/", "/p/", "/f/", "/join/", "/join-company/", "/uploads/"];
 // Search and AI crawlers, named explicitly so our intent is unambiguous. They get
 // the same rules as "*"; the separate group exists because some operators only
-// honour a group that names their agent.
-const AGENTS = [
+// honour a group that names their agent. Tokens come from each operator's own
+// crawler documentation. xAI (Grok) publishes no crawler user agent, so none is
+// invented here: the "*" group is what applies to it.
+export const AGENTS = [
+  // Search engines
   "Googlebot",
   "Bingbot",
+  "Applebot",
+  "DuckDuckBot",
+  "YandexBot",
+  // Google AI and other Google products
   "Google-Extended",
+  "GoogleOther",
+  "Google-CloudVertexBot",
+  // OpenAI
   "GPTBot",
   "OAI-SearchBot",
   "ChatGPT-User",
+  "OAI-AdsBot",
+  // Anthropic
   "ClaudeBot",
   "Claude-SearchBot",
   "Claude-User",
   "anthropic-ai",
+  // Perplexity
   "PerplexityBot",
   "Perplexity-User",
-  "Applebot",
+  // Apple, Meta, Amazon
   "Applebot-Extended",
   "Meta-ExternalAgent",
+  "Meta-ExternalFetcher",
+  "FacebookBot",
+  "facebookexternalhit",
   "Amazonbot",
+  // Other assistants and datasets
   "DuckAssistBot",
-  "cohere-ai",
   "MistralAI-User",
+  "cohere-ai",
+  "cohere-training-data-crawler",
+  "YouBot",
   "CCBot",
+  // Link previews
+  "LinkedInBot",
+  "Twitterbot",
 ];
 
-function robotsTxt(): string {
+export function robotsTxt(): string {
   // /api/health/demo is public counts only (no customer data); allowing it lets the
   // daily demo health check read it. The longer Allow wins over "Disallow: /api/".
   const rules = ["Allow: /", "Allow: /api/health/demo", ...PRIVATE.map((p) => `Disallow: ${p}`)];
@@ -78,14 +104,35 @@ function robotsTxt(): string {
 type Entry = {
   seoPages: { path: string }[];
   render: (path: string) => { body: string; head: string };
+  notFoundHead: () => string;
+  notFoundBody: () => string;
   sitemapXml: (lastmod: string) => string;
-  llmsTxt: () => string;
+  llmsTxt: (today: string) => string;
   llmsFullTxt: () => string;
   rssXml: () => string;
 };
 
 const SEO_START = "<!--seo-->";
 const SEO_END = "<!--/seo-->";
+
+/**
+ * Declare a page's own social image (a blog cover) at its real size: covers
+ * come in many sizes, and a wrong og:image:width/height makes some link
+ * previews crop or drop the image. The default image's size is set in head.ts.
+ */
+async function withImageSize(head: string, outDir: string): Promise<string> {
+  if (head.includes('property="og:image:width"')) return head;
+  const m = head.match(/<meta property="og:image" content="([^"]+)" \/>/);
+  if (!m || !m[1]!.startsWith(`${SITE}/`)) return head;
+  const rel = decodeURIComponent(new URL(m[1]!.replace(/&amp;/g, "&")).pathname).replace(/^\/+/, "");
+  const bytes = await fs.readFile(path.join(outDir, rel)).catch(() => null);
+  const size = bytes ? imageSize(new Uint8Array(bytes)) : null;
+  if (!size) return head;
+  return head.replace(
+    m[0],
+    `${m[0]}\n\t\t<meta property="og:image:width" content="${size.width}" />\n\t\t<meta property="og:image:height" content="${size.height}" />`,
+  );
+}
 
 export default function prerenderPlugin(): Plugin {
   let config: ResolvedConfig;
@@ -128,8 +175,10 @@ export default function prerenderPlugin(): Plugin {
       const pagesDir = path.join(outDir, "_pages");
       await fs.rm(pagesDir, { recursive: true, force: true });
       const urls: string[] = [];
+      const pages: { url: string; hash: string }[] = [];
       for (const { path: route } of mod.seoPages) {
-        const { body, head } = mod.render(route);
+        const { body, head: rawHead } = mod.render(route);
+        const head = await withImageSize(rawHead, outDir);
         if (!body.includes("<h1")) throw new Error(`Prerendered ${route} has no <h1>`);
         const html =
           shell.slice(0, a) +
@@ -138,8 +187,22 @@ export default function prerenderPlugin(): Plugin {
         const file = path.join(pagesDir, route === "/" ? "index.html" : `${route.slice(1)}.html`);
         await fs.mkdir(path.dirname(file), { recursive: true });
         await fs.writeFile(file, html);
-        urls.push(route === "/" ? `${SITE}/` : `${SITE}${route}`);
+        const url = route === "/" ? `${SITE}/` : `${SITE}${route}`;
+        urls.push(url);
+        // Hash the page's own content (head + body), not the shell: the shell's
+        // asset hashes change on every code deploy, the content doesn't.
+        pages.push({ url, hash: createHash("sha256").update(head).update("\n").update(body).digest("hex").slice(0, 16) });
       }
+
+      // The 404 page: same shell (so the app still boots and shows its own
+      // "not found"), but with its own title and noindex instead of the home
+      // page's metadata, and a readable body for agents that don't run JS.
+      await fs.writeFile(
+        path.join(pagesDir, "404.html"),
+        shell.slice(0, a) +
+          mod.notFoundHead() +
+          shell.slice(b + SEO_END.length).replace('<div id="root"></div>', `<div id="root" data-prerendered="/404">${mod.notFoundBody()}</div>`),
+      );
 
       // Today's date on the business's own calendar, not UTC (a build after
       // 18:00 CT used to stamp pages with tomorrow's date). Shared with the blog
@@ -147,15 +210,15 @@ export default function prerenderPlugin(): Plugin {
       const today = todayInSiteZone();
       await fs.writeFile(path.join(outDir, "sitemap.xml"), mod.sitemapXml(today));
       await fs.writeFile(path.join(outDir, "robots.txt"), robotsTxt());
-      await fs.writeFile(path.join(outDir, "llms.txt"), mod.llmsTxt());
+      await fs.writeFile(path.join(outDir, "llms.txt"), mod.llmsTxt(today));
       await fs.writeFile(path.join(outDir, "llms-full.txt"), mod.llmsFullTxt());
       await fs.mkdir(path.join(outDir, "blog"), { recursive: true });
       await fs.writeFile(path.join(outDir, "blog", "rss.xml"), mod.rssXml());
       await fs.writeFile(
         path.join(pagesDir, "manifest.json"),
-        JSON.stringify({ builtAt: new Date().toISOString(), indexNowKey: INDEXNOW_KEY, urls }, null, 2),
+        JSON.stringify({ builtAt: new Date().toISOString(), indexNowKey: INDEXNOW_KEY, urls, pages }, null, 2),
       );
-      config.logger.info(`\n[prerender] ${urls.length} pages + sitemap.xml, robots.txt, llms.txt, llms-full.txt, blog/rss.xml`);
+      config.logger.info(`\n[prerender] ${urls.length} pages + 404, sitemap.xml, robots.txt, llms.txt, llms-full.txt, blog/rss.xml`);
     },
   };
 }
