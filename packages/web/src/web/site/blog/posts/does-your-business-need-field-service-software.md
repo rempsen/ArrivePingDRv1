@@ -118,7 +118,7 @@ ArrivePing is field service software made by NVC360 in Winnipeg, Manitoba. It be
 
 As [field service management software](/field-service-software), it shows your team on a live map from the phones they already carry, with no GPS hardware in the vehicles. As [dispatch software](/dispatch-software), it ranks people by distance, matching skills, availability and workload, assigns the best fit or suggests it to a dispatcher, and sends the job to that person's phone. When they tap "on the way," the customer gets a text with a live tracking page and an ETA; if the day slips, a running-late notice goes out, and a geofence records arrival and starts the on-site clock. Starter is $49 a month for one dispatcher and two technician licenses; technicians 3 to 29 are $30 each, and a second office user is priced like a technician ([pricing](/pricing)). There is a 30-day free trial with as many users as you like; a card is required, and nothing is charged until day 30.
 
-**When not to choose us.** If you scored zero or one, you don't need us yet. If you want marketing campaigns or a sales pipeline in the same product, an all-in-one platform covers more of that. If you need engine diagnostics or driver-behaviour scoring, that is a telematics product. And if you run a home care agency that needs care plans, clinical notes or electronic visit verification for Medicaid billing, choose software built for home care; ArrivePing handles who goes where, when they arrive and what the client is told.
+**When not to choose us.** If you scored zero or one, you don't need us yet. If you want marketing campaigns or a sales pipeline in the same product, an all-in-one platform covers more of that. If you need engine diagnostics or driver-behaviour scoring, that is a telematics product. And ArrivePing doesn't include care plans or clinical records. In-home care, home nursing and healthcare-aide agencies are a strong fit for the scheduling side, which covers who visits whom, when they arrive and what the client and family are told. Keep care plans in the clinical system you already use.
 
 ## FAQ
 
@@ -132,7 +132,7 @@ It is worth it when it saves more staff time than it costs. At an assumed loaded
 
 ### Can cleaning, home care or delivery businesses use field service software?
 
-Yes, if they send people to customer addresses; the problems are the same: who goes where, when they arrive and what the customer is told. Because BLS median wages for cleaners ($17.07 an hour in May 2025) are lower than for trades, the break-even takes more saved time, about two hours a month on a $49 plan.
+Yes, if they send people to customer addresses; the problems are the same: who goes where, when they arrive and what the customer is told. In-home care, home nursing and healthcare-aide agencies fit especially well, because a client and their family want to know exactly when the caregiver will arrive. Because BLS median wages for cleaners ($17.07 an hour in May 2025) are lower than for trades, the break-even takes more saved time, about two hours a month on a $49 plan.
 
 ### When is a spreadsheet good enough instead of field service software?
 
