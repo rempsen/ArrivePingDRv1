@@ -1,5 +1,6 @@
 ---
 title: "The AI Divide in Construction: How Fast-Moving Firms Are Leaving Laggards Behind"
+seoTitle: "The AI Divide in Construction: Fast Movers vs Laggards"
 slug: "ai-divide-in-construction"
 description: "Most construction firms still use little or no AI. What RICS, BCG and Deloitte data show about the gap, and why scheduling and client updates come first."
 date: "2026-04-10"
@@ -93,7 +94,7 @@ Think of it as the “Uber-like” experience for your operations. Here is what 
 
 **Before:** A client calls to report an issue. The dispatcher manually reviews a whiteboard schedule, calls three technicians to find availability, and gives the client a vague four-hour window. The client calls back twice for updates. The technician arrives without the full job details. The back office finds out the job is done when the tech calls in.
 
-**With ArrivePing:** The client request comes in through an online intake form or is logged by the office. The dispatcher sees a live map of technician locations and a dispatch board of current job statuses. [Automatic assignment](/dispatch-software) ranks technicians by distance, skill match, availability and current workload, and the dispatcher can accept the pick or override it. When the technician heads out, the client receives an [on-my-way text](/customer-notifications) with a link to a live tracking page showing the technician’s progress and ETA. The technician has the job details on their phone. A geofence records arrival and on-site time, the office sees the status change, and the invoice and review request follow from the job.
+**With ArrivePing:** The client request comes in through an online intake form or is logged by the office. The dispatcher sees a live map of technician locations and a dispatch board of current job statuses. [Automatic assignment](/dispatch-software) ranks technicians by distance, skill match, availability and current workload, and the dispatcher can accept the pick or override it. When the technician heads out, the client receives an [on-my-way text](/on-my-way-text-software) with a link to a live tracking page showing the technician’s progress and ETA. The technician has the job details on their phone. A geofence records arrival and on-site time, the office sees the status change, and the invoice and review request follow from the job.
 
 This is not a vision of the distant future. It is how ArrivePing works. It connects the back office, the field, and the customer—cutting out the communication breakdowns that cost the industry billions of dollars every year.
 

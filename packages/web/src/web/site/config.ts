@@ -40,15 +40,28 @@ export const brand = {
   },
 } as const;
 
+/**
+ * Primary navigation: real pages, not homepage anchors, so every page links to
+ * the hubs (features, the solution pillars, pricing and comparisons) sitewide.
+ * Seven short labels, narrower than the old set, so the desktop bar keeps its layout.
+ */
 export const nav = [
-  { label: "Product", href: brand.urls.product },
   { label: "Features", href: "/features" },
-  { label: "How it works", href: brand.urls.how },
-  { label: "Who it's for", href: brand.urls.who },
-  { label: "Pricing", href: brand.urls.pricing },
+  { label: "Solutions", href: "/field-service-software" },
+  { label: "Dispatch", href: "/dispatch-software" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "Compare", href: "/compare" },
   { label: "Blog", href: "/blog" },
   { label: "Support", href: "/support" },
 ] as const;
+
+/**
+ * The technician app line next to the App Store badge. The iPhone and iPad app
+ * is live; there is no public Google Play listing yet, so Android technicians
+ * use the web version in their phone's browser (Help Center:
+ * /support/use-arriveping-in-a-browser). No date is promised.
+ */
+export const TECH_APP_LINE = "Technician app for iPhone and iPad. On Android, technicians use ArrivePing in the phone's web browser.";
 
 /* ------------------------------------------------------------------ */
 /* Copy                                                                 */
@@ -57,13 +70,13 @@ export const nav = [
 export const hero = {
   /** The category label in the pill above the headline: what ArrivePing is, in under a second.
    *  (The three pillars, Plan with visibility / Assign and track / Communicate, are now the headline itself.) */
-  pillars: ["Field service software for trades"],
+  pillars: ["Field service software for teams that visit customers"],
   /** What ArrivePing does, in three verbs: the three pillars as one line (Dan, 2026-10-18, option 2).
    *  The pain hook ("No more 'Where's my tech?' calls.") now heads the customer-view section. */
   title: "See every tech. Assign every job. Update every customer.",
   /** Optional bold line under the headline; empty hides it. */
   subhead: "",
-  lede: "ArrivePing puts your crew on a live map, sends the right tech to each work order, and texts your customers a live ETA so they never have to call.",
+  lede: "ArrivePing puts your team on a live map, sends the right person to each job, and texts your customers a live ETA so they never have to call.",
   /** The four objections a buyer has before clicking, answered before the button. */
   assurances: [
     { icon: "phone", label: "No GPS hardware", sub: "Runs on the phones your team carries" },
@@ -340,7 +353,7 @@ export const dispatchStory = {
 export const officeView = {
   eyebrow: "For your office",
   title: "Run the whole day from one board.",
-  titleMuted: "Plan, assign, track and communicate.",
+  titleMuted: "Plan with visibility. Assign and track. Communicate.",
   body:
     "The office sees every job, every technician and every customer update in one place, and the board keeps itself current as technicians tap through their day.",
   pillars: [
@@ -572,19 +585,16 @@ export const tradeMedia = (key: string) => ({
 /* Proof points & founder story                                        */
 /* ------------------------------------------------------------------ */
 
-export const stats = [
-  {
-    value: "1B+",
-    label: "Hours lost each year to appointment waits, repeat trips, rework and phone tag",
-    source: "ArrivePing research estimate",
-  },
-  {
-    value: "20%",
-    label: "Lower field labour costs at National Interiors with the system ArrivePing grew from",
-    source: "National Interiors, early 2020s",
-  },
+/**
+ * Company facts only. The unsourced "1B+ hours lost" estimate and the
+ * "20% lower labour costs" figure were removed (2026-11-01): neither had a
+ * published source. Add a figure here only with a link to where it comes from.
+ */
+export const stats: readonly { value: string; label: string; source?: string }[] = [
   { value: "800+", label: "Field technicians run by our team before ArrivePing was built" },
-] as const;
+  { value: "<1 hr", label: "Typical time from signup to the first dispatched job" },
+  { value: "30 days", label: "Free trial with as many users as you like. Nothing is charged until day 30" },
+];
 
 export const story = {
   eyebrow: "Why we built this",
@@ -649,6 +659,23 @@ export const pricing = {
   ],
 } as const;
 
+/**
+ * "What is ArrivePing?" under the home hero: the entity answer an AI assistant
+ * or a searcher can lift whole (56-70 words). Price and trial from the config.
+ */
+export const whatIs = {
+  q: "What is ArrivePing?",
+  a: `ArrivePing is field service software made by NVC360 in Winnipeg, Canada, for any business that sends people to customers: HVAC, plumbing and electrical trades, home cleaning, security, delivery, home repair and other home services. It puts your team on a live map, assigns each job to the right person and texts customers a live ETA. Plans start at US$${STARTER_PRICE} a month after a 30-day free trial.`,
+  next: [
+    { label: "Every ArrivePing feature", href: "/features" },
+    { label: "Field service management software", href: "/field-service-software" },
+    { label: "Dispatch software", href: "/dispatch-software" },
+    { label: "On-my-way texts", href: "/on-my-way-text-software" },
+    { label: "Pricing from US$" + STARTER_PRICE + " a month", href: "/pricing" },
+    { label: "Compare with Jobber, Housecall Pro and ServiceTitan", href: "/compare" },
+  ],
+};
+
 const usd = (v: number) => `$${v.toLocaleString("en-US")}`;
 
 /** Monthly price in USD for a team of `n` drivers, using the graduated bands above. */
@@ -669,12 +696,16 @@ export function monthlyPrice(n: number): { plan: string; total: number; breakdow
 
 export const faqs = [
   {
+    q: "What kinds of businesses use ArrivePing?",
+    a: "Any business that sends people to customers: HVAC, plumbing and electrical contractors, installers and subcontractors, property maintenance teams, delivery crews, home cleaning, security, home repair and other home services. You choose what to call the work (jobs, visits or deliveries) and your people (technicians, crews or drivers).",
+  },
+  {
     q: "Do customers need to install an app?",
     a: "No. When the technician starts driving, the customer gets a text with a link that opens a live page in their browser: who's coming, an ETA that updates as they drive, and buttons to call, text or message the technician. There's no account to create.",
   },
   {
     q: "What do technicians use?",
-    a: "The ArrivePing app on the phone they already carry. A job comes in as an offer they accept, then they tap Start Driving, I've Arrived and Complete Job. With the job open, arrival is logged automatically within 150 m of the address by default, and the button is the backup.",
+    a: "The phone they already carry: the ArrivePing app on iPhone and iPad, or on an Android phone, ArrivePing in the phone's web browser. A job comes in as an offer they accept, then they tap Start Driving, I've Arrived and Complete Job. With the job open, arrival is logged automatically within 150 m of the address by default, and the button is the backup.",
   },
   {
     q: "What can customers see about a technician's location?",
@@ -711,6 +742,14 @@ export const faqs = [
   {
     q: "Is ArrivePing available in Canada?",
     a: "Yes. ArrivePing is built in Winnipeg, Manitoba and is available in Canada and the United States. Prices are in US dollars.",
+  },
+  {
+    q: "Who makes ArrivePing?",
+    a: "NVC360, a software company in Winnipeg, Manitoba, Canada. ArrivePing is NVC360's flagship product. It is not affiliated with Arrive Logistics, Arrive AI, arrive.gg or Arrive, the parking company behind ParkWhiz.",
+  },
+  {
+    q: "Can AI assistants work with ArrivePing?",
+    a: "Yes. ArrivePing has an MCP server, so an AI assistant can look up, create and assign jobs. Keys are available from our team on request. We also build two-way integrations with customers' own systems.",
   },
 ] as const;
 
@@ -756,7 +795,7 @@ export const footer = {
         { label: "Field service software", href: "/field-service-software" },
         { label: "Dispatch software", href: "/dispatch-software" },
         { label: "Fleet tracking", href: "/fleet-tracking" },
-        { label: "Customer ETA texts", href: "/customer-notifications" },
+        { label: "Customer notifications", href: "/customer-notifications" },
         { label: "On-my-way texts", href: "/on-my-way-text-software" },
       ],
     },

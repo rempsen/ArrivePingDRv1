@@ -1,5 +1,6 @@
 ---
 title: "Swing for Base Hits: Why Small Businesses Should Buy Software That Pays Off on Day One"
+seoTitle: "Buy Small Business Software That Pays Off on Day One"
 slug: "base-hit-software-small-business"
 description: "Big software rollouts run over budget and under-deliver. Why small service businesses win with low-cost, low-training tools that pay back in weeks, not years."
 date: "2026-10-27"

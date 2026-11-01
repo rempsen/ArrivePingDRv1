@@ -1,5 +1,6 @@
 ---
 title: "The ROI of Visibility: How Real-Time Technician Tracking Transforms Field Service"
+seoTitle: "The ROI of Real-Time Technician Tracking in Field Service"
 slug: "real-time-technician-tracking-field-service-benefits"
 description: "How real-time technician tracking affects first-time fix rates, workforce productivity and customer calls, with the industry figures behind each claim."
 date: "2026-04-26"
@@ -38,7 +39,7 @@ The benefits of this visibility are profound. According to [Fieldproxy](https://
 
 Picture a mid-sized HVAC company that adds real-time tracking. Before, its dispatchers relied on phone calls to determine technician locations, leading to inaccurate ETAs and frustrated customers. With a modern tracking solution, the dynamic shifts entirely.
 
-Now, when a technician heads out, the customer receives an automated text message with a [live tracking link](/customer-notifications). As the technician approaches, the customer can view their progress on a map, much like tracking a ride-share vehicle. This “Uber-like” experience reduces customer anxiety and sharply cuts “where is my tech?” calls to the dispatch center. In fact, companies offering this level of transparency report a 40% to 60% improvement in customer service responsiveness, according to [US Fleet Tracking](https://www.usfleettracking.com/gps/business/business-company-tracking-systems/).
+Now, when a technician heads out, the customer receives an automated text message with a [live tracking link](/on-my-way-text-software). As the technician approaches, the customer can view their progress on a map, much like tracking a ride-share vehicle. This “Uber-like” experience reduces customer anxiety and sharply cuts “where is my tech?” calls to the dispatch center. In fact, companies offering this level of transparency report a 40% to 60% improvement in customer service responsiveness, according to [US Fleet Tracking](https://www.usfleettracking.com/gps/business/business-company-tracking-systems/).
 
 For the technicians, the experience changes just as much. They no longer waste time calling dispatch for directions or schedule updates. The system automatically logs their arrival and time on site, providing clear proof of service and protecting the business from billing disputes. This streamlined workflow reduces technician burnout and allows them to focus on what they do best: solving the customer’s problem.
 

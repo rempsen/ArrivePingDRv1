@@ -1,5 +1,6 @@
 ---
 title: "How to Uberize Your Field Service Business: The Complete Guide to Real-Time Client Communication"
+seoTitle: "How to Uberize Your Field Service Business: Complete Guide"
 slug: "uberize-your-field-service-business"
 description: "A five-step plan to add real-time technician tracking and automated client texts to a field service business, plus the business case and a rollout checklist."
 date: "2026-03-01"
@@ -93,6 +94,6 @@ Use this checklist to ensure your business is ready to deploy real-time communic
 
 The “Uberization” of field service is not a passing trend; it is the new standard of customer service. By implementing real-time tracking and automated communication, you do not just save money on administrative labor—you build trust.
 
-ArrivePing by NVC360 was built for exactly this: a [live map of your technicians](/fleet-tracking), [automatic assignment](/dispatch-software) of the closest qualified tech, and [on-my-way texts with a live tracking link](/customer-notifications) that need no customer app or account. It is available now.
+ArrivePing by NVC360 was built for exactly this: a [live map of your technicians](/fleet-tracking), [automatic assignment](/dispatch-software) of the closest qualified tech, and [on-my-way texts with a live tracking link](/on-my-way-text-software) that need no customer app or account. It is available now.
 
 See how ArrivePing works for your team: [sign up free](https://arriveping.com/get-started) and try it for 30 days.

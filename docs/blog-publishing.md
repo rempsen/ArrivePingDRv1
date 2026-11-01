@@ -46,6 +46,14 @@ Category must be one of:
 - `ai-operations`
 - `growth`
 
+If the title is longer than 60 characters, add a short search title. The page's H1 and every visible title stay the full `title`; only the `<title>` tag uses it. Count it with code:
+
+```
+seoTitle: "Field Service Software Cost: Prices for 4, 12 and 28 Techs"
+```
+
+Without `seoTitle`, the `<title>` is "<title> | ArrivePing" when that fits in 60 characters, otherwise the title alone.
+
 Two optional frontmatter lines control publishing:
 
 | Line | Effect |
@@ -59,7 +67,8 @@ Two optional frontmatter lines control publishing:
 - **Every number has a source.** Use an inline link to the original study, not to a blog that quotes it. Leave out "internal data" and unsourced percentages.
 - **Product claims match the product today.** Check the claim list in `packages/web/src/web/site/content/landing.ts`. Never claim customers, results or features we don't have.
 - **Internal links:**
-  - 2–3 per post to the matching product page: `/customer-notifications`, `/dispatch-software`, `/fleet-tracking`, `/construction-trades`, `/field-service-software`, `/pricing`, `/compare`.
+  - 2–3 per post to the matching product page: `/on-my-way-text-software`, `/customer-notifications`, `/dispatch-software`, `/fleet-tracking`, `/construction-trades`, `/field-service-software`, `/pricing`, `/compare`.
+  - One anchor family per page, so pages don't compete: "on-my-way text", "live tracking link" → `/on-my-way-text-software`; "customer notifications", "running-late notices" → `/customer-notifications`; "field service management software" → `/field-service-software`; "dispatch software" → `/dispatch-software`; "technician GPS tracking" → `/fleet-tracking`.
   - 1–2 links to related posts.
 - **One topic per post.** Many older posts cover the same ground, such as the "Uber effect" and the 4-hour window. New posts should go deeper on a specific question rather than repeat those.
 - **No stock phrases** ("in today's fast-paced world", "game-changer", "unlock"). Write like an operator who has run crews.
@@ -130,7 +139,7 @@ The evidence behind the standard format, and four habits the research says to ad
 
 Checks before a pull request is opened:
 
-- `description` is 120–158 characters. Count it with code, not by eye.
+- `description` is 120–158 characters, and the `<title>` (`seoTitle` or `title`) is 60 or less. Count them with code, not by eye.
 - Every number in the body has an inline link, and every link appears in Sources.
 - No competitor is characterised beyond what its own public materials say.
 - `bun run build` passes and `bun run seo:check` reports the new URL.

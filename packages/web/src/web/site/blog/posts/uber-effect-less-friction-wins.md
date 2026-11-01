@@ -1,5 +1,6 @@
 ---
 title: "The Uber Effect: Why Less Friction Wins More Business Than a Better Price"
+seoTitle: "The Uber Effect: Less Friction Wins More Than a Lower Price"
 slug: "uber-effect-less-friction-wins"
 description: "How Uber beat taxis on ease rather than price, what ride-hailing data shows about trust and price shopping, and how field service firms can cut friction."
 date: "2026-02-27"
@@ -167,7 +168,7 @@ You don’t have to make the same mistake.
 
 ArrivePing was built by the team at NVC360, operators who managed 800+ field technicians and experienced the friction firsthand — from both sides of the dispatch desk and the client relationship. It is designed to close the communication gaps that erode trust, inflate costs, and put margin at risk.
 
-A [live map of your technicians](/fleet-tracking). [On-my-way texts with a live ETA](/customer-notifications), and a running-late notice when a job slips. Job photos and invoicing. Exports, webhooks, Zapier and Make so it works alongside the tools you already use. No vehicle GPS hardware to install, and most teams dispatch their first job within an hour.
+A [live map of your technicians](/fleet-tracking). [On-my-way texts with a live ETA](/on-my-way-text-software), and a running-late notice when a job slips. Job photos and invoicing. Exports, webhooks, Zapier and Make so it works alongside the tools you already use. No vehicle GPS hardware to install, and most teams dispatch their first job within an hour.
 
 ArrivePing is available now. The Uber Effect is coming to field service; the only question is whether you’re delivering it or watching a competitor do it first.
 

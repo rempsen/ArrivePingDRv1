@@ -1,5 +1,6 @@
 ---
 title: "Live Tracking: Promise of Transparency, Trust, and Efficiency"
+seoTitle: "Live Tracking: Transparency, Trust and Efficiency"
 slug: "live-tracking-promise-of-transparency-trust-and-efficiency"
 description: "How live technician tracking gives customers a clear ETA, cuts “where’s my tech?” calls, and helps dispatchers react to delays and plan staffing better."
 date: "2025-12-17"
@@ -18,7 +19,7 @@ In today’s service-driven world, live tracking isn’t just a nice-to-have fea
 
 ## Building Transparency
 
-Transparency is no longer optional. Customers expect to know exactly where their technician is and when they’ll arrive. With ArrivePing, your clients get an [on-my-way text or email](/customer-notifications) when the technician heads out, with a link to a live tracking page showing the technician’s progress and ETA. No app to download, and the technician’s location is shared only while they’re travelling to that appointment.
+Transparency is no longer optional. Customers expect to know exactly where their technician is and when they’ll arrive. With ArrivePing, your clients get an [on-my-way text or email](/on-my-way-text-software) when the technician heads out, with a link to a live tracking page showing the technician’s progress and ETA. No app to download, and the technician’s location is shared only while they’re travelling to that appointment.
 
 No more guesswork. Whether it’s a homeowner waiting for a furnace repair or a business expecting an urgent electrical fix, [real-time tracking](/blog/how-real-time-technician-tracking-improves-job-completion-rates) eliminates uncertainty and offers peace of mind. For your office staff, it means fewer *“Where’s my tech?”* calls—freeing up time to focus on higher-value tasks.
 

@@ -123,8 +123,8 @@ Unlike “rip-and-replace” systems, **ArrivePing works alongside your existing
 
 - No hardware installation required; location comes from the technician app on their phone
 - Works alongside existing accounting and CRM tools, with exports, webhooks, Zapier and Make
-- iOS and Android technician app with one-tap job acceptance
-- [On-my-way texts with a live tracking page](/customer-notifications) for customers, with no app or account to set up
+- Technician app for iPhone and iPad (Android phones use the web version in the browser) with one-tap job acceptance
+- [On-my-way texts with a live tracking page](/on-my-way-text-software) for customers, with no app or account to set up
 - Built by NVC360 from running 800+ field technicians
 
 ArrivePing is designed for **small and mid-sized businesses in construction, trades, and logistics**. You can see [how it compares with other field service platforms](/compare).

@@ -6,12 +6,13 @@ import { useHeaderOffset } from "../../site/motion/use-scrollspy";
 import { SiteHeader } from "../../site/components/SiteHeader";
 import { SiteFooter } from "../../site/components/SiteFooter";
 import { ClosingCTA, OurStory, Pricing } from "../../site/sections";
-import { brand } from "../../site/config";
+import { brand, TECH_APP_LINE } from "../../site/config";
 import { TradeCards } from "../../site/components/TradeCards";
 import { AppStoreBadge } from "../../site/components/AppStoreBadge";
 import { TradeDay, TradeFeatures, TradeHero, TradeStats } from "../../site/live/TradeParts";
 import { GeoSectionBlock } from "../../site/components/GeoSections";
 import { landingByPath, type Cell, type LandingPage, type Section } from "../../site/content/landing";
+import { LastUpdated, NextLinks } from "../../site/components/NextLinks";
 import { seoByPath } from "../../site/seo/pages";
 import { usePageMeta } from "../../site/seo/head";
 import "../../site/site.css";
@@ -91,6 +92,8 @@ function TradeBody({ page }: { page: LandingPage }) {
               {page.answer.q}
             </h2>
             <p className="lp-answer__a">{page.answer.a}</p>
+            <NextLinks links={page.next} />
+            <LastUpdated />
           </div>
         </div>
       </section>
@@ -118,14 +121,20 @@ function GenericBody({ page }: { page: LandingPage }) {
             <a href={brand.urls.signUp} className="btn btn--primary">
               Sign up free
             </a>
-            <a href={brand.urls.how} className="btn btn--secondary">
-              See how it works
-            </a>
+            {page.path === "/pricing" ? (
+              <a href="/features" className="btn btn--secondary">
+                See every feature
+              </a>
+            ) : (
+              <a href="/pricing" className="btn btn--secondary">
+                See pricing
+              </a>
+            )}
           </div>
           <p className="lp-hero__fine">Free for 30 days · Then from US$49 a month · No setup fee, no contract</p>
           <div className="lp-hero__app">
             <AppStoreBadge height={40} />
-            <span>Technician app for iPhone and iPad</span>
+            <span>{TECH_APP_LINE}</span>
           </div>
         </div>
       </header>
@@ -137,6 +146,8 @@ function GenericBody({ page }: { page: LandingPage }) {
               {page.answer.q}
             </h2>
             <p className="lp-answer__a">{page.answer.a}</p>
+            <NextLinks links={page.next} />
+            <LastUpdated />
           </div>
         </div>
       </section>
@@ -182,7 +193,7 @@ function Faqs({ page }: { page: LandingPage }) {
         <div className="intro intro--center" data-reveal="">
           <span className="eyebrow">FAQs</span>
           <h2 id="lp-faqs" className="h-section">
-            Common questions
+            {page.faqTitle ?? "Common questions"}
           </h2>
         </div>
         <div className="faq" data-reveal="">
@@ -308,7 +319,7 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
             <Head eyebrow={s.eyebrow} title={s.title} body={s.body} />
             <div className="lp-table-wrap" data-reveal="">
               <table className="lp-table">
-                <caption className="visually-hidden">{page.h1}</caption>
+                <caption className="visually-hidden">{page.verified ? `${s.title} (checked ${page.verified})` : s.title}</caption>
                 <thead>
                   <tr>
                     {s.columns.map((c, i) => (
@@ -325,7 +336,7 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
                       {r.cells.map((c, i) => (
                         // data-col: on phones each row becomes a card and the
                         // cells are labelled with their column (landing.css).
-                        <td key={i} className={i === 0 ? "lp-table__ours" : undefined} data-col={s.columns[i + 1] || undefined}>
+                        <td key={i} className={i === 0 && !s.plain ? "lp-table__ours" : undefined} data-col={s.columns[i + 1] || undefined}>
                           <CellView cell={c} />
                         </td>
                       ))}
