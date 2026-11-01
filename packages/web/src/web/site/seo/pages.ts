@@ -74,7 +74,7 @@ const home: SeoPage = {
 };
 
 function sectionFor(p: LandingPage): SeoPage["section"] {
-  if (p.path.startsWith("/compare")) return "Compare";
+  if (p.path.startsWith("/compare") || p.path.startsWith("/alternatives")) return "Compare";
   if (p.path === "/about") return "Company";
   if (p.path === "/pricing") return "Product";
   return "Solutions";

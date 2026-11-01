@@ -14,6 +14,9 @@
 import { construction, delivery, electrical, hvac, plumbing, property } from "./trades";
 import { monthlyPrice, pricingBands, STARTER_PRICE } from "../config";
 import { authorFor } from "../blog/meta";
+import { compareMorePages } from "./compare-more";
+import { toolPages } from "./tools";
+import type { GeoSection } from "./geo-sections";
 
 export const COMPETITORS_VERIFIED = "October 7, 2026";
 /** Jobber re-checked on its own: the Force Fleet Tracking live link in On My Way texts was missing. */
@@ -57,7 +60,8 @@ export type Section =
   | { kind: "choose"; id?: string; title: string; ours: { title: string; items: string[] }; theirs: { title: string; items: string[] } }
   | { kind: "pricing" }
   | { kind: "story" }
-  | { kind: "trades"; title: string; body?: string };
+  | { kind: "trades"; title: string; body?: string }
+  | GeoSection;
 
 /** Rich content for a trade page (HVAC, plumbing…), rendered in the homepage's design language. */
 export type TradeContent = {
@@ -444,7 +448,7 @@ const notifications: LandingPage = {
     q: "Can customers contact the technician?",
     a: "Yes. The tracking page has buttons to text or call the technician, so customers can share access details or coordinate a delay without calling the office.",
   }, PRICE_FAQ],
-  related: ["/on-my-way-text-software", "/fleet-tracking", "/dispatch-software", "/pricing"],
+  related: ["/on-my-way-text-software", "/tools/on-my-way-text-generator", "/fleet-tracking", "/dispatch-software", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -900,7 +904,7 @@ const onMyWay: LandingPage = {
     },
     PRICE_FAQ,
   ],
-  related: ["/customer-notifications", "/fleet-tracking", "/dispatch-software", "/compare/workiz", "/pricing"],
+  related: ["/tools/on-my-way-text-generator", "/customer-notifications", "/fleet-tracking", "/dispatch-software", "/compare/workiz", "/pricing"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -1280,7 +1284,7 @@ const compareHub: LandingPage = {
     q: "Do I need vehicle GPS hardware?",
     a: "Not for ArrivePing, which uses the technician's phone. Jobber's live map uses FleetSharp or Force Fleet Tracking devices, and Housecall Pro's vehicle GPS uses an OBD-II device.",
   }],
-  related: ["/compare/jobber", "/compare/housecall-pro", "/compare/servicetitan", "/compare/workiz", "/compare/onfleet", "/compare/routific", "/pricing"],
+  related: ["/compare/jobber", "/compare/housecall-pro", "/compare/servicetitan", "/compare/workiz", "/compare/arrivy", "/compare/glympse", "/compare/onfleet", "/compare/routific", "/alternatives", "/pricing"],
   sources: [...jobberSources, ...hcpSources, ...stSources, ...workizSources, ...onfleetSources, ...routificSources],
   verified: `${COMPETITORS_VERIFIED} (Housecall Pro October 18, Jobber ${JOBBER_VERIFIED})`,
 };
@@ -1307,6 +1311,8 @@ export const landingPages: LandingPage[] = [
   onfleet,
   routific,
   about,
+  ...compareMorePages,
+  ...toolPages,
 ];
 
 export const landingByPath: Record<string, LandingPage> = Object.fromEntries(landingPages.map((p) => [p.path, p]));

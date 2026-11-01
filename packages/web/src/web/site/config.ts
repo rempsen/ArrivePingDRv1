@@ -797,6 +797,7 @@ export const footer = {
         { label: "Fleet tracking", href: "/fleet-tracking" },
         { label: "Customer notifications", href: "/customer-notifications" },
         { label: "On-my-way texts", href: "/on-my-way-text-software" },
+        { label: "Free tools", href: "/tools" },
       ],
     },
     {
@@ -823,6 +824,9 @@ export const footer = {
         { label: "vs Workiz", href: "/compare/workiz" },
         { label: "vs Onfleet", href: "/compare/onfleet" },
         { label: "vs Routific", href: "/compare/routific" },
+        { label: "vs Arrivy", href: "/compare/arrivy" },
+        { label: "vs Glympse", href: "/compare/glympse" },
+        { label: "Alternatives", href: "/alternatives" },
       ],
     },
     {
