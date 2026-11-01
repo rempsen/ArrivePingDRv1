@@ -155,7 +155,7 @@ const arrivy: LandingPage = {
         { label: "SMS notifications", cells: ["In every plan", src(SRC.arrivyPricing, "\"SMS & Email Notifications\" is listed on the Custom plan cards (Contact Us), not on the Premium card")] },
         { label: "Route planning", cells: ["No multi-stop route optimization; each job goes to the closest qualified technician", src(SRC.arrivyPricing, "\"Route Planning\" on Premium; a \"Route Planning Pro\" add-on for high-density routes")] },
         { label: "Automatic assignment", cells: ["By distance, skills, availability and workload, in every plan", "Not described on the pages we checked"] },
-        { label: "Field app", cells: ["iPhone and iPad app; Android technicians use the browser", src(SRC.arrivyCx, "iOS and Android apps")] },
+        { label: "Field app", cells: ["iPhone and iPad app; Android technicians use the browser", src(SRC.arrivyCx, "Android and iOS apps")] },
       ],
     },
     {
