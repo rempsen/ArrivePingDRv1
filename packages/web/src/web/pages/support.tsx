@@ -241,7 +241,7 @@ function Hero() {
     <section className="help-hero">
       <div className="container help-hero__inner">
         <span className="eyebrow">Help Center</span>
-        <h1 className="help-hero__title">How can we help?</h1>
+        <h1 className="help-hero__title">ArrivePing Help Center: how can we help?</h1>
         <p className="help-hero__lede">
           {canAsk
             ? "Ask anything about ArrivePing and get the steps, button by button. Or browse by what you're trying to get done."
