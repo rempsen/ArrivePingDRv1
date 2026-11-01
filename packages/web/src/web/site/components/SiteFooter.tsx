@@ -58,7 +58,7 @@ export function SiteFooter() {
             </div>
             <p>{footer.description}</p>
             <div className="footer__app">
-              <span className="footer__app-label">Technician app for iPhone and iPad</span>
+              <span className="footer__app-label">Technician app for iPhone and iPad (Android: use the web browser)</span>
               <AppStoreBadge height={40} />
             </div>
             <ul className="footer__social" aria-label="ArrivePing on social media">

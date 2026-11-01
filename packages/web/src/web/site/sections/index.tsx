@@ -1,10 +1,28 @@
 import { useState } from "react";
-import { brand, closing, faqs, monthlyPrice, pricing, stats, story } from "../config";
+import { brand, closing, faqs, monthlyPrice, pricing, stats, story, whatIs } from "../config";
+import { NextLinks } from "../components/NextLinks";
 import { TradeCards } from "../components/TradeCards";
 import { ContactAsk } from "../components/ContactAsk";
 import { AppStoreBadge } from "../components/AppStoreBadge";
 import { useAnchorNav } from "../components/SiteHeader";
 import { CountUp, handleSpotlight } from "../motion/effects";
+
+/* ---------------- What is ArrivePing? (entity answer under the home hero) ---------------- */
+export function WhatIs() {
+  return (
+    <section className="section--tight lp-answer-wrap" aria-labelledby="what-is-arriveping">
+      <div className="container">
+        <div className="lp-answer" data-reveal="">
+          <h2 id="what-is-arriveping" className="lp-answer__q">
+            {whatIs.q}
+          </h2>
+          <p className="lp-answer__a">{whatIs.a}</p>
+          <NextLinks links={whatIs.next} />
+        </div>
+      </div>
+    </section>
+  );
+}
 
 /* ---------------- Who it's for: one card per trade ---------------- */
 export function Audiences() {
@@ -16,7 +34,14 @@ export function Audiences() {
           <h2 className="h-section">
             Built for teams that work <span className="h-muted">at the customer's door.</span>
           </h2>
-          <p className="lede">Pick your trade to see how ArrivePing runs a real day of it.</p>
+          <p className="lede">
+            Pick your trade to see how ArrivePing runs a real day of it. Home cleaning, security, delivery, home repair and other
+            home service teams use the same{" "}
+            <a className="link" href="/field-service-software">
+              field service management software
+            </a>
+            .
+          </p>
         </div>
         <TradeCards />
       </div>
@@ -172,7 +197,7 @@ export function FAQ() {
       <div className="container">
         <div className="intro intro--center" data-reveal="">
           <span className="eyebrow">FAQs</span>
-          <h2 className="h-section">Questions we hear before every signup</h2>
+          <h2 className="h-section">ArrivePing FAQ: setup, pricing and tracking</h2>
         </div>
         <div className="faq" data-reveal="">
           {faqs.map((f) => (
@@ -215,7 +240,7 @@ export function OurStory() {
               <div key={s.label} className="ourstat spot">
                 <CountUp value={s.value} className="ourstat__value" />
                 <p className="ourstat__label">{s.label}</p>
-                {"source" in s && s.source && <span className="ourstat__source">{s.source}</span>}
+                {s.source ? <span className="ourstat__source">{s.source}</span> : null}
               </div>
             ))}
           </div>
@@ -256,7 +281,7 @@ export function ClosingCTA() {
             {closing.help} <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
           </p>
           <div className="closing__app">
-            <span>Technicians: get the ArrivePing app</span>
+            <span>Technicians: get the iPhone and iPad app, or use ArrivePing in an Android phone's web browser</span>
             <AppStoreBadge height={44} />
           </div>
         </div>

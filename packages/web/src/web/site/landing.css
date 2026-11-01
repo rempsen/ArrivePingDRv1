@@ -27,6 +27,9 @@
   gap: 12px;
   margin-top: 28px;
 }
+.site .intro--center .lp-hero__cta {
+  justify-content: center;
+}
 .site .lp-hero__fine {
   margin-top: 16px;
   font-size: 14px;
@@ -259,6 +262,31 @@
   color: var(--ink-secondary);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* "Learn more" links under an answer: the Sources list, introduced by a label */
+.site .lp-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 18px;
+  margin-top: 18px;
+  font-size: 14px;
+}
+.site .lp-next__label {
+  font-weight: 600;
+  color: var(--ink);
+}
+.site .lp-next .lp-sources {
+  margin: 0;
+}
+.site .lp-sources a:hover {
+  color: var(--ink);
+}
+.site .lp-updated {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--ink-muted);
 }
 
 /* Related pages */

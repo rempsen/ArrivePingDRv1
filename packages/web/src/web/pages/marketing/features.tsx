@@ -1,9 +1,10 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { Fragment, useEffect, useState, type ComponentType } from "react";
 import { MarketingShell } from "../../site/components/MarketingShell";
 import { useAnchorNav } from "../../site/components/SiteHeader";
 import { ClosingCTA } from "../../site/sections";
 import { brand } from "../../site/config";
-import { chapters, featuresMeta, hero, industries, jobPhotos, screens, type Chapter, type Screen } from "../../site/content/features";
+import { chapters, featureFaqs, featuresAnswer, featuresMeta, featuresMidCta, hero, industries, jobPhotos, screens, type Chapter, type Screen } from "../../site/content/features";
+import { LastUpdated, NextLinks } from "../../site/components/NextLinks";
 import "../../site/site.css";
 import "../../site/landing.css";
 import "../../site/features.css";
@@ -122,6 +123,59 @@ const EXTRA: Partial<Record<string, ComponentType>> = {
   start: IndustryPicker,
 };
 
+/** Mid-page signup band: the hero's buttons, centred, between two chapters. */
+function MidCta() {
+  return (
+    <section className="section--tight lp-answer-wrap" aria-labelledby="ft-midcta">
+      <div className="container">
+        <div className="intro intro--center" data-reveal="">
+          <h2 id="ft-midcta" className="h-section">
+            {featuresMidCta.title}
+          </h2>
+          <p className="lede">{featuresMidCta.body}</p>
+          <div className="lp-hero__cta">
+            <a className="btn btn--primary" href={brand.urls.signUp}>
+              Sign up free
+            </a>
+            <a className="btn btn--secondary" href="/pricing">
+              See pricing
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The features FAQ, same markup as the landing pages' FAQ (and the FAQPage JSON-LD in seo/pages.ts). */
+function FeatureFaqs() {
+  return (
+    <section id="faqs" className="section section--divided anchor" aria-labelledby="ft-faqs">
+      <div className="container">
+        <div className="intro intro--center" data-reveal="">
+          <span className="eyebrow">FAQs</span>
+          <h2 id="ft-faqs" className="h-section">
+            ArrivePing features FAQ
+          </h2>
+        </div>
+        <div className="faq" data-reveal="">
+          {featureFaqs.map((f) => (
+            <details key={f.q}>
+              <summary>
+                <h3 className="lp-faq__q">{f.q}</h3>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </summary>
+              <p className="faq__a">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ---------------- page ---------------- */
 
 function useActiveChapter() {
@@ -212,6 +266,18 @@ export default function FeaturesPage() {
           <p className="lp-hero__fine">Free for 30 days. No setup fee, no contract.</p>
         </div>
       </header>
+      <section className="section--tight lp-answer-wrap" aria-labelledby="ft-answer">
+        <div className="container">
+          <div className="lp-answer" data-reveal="">
+            <h2 id="ft-answer" className="lp-answer__q">
+              {featuresAnswer.q}
+            </h2>
+            <p className="lp-answer__a">{featuresAnswer.a}</p>
+            <NextLinks links={featuresAnswer.next} />
+            <LastUpdated />
+          </div>
+        </div>
+      </section>
       <nav className="ft-rail" aria-label="Feature chapters">
         <div className="container ft-rail__in">
           {chapters.map((c) => (
@@ -223,8 +289,12 @@ export default function FeaturesPage() {
         </div>
       </nav>
       {chapters.map((c) => (
-        <ChapterView key={c.id} c={c} />
+        <Fragment key={c.id}>
+          <ChapterView c={c} />
+          {c.id === featuresMidCta.after && <MidCta />}
+        </Fragment>
       ))}
+      <FeatureFaqs />
       <ClosingCTA />
     </MarketingShell>
   );
