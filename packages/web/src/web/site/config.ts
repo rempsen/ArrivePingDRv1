@@ -43,7 +43,7 @@ export const brand = {
 /**
  * Primary navigation: real pages, not homepage anchors, so every page links to
  * the hubs (features, the solution pillars, pricing and comparisons) sitewide.
- * Seven short labels, narrower than the old set, so the desktop bar keeps its layout.
+ * Eight short labels (About added 2026-11-02 for the leadership section), still sized to keep the desktop bar on one line.
  */
 export const nav = [
   { label: "Features", href: "/features" },
@@ -52,6 +52,7 @@ export const nav = [
   { label: "Pricing", href: "/pricing" },
   { label: "Compare", href: "/compare" },
   { label: "Blog", href: "/blog" },
+  { label: "About", href: "/about" },
   { label: "Support", href: "/support" },
 ] as const;
 
