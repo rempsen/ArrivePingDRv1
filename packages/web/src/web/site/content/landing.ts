@@ -371,7 +371,7 @@ const dispatch: LandingPage = {
           src: "/img/site/app/dispatch-live-map.webp?v=7c190a1b",
           w: 2400,
           h: 1500,
-          alt: "The ArrivePing live dispatch map for a sample HVAC company in Winnipeg: 17 unassigned jobs listed on the left, six technicians and clusters of jobs on the street map, and a hover card for Marcus Bell showing he is on site at a no-heat call with a duct-balancing job next at 4:00 PM.",
+          alt: "The ArrivePing live dispatch map for a sample HVAC company in Winnipeg: 17 unassigned jobs listed on the left, six technicians and clusters of jobs on the street map, and a hover card for Marcus Bell showing he is on site at a thermostat-not-responding job, with a duct-balancing job next at 4:00 PM.",
           caption: "The live map: unassigned jobs on the left, every technician on the street map, and who's doing what. Real ArrivePing screen, sample company.",
         },
       ],
