@@ -291,6 +291,35 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
           </div>
         </section>
       );
+    case "team":
+      return (
+        <section className="section section--divided" id={s.id}>
+          <div className="container">
+            <Head eyebrow={s.eyebrow} title={s.title} body={s.body} />
+            <div className="lp-grid lp-team">
+              {s.people.map((p, i) => (
+                <article key={p.id} id={p.id} className="lp-card lp-team__card" data-reveal="" data-reveal-delay={String(i % 3)}>
+                  <picture>
+                    <source srcSet={`/img/site/team/${p.id}.webp`} type="image/webp" />
+                    <img
+                      className="lp-team__photo"
+                      src={`/img/site/team/${p.id}.jpg`}
+                      alt={`${p.name}, ${p.role}`}
+                      width={96}
+                      height={96}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </picture>
+                  <h3 className="h-card">{p.name}</h3>
+                  <span className="lp-team__role">{p.role}</span>
+                  <p>{p.bio}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      );
     case "prose":
       return (
         <section className="section section--divided" id={s.id}>

@@ -13,7 +13,6 @@
 
 import { construction, delivery, electrical, hvac, plumbing, property } from "./trades";
 import { monthlyPrice, pricingBands, STARTER_PRICE } from "../config";
-import { authorFor } from "../blog/meta";
 import { compareMorePages } from "./compare-more";
 import { toolPages } from "./tools";
 import type { GeoSection } from "./geo-sections";
@@ -34,7 +33,7 @@ const [GROW, FLEET] = pricingBands;
  * Central time, which Google treats as an unreliable lastmod).
  * Bump it when page copy changes, not when the site is merely rebuilt.
  */
-export const CONTENT_UPDATED = "2026-11-01";
+export const CONTENT_UPDATED = "2026-11-02";
 
 export type Cell = string | { text: string; href?: string };
 
@@ -60,6 +59,15 @@ export type Section =
   | { kind: "choose"; id?: string; title: string; ours: { title: string; items: string[] }; theirs: { title: string; items: string[] } }
   | { kind: "pricing" }
   | { kind: "story" }
+  | {
+      kind: "team";
+      id?: string;
+      eyebrow?: string;
+      title: string;
+      body?: string;
+      /** Headshots live in public/img/site/team/<id>.webp (+ .jpg fallback), square, 400×400. */
+      people: readonly { id: string; name: string; role: string; bio: string }[];
+    }
   | { kind: "trades"; title: string; body?: string }
   | GeoSection;
 
@@ -514,6 +522,28 @@ const pricingPage: LandingPage = {
   related: ["/features", "/compare", "/field-service-software", "/dispatch-software", "/customer-notifications"],
 };
 
+/** The NVC360 / ArrivePing leadership team, shown on /about (and in llms-full.txt). Bios supplied by each person, Nov 2026. */
+export const LEADERSHIP = [
+  {
+    id: "dan-rosenblat",
+    name: "Dan Rosenblat",
+    role: "Founder & CEO",
+    bio: "Dan founded NVC360 and leads ArrivePing, its flagship product. He has spent more than 28 years as a founder and board member, with six successful exits. As president of his previous flooring company he grew the business more than 500% and worked with supply-chain partners to cut clients' purchase costs by at least 25%. He also leads BMD Materials, a commercial interior finishes and construction company, and EV Rides, an importer of electric vehicles and last-mile transportation. Dan serves on the boards of YPO Manitoba and YPO Canada.",
+  },
+  {
+    id: "gregor-mckenzie",
+    name: "Gregor McKenzie",
+    role: "Vice President of Product",
+    bio: "Gregor leads product at NVC360 and ArrivePing. He spent more than 15 years as a senior product manager in online travel, shipping large-scale, customer-facing products with agile teams and working with stakeholders across the whole software lifecycle. He holds a Bachelor of Science in Computer Science from the University of Manitoba, and believes a motivated, well-supported development team is the key to outstanding products.",
+  },
+  {
+    id: "joel-tetrault",
+    name: "Joel Tetrault",
+    role: "Vice President of Software",
+    bio: "Joel leads software development at NVC360 and ArrivePing. He has more than 13 years of full-stack experience, mostly in Python and TypeScript, including seven years designing and building grain storage and monitoring software, two years on police records software and two years on cybersecurity software. He holds a Bachelor of Computer Science (Honours, co-op) from the University of Manitoba, graduating in 2014 on the Dean's Honour List.",
+  },
+] as const;
+
 const about: LandingPage = {
   path: "/about",
   label: "About",
@@ -541,11 +571,12 @@ const about: LandingPage = {
   sections: [
     { kind: "story" },
     {
-      kind: "prose",
-      id: "dan-rosenblat",
-      eyebrow: "Founder",
-      title: "Who founded ArrivePing?",
-      paragraphs: [`${authorFor("Dan Rosenblat").name}, ${authorFor("Dan Rosenblat").role}. ${authorFor("Dan Rosenblat").bio}`],
+      kind: "team",
+      id: "leadership",
+      eyebrow: "Leadership",
+      title: "Who founded ArrivePing, and who leads it?",
+      body: "ArrivePing was founded by Dan Rosenblat. Three people lead NVC360 and ArrivePing from Winnipeg.",
+      people: LEADERSHIP,
     },
     {
       kind: "prose",

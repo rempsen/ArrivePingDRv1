@@ -76,7 +76,13 @@ const WINNIPEG = {
   addressCountry: "CA",
 };
 
-const FOUNDER = { "@type": "Person", name: "Dan Rosenblat", jobTitle: "Founder & CEO" };
+const FOUNDER = {
+  "@type": "Person",
+  name: "Dan Rosenblat",
+  jobTitle: "Founder & CEO",
+  url: `${SITE_URL}/about#dan-rosenblat`,
+  image: `${SITE_URL}/img/site/team/dan-rosenblat.jpg`,
+};
 
 /** NVC360, the parent company (referenced from the ArrivePing Organization). */
 export function parentOrganization(): JsonLd {

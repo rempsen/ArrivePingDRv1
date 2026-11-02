@@ -326,6 +326,8 @@ function sectionText(s: Section, t: (x: string) => string): string | null {
       const items = (s.bullets ?? []).filter((b) => ANDROID_APP_LIVE || !ANDROID_CLAIM.test(b)).map(t);
       return [`### ${s.title}`, ...paras, items.length ? bullets(items) : ""].filter(Boolean).join("\n\n");
     }
+    case "team":
+      return [`### ${s.title}`, s.body ? t(s.body) : "", bullets(s.people.map((p) => t(`**${p.name}, ${p.role}**: ${p.bio}`)))].filter(Boolean).join("\n\n");
     case "table": {
       const head = `| ${s.columns.map(cell).join(" | ")} |\n| ${s.columns.map(() => "---").join(" | ")} |`;
       const rows = s.rows.map((r) => `| ${[cell(r.label), ...r.cells.map(cell)].join(" | ")} |`).join("\n");
