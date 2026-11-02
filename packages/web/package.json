@@ -11,6 +11,7 @@
     "smoke": "bun run scripts/smoke-build.mjs",
     "seo:check": "bun run tools/seo-check.ts",
     "seo:check:live": "bun run tools/seo-check.ts --live",
+    "listing:facts": "bun run tools/listing-facts.ts",
     "analytics:dashboard": "bun run tools/analytics-dashboard.ts",
     "logo:check": "bun --env-file=../../.env run tools/logo-plate-check.ts",
     "ask:eval": "bun run tools/guide-ask-eval.ts",
