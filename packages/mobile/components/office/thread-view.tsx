@@ -17,6 +17,7 @@ import { useBoard } from "../../lib/use-board";
 import { STATUS_LABEL } from "../../lib/board";
 import { useAccess } from "../../lib/use-access";
 import { throwIfNotOk } from "../../lib/api-error";
+import { useBottomBarPadding } from "../../lib/bottom-inset";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -41,6 +42,8 @@ export function ThreadView({ techId, embedded }: { techId: string; embedded?: bo
   // Sending is a POST on /api/messages → work_orders:edit; reading only needs view.
   const { can } = useAccess();
   const canSend = can("work_orders:edit");
+  // Full screen, the composer sits above Android's navigation bar (lib/bottom-inset-core.ts).
+  const composerBottom = useBottomBarPadding(28, 10);
   const board = useBoard(null);
   const tech = board.data?.techs.find((t) => t.id === techId);
 
@@ -118,6 +121,7 @@ export function ThreadView({ techId, embedded }: { techId: string; embedded?: bo
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={70}>
           <MessageThread
             readOnly={!canSend}
+            composerBottom={embedded ? 28 : composerBottom}
             messages={thread.data?.messages ?? []}
             mine={(m) => m.senderRole === "dispatch"}
             theirName={name}

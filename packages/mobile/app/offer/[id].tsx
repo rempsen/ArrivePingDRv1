@@ -40,6 +40,7 @@ import { useCustomerNoun, useDistanceUnit, useJobNoun } from "../../lib/use-bran
 import { fmtKm } from "../../lib/units";
 import { fmtMins, fmtMinsShort } from "../../lib/offer";
 import { isPracticeJob, isSampleJob } from "../../lib/practice";
+import { useBottomBarPadding } from "../../lib/bottom-inset";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -93,6 +94,8 @@ export default function OfferDetails() {
   const { noun: customerNoun } = useCustomerNoun();
   const { accept, decline, pendingId } = useOfferActions();
   const [declineOpen, setDeclineOpen] = useState(false);
+  // Accept / Decline sit above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const footerPad = useBottomBarPadding(28, 12);
 
   const job = useQuery({
     queryKey: ["job", id],
@@ -364,12 +367,12 @@ export default function OfferDetails() {
       </ScrollView>
 
       {open ? (
-        <View style={s.footer}>
+        <View style={[s.footer, { paddingBottom: footerPad }]}>
           <Button title="Decline" variant="outline" disabled={busy} onPress={() => setDeclineOpen(true)} style={{ flex: 1 }} />
           <Button title="Accept" variant="success" loading={busy && accept.isPending} disabled={busy} onPress={doAccept} style={{ flex: 2 }} />
         </View>
       ) : o?.assignStatus === "accepted" ? (
-        <View style={s.footer}>
+        <View style={[s.footer, { paddingBottom: footerPad }]}>
           <Button title={`Open ${jobNoun.toLowerCase()}`} onPress={() => router.replace(`/job/${id}` as never)} style={{ flex: 1 }} />
         </View>
       ) : null}

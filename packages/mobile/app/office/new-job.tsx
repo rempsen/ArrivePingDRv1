@@ -11,6 +11,7 @@ import { DatetimeSheet } from "../../components/office/datetime-sheet";
 import { PickCard } from "../../components/office/pick-card";
 import { showToast } from "../../components/office/undo-toast";
 import { C, R, S, WIDE } from "../../lib/theme";
+import { useAndroidBottomInset } from "../../lib/bottom-inset";
 import { authHeaders } from "../../lib/auth";
 import { getActiveCompany } from "../../lib/active-company";
 import { useBoard } from "../../lib/use-board";
@@ -34,6 +35,8 @@ const PRIORITIES: Array<{ key: Priority; label: string; color: string }> = [
  * the job can be finished there afterwards.
  */
 export default function NewJob() {
+  // Lets the last control scroll clear of Android's navigation bar (lib/bottom-inset-core.ts).
+  const navInset = useAndroidBottomInset();
   const router = useRouter();
   const qc = useQueryClient();
   const board = useBoard(null);
@@ -113,7 +116,7 @@ export default function NewJob() {
         </Pressable>
       </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={[s.content, WIDE]} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl * 2 + navInset }]} keyboardShouldPersistTaps="handled">
           <PickCard
             icon={<User color={C.brand} size={20} weight="fill" />}
             label="Client"

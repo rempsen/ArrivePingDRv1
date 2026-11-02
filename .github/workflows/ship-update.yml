@@ -1,0 +1,77 @@
+name: Ship app update (over the air)
+
+# Manually triggered only (GitHub's "Run workflow" button, or the
+# workflow_dispatch API). Never runs on push/PR.
+#
+# Publishes the current JavaScript (screens, styles, logic) as an EAS Update
+# on the `production` channel. Installed apps of the SAME version
+# (app.json expo.version, runtimeVersion policy appVersion) download it in the
+# background and use it on their next launch. No store review is involved.
+#
+# Only for JavaScript changes. Anything native (a new library, a permission,
+# app.json plugins, icons) needs a new store build instead: Ship iOS app /
+# Ship Android app.
+#
+# platform=android (default) reaches Android installs only; ios and all also
+# reach the live App Store app, so pick those deliberately.
+# Runbook: packages/mobile/docs/PLAY_STORE_RELEASE.md ("Over-the-air updates").
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Which installs get the update"
+        required: false
+        type: choice
+        options: [android, ios, all]
+        default: android
+      message:
+        description: "What changed (shown in Expo's update list)"
+        required: true
+      requestedBy:
+        description: "Who/what triggered this run"
+        required: false
+        default: "manual"
+
+concurrency:
+  group: ship-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Publish the update
+        run: |
+          version="$(jq -r '.expo.version' app.json)"
+          bunx --yes eas-cli update --channel production --environment production \
+            --platform "$PLATFORM" --message "$MESSAGE" --non-interactive --json > update.json
+          group="$(jq -r '.[0].group // empty' update.json)"
+          [ -n "$group" ] || { echo "::error::Couldn't read the update group from eas-cli."; cat update.json; exit 1; }
+          {
+            echo "## Over-the-air update: $PLATFORM, version $version"
+            echo
+            echo "- **What changed:** $MESSAGE"
+            echo "- **Update group:** https://expo.dev/accounts/nvc360/projects/nvc360v4/updates/$group"
+            echo "- Reaches $PLATFORM installs of version $version on their next launch (open, close, open again to see it sooner)."
+            echo "- Requested by: ${REQUESTED_BY}"
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          PLATFORM: ${{ inputs.platform || 'android' }}
+          MESSAGE: ${{ inputs.message }}
+          REQUESTED_BY: ${{ inputs.requestedBy || 'manual' }}

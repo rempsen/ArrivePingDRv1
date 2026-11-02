@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Sentry } from "../lib/sentry";
 import { R } from "../lib/theme";
+import { launchBottomBarPadding } from "../lib/bottom-inset";
 
 interface Props {
   children: ReactNode;
@@ -188,7 +189,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
           {/* Toast bar */}
           <TouchableOpacity
-            style={s.toast}
+            style={[s.toast, { paddingBottom: launchBottomBarPadding(28, 14) }]}
             onPress={() => this.setState((p) => ({ expanded: !p.expanded }))}
             activeOpacity={0.85}
           >

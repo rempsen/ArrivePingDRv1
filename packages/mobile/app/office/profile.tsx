@@ -10,6 +10,7 @@ import { authClient, clearToken } from "../../lib/auth";
 import { unregisterPushToken } from "../../lib/push";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
 import { C, R, S, WIDE } from "../../lib/theme";
+import { useAndroidBottomInset } from "../../lib/bottom-inset";
 import { Avatar, Card, Button, Row } from "../../components/ui";
 import { isBiometricAvailable, getLockPreference, setLockPreference, clearUnlockStamp } from "../../lib/biometric-lock";
 import { clearActiveCompany, getActiveCompany, setActiveCompany } from "../../lib/active-company";
@@ -38,6 +39,8 @@ const ROLE_LABEL: Record<string, string> = {
  * technician's record, which office mode never touches.
  */
 export default function OfficeProfile() {
+  // Lets the last control scroll clear of Android's navigation bar (lib/bottom-inset-core.ts).
+  const navInset = useAndroidBottomInset();
   const router = useRouter();
   const qc = useQueryClient();
   const { data: session } = authClient.useSession();
@@ -123,7 +126,7 @@ export default function OfficeProfile() {
         <Text style={s.topTitle}>Profile</Text>
         <View style={{ width: 22 }} />
       </View>
-      <ScrollView contentContainerStyle={[s.content, WIDE]}>
+      <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl + navInset }]}>
         <View style={s.hero}>
           <Avatar name={user?.name} photoUrl={user?.image} size={64} />
           <Text style={s.name}>{user?.name ?? "Office"}</Text>

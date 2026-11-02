@@ -13,6 +13,7 @@ import { NOTIFY_SUMMARY_KEY } from "../lib/notify-summary";
 import { DECLINE_REASONS } from "../lib/offer";
 import { C, R } from "../lib/theme";
 import { Button } from "./ui";
+import { useBottomBarPadding } from "../lib/bottom-inset";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -92,6 +93,8 @@ export function DeclineSheet({
 }) {
   const [code, setCode] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const sheetPad = useBottomBarPadding(30, 20);
   const list = reasons?.length ? reasons : DECLINE_REASONS;
   const noun = jobNoun.toLowerCase();
   const close = () => {
@@ -102,7 +105,7 @@ export function DeclineSheet({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.wrap}>
-        <View style={s.sheet}>
+        <View style={[s.sheet, { paddingBottom: sheetPad }]}>
           <Text style={s.title}>Decline this {noun}?</Text>
           <Text style={s.sub}>It goes back to dispatch to offer someone else. Tell the office why.</Text>
           <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">

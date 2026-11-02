@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import { authHeaders } from "../lib/auth";
 import { C, R } from "../lib/theme";
 import { messageFromBody } from "../lib/api-error";
+import { useBottomBarPadding } from "../lib/bottom-inset";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -27,6 +28,8 @@ export function DeleteAccountSheet({ open, onClose, onDeleted }: { open: boolean
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const sheetPad = useBottomBarPadding(34, 20);
 
   useEffect(() => {
     if (!open) return;
@@ -93,7 +96,7 @@ export function DeleteAccountSheet({ open, onClose, onDeleted }: { open: boolean
     <Modal visible={open} transparent animationType="slide" onRequestClose={busy ? undefined : onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} accessibilityLabel="Close" />
-        <View style={s.sheet} accessibilityViewIsModal>
+        <View style={[s.sheet, { paddingBottom: sheetPad }]} accessibilityViewIsModal>
           <View style={s.handle} />
           <View style={s.titleRow}>
             <View style={s.iconWrap}>

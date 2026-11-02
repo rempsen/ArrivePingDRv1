@@ -99,6 +99,7 @@ import {
   type Parsed,
 } from "../lib/forms/job-form-data";
 import { jobFormSaveKey, useSaveJobAnswers } from "../lib/forms/use-job-form";
+import { useBottomBarPadding } from "../lib/bottom-inset";
 
 export interface JobFormHandle {
   /** Commit any half-typed answers now; returns the required questions still unanswered. */
@@ -702,6 +703,8 @@ function ChoicePicker({
   readOnly: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const sheetPad = useBottomBarPadding(34, 20);
   const bad = !!selected && (item.flagOn ?? []).includes(selected);
   return (
     <>
@@ -719,7 +722,7 @@ function ChoicePicker({
       </Pressable>
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <View style={st.sheetWrap}>
-          <View style={st.sheet}>
+          <View style={[st.sheet, { paddingBottom: sheetPad }]}>
             <Text style={st.sheetTitle}>{item.label}</Text>
             <ScrollView style={{ maxHeight: 420 }}>
               {(item.options ?? []).map((o) => {
@@ -1050,6 +1053,7 @@ function SignaturePreview({ src }: { src: string }) {
 
 function SignatureAnswer({ item, answer, readOnly, commit }: Parameters<typeof Question>[0]) {
   const [open, setOpen] = useState(false);
+  const sheetPad = useBottomBarPadding(34, 20);
   const value = typeof answer?.value === "string" ? answer.value : null;
   const who = item.signer === "technician" ? "Technician signs" : "Customer signs";
   return (
@@ -1079,7 +1083,7 @@ function SignatureAnswer({ item, answer, readOnly, commit }: Parameters<typeof Q
       )}
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <View style={st.sheetWrap}>
-          <View style={st.sheet}>
+          <View style={[st.sheet, { paddingBottom: sheetPad }]}>
             <Text style={st.sheetTitle}>{item.label}</Text>
             <Text style={st.sheetSub}>{who} with a finger, then print the name.</Text>
             <SignaturePad

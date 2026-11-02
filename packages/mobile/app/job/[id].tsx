@@ -82,6 +82,7 @@ import {
 } from "../../lib/photo-queue";
 import { choosePhotoSource, pickPhoto, type PhotoSource } from "../../lib/pick-photo";
 import { SIGNED_OUT, messageFromBody, throwIfNotOk } from "../../lib/api-error";
+import { useBottomBarPadding } from "../../lib/bottom-inset";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
@@ -134,7 +135,11 @@ export default function JobDetail() {
   const { noun: customerNoun } = useCustomerNoun();
   const { noun: jobNoun } = useJobNoun();
   const unit = useDistanceUnit();
-  
+  // The sticky action and the release sheet sit above Android's navigation
+  // bar when the phone shows one (lib/bottom-inset-core.ts); iOS unchanged.
+  const footerPad = useBottomBarPadding(28, 16);
+  const sheetPad = useBottomBarPadding(30, 20);
+
   const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [msg, setMsg] = useState("");
   const [dispatchMsg, setDispatchMsg] = useState("");
@@ -1934,12 +1939,13 @@ export default function JobDetail() {
             </View>
           )}
 
-          <View style={{ height: 90 }} />
+          {/* Clears the sticky action, which grows with Android's navigation bar. */}
+          <View style={{ height: 90 + footerPad - 28 }} />
         </ScrollView>
 
         {/* Sticky action */}
         {action && (
-          <View style={s.footer}>
+          <View style={[s.footer, { paddingBottom: footerPad }]}>
             {setStatus.isPaused && (
               <Text style={s.offlineHint}>No signal — will send the moment you're back online</Text>
             )}
@@ -2041,7 +2047,7 @@ export default function JobDetail() {
           </View>
         )}
         {j.status === "completed" && (
-          <View style={s.footer}>
+          <View style={[s.footer, { paddingBottom: footerPad }]}>
             <View style={s.doneBanner}>
               <CheckSquare color={C.green} size={20} weight="fill" />
               <Text style={s.doneTxt}>{jobNoun} completed{techPay > 0 ? ` · ${money(techPay)} earned` : ""}</Text>
@@ -2056,7 +2062,7 @@ export default function JobDetail() {
           onRequestClose={() => setReleaseOpen(false)}
         >
           <View style={s.sheetWrap}>
-            <View style={s.sheet}>
+            <View style={[s.sheet, { paddingBottom: sheetPad }]}>
               <Text style={s.sheetTitle}>Send this {jobNoun.toLowerCase()} back to dispatch</Text>
               <Text style={s.sheetSub}>
                 The office is notified right away and will reassign it. The {customerNoun.toLowerCase()} isn't

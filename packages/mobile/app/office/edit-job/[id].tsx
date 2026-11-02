@@ -12,6 +12,7 @@ import { PickCard } from "../../../components/office/pick-card";
 import { CustomFieldInput } from "../../../components/office/field-inputs";
 import { showToast } from "../../../components/office/undo-toast";
 import { C, R, S, WIDE } from "../../../lib/theme";
+import { useAndroidBottomInset } from "../../../lib/bottom-inset";
 import { authHeaders } from "../../../lib/auth";
 import { getActiveCompany } from "../../../lib/active-company";
 import { useBooking, bookingKey } from "../../../lib/use-booking";
@@ -39,6 +40,8 @@ const STATUS_WORD: Record<string, string> = { pending: "Pending", confirmed: "Co
  * through its own endpoint after the patch lands.
  */
 export default function EditJob() {
+  // Lets the last control scroll clear of Android's navigation bar (lib/bottom-inset-core.ts).
+  const navInset = useAndroidBottomInset();
   const router = useRouter();
   const qc = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -201,7 +204,7 @@ export default function EditJob() {
         <Empty icon={<Warning color={C.amber} size={28} />} text="Your role can view this job but not edit it" sub="Ask an admin on your account." />
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={[s.content, WIDE]} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl * 2 + navInset }]} keyboardShouldPersistTaps="handled">
             {/* The job */}
             <Card>
               <Field label="Title" value={d.title} onChange={(v) => update({ title: v })} placeholder={d.serviceName || "What's the job?"} />

@@ -27,6 +27,7 @@ export function MessageThread({
   onSend,
   empty,
   readOnly,
+  composerBottom = 28,
 }: {
   messages: ThreadMessage[];
   /** Is this message from the person holding the phone? */
@@ -41,6 +42,8 @@ export function MessageThread({
   empty?: React.ReactNode;
   /** Show the conversation without a composer (no permission to send). */
   readOnly?: boolean;
+  /** Padding under the composer. A full-screen thread passes room for Android's navigation bar. */
+  composerBottom?: number;
 }) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<ScrollView>(null);
@@ -82,11 +85,11 @@ export function MessageThread({
             })}
       </ScrollView>
       {readOnly ? (
-        <View style={s.composer}>
+        <View style={[s.composer, { paddingBottom: composerBottom }]}>
           <Text style={[s.readOnly, WIDE]}>Your role can read this thread but not send. Ask an admin on your account.</Text>
         </View>
       ) : (
-      <View style={s.composer}>
+      <View style={[s.composer, { paddingBottom: composerBottom }]}>
         <View style={[s.composerInner, WIDE]}>
           <TextInput
             value={draft}

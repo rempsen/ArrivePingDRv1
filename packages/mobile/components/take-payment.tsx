@@ -6,6 +6,7 @@ import { authHeaders } from "../lib/auth";
 import { C, money } from "../lib/theme";
 import { Button } from "./ui";
 import { messageFromBody } from "../lib/api-error";
+import { useBottomBarPadding } from "../lib/bottom-inset";
 
 type LinkResp = { url: string; qr: string; total: number; paid: boolean; cardPayments: boolean; canText: boolean; sent: boolean };
 
@@ -28,6 +29,8 @@ async function fetchLink(api: string, bookingId: string, send = false): Promise<
  */
 export function TakePayment({ api, bookingId, total, paid }: { api: string; bookingId: string; total?: number; paid?: boolean }) {
   const [open, setOpen] = useState(false);
+  // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const sheetPad = useBottomBarPadding(36, 20);
   const q = useQuery({
     queryKey: ["pay-link", bookingId],
     queryFn: () => fetchLink(api, bookingId),
@@ -58,7 +61,7 @@ export function TakePayment({ api, bookingId, total, paid }: { api: string; book
       />
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
         <View style={s.backdrop}>
-          <View style={s.sheet}>
+          <View style={[s.sheet, { paddingBottom: sheetPad }]}>
             <View style={s.head}>
               <View style={{ flex: 1 }}>
                 <Text style={s.title}>Take payment</Text>
