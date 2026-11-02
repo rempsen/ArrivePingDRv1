@@ -173,7 +173,7 @@ Android delivers push through Firebase Cloud Messaging. Without it, the app work
 
 A change to JavaScript only (screens, styles, logic) doesn't need a new build or a Google review. GitHub → **Actions** → **Ship app update (over the air)** → **Run workflow**:
 
-- `platform: android` (the default) reaches Android installs only. `ios` and `all` also reach the live App Store app, so pick those deliberately.
+- `platform: all` (the default) reaches Android installs and the live App Store app. Pick `android` or `ios` to limit an update to one of them.
 - Write what changed in `message`.
 
 Installed apps of the same `expo.version` download it in the background and use it on the next launch: open the app, close it fully, open it again. Anything native (a new library, a permission, `app.json` plugins, icons) still needs a new build.

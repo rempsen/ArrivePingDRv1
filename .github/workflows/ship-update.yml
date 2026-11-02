@@ -12,8 +12,8 @@ name: Ship app update (over the air)
 # app.json plugins, icons) needs a new store build instead: Ship iOS app /
 # Ship Android app.
 #
-# platform=android (default) reaches Android installs only; ios and all also
-# reach the live App Store app, so pick those deliberately.
+# platform=all (default) reaches Android and the live App Store app; pick
+# android or ios to limit an update to one of them.
 # Runbook: packages/mobile/docs/PLAY_STORE_RELEASE.md ("Over-the-air updates").
 on:
   workflow_dispatch:
@@ -22,8 +22,8 @@ on:
         description: "Which installs get the update"
         required: false
         type: choice
-        options: [android, ios, all]
-        default: android
+        options: [all, android, ios]
+        default: all
       message:
         description: "What changed (shown in Expo's update list)"
         required: true
@@ -72,6 +72,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          PLATFORM: ${{ inputs.platform || 'android' }}
+          PLATFORM: ${{ inputs.platform || 'all' }}
           MESSAGE: ${{ inputs.message }}
           REQUESTED_BY: ${{ inputs.requestedBy || 'manual' }}
