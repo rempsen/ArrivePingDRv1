@@ -357,6 +357,63 @@ const dispatch: LandingPage = {
         { title: "Running-late watch", body: "When a job is slipping, dispatch is flagged first and the customer is told if nobody acts." },
       ],
     },
+    {
+      kind: "shots",
+      id: "live-map",
+      eyebrow: "Live map",
+      title: "See every technician and every open job on one map",
+      paragraphs: [
+        "The map shows where each technician is right now and what they're doing: on site, en route or free. Hover a technician to see their current job and what's next.",
+        "Unassigned jobs wait in the panel on the left. Drag one onto a technician to assign it, or let auto-assign pick the closest qualified person.",
+      ],
+      shots: [
+        {
+          src: "/img/site/app/dispatch-live-map.webp?v=7c190a1b",
+          w: 2400,
+          h: 1500,
+          alt: "The ArrivePing live dispatch map for a sample HVAC company in Winnipeg: 17 unassigned jobs listed on the left, six technicians and clusters of jobs on the street map, and a hover card for Marcus Bell showing he is on site at a thermostat-not-responding job, with a duct-balancing job next at 4:00 PM.",
+          caption: "The live map: unassigned jobs on the left, every technician on the street map, and who's doing what. Real ArrivePing screen, sample company.",
+        },
+      ],
+    },
+    {
+      kind: "shots",
+      id: "calendar",
+      eyebrow: "Calendar",
+      title: "Plan the week across your whole team",
+      paragraphs: [
+        "The calendar lays out each technician's week as a row, with every job and a bar showing how full their day is. You can spot an overbooked day, or an empty Saturday, before it becomes a problem.",
+        "Switch between day, week and month views, filter by skill, and search for any job, customer or technician.",
+      ],
+      shots: [
+        {
+          src: "/img/site/app/dispatch-calendar-week.webp?v=cd2b3af9",
+          w: 2400,
+          h: 1500,
+          alt: "The ArrivePing scheduler in week view for a sample HVAC company: technicians as rows and Monday to Sunday as columns, each day showing the technician's booked hours, a fill bar and that day's jobs with start times.",
+          caption: "Week view: each technician's booked hours and jobs, day by day. Real ArrivePing screen, sample company.",
+        },
+      ],
+    },
+    {
+      kind: "shots",
+      id: "scheduler",
+      eyebrow: "Scheduler",
+      title: "Run today hour by hour",
+      paragraphs: [
+        "The day view puts every technician on a timeline with a line marking the current time, so you can see who is on site, who is on the way and where there's a gap.",
+        "Jobs still to schedule wait in the queue on the right. Press Find a slot and ArrivePing suggests the best openings by skill, drive time and workload. You can also drag a job onto any row.",
+      ],
+      shots: [
+        {
+          src: "/img/site/app/dispatch-scheduler-day.webp?v=afb3e821",
+          w: 2400,
+          h: 1500,
+          alt: "The ArrivePing scheduler in day view for a sample HVAC company: six technicians on a timeline with their jobs, a red line at the current time, each technician's status and booked hours, and a To schedule queue of 17 jobs with Find a slot buttons.",
+          caption: "Day view: today's jobs on a timeline, and the queue of jobs still to schedule. Real ArrivePing screen, sample company.",
+        },
+      ],
+    },
     { kind: "trades", title: "Which teams use dispatch software?" },
   ],
   faqs: [{

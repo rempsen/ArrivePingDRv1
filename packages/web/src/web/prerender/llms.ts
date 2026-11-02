@@ -335,6 +335,12 @@ function sectionText(s: Section, t: (x: string) => string): string | null {
     }
     case "choose":
       return [`### ${s.title}`, `${s.ours.title}:\n${bullets(s.ours.items.map(t))}`, `${s.theirs.title}:\n${bullets(s.theirs.items.map(t))}`].join("\n\n");
+    case "shots": {
+      // Real app screens: the explanation, plus each caption as the text of the picture.
+      const paras = (s.paragraphs ?? []).map(t).filter(Boolean);
+      const caps = s.shots.map((x) => t(`Screenshot: ${x.caption}`)).filter(Boolean);
+      return [`### ${s.title}`, ...paras, caps.length ? bullets(caps) : ""].filter(Boolean).join("\n\n");
+    }
     default:
       return null; // pricing, story and trade-list sections repeat facts stated elsewhere
   }

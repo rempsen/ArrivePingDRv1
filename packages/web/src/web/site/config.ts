@@ -43,14 +43,13 @@ export const brand = {
 /**
  * Primary navigation: real pages, not homepage anchors, so every page links to
  * the hubs (features, the solution pillars, pricing and comparisons) sitewide.
- * Eight short labels (About added 2026-11-02 for the leadership section), still sized to keep the desktop bar on one line.
+ * Seven short labels (About added 2026-11-02; Compare left the header the same day and stays in the footer).
  */
 export const nav = [
   { label: "Features", href: "/features" },
   { label: "Solutions", href: "/field-service-software" },
   { label: "Dispatch", href: "/dispatch-software" },
   { label: "Pricing", href: "/pricing" },
-  { label: "Compare", href: "/compare" },
   { label: "Blog", href: "/blog" },
   { label: "About", href: "/about" },
   { label: "Support", href: "/support" },
