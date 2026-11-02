@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { getActiveCompany } from "../lib/active-company";
 import { C, R } from "../lib/theme";
+import { useAndroidBottomInset } from "../lib/bottom-inset";
 
 /**
  * Technician coach marks (blueprint 2026-10-17, Phase 5).
@@ -462,6 +463,8 @@ function Overlay({
   onBack?: () => void;
   onSkip: () => void;
 }) {
+  // The overlay is edge to edge; keep the card clear of Android's navigation bar.
+  const navInset = useAndroidBottomInset();
   const spot = rect.w > 0 && rect.h > 0;
   const hole = spot
     ? {
@@ -477,13 +480,13 @@ function Overlay({
   // Below the control if it fits, else above it, else centred.
   let pos: { left: number; top?: number; bottom?: number };
   if (!hole) {
-    pos = { left: (width - cardW) / 2, top: Math.max(EDGE, (height - estH) / 2) };
+    pos = { left: (width - cardW) / 2, top: Math.max(EDGE, (height - navInset - estH) / 2) };
   } else {
     const left = Math.min(Math.max(EDGE, hole.x + hole.w / 2 - cardW / 2), width - cardW - EDGE);
     const below = hole.y + hole.h + GAP;
-    if (below + estH <= height - EDGE) pos = { left, top: below };
+    if (below + estH <= height - navInset - EDGE) pos = { left, top: below };
     else if (hole.y - GAP - estH >= EDGE) pos = { left, bottom: height - hole.y + GAP };
-    else pos = { left, top: Math.max(EDGE, height - estH - EDGE * 2) };
+    else pos = { left, top: Math.max(EDGE, height - navInset - estH - EDGE * 2) };
   }
   const last = n === total;
 

@@ -17,6 +17,7 @@ import {
 import { api } from "../lib/api";
 import { authClient } from "../lib/auth";
 import { C, R, S, WIDE } from "../lib/theme";
+import { useAndroidBottomInset } from "../lib/bottom-inset";
 import { Card, Button } from "../components/ui";
 import {
   CalendarPermissionError,
@@ -66,6 +67,8 @@ function summary(r?: { added: number; updated: number; removed: number }): strin
 }
 
 export default function CalendarSyncScreen() {
+  // Lets the last control scroll clear of Android's navigation bar (lib/bottom-inset-core.ts).
+  const navInset = useAndroidBottomInset();
   const router = useRouter();
   const qc = useQueryClient();
   const { data: session } = authClient.useSession();
@@ -198,7 +201,7 @@ export default function CalendarSyncScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView contentContainerStyle={[s.content, WIDE]}>
+      <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl + navInset }]}>
         <Text style={s.intro}>
           Your assigned jobs in the calendar you already use. When a job is added, moved or cancelled, your calendar follows.
         </Text>

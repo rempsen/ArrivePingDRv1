@@ -17,8 +17,11 @@ import { useNotifySummary } from "../../lib/notify-summary";
 import { useCoach } from "../../components/coach-tour";
 import { authClient } from "../../lib/auth";
 import { useCalendarAutoSync } from "../../lib/calendar-sync";
+import { TAB_BAR_CONTENT, useBottomBarPadding } from "../../lib/bottom-inset";
 
 export default function RiderLayout() {
+  // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const tabBarPad = useBottomBarPadding(28, 8);
   // Rider's own status drives whether native background GPS tracking runs at
   // all — NOT merely "is there a signed-in session" (a session persists
   // across app relaunches, including headless background relaunches iOS
@@ -114,9 +117,9 @@ export default function RiderLayout() {
           backgroundColor: C.bg2,
           borderTopColor: C.border,
           borderTopWidth: 1,
-          height: 84,
+          height: TAB_BAR_CONTENT + tabBarPad,
           paddingTop: 8,
-          paddingBottom: 28,
+          paddingBottom: tabBarPad,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
       }}

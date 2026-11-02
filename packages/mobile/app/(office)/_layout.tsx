@@ -10,6 +10,7 @@ import { usePushNotifications, setAppBadgeCount, setPushRouting } from "../../li
 import { useDispatchThreads } from "../../lib/use-threads";
 import { endAllLiveActivities } from "../../lib/useLiveActivity";
 import { UndoToastHost } from "../../components/office/undo-toast";
+import { TAB_BAR_CONTENT, useBottomBarPadding } from "../../lib/bottom-inset";
 
 /**
  * Office mode: the dispatcher's, manager's and owner's side of the app.
@@ -25,6 +26,8 @@ import { UndoToastHost } from "../../components/office/undo-toast";
 export default function OfficeLayout() {
   const { can, isLoading } = useAccess();
   const { wide } = useLayout();
+  // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
+  const tabBarPad = useBottomBarPadding(28, 8);
   useDispatchStream(true);
   usePushNotifications();
 
@@ -62,9 +65,9 @@ export default function OfficeLayout() {
             backgroundColor: C.bg2,
             borderTopColor: C.border,
             borderTopWidth: 1,
-            height: 84,
+            height: TAB_BAR_CONTENT + tabBarPad,
             paddingTop: 8,
-            paddingBottom: 28,
+            paddingBottom: tabBarPad,
           },
           tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
         }}

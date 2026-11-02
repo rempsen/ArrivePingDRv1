@@ -169,4 +169,21 @@ Android delivers push through Firebase Cloud Messaging. Without it, the app work
 2. **Ship Android app** → `target: internal` (or `build-only` and upload by hand).
 3. Test on the internal track → Play Console → **Promote release → Production** → **Send changes for review**.
 
-Over-the-air updates (EAS Update, channel `production`) reach Android binaries of the same `expo.version`, the same as on iOS.
+### Over-the-air updates
+
+A change to JavaScript only (screens, styles, logic) doesn't need a new build or a Google review. GitHub → **Actions** → **Ship app update (over the air)** → **Run workflow**:
+
+- `platform: android` (the default) reaches Android installs only. `ios` and `all` also reach the live App Store app, so pick those deliberately.
+- Write what changed in `message`.
+
+Installed apps of the same `expo.version` download it in the background and use it on the next launch: open the app, close it fully, open it again. Anything native (a new library, a permission, `app.json` plugins, icons) still needs a new build.
+
+## Android screen edges
+
+The app draws edge to edge (`edgeToEdgeEnabled`), so Android's navigation sits over the bottom of the screen. Every bar pinned to the bottom (tab bars, sticky buttons, bottom sheets, the message composer) takes its bottom padding from `lib/bottom-inset.ts`, which reads the phone's setting:
+
+- **3-button navigation** (◁ ○ □): the bar sits just above the buttons.
+- **Gesture navigation**: the app stays full screen and only the thin gesture strip is kept clear.
+- **No navigation shown**: fully full screen.
+
+iOS keeps the padding each bar was designed with. New bottom bars should use `useBottomBarPadding` too.
