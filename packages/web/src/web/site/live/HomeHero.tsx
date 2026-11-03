@@ -2,7 +2,7 @@ import type { JSX } from "react";
 import { hero } from "../config";
 import { useAnchorNav } from "../components/SiteHeader";
 import { PauseButton, useLivePlay } from "./shared";
-import { AppStoreBadge } from "../components/AppStoreBadge";
+import { StoreBadges } from "../components/GooglePlayBadge";
 
 /**
  * Hero. A real photo of a technician arriving at a customer's home sits
@@ -124,8 +124,8 @@ export function HomeHero() {
               </a>
             </div>
             <p className="lv-hero__app">
-              <span>Your technicians use the ArrivePing app for iPhone and iPad. On Android, they use ArrivePing in the phone's web browser.</span>
-              <AppStoreBadge height={40} />
+              <span>Your technicians use the ArrivePing app for iPhone, iPad and Android.</span>
+              <StoreBadges height={40} />
             </p>
           </div>
         </div>

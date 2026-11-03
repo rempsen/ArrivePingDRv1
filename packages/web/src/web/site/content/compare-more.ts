@@ -71,7 +71,7 @@ const PRICE_FAQ = {
 
 const HARDWARE_FAQ = {
   q: "Does ArrivePing need GPS hardware in the vans?",
-  a: "No. Location comes from the ArrivePing app on the phone each technician already carries: the iPhone and iPad app from the App Store, or the browser for Android technicians. There are no plug-in trackers to buy, install or pay for per vehicle.",
+  a: "No. Location comes from the ArrivePing app on the phone each technician already carries: the app for iPhone and iPad from the App Store, or for Android from Google Play. There are no plug-in trackers to buy, install or pay for per vehicle.",
 };
 
 const SHOT_TRACK = {
@@ -155,7 +155,7 @@ const arrivy: LandingPage = {
         { label: "SMS notifications", cells: ["In every plan", src(SRC.arrivyPricing, "\"SMS & Email Notifications\" is listed on the Custom plan cards (Contact Us), not on the Premium card")] },
         { label: "Route planning", cells: ["No multi-stop route optimization; each job goes to the closest qualified technician", src(SRC.arrivyPricing, "\"Route Planning\" on Premium; a \"Route Planning Pro\" add-on for high-density routes")] },
         { label: "Automatic assignment", cells: ["By distance, skills, availability and workload, in every plan", "Not described on the pages we checked"] },
-        { label: "Field app", cells: ["iPhone and iPad app; Android technicians use the browser", src(SRC.arrivyCx, "Android and iOS apps")] },
+        { label: "Field app", cells: ["iPhone, iPad and Android apps", src(SRC.arrivyCx, "Android and iOS apps")] },
       ],
     },
     {
@@ -192,7 +192,6 @@ const arrivy: LandingPage = {
         items: [
           "You plan multi-stop routes and want route planning built in",
           "You need warehouse or carrier workflows alongside field crews",
-          "Your crew needs a native Android app today",
           "You prefer a 14-day trial with no card on file",
         ],
       },
@@ -404,7 +403,7 @@ const PICK = {
       { label: "Free trial", value: src(SRC.arrivyPricing, "14 days, no credit card") },
       { label: "Customer updates", value: src(SRC.arrivyCx, "Live ETAs and a live map of the crew's approach") },
     ],
-    chooseIf: ["You plan multi-stop routes and want route planning built in", "You run delivery or warehouse workflows as well as field crews", "Your crew needs a native Android app today"],
+    chooseIf: ["You plan multi-stop routes and want route planning built in", "You run delivery or warehouse workflows as well as field crews"],
     more: { label: "ArrivePing vs Arrivy", href: "/compare/arrivy" },
   } satisfies Pick,
 };
@@ -613,7 +612,7 @@ const hcpAlternatives: LandingPage = {
       kind: "shots",
       title: "How does phone-based tracking work in ArrivePing?",
       paragraphs: [
-        "Each technician runs the ArrivePing app on their phone: the iPhone and iPad app from the App Store, or the browser on Android. Location is shared only while they're on the clock, and the customer sees it only from on the way to arrival. A geofence around the address marks arrival automatically, 150 m by default.",
+        "Each technician runs the ArrivePing app on their phone: the app from the App Store on iPhone and iPad, or from Google Play on Android. Location is shared only while they're on the clock, and the customer sees it only from on the way to arrival. A geofence around the address marks arrival automatically, 150 m by default.",
         "Read more about [fleet tracking without hardware](/fleet-tracking) and the [on-my-way text](/on-my-way-text-software).",
       ],
       shots: [SHOT_ENROUTE, SHOT_GEOFENCE],

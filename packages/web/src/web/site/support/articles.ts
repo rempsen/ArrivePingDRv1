@@ -279,12 +279,12 @@ export const articles: Article[] = [
     slug: "install-and-sign-in",
     title: "Install the app and sign in",
     summary: "Technicians join from an invitation; there is no public sign-up in the app.",
-    description: "Technicians join from an invitation: set a password, install ArrivePing from the App Store on iPhone or iPad, or sign in in an Android phone's browser.",
+    description: "Technicians join from an invitation: set a password, install ArrivePing from the App Store (iPhone or iPad) or Google Play (Android).",
     category: "technician-app",
     updated: U,
     keywords: ["login", "iphone", "ipad", "app store", "password", "invitation"],
     blocks: [
-      { type: "p", text: "Your company adds you to its roster and ArrivePing emails you an invitation. Set your password from that email, install **ArrivePing** from the App Store, and sign in with the same email address. The app works on iPhone and iPad. On an Android phone, sign in at arriveping.com in the phone's browser instead: see [No iPhone? Use ArrivePing in a browser](/support/use-arriveping-in-a-browser)." },
+      { type: "p", text: "Your company adds you to its roster and ArrivePing emails you an invitation. Set your password from that email, install **ArrivePing** from the App Store on iPhone or iPad, or from Google Play on Android, and sign in with the same email address. No phone with you? You can also work from a browser: see [Use ArrivePing in a browser](/support/use-arriveping-in-a-browser)." },
       { type: "p", text: "If you have not received an invitation, ask your dispatcher or office admin to add you from People → Technicians & Managers. Support cannot create technician accounts on a company's behalf." },
       { type: "p", text: "Forgotten your password? Tap **Forgot password?** on the sign-in screen or go to [arriveping.com/forgot-password](/forgot-password). The reset link is valid for one hour." },
     ],
@@ -378,13 +378,13 @@ export const articles: Article[] = [
   },
   {
     slug: "use-arriveping-in-a-browser",
-    title: "No iPhone? Use ArrivePing in a browser",
-    summary: "The app is for iPhone and iPad. On an Android phone or any other device, sign in at arriveping.com and work your jobs from the web version.",
+    title: "Use ArrivePing in a browser",
+    summary: "The app is on the App Store and Google Play. On a laptop or any other device, sign in at arriveping.com and work your jobs from the web version.",
     category: "technician-app",
     updated: U3,
     keywords: ["android", "web app", "browser", "no app", "samsung", "pixel", "laptop", "which phones", "devices supported"],
     blocks: [
-      { type: "p", text: "The ArrivePing app is built for iPhone and iPad, and there is no Android app in Google Play yet. If you carry an Android phone or want to work from a laptop, open [arriveping.com/sign-in](/sign-in) in your browser and sign in with the email your company invited. You land in the web version of the technician app." },
+      { type: "p", text: "The ArrivePing app is on the [App Store](https://apps.apple.com/app/arriveping/id6776464675) for iPhone and iPad and on [Google Play](https://play.google.com/store/apps/details?id=com.nvc360.uberize) for Android. If you'd rather work from a laptop or another device, open [arriveping.com/sign-in](/sign-in) in your browser and sign in with the email your company invited. You land in the web version of the technician app." },
       {
         type: "ul",
         items: [

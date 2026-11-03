@@ -25,15 +25,13 @@ export const APP_ID = `${SITE_URL}/#software`;
 /**
  * Is the Android app publicly listed on Google Play?
  *
- * Checked 2026-11-01: the listing below returns 404 (not public yet). While
- * this is false, nothing generated from this repo (JSON-LD, llms.txt,
- * llms-full.txt) may claim Android, and `bun run seo:check` fails if it does.
- * Flip it to true the day the listing is public; the schema, the llms files and
- * the check all follow.
+ * Live since 2026-11-03 (Dan confirmed the store page). While this is false,
+ * nothing generated from this repo (JSON-LD, llms.txt, llms-full.txt) may claim
+ * Android, and `bun run seo:check` fails if it does.
  */
-export const ANDROID_APP_LIVE = false;
+export const ANDROID_APP_LIVE = true;
 /** Google Play listing (package id from packages/mobile/app.json). Only published while ANDROID_APP_LIVE is true. */
-export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.nvc360.uberize";
+export const PLAY_STORE_URL = brand.urls.googlePlay;
 /** The live iOS app (iPhone and iPad). */
 export const APP_STORE_URL = brand.urls.appStore;
 /** Platforms the product really runs on today. */

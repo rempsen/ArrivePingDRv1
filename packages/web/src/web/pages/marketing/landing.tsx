@@ -8,7 +8,7 @@ import { SiteFooter } from "../../site/components/SiteFooter";
 import { ClosingCTA, OurStory, Pricing } from "../../site/sections";
 import { brand, TECH_APP_LINE } from "../../site/config";
 import { TradeCards } from "../../site/components/TradeCards";
-import { AppStoreBadge } from "../../site/components/AppStoreBadge";
+import { StoreBadges } from "../../site/components/GooglePlayBadge";
 import { TradeDay, TradeFeatures, TradeHero, TradeStats } from "../../site/live/TradeParts";
 import { GeoSectionBlock } from "../../site/components/GeoSections";
 import { FeatureGalleryGrid } from "../../site/components/FeatureGallery";
@@ -134,7 +134,7 @@ function GenericBody({ page }: { page: LandingPage }) {
           </div>
           <p className="lp-hero__fine">Free for 30 days · Then from US$49 a month · No setup fee, no contract</p>
           <div className="lp-hero__app">
-            <AppStoreBadge height={40} />
+            <StoreBadges height={40} />
             <span>{TECH_APP_LINE}</span>
           </div>
         </div>

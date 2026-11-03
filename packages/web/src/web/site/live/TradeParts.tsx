@@ -4,7 +4,7 @@ import type { LandingPage, TradeContent } from "../content/landing";
 import { usePlayback } from "../motion/playback";
 import { SmsScreen } from "./CustomerView";
 import { PauseButton, useLivePlay } from "./shared";
-import { AppStoreBadge } from "../components/AppStoreBadge";
+import { StoreBadges } from "../components/GooglePlayBadge";
 
 /**
  * Trade pages (HVAC, plumbing, electrical, installers, property maintenance,
@@ -92,8 +92,8 @@ export function TradeHero({ page, crumbs }: { page: LandingPage; crumbs: ReactNo
               cancel any time.
             </p>
             <p className="lv-hero__app">
-              <span>Your technicians use the ArrivePing app for iPhone and iPad. On Android, they use ArrivePing in the phone's web browser.</span>
-              <AppStoreBadge height={40} />
+              <span>Your technicians use the ArrivePing app for iPhone, iPad and Android.</span>
+              <StoreBadges height={40} />
             </p>
           </div>
         </div>

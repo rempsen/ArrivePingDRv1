@@ -32,6 +32,8 @@ export const brand = {
     terms: "/terms",
     /** The live ArrivePing iOS app (iPhone + iPad). No country code, so Apple sends each visitor to their own store. */
     appStore: "https://apps.apple.com/app/arriveping/id6776464675",
+    /** Live Android app. No hl/gl parameters, so Google shows each visitor their own language and country. */
+    googlePlay: "https://play.google.com/store/apps/details?id=com.nvc360.uberize",
     youtube: "https://www.youtube.com/@arriveping",
     facebook: "https://www.facebook.com/arriveping",
     instagram: "https://www.instagram.com/arriveping",
@@ -55,13 +57,8 @@ export const nav = [
   { label: "Support", href: "/support" },
 ] as const;
 
-/**
- * The technician app line next to the App Store badge. The iPhone and iPad app
- * is live; there is no public Google Play listing yet, so Android technicians
- * use the web version in their phone's browser (Help Center:
- * /support/use-arriveping-in-a-browser). No date is promised.
- */
-export const TECH_APP_LINE = "Technician app for iPhone and iPad. On Android, technicians use ArrivePing in the phone's web browser.";
+/** The technician app line next to the App Store and Google Play badges. */
+export const TECH_APP_LINE = "Technician app for iPhone, iPad and Android.";
 
 /* ------------------------------------------------------------------ */
 /* Copy                                                                 */
@@ -705,7 +702,7 @@ export const faqs = [
   },
   {
     q: "What do technicians use?",
-    a: "The phone they already carry: the ArrivePing app on iPhone and iPad, or on an Android phone, ArrivePing in the phone's web browser. A job comes in as an offer they accept, then they tap Start Driving, I've Arrived and Complete Job. With the job open, arrival is logged automatically within 150 m of the address by default, and the button is the backup.",
+    a: "The phone they already carry: the ArrivePing app for iPhone, iPad and Android. A job comes in as an offer they accept, then they tap Start Driving, I've Arrived and Complete Job. With the job open, arrival is logged automatically within 150 m of the address by default, and the button is the backup.",
   },
   {
     q: "What can customers see about a technician's location?",

@@ -9,7 +9,7 @@ import { usePageMeta } from "../seo/head";
 import type { ArticleBlock } from "../support/articles";
 import { support } from "../support/articles";
 import { SupportMessageForm } from "./SupportMessageForm";
-import { AppStoreBadge } from "./AppStoreBadge";
+import { StoreBadges } from "./GooglePlayBadge";
 import "../site.css";
 import { homeFor } from "../../lib/home";
 
@@ -146,7 +146,7 @@ export function ContactCard({ compact = false }: { compact?: boolean }) {
         <div>
           <dt>Technician app</dt>
           <dd>
-            <AppStoreBadge height={40} />
+            <StoreBadges height={40} />
           </dd>
         </div>
         <div>

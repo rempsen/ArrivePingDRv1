@@ -3,7 +3,7 @@ import { brand, closing, faqs, monthlyPrice, pricing, stats, story, whatIs } fro
 import { NextLinks } from "../components/NextLinks";
 import { TradeCards } from "../components/TradeCards";
 import { ContactAsk } from "../components/ContactAsk";
-import { AppStoreBadge } from "../components/AppStoreBadge";
+import { StoreBadges } from "../components/GooglePlayBadge";
 import { useAnchorNav } from "../components/SiteHeader";
 import { CountUp, handleSpotlight } from "../motion/effects";
 
@@ -281,8 +281,8 @@ export function ClosingCTA() {
             {closing.help} <a href={`mailto:${brand.contactEmail}`}>{brand.contactEmail}</a>
           </p>
           <div className="closing__app">
-            <span>Technicians: get the iPhone and iPad app, or use ArrivePing in an Android phone's web browser</span>
-            <AppStoreBadge height={44} />
+            <span>Technicians: get the ArrivePing app for iPhone, iPad or Android</span>
+            <StoreBadges height={44} />
           </div>
         </div>
         <div data-reveal="" data-reveal-delay="1">

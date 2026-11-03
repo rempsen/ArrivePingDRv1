@@ -1522,6 +1522,16 @@
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
+.site .store-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.site .google-play-badge:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -10px;
+}
 .site .footer__social {
   margin-top: 18px !important;
   display: flex !important;
