@@ -17,7 +17,7 @@ on Expo's servers (EAS); nothing needs Android Studio.
 | Permissions | Location (fine, coarse, background) and a location foreground service while on the clock; camera (job photos); microphone (voice notes); notifications; calendar (writes jobs to the phone's calendar) |
 | Blocked permissions | `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`: the photo library opens Android's system photo picker, which needs no permission, so Play's photo/video permission declaration doesn't apply. `FOREGROUND_SERVICE_MEDIA_PLAYBACK` is blocked because the app never plays audio in the background. |
 | Background-location disclosure | `lib/location-disclosure.ts`: Play's required in-app notice, shown before the location prompts (Android only) |
-| Push notifications | **Need Firebase first.** Until then, Android gets no push. See step 9. |
+| Push notifications | Firebase project **ArrivePing** (`arriveping-5f7f0`), Android app `com.nvc360.uberize` registered 3 Nov 2026. `google-services.json` is in `packages/mobile/`. Android push also needs the FCM V1 key in Expo (step 9.4–9.5). The status-bar icon is `assets/notification-icon.png` (white on transparent). |
 | Privacy policy | https://arriveping.com/privacy (covers background location) |
 | Account deletion | In the app: Profile → Delete my account. On the web: https://arriveping.com/support/delete-your-account |
 | Support | support@nvc360.com · https://arriveping.com/support |
@@ -157,11 +157,13 @@ If the upload fails with *"Only releases with status draft may be created on dra
 
 Android delivers push through Firebase Cloud Messaging. Without it, the app works, but technicians get no job-offer or message notifications.
 
-1. https://console.firebase.google.com → **Add project** (e.g. "ArrivePing"; Google Analytics not needed).
-2. **Add app → Android**. Package name `com.nvc360.uberize`, nickname "ArrivePing" → **Register app** → **Download google-services.json** → skip the remaining SDK steps.
-3. Send `google-services.json` to Claude to commit. It goes in `packages/mobile/` and gets wired into `app.json` (`android.googleServicesFile`). The file isn't a secret. **A new build is needed after this.**
-4. Firebase → **Project settings → Service accounts → Generate new private key**. This downloads a second, *different* JSON.
-5. Upload it to Expo: https://expo.dev → project **nvc360v4** → **Credentials** → **Android** → `com.nvc360.uberize` → **FCM V1 service account key** → **Add / Upload**. The server needs no change; it already sends through Expo's push service.
+Done on 3 Nov 2026: Firebase project **ArrivePing** (`arriveping-5f7f0`, project number 987563778259) with the Android app `com.nvc360.uberize` ("ArrivePing Android"), no Google Analytics, no Gemini. To redo it in another project:
+
+1. https://console.firebase.google.com → **Create a new Firebase project** (Google Analytics not needed).
+2. **Project settings → Your apps → Android**. Package name `com.nvc360.uberize` → **Register app** → **Download google-services.json** → skip the remaining SDK steps.
+3. Put `google-services.json` in `packages/mobile/`. `app.json` points at it (`android.googleServicesFile`). The file isn't a secret: it ships inside every Android build. **A new build is needed after any change to it.**
+4. Firebase → **Project settings → Service accounts → Firebase Admin SDK → Generate new private key**. This downloads a second, *different* JSON that *is* secret. Don't commit it or paste it anywhere else.
+5. Upload it to Expo: https://expo.dev → project **nvc360v4** → **Credentials** → **Android** → `com.nvc360.uberize` → **FCM V1 service account key** → **Add / Upload**. The server needs no change; it already sends through Expo's push service. Then delete the downloaded key file.
 
 ## Later releases
 
