@@ -79,6 +79,7 @@ export const support = {
 const U = "October 16, 2026";
 const U2 = "October 17, 2026";
 const U3 = "October 18, 2026";
+const U4 = "November 3, 2026";
 
 export const articles: Article[] = [
   /* ---------------------------------------------------------------- */
@@ -279,12 +280,12 @@ export const articles: Article[] = [
     slug: "install-and-sign-in",
     title: "Install the app and sign in",
     summary: "Technicians join from an invitation; there is no public sign-up in the app.",
-    description: "Technicians join from an invitation: set a password, install ArrivePing from the App Store on iPhone or iPad, or sign in in an Android phone's browser.",
+    description: "Technicians join from an invitation: set a password, install ArrivePing from the App Store (iPhone or iPad) or Google Play (Android).",
     category: "technician-app",
-    updated: U,
+    updated: U4,
     keywords: ["login", "iphone", "ipad", "app store", "password", "invitation"],
     blocks: [
-      { type: "p", text: "Your company adds you to its roster and ArrivePing emails you an invitation. Set your password from that email, install **ArrivePing** from the App Store, and sign in with the same email address. The app works on iPhone and iPad. On an Android phone, sign in at arriveping.com in the phone's browser instead: see [No iPhone? Use ArrivePing in a browser](/support/use-arriveping-in-a-browser)." },
+      { type: "p", text: "Your company adds you to its roster and ArrivePing emails you an invitation. Set your password from that email, install **ArrivePing** from the App Store on iPhone or iPad, or from Google Play on Android, and sign in with the same email address. No phone with you? You can also work from a browser: see [Use ArrivePing in a browser](/support/use-arriveping-in-a-browser)." },
       { type: "p", text: "If you have not received an invitation, ask your dispatcher or office admin to add you from People → Technicians & Managers. Support cannot create technician accounts on a company's behalf." },
       { type: "p", text: "Forgotten your password? Tap **Forgot password?** on the sign-in screen or go to [arriveping.com/forgot-password](/forgot-password). The reset link is valid for one hour." },
     ],
@@ -294,14 +295,15 @@ export const articles: Article[] = [
     title: "Location sharing and the \"Always\" permission",
     summary: "Your location is shared with dispatch only while you are On the clock, and with customers only while you travel to their job.",
     category: "technician-app",
-    updated: U,
-    keywords: ["gps", "tracking", "privacy", "on the clock", "precise location", "background"],
+    updated: U4,
+    keywords: ["gps", "tracking", "privacy", "on the clock", "precise location", "background", "allow all the time", "android"],
     blocks: [
-      { type: "p", text: "ArrivePing shares your live location with dispatch only while you are **On the clock** — the switch at the top of the Profile tab. When you go off the clock the app stops sharing and tells iOS to stop tracking." },
+      { type: "p", text: "ArrivePing shares your live location with dispatch only while you are **On the clock** — the switch at the top of the Profile tab. When you go off the clock the app stops sharing and tells the phone to stop tracking." },
       { type: "p", text: "Customers see even less: only your progress toward their own appointment, and only while you are travelling to it. Sharing to the customer stops the moment you arrive." },
       { type: "h3", text: "Why the app asks for \"Always\"" },
-      { type: "p", text: "Your ETA has to keep updating while the phone is in your pocket or mounted in the van. With \"While Using\", tracking pauses whenever the app is in the background and customers see a stale ETA." },
-      { type: "p", text: "To check or change the permission: iPhone **Settings → ArrivePing → Location**. Choose **Always** and turn on **Precise Location**." },
+      { type: "p", text: "Your ETA has to keep updating while the phone is in your pocket or mounted in the van. With \"While Using\" (iPhone) or \"Allow only while using the app\" (Android), tracking pauses whenever the app is in the background and customers see a stale ETA." },
+      { type: "p", text: "**iPhone:** **Settings → ArrivePing → Location**. Choose **Always** and turn on **Precise Location**." },
+      { type: "p", text: "**Android:** **Settings → Apps → ArrivePing → Permissions → Location**. Choose **Allow all the time** and turn on **Use precise location**. While you share in the background, Android shows an \"ArrivePing is sharing your location\" notification; leave it there, because it keeps Android from stopping location updates. If you tapped **Not now** on the app's location message, it won't ask again for 3 days, so change the setting here instead." },
       { type: "note", title: "No hardware needed.", text: "ArrivePing uses the phone you already carry. There are no plug-in vehicle trackers to buy or install." },
     ],
   },
@@ -378,13 +380,13 @@ export const articles: Article[] = [
   },
   {
     slug: "use-arriveping-in-a-browser",
-    title: "No iPhone? Use ArrivePing in a browser",
-    summary: "The app is for iPhone and iPad. On an Android phone or any other device, sign in at arriveping.com and work your jobs from the web version.",
+    title: "Use ArrivePing in a browser",
+    summary: "The app is on the App Store and Google Play. On a laptop or any other device, sign in at arriveping.com and work your jobs from the web version.",
     category: "technician-app",
-    updated: U3,
+    updated: U4,
     keywords: ["android", "web app", "browser", "no app", "samsung", "pixel", "laptop", "which phones", "devices supported"],
     blocks: [
-      { type: "p", text: "The ArrivePing app is built for iPhone and iPad, and there is no Android app in Google Play yet. If you carry an Android phone or want to work from a laptop, open [arriveping.com/sign-in](/sign-in) in your browser and sign in with the email your company invited. You land in the web version of the technician app." },
+      { type: "p", text: "The ArrivePing app is on the [App Store](https://apps.apple.com/app/arriveping/id6776464675) for iPhone and iPad and on [Google Play](https://play.google.com/store/apps/details?id=com.nvc360.uberize) for Android. If you'd rather work from a laptop or another device, open [arriveping.com/sign-in](/sign-in) in your browser and sign in with the email your company invited. You land in the web version of the technician app." },
       {
         type: "ul",
         items: [
@@ -1164,19 +1166,35 @@ export const articles: Article[] = [
   {
     slug: "not-receiving-notifications",
     title: "I'm not receiving notifications",
-    summary: "Check iOS notification settings, Focus modes and Background App Refresh.",
-    description: "Not getting ArrivePing notifications? Check the iPhone notification settings, Focus modes and Background App Refresh for the app.",
+    summary: "Check the phone's notification settings for ArrivePing, then Focus or Do Not Disturb and battery limits.",
+    description: "Not getting ArrivePing notifications? Check the notification settings for the app on iPhone or Android, Focus or Do Not Disturb, and background or battery limits.",
     category: "troubleshooting",
-    updated: U,
-    keywords: ["push", "no alerts", "silent", "focus", "do not disturb"],
+    updated: U4,
+    keywords: ["push", "no alerts", "silent", "focus", "do not disturb", "android", "job alerts", "battery"],
     blocks: [
       {
         type: "ol",
         items: [
-          "iPhone **Settings → ArrivePing → Notifications**: Allow Notifications on, with Lock Screen, Banners and Sounds enabled.",
+          "Make sure you're signed in and **On the clock**: job offers only go to technicians on shift.",
+          "Sign out and back in once; this re-registers the phone for push.",
+        ],
+      },
+      { type: "h3", text: "iPhone" },
+      {
+        type: "ol",
+        items: [
+          "**Settings → ArrivePing → Notifications**: Allow Notifications on, with Lock Screen, Banners and Sounds enabled.",
           "Check **Focus** (Do Not Disturb, Driving). Add ArrivePing to the allowed apps for any Focus you use on shift.",
           "**Settings → General → Background App Refresh** must be on for ArrivePing.",
-          "Sign out and back in once; this re-registers the phone for push.",
+        ],
+      },
+      { type: "h3", text: "Android" },
+      {
+        type: "ol",
+        items: [
+          "**Settings → Apps → ArrivePing → Notifications**: turn notifications on, and make sure the **Job alerts** category is on too.",
+          "Check **Do Not Disturb** (and any driving or work mode). Add ArrivePing to the apps allowed to interrupt.",
+          "**Settings → Apps → ArrivePing → Battery**: choose **Unrestricted** so the phone doesn't put the app to sleep. Names vary by phone maker.",
         ],
       },
       { type: "p", text: "Dispatch messages are also visible in the app's Messages tab, so nothing is lost while you sort this out." },
@@ -1205,18 +1223,18 @@ export const articles: Article[] = [
   {
     slug: "app-wont-open",
     title: "The app crashes or won't open",
-    summary: "Update iOS and the app, restart the phone, then reinstall — your data lives on the server, not the phone.",
+    summary: "Update the phone and the app, restart the phone, then reinstall — your data lives on the server, not the phone.",
     category: "troubleshooting",
-    updated: U,
+    updated: U4,
     keywords: ["crash", "freeze", "white screen", "reinstall", "update"],
     blocks: [
       {
         type: "ol",
         items: [
-          "Update ArrivePing from the App Store and make sure iOS is current.",
+          "Update ArrivePing (App Store on iPhone, Google Play on Android) and make sure the phone's software is up to date.",
           "Restart the phone.",
           "Delete and reinstall the app, then sign in again. Nothing is lost: jobs, photos and notes are stored on the server as soon as they upload.",
-          "Still crashing? Email [support@nvc360.com](mailto:support@nvc360.com) with your phone model, iOS version and what you tapped just before the crash. A screen recording helps enormously.",
+          "Still crashing? Email [support@nvc360.com](mailto:support@nvc360.com) with your phone model, its iOS or Android version and what you tapped just before the crash. A screen recording helps enormously.",
         ],
       },
     ],

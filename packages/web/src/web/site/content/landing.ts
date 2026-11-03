@@ -145,7 +145,7 @@ const PRIVACY_FAQ = {
 
 const HARDWARE_FAQ = {
   q: "Do I need GPS hardware in my vehicles?",
-  a: "No. ArrivePing uses the location from the phone your technicians and drivers already carry (the iPhone and iPad app, or ArrivePing in an Android phone's web browser), so there are no plug-in trackers to buy or install.",
+  a: "No. ArrivePing uses the location from the phone your technicians and drivers already carry (the ArrivePing app for iPhone, iPad and Android), so there are no plug-in trackers to buy or install.",
 };
 
 const SETUP_FAQ = {
@@ -654,7 +654,7 @@ const about: LandingPage = {
         "Name: ArrivePing, one word; NVC360's flagship product",
         "Availability: available now, with a 30-day free trial",
         `Pricing: from $${P} USD a month, published at arriveping.com/pricing`,
-        "Platforms: web dispatch console; technician app for iPhone and iPad (Android phones use the web version in the browser); browser-based customer tracking pages",
+        "Platforms: web dispatch console; technician app for iPhone, iPad and Android; browser-based customer tracking pages",
         "Not affiliated with: Arrive Logistics, Arrive AI, arrive.gg, Arrive (ParkWhiz) or Arrivy",
         "Contact: contact@nvc360.com",
       ],

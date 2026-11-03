@@ -13,8 +13,8 @@ const up = (pricingLabel: string) => [
   { label: "Field service management software", href: "/field-service-software" },
 ];
 
-/** Technicians' devices, said the same way everywhere (no public Android app yet). */
-const PHONES = "the phones they already carry: the ArrivePing app on iPhone and iPad, or ArrivePing in an Android phone's web browser";
+/** Technicians' devices, said the same way everywhere. */
+const PHONES = "the phones they already carry: the ArrivePing app for iPhone, iPad and Android";
 
 /**
  * Trade pages, from the October 2026 industry research (scratch briefs, one per

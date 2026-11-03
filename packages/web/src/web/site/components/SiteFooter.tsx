@@ -2,7 +2,7 @@ import { useState } from "react";
 import { brand, footer } from "../config";
 import { openConsent } from "../lib/hubspot-tracking";
 import { useAnchorNav } from "./SiteHeader";
-import { AppStoreBadge } from "./AppStoreBadge";
+import { StoreBadges } from "./GooglePlayBadge";
 import { SocialIcon } from "./SocialIcon";
 
 /**
@@ -58,8 +58,8 @@ export function SiteFooter() {
             </div>
             <p>{footer.description}</p>
             <div className="footer__app">
-              <span className="footer__app-label">Technician app for iPhone and iPad (Android: use the web browser)</span>
-              <AppStoreBadge height={40} />
+              <span className="footer__app-label">Technician app for iPhone, iPad and Android</span>
+              <StoreBadges height={40} />
             </div>
             <ul className="footer__social" aria-label="ArrivePing on social media">
               {footer.social.map((s) => (
