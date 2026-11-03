@@ -3,6 +3,7 @@
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.nvc360.uberize",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -104,7 +105,8 @@
       [
         "expo-notifications",
         {
-          "color": "#0ea5e9"
+          "color": "#0ea5e9",
+          "icon": "./assets/notification-icon.png"
         }
       ],
       [
