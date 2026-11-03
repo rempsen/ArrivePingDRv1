@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiHeaders } from "../lib/api";
+import { apiFetch, apiHeaders } from "../lib/api";
 import { TechAvatar } from "./tech-avatar";
 import { TECH_STATUS } from "../lib/utils";
 import {
@@ -21,19 +21,18 @@ const API = "";
 // apiHeaders() carries the tenant (X-Company-Id) and Control Hub act-as
 // (X-Act-As) headers as well as the token. With the token alone, a superadmin
 // switched into or acting as another company got their HOME company's
-// technicians here instead of that company's.
+// technicians here instead of that company's. apiFetch() also drops an act-as
+// session the server says has ended, and throws an ApiError on a non-ok reply.
 async function jget(path: string) {
-  const res = await fetch(`${API}${path}`, { headers: apiHeaders() });
-  if (!res.ok) throw new Error(`${res.status}`);
+  const res = await apiFetch(`${API}${path}`, { headers: apiHeaders() });
   return res.json();
 }
 async function jpost(path: string, body: any) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await apiFetch(`${API}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...apiHeaders() },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }
 

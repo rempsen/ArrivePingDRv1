@@ -37,9 +37,12 @@ describe("raw fetches send the tenant headers", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the dispatch messenger uses apiHeaders()", () => {
+  it("the dispatch messenger uses apiHeaders() and apiFetch()", () => {
     const src = readFileSync(join(ROOT, "components/dispatch-messenger.tsx"), "utf8");
     expect(src).toContain("apiHeaders()");
     expect(src).not.toContain("getToken");
+    // apiFetch drops an act-as session the server reports ended (X-Act-As-Ended);
+    // a bare fetch() would leave the stale session in place while it polls.
+    expect(src).not.toMatch(/(?<![A-Za-z])fetch\(/);
   });
 });
