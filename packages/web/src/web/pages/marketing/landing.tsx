@@ -11,6 +11,7 @@ import { TradeCards } from "../../site/components/TradeCards";
 import { AppStoreBadge } from "../../site/components/AppStoreBadge";
 import { TradeDay, TradeFeatures, TradeHero, TradeStats } from "../../site/live/TradeParts";
 import { GeoSectionBlock } from "../../site/components/GeoSections";
+import { FeatureGalleryGrid } from "../../site/components/FeatureGallery";
 import { landingByPath, type Cell, type LandingPage, type Section } from "../../site/content/landing";
 import { LastUpdated, NextLinks } from "../../site/components/NextLinks";
 import { seoByPath } from "../../site/seo/pages";
@@ -261,14 +262,18 @@ function SectionBlock({ section: s, page }: { section: Section; page: LandingPag
         <section className="section section--divided" id={s.id}>
           <div className="container">
             <Head eyebrow={s.eyebrow} title={s.title} body={s.body} />
-            <div className="lp-grid">
-              {s.items.map((it, i) => (
-                <div key={it.title} className="lp-card" data-reveal="" data-reveal-delay={String(i % 3)}>
-                  <h3 className="h-card">{it.title}</h3>
-                  <p>{it.body}</p>
-                </div>
-              ))}
-            </div>
+            {s.items.some((it) => it.gallery?.length) ? (
+              <FeatureGalleryGrid items={s.items} />
+            ) : (
+              <div className="lp-grid">
+                {s.items.map((it, i) => (
+                  <div key={it.title} className="lp-card" data-reveal="" data-reveal-delay={String(i % 3)}>
+                    <h3 className="h-card">{it.title}</h3>
+                    <p>{it.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       );
