@@ -33,7 +33,7 @@ const [GROW, FLEET] = pricingBands;
  * Central time, which Google treats as an unreliable lastmod).
  * Bump it when page copy changes, not when the site is merely rebuilt.
  */
-export const CONTENT_UPDATED = "2026-11-02";
+export const CONTENT_UPDATED = "2026-11-03";
 
 export type Cell = string | { text: string; href?: string };
 
