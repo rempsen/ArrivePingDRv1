@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "987563778259",
+    "project_id": "arriveping-5f7f0",
+    "storage_bucket": "arriveping-5f7f0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:987563778259:android:98a45da8a4be449e1c3426",
+        "android_client_info": {
+          "package_name": "com.nvc360.uberize"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA26GaANUYCZv1PL_PZlrmoerdEuNnNBbA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
