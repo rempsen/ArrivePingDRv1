@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { setupFilm as F } from "../config";
+import { setupFilm as F, tradeAlt } from "../config";
 import { usePlayback } from "../motion/playback";
 import { useLivePlay } from "./shared";
 
@@ -589,7 +589,7 @@ function SampleSite({ drops }: { drops: boolean }) {
         </div>
         <picture>
           <source type="image/webp" srcSet="/img/site/trades/plumbing-card.webp" />
-          <img src="/img/site/trades/plumbing-card.jpg" alt="" width={800} height={600} loading="lazy" decoding="async" />
+          <img src="/img/site/trades/plumbing-card.jpg" alt={tradeAlt.plumbing} width={800} height={600} loading="lazy" decoding="async" />
         </picture>
       </section>
       <section className="bs-svc" data-k="services">

@@ -60,7 +60,7 @@ export function HomeHero() {
               src={ph.jpg.large}
               srcSet={`${ph.jpg.small} 960w, ${ph.jpg.large} 1920w`}
               sizes="(min-width: 1121px) 64vw, 100vw"
-              alt=""
+              alt={ph.alt}
               width={ph.width}
               height={ph.height}
               fetchPriority="high"

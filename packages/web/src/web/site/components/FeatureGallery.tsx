@@ -63,7 +63,7 @@ export function FeatureGalleryGrid({ items }: { items: readonly GalleryItem[] })
               <span className={`fg-mosaic fg-mosaic--${Math.min(g.length, 4)}`} aria-hidden="true">
                 {g.slice(0, 4).map((s) => (
                   <span key={s.src} className={`fg-thumb${s.phone ? " fg-thumb--phone" : ""}`}>
-                    <img src={s.src} alt="" width={s.w} height={s.h} loading="lazy" decoding="async" />
+                    <img src={s.src} alt={s.alt} width={s.w} height={s.h} loading="lazy" decoding="async" />
                   </span>
                 ))}
               </span>
@@ -124,7 +124,7 @@ export function FeatureGalleryGrid({ items }: { items: readonly GalleryItem[] })
                       aria-current={n === open.shot ? "true" : undefined}
                       onClick={() => setOpen({ ...open, shot: n })}
                     >
-                      <img src={s.src} alt="" width={s.w} height={s.h} loading="lazy" decoding="async" />
+                      <img src={s.src} alt={s.alt} width={s.w} height={s.h} loading="lazy" decoding="async" />
                     </button>
                   ))}
                 </div>

@@ -68,7 +68,7 @@ export function OfficeView() {
                   src={s.src}
                   width={s.width}
                   height={s.height}
-                  alt={i === tab ? s.alt : ""}
+                  alt={s.alt}
                   aria-hidden={i === tab ? undefined : true}
                   className={i === tab ? "is-on" : undefined}
                   loading="lazy"

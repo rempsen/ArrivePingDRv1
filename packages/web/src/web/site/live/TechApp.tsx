@@ -68,7 +68,7 @@ export function TechApp() {
                     {i + 1}
                   </span>
                   <span className="ap-tap__btn">
-                    <img src={t.button.src} width={t.button.width} height={t.button.height} alt="" loading="lazy" decoding="async" />
+                    <img src={t.button.src} width={t.button.width} height={t.button.height} alt={`${t.title} button in the ArrivePing technician app`} loading="lazy" decoding="async" />
                   </span>
                   <span className="ap-tap__t" id={`${uid}-t${i}`}>
                     {t.title}

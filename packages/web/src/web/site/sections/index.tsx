@@ -256,7 +256,7 @@ export function ClosingCTA() {
   const t = closing.trial;
   return (
     <section id="free-trial" className="closing anchor">
-      <img src={brand.watermark} alt="" aria-hidden="true" className="closing__watermark" />
+      <img src={brand.watermark} alt="ArrivePing logo" aria-hidden="true" className="closing__watermark" />
       <div className="container closing__grid">
         <div data-reveal="">
           <span className="eyebrow" style={{ color: "#b9bcc4" }}>

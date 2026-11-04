@@ -33,7 +33,7 @@ function TradeCard({ trade, delay }: { trade: (typeof trades)[number]; delay: nu
         <span className="trade-card__media">
           <picture>
             <source type="image/webp" srcSet={m.card} />
-            <img src={m.cardJpg} alt="" loading="lazy" decoding="async" width={800} height={600} />
+            <img src={m.cardJpg} alt={m.alt} loading="lazy" decoding="async" width={800} height={600} />
           </picture>
           {/* Illustration of the customer's text; the link's label carries the meaning. */}
           <span className="trade-ping" aria-hidden="true">

@@ -150,7 +150,7 @@ function WatchAndLearn() {
       <div className="hv-feature">
         <div className="hv-feature__main">
           <button type="button" className="hv-feature__poster" onClick={() => open(walk.key)} aria-label={`Play the full walkthrough: ${walk.title} (${clock(walk.seconds)})`}>
-            <img src={walk.poster} alt="" width={960} height={540} decoding="async" />
+            <img src={walk.poster} alt={`Video: ${walk.title}`} width={960} height={540} decoding="async" />
             <span className="hv-poster__play" aria-hidden="true">
               <svg width="28" height="28" viewBox="0 0 24 24">
                 <path d="M8 5.5v13l11-6.5z" fill="currentColor" />
