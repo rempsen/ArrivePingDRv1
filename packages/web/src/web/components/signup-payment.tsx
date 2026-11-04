@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js/pure";
 import type { Stripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { CheckCircle2, Loader2, ShieldCheck, ArrowRight } from "lucide-react";
 import { Loader } from "./loader";
+import { saveCardOnce } from "../lib/setup-intent";
 
 /**
  * The card step on /get-started. Saves a card (SetupIntent, nothing charged)
@@ -158,15 +159,18 @@ function CardForm({
   const elements = useElements();
   const [confirming, setConfirming] = useState(false);
   const [err, setErr] = useState("");
+  // Once the card is saved, a retry (after the signup request failed) goes
+  // straight to the signup request instead of confirming the card again.
+  const card = useRef({ saved: false });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!stripe || !elements) return;
     setConfirming(true);
     setErr("");
-    const { error } = await stripe.confirmSetup({ elements, redirect: "if_required" });
-    if (error) {
-      setErr(error.message ?? "We couldn't save that card. Please check the details.");
+    const saved = await saveCardOnce(() => stripe.confirmSetup({ elements, redirect: "if_required" }), card.current);
+    if (!saved.ok) {
+      setErr(saved.message);
       setConfirming(false);
       return;
     }
