@@ -63,7 +63,10 @@ beforeAll(async () => {
   _setQboFetch((async (url: any) => {
     const u = new URL(String(url));
     if (u.pathname.endsWith("/cdc")) {
-      cdcSince = u.searchParams.get("changedSince");
+      // Test files share one in-memory database, so the sweep also visits
+      // other files' connected tenants (quickbooks-pull leaves realm r2).
+      // Only this file's tenant (realm r3) counts.
+      if (u.pathname.includes("/company/r3/")) cdcSince = u.searchParams.get("changedSince");
       return json({ CDCResponse: [{ QueryResponse: [{ Bill: cdcBills }, { PurchaseOrder: [] }] }] });
     }
     return json({ Fault: { Error: [{ code: "999", Message: `unexpected ${u.pathname}` }] } }, 400);
