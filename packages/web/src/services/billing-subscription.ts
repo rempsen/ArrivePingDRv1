@@ -489,6 +489,118 @@ export async function cancelAtPeriodEnd(companyId: string, cancel: boolean): Pro
   await applySubscriptionState(sub);
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Activate a plan for a company that predates self-serve signup             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Companies our team set up by hand before paid signup existed have no
+ * Stripe customer or subscription (billingStatus "none"). An admin of the
+ * company (or a super admin switched into it) can start the plan from
+ * Settings → Billing. Same customer, card and price model as signup, but no
+ * trial: the first month is charged on the spot, then monthly on that date.
+ * Nothing else about the company changes: its data, people and settings are
+ * untouched; only the billing fields are filled in.
+ */
+export type ActivationBlock = "stripe_off" | "own_account" | "already_billed" | "not_found";
+
+export async function activationBlock(companyId: string): Promise<ActivationBlock | null> {
+  if (!stripeEnabled) return "stripe_off";
+  if (companyId === "default") return "own_account";
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co) return "not_found";
+  // A live (or past-due) subscription is managed from the normal Billing tab.
+  if (co.billingSubscriptionId && co.billingStatus !== "canceled") return "already_billed";
+  return null;
+}
+
+/** Step 1: a customer for the company (reused if one is on file) and a SetupIntent for the card. */
+export async function startActivation(
+  companyId: string,
+  contact: { email?: string | null; name?: string | null },
+): Promise<{ clientSecret: string; setupIntentId: string }> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co) throw new Error("Company not found");
+  const stripe = getStripe();
+  let customerId = co.billingCustomerId;
+  if (!customerId) {
+    const customer = await stripe.customers.create(
+      {
+        email: co.contactEmail || contact.email || undefined,
+        name: co.name,
+        metadata: { source: "arriveping-activate", companyId, contactName: contact.name ?? "" },
+      },
+      { idempotencyKey: `activate-customer-${companyId}-${new Date().toISOString().slice(0, 10)}` },
+    );
+    customerId = customer.id;
+    // Saved now so a retry reuses it; billingSummary still reads "not set up"
+    // until a subscription exists (it keys on billingSubscriptionId).
+    await db.update(schema.companies).set({ billingCustomerId: customerId }).where(eq(schema.companies.id, companyId));
+  }
+  const si = await stripe.setupIntents.create({
+    customer: customerId,
+    usage: "off_session",
+    automatic_payment_methods: { enabled: true },
+    metadata: { companyId, source: "arriveping-activate" },
+  });
+  return { clientSecret: si.client_secret!, setupIntentId: si.id };
+}
+
+export type ActivationResult = { ok: true; seats: number; status: BillingStatus } | { ok: false; message: string };
+
+/**
+ * Step 2, after the browser saved the card: make it the default and start
+ * the subscription with the company's current license count, charging the
+ * first month now. A declined first payment leaves no subscription behind.
+ */
+export async function completeActivation(companyId: string, setupIntentId: string): Promise<ActivationResult> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co?.billingCustomerId) return { ok: false, message: "Start again: the card form expired." };
+  const stripe = getStripe();
+  const si = await stripe.setupIntents.retrieve(setupIntentId);
+  const owner = typeof si.customer === "string" ? si.customer : si.customer?.id;
+  if (owner !== co.billingCustomerId) return { ok: false, message: "That card setup doesn't belong to this account." };
+  if (si.status !== "succeeded" || !si.payment_method) return { ok: false, message: "We couldn't save that card. Check the details and try again." };
+  const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method.id;
+
+  await stripe.customers.update(co.billingCustomerId, { invoice_settings: { default_payment_method: pm } });
+  const { billable } = await billableSeatCounts(companyId);
+  const seats = Math.max(1, billable);
+  const priceId = await ensureSubscriptionPrice();
+  let sub: Stripe.Subscription;
+  try {
+    sub = await stripe.subscriptions.create(
+      {
+        customer: co.billingCustomerId,
+        items: [{ price: priceId, quantity: seats }],
+        default_payment_method: pm,
+        collection_method: "charge_automatically",
+        // Charge now; if the bank declines, Stripe creates no subscription.
+        payment_behavior: "error_if_incomplete",
+        proration_behavior: "none",
+        metadata: { companyId, source: "arriveping-activate" },
+      },
+      { idempotencyKey: `activate-sub-${companyId}-${setupIntentId}` },
+    );
+  } catch (e) {
+    const msg = (e as { message?: string }).message ?? "";
+    log.warn("billing activate: first payment failed", { companyId, err: msg.slice(0, 200) });
+    return { ok: false, message: msg ? `The card was declined: ${msg}` : "The card was declined. Try another card." };
+  }
+  await db
+    .update(schema.companies)
+    .set({
+      billingSubscriptionId: sub.id,
+      billingStatus: mapStatus(sub.status),
+      billingSeats: seats,
+      billingTrialEndsAt: null,
+      plan: "starter",
+    })
+    .where(eq(schema.companies.id, companyId));
+  queueCompanySync(companyId);
+  return { ok: true, seats, status: mapStatus(sub.status) };
+}
+
 /** A SetupIntent on the existing customer, so the card can be replaced (never removed). */
 export async function startPaymentMethodChange(companyId: string): Promise<{ clientSecret: string; setupIntentId: string } | null> {
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));

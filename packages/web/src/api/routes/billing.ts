@@ -17,12 +17,22 @@ import {
   closeAccount,
   billableSeatCounts,
   officeRemovable,
+  activationBlock,
+  startActivation,
+  completeActivation,
 } from "../../services/billing-subscription";
 import { AccessError, downsize, seatCandidates } from "../../services/user-access";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
 import type { AppEnv } from "../env";
+
+const ACTIVATION_BLOCKED: Record<string, string> = {
+  stripe_off: "Card payments aren't switched on yet. Contact contact@nvc360.com.",
+  own_account: "ArrivePing's own account isn't billed.",
+  already_billed: "This account already has a plan. Manage it below.",
+  not_found: "Company not found.",
+};
 
 export const billingRoutes = new Hono<AppEnv>()
   .get("/summary", requireAdmin, async (c) => c.json(await billingSummary(tenantId(c)), 200))
@@ -78,6 +88,26 @@ export const billingRoutes = new Hono<AppEnv>()
     await cancelAtPeriodEnd(tenantId(c), false);
     capture("billing.cancel_reverted", tenantId(c), { by: (c.get("user") as { id: string }).id });
     return c.json(await billingSummary(tenantId(c)), 200);
+  })
+
+  // Start a paid plan on a company our team set up before self-serve signup
+  // (no subscription yet). Card on Stripe's form, first month charged now.
+  .post("/activate", requireAdmin, async (c) => {
+    const cid = tenantId(c);
+    const block = await activationBlock(cid);
+    if (block) return c.json({ message: ACTIVATION_BLOCKED[block] }, 400);
+    const me = c.get("user") as { email?: string; name?: string };
+    const r = await startActivation(cid, { email: me.email, name: me.name });
+    return c.json({ ...r, publishableKey: STRIPE_PUBLISHABLE_KEY }, 200);
+  })
+  .post("/activate/confirm", requireAdmin, jsonBody(z.object({ setupIntentId: z.string().max(80) })), async (c) => {
+    const cid = tenantId(c);
+    const block = await activationBlock(cid);
+    if (block) return c.json({ message: ACTIVATION_BLOCKED[block] }, 400);
+    const r = await completeActivation(cid, c.req.valid("json").setupIntentId);
+    if (!r.ok) return c.json({ message: r.message }, 402);
+    capture("billing.plan_activated", cid, { by: (c.get("user") as { id: string }).id, seats: r.seats });
+    return c.json(await billingSummary(cid), 200);
   })
 
   .post("/payment-method", requireAdmin, async (c) => {

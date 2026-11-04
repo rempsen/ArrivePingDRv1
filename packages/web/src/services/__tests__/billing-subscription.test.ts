@@ -12,6 +12,7 @@ type Call = { method: string; args: unknown[] };
 let calls: Call[] = [];
 let existingPrice: { id: string } | null = null;
 let setupState: { status: string; customer: string; payment_method: string | null } = { status: "succeeded", customer: "cus_1", payment_method: "pm_1" };
+let subCreateError: string | null = null;
 
 const stripeStub = {
   prices: {
@@ -39,10 +40,13 @@ const stripeStub = {
       calls.push({ method: "subscriptions.update", args }),
       { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 10 * 86400, cancel_at_period_end: (args[1] as any)?.cancel_at_period_end ?? false, items: { data: [{ id: "si_1", quantity: 3 }] }, metadata: { companyId: CO } }
     ),
-    create: async (...args: unknown[]) => (
-      calls.push({ method: "subscriptions.create", args }),
-      { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 30 * 86400, items: { data: [{ id: "si_1", quantity: 1 }] } }
-    ),
+    create: async (...args: unknown[]) => {
+      calls.push({ method: "subscriptions.create", args });
+      if (subCreateError) throw new Error(subCreateError);
+      return (args[0] as any)?.trial_period_days === undefined
+        ? { id: "sub_act", status: "active", trial_end: null, items: { data: [{ id: "si_act", quantity: (args[0] as any).items[0].quantity }] } }
+        : { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 30 * 86400, items: { data: [{ id: "si_1", quantity: 1 }] } };
+    },
     cancel: async (...args: unknown[]) => (calls.push({ method: "subscriptions.cancel", args }), {}),
   },
 };
@@ -75,6 +79,9 @@ const {
   billingSummary,
   officeRemovable,
   plannedSeatsFor,
+  activationBlock,
+  startActivation,
+  completeActivation,
 } = await import("../billing-subscription");
 const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
@@ -109,6 +116,7 @@ beforeEach(() => {
   calls = [];
   existingPrice = null;
   setupState = { status: "succeeded", customer: "cus_1", payment_method: "pm_1" };
+  subCreateError = null;
   _resetBillingCache();
   delete process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
 });
@@ -358,5 +366,64 @@ describe("billable licenses", () => {
     await addPerson("lic-mgr", "manager");
     s = await billingSummary(LIC);
     expect(s).toMatchObject({ activeOffice: 3, billableUsers: 4, excessActive: 1 });
+  });
+});
+
+describe("activate a plan for a company set up before self-serve signup", () => {
+  const LEG = "legacy-co";
+  const row = async () => (await db.select().from(schema.companies).where(eq(schema.companies.id, LEG)))[0]!;
+  beforeEach(async () => {
+    const sql = (db as any).$client;
+    await sql.execute({ sql: "DELETE FROM companies WHERE id = ?", args: [LEG] });
+    await sql.execute({ sql: "INSERT INTO companies (id, name, contact_email, plan) VALUES (?,?,?,?)", args: [LEG, "Legacy Materials", "office@legacy.test", "pro"] });
+  });
+
+  it("is open to an unbilled company, closed to ArrivePing's own account", async () => {
+    expect(await activationBlock(LEG)).toBeNull();
+    expect(await activationBlock("default")).toBe("own_account");
+  });
+
+  it("charges the first month now (no trial) and fills in only the billing fields", async () => {
+    const setup = await startActivation(LEG, { email: "admin@legacy.test", name: "Admin" });
+    expect(setup).toEqual({ clientSecret: "seti_1_secret", setupIntentId: "seti_1" });
+    expect((calls.find((c) => c.method === "customers.create")!.args[0] as any).email).toBe("office@legacy.test");
+    expect((await row()).billingCustomerId).toBe("cus_1");
+
+    const r = await completeActivation(LEG, "seti_1");
+    expect(r).toEqual({ ok: true, seats: 1, status: "active" });
+    const sub = calls.find((c) => c.method === "subscriptions.create")!.args[0] as any;
+    expect(sub.trial_period_days).toBeUndefined();
+    expect(sub.payment_behavior).toBe("error_if_incomplete");
+    expect(sub.default_payment_method).toBe("pm_1");
+    expect(sub.metadata).toEqual({ companyId: LEG, source: "arriveping-activate" });
+    const co = await row();
+    expect(co).toMatchObject({ name: "Legacy Materials", billingSubscriptionId: "sub_act", billingStatus: "active", billingSeats: 1, plan: "starter", billingTrialEndsAt: null });
+    expect(await activationBlock(LEG)).toBe("already_billed");
+  });
+
+  it("reuses a customer already on file instead of making another", async () => {
+    const sql = (db as any).$client;
+    await sql.execute({ sql: "UPDATE companies SET billing_customer_id = ? WHERE id = ?", args: ["cus_1", LEG] });
+    await startActivation(LEG, {});
+    expect(calls.some((c) => c.method === "customers.create")).toBe(false);
+  });
+
+  it("leaves no plan behind when the first payment is declined", async () => {
+    await startActivation(LEG, {});
+    subCreateError = "Your card was declined.";
+    const r = await completeActivation(LEG, "seti_1");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toContain("declined");
+    const co = await row();
+    expect(co.billingSubscriptionId).toBeNull();
+    expect(co.billingStatus).toBe("none");
+    expect(await activationBlock(LEG)).toBeNull();
+  });
+
+  it("refuses a card setup that belongs to another customer", async () => {
+    await startActivation(LEG, {});
+    setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_x" };
+    expect((await completeActivation(LEG, "seti_1")).ok).toBe(false);
+    expect(calls.some((c) => c.method === "subscriptions.create")).toBe(false);
   });
 });
