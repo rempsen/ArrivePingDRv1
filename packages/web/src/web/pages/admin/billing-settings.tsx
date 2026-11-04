@@ -53,6 +53,7 @@ type Summary = {
   cancelAt: string | null;
   paymentMethod: { kind: string; brand: string; last4: string; expMonth: number | null; expYear: number | null; label: string } | null;
   stripeError?: string;
+  activatable?: boolean;
 };
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
@@ -141,7 +142,14 @@ export default function BillingSettingsTab() {
         </p>
       )}
 
-      {s && !s.configured && (
+      {s && !s.configured && !s.activatable && (
+        <div className="nvc-card p-5 text-sm text-slate-300">
+          This account isn't billed through ArrivePing's self-serve plan (it was set up by our team). Questions about your
+          invoice? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
+        </div>
+      )}
+
+      {s && !s.configured && s.activatable && (
         <div className="nvc-card space-y-4 p-5 text-sm text-slate-300">
           <div>
             <h3 className="text-base font-bold text-white">Activate your plan</h3>
