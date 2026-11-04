@@ -88,7 +88,10 @@ export const BrandProposal = z
     accentColor: hexColor("Accent colour").nullable(),
     // Rendered in an <img src> in-app AND in email headers.
     logoUrl: imageRef("Logo URL").nullable(),
-    logoSourceUrl: imageRef("Logo source URL").nullable(),
+    // Only where the scout found the logo (provenance, never rendered), so a
+    // bad value is dropped rather than failing the signup: the page sends the
+    // scout's proposal back verbatim, after the card is already saved.
+    logoSourceUrl: imageRef("Logo source URL").nullable().catch(null),
     workerNoun: shortText("Worker noun", 40).nullable(),
     workerNounPlural: shortText("Worker noun (plural)", 40).nullable(),
     customerNoun: shortText("Customer noun", 40).nullable(),

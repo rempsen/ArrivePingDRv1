@@ -130,6 +130,10 @@ export function normalizeUrl(raw: string): string {
   }
 }
 
+function isHttpUrl(u: string): boolean {
+  return /^https?:\/\//i.test(u);
+}
+
 function absolutize(base: string, href: string): string | null {
   try {
     return new URL(href, base).toString();
@@ -409,12 +413,15 @@ async function cssBrandColors(
  * <link rel="icon">, og:image, apple-touch-icon, and <img> tags whose
  * attributes mention "logo". All resolved to absolute URLs.
  */
-function logoCandidates(html: string, base: string): string[] {
+export function logoCandidates(html: string, base: string): string[] {
   const out: string[] = [];
   const push = (href?: string | null) => {
     if (!href) return;
     const abs = absolutize(base, href);
-    if (abs && !out.includes(abs)) out.push(abs);
+    // Only links we can download. `new URL` happily resolves "data:;",
+    // "data:image/svg+xml,…" and "blob:…", and an unhostable candidate is
+    // still reported as logoSourceUrl, which signup then validated as a URL.
+    if (abs && isHttpUrl(abs) && !out.includes(abs)) out.push(abs);
   };
 
   // <img ... logo ...>
@@ -1364,7 +1371,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
 
   // logo: gather candidates from HTML, host the best one
   const candidates = logoCandidates(html, finalUrl);
-  if (structured?.logo && !candidates.includes(structured.logo)) candidates.unshift(structured.logo);
+  if (structured?.logo && isHttpUrl(structured.logo) && !candidates.includes(structured.logo)) candidates.unshift(structured.logo);
   const hosted = candidates.length
     ? await hostLogo(candidates, companyId)
     : null;
