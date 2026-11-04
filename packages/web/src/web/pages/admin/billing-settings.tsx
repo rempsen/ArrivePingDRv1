@@ -53,6 +53,7 @@ type Summary = {
   cancelAt: string | null;
   paymentMethod: { kind: string; brand: string; last4: string; expMonth: number | null; expYear: number | null; label: string } | null;
   stripeError?: string;
+  activatable?: boolean;
 };
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
@@ -75,6 +76,7 @@ export default function BillingSettingsTab() {
   const { noun, nounPlural } = useWorkerNoun();
   const [err, setErr] = useState("");
   const [changeCard, setChangeCard] = useState(false);
+  const [activate, setActivate] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [picker, setPicker] = useState(false);
@@ -140,11 +142,49 @@ export default function BillingSettingsTab() {
         </p>
       )}
 
-      {s && !s.configured && (
+      {s && !s.configured && !s.activatable && (
         <div className="nvc-card p-5 text-sm text-slate-300">
           This account isn't billed through ArrivePing's self-serve plan (it was set up by our team). Questions about your
           invoice? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
         </div>
+      )}
+
+      {s && !s.configured && s.activatable && (
+        <div className="nvc-card space-y-4 p-5 text-sm text-slate-300">
+          <div>
+            <h3 className="text-base font-bold text-white">Activate your plan</h3>
+            <p className="mt-1">
+              Your account was set up by our team before self-serve billing. Activate the plan to pay by card each month.
+              Everything in your account stays exactly as it is.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat label="Users on the plan" value={String(Math.max(1, s.billableUsers))} sub={`${s.activeDrivers} field · ${s.activeOffice} office (1 included)`} />
+            <Stat label="Monthly total" value={`${money(priceFor(Math.max(1, s.billableUsers)).total)} USD`} sub={priceFor(Math.max(1, s.billableUsers)).breakdown} />
+            <Stat label="First charge" value="Today" sub="Then monthly on this date" />
+          </div>
+          <button type="button" onClick={() => setActivate(true)} className="nvc-btn nvc-btn-lg nvc-btn-brand">
+            <CreditCard className="h-4 w-4" /> Activate plan
+          </button>
+          <p className="text-xs text-white/50">
+            Questions? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
+          </p>
+        </div>
+      )}
+
+      {activate && (
+        <CardModal
+          title="Activate your plan"
+          intro="Your card is charged today for the first month, then monthly on this date. You can change the card or cancel from this page."
+          setupPath="activate"
+          confirmPath="activate/confirm"
+          buttonLabel="Activate and pay"
+          onClose={() => setActivate(false)}
+          onDone={() => {
+            setActivate(false);
+            refresh();
+          }}
+        />
       )}
 
       {s?.stripeError && (
@@ -446,19 +486,50 @@ function stripeFor(pk: string) {
 }
 
 function ChangeCardModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  return (
+    <CardModal
+      title="Change card"
+      intro="The new card replaces the old one for all future bills."
+      setupPath="payment-method"
+      confirmPath="payment-method/confirm"
+      buttonLabel="Use this card"
+      onClose={onClose}
+      onDone={onDone}
+    />
+  );
+}
+
+/** Stripe's card form in a dialog: `setupPath` returns a SetupIntent, `confirmPath` finishes the job. */
+function CardModal({
+  title,
+  intro,
+  setupPath,
+  confirmPath,
+  buttonLabel,
+  onClose,
+  onDone,
+}: {
+  title: string;
+  intro: string;
+  setupPath: string;
+  confirmPath: string;
+  buttonLabel: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const [setup, setSetup] = useState<{ clientSecret: string; setupIntentId: string; publishableKey: string } | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    post<{ clientSecret: string; setupIntentId: string; publishableKey: string }>("payment-method")
+    post<{ clientSecret: string; setupIntentId: string; publishableKey: string }>(setupPath)
       .then(setSetup)
       .catch((e: Error) => setErr(e.message));
-  }, []);
+  }, [setupPath]);
   const stripePromise = useMemo(() => (setup ? stripeFor(setup.publishableKey) : null), [setup]);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" {...dismiss(onClose)}>
-      <DialogPanel onClose={onClose} label="Change payment card" className="w-full max-w-md rounded-2xl bg-ink-2 p-6 shadow-2xl">
-        <h3 className="text-lg font-extrabold text-white">Change card</h3>
-        <p className="text-sm text-slate-500">The new card replaces the old one for all future bills.</p>
+      <DialogPanel onClose={onClose} label={title} className="w-full max-w-md rounded-2xl bg-ink-2 p-6 shadow-2xl">
+        <h3 className="text-lg font-extrabold text-white">{title}</h3>
+        <p className="text-sm text-slate-500">{intro}</p>
         {err && <div className="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-400">{err}</div>}
         {!setup && !err && (
           <div className="mt-8 flex flex-col items-center gap-3 py-6">
@@ -471,7 +542,7 @@ function ChangeCardModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             stripe={stripePromise}
             options={{ clientSecret: setup.clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#06B6D4", colorBackground: "#0f1419", borderRadius: "12px" } } }}
           >
-            <CardForm setupIntentId={setup.setupIntentId} onDone={onDone} />
+            <CardForm setupIntentId={setup.setupIntentId} confirmPath={confirmPath} buttonLabel={buttonLabel} onDone={onDone} />
           </Elements>
         )}
         <button type="button" onClick={onClose} className="mt-4 text-xs text-slate-400 hover:text-white">
@@ -482,7 +553,17 @@ function ChangeCardModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   );
 }
 
-function CardForm({ setupIntentId, onDone }: { setupIntentId: string; onDone: () => void }) {
+function CardForm({
+  setupIntentId,
+  confirmPath,
+  buttonLabel,
+  onDone,
+}: {
+  setupIntentId: string;
+  confirmPath: string;
+  buttonLabel: string;
+  onDone: () => void;
+}) {
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
@@ -499,7 +580,7 @@ function CardForm({ setupIntentId, onDone }: { setupIntentId: string; onDone: ()
       return;
     }
     try {
-      await post("payment-method/confirm", { setupIntentId });
+      await post(confirmPath, { setupIntentId });
       onDone();
     } catch (e: any) {
       setErr(e.message);
@@ -515,7 +596,7 @@ function CardForm({ setupIntentId, onDone }: { setupIntentId: string; onDone: ()
         disabled={!stripe || busy}
         className="nvc-btn nvc-btn-lg nvc-btn-brand w-full"
       >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Use this card
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} {buttonLabel}
       </button>
     </form>
   );

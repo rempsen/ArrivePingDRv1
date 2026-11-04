@@ -57,6 +57,7 @@ export type AnalyticsEvent =
   | "billing.cancel_scheduled"
   | "billing.cancel_reverted"
   | "billing.card_changed"
+  | "billing.plan_activated"
   | "billing.account_closed"
   | "billing.downsized"
   | "team.deactivated"
