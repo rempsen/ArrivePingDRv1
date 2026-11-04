@@ -76,7 +76,7 @@ function JobPhotos() {
         {jobPhotos.map((x, i) => (
           <picture key={x.stage} className={i === k ? "is-on" : undefined}>
             <source srcSet={`${x.src}.webp`} type="image/webp" />
-            <img src={`${x.src}.jpg`} width={1200} height={900} alt={i === k ? `${x.stage} photo: ${x.caption}` : ""} loading="lazy" decoding="async" />
+            <img src={`${x.src}.jpg`} width={1200} height={900} alt={`${x.stage} the job: ${x.caption}`} loading="lazy" decoding="async" />
           </picture>
         ))}
         <p className="ft-photos__cap" aria-live="polite"><b>{p.stage}</b> {p.caption}<span>{p.time}</span></p>

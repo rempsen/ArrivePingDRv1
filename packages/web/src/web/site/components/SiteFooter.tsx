@@ -77,7 +77,7 @@ export function SiteFooter() {
         </div>
         <div className="footer__bottom">
           <span className="footer__bottom-brand">
-            <img src={brand.icon} alt="" width={16} height={16} className="footer__mini-mark" aria-hidden="true" />
+            <img src={brand.icon} alt="ArrivePing logo" width={16} height={16} className="footer__mini-mark" aria-hidden="true" />
             {footer.legal}
           </span>
           <span className="footer__bottom-links">

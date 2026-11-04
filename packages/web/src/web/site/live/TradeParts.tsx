@@ -43,7 +43,7 @@ export function TradeHero({ page, crumbs }: { page: LandingPage; crumbs: ReactNo
       <div className="lv-hero__film" aria-hidden="true">
         <picture>
           <source type="image/webp" srcSet={t.media.posterWebp} />
-          <img src={t.media.poster} alt="" width={1600} height={900} fetchPriority="high" decoding="async" />
+          <img src={t.media.poster} alt={t.media.alt ?? ""} width={1600} height={900} fetchPriority="high" decoding="async" />
         </picture>
         {src && !reduced ? (
           <video ref={video} aria-hidden="true" src={src} poster={t.media.posterWebp} muted loop playsInline autoPlay preload="auto" disablePictureInPicture tabIndex={-1} />

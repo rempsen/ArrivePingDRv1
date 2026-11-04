@@ -189,6 +189,16 @@ for (const { loc, lastmod } of entries) {
   if (/<meta name="robots" content="[^"]*noindex/.test(html)) fail(`${loc}: page is noindex but listed in sitemap`);
   checkJsonLd(loc, html);
 
+  // Bing Webmaster counts an empty alt as missing ("Alt attribute for images is missing").
+  // Every image gets real alt text; a truly decorative one is marked data-decorative.
+  const noAlt = [...html.matchAll(/<img\b[^>]*>/gi)]
+    .map((m) => m[0])
+    .filter((tag) => !/\bdata-decorative\b/i.test(tag) && !/\balt\s*=\s*"[^"]*[^"\s][^"]*"/i.test(tag));
+  if (noAlt.length) {
+    const srcs = [...new Set(noAlt.map((t) => t.match(/\bsrc="([^"]+)"/)?.[1] ?? "?"))].slice(0, 5).join(", ");
+    fail(`${loc}: ${noAlt.length} <img> with missing or empty alt (${srcs})`);
+  }
+
   const banned = html.match(BANNED)?.[0];
   if (banned) fail(`${loc}: contains the stale phrase "${banned}"`);
   if (!ANDROID_APP_LIVE) {

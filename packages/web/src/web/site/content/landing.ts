@@ -82,7 +82,7 @@ export type Section =
 /** Rich content for a trade page (HVAC, plumbing…), rendered in the homepage's design language. */
 export type TradeContent = {
   /** Film loop and poster for the hero (generated footage of the trade, no real customers). */
-  media: { poster: string; posterWebp: string; film?: { large: string; small: string }; position?: string };
+  media: { poster: string; posterWebp: string; alt?: string; film?: { large: string; small: string }; position?: string };
   /** Three short proof points under the headline. */
   proof: readonly string[];
   /** The customer's on-the-way text, in ArrivePing's default wording with the trade's own word for the field person (a sample company and person). */

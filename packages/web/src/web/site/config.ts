@@ -97,6 +97,7 @@ export const hero = {
     webp: { small: "/media/site-hero-day-960.webp", large: "/media/site-hero-day-1920.webp" },
     width: 1920,
     height: 1280,
+    alt: "An electrician in a high-visibility vest arriving at a job beside his white service van, tool tote in hand",
   },
   /** Real ArrivePing screens (sample company, people and job). */
   device: {
@@ -571,7 +572,18 @@ export const trades = [
  *   property      Ksenia Chernaya       https://www.pexels.com/photo/5691548/
  *   delivery      Carbell Sarfo         https://www.pexels.com/photo/33679977/
  */
+/** Alt text for each trade photo, written from the image itself (card and hero show the same scene). */
+export const tradeAlt: Record<string, string> = {
+  hvac: "An HVAC technician inspecting a home's outdoor air conditioning unit",
+  plumbing: "A plumber tightening a pipe fitting",
+  electrical: "An electrician testing a home electrical panel",
+  construction: "Two installers in safety glasses running PEX tubing through a wall",
+  property: "A maintenance technician repairing a window above a radiator",
+  delivery: "A delivery worker unloading boxed appliances from a truck",
+};
+
 export const tradeMedia = (key: string) => ({
+  alt: tradeAlt[key] ?? "",
   card: `/img/site/trades/${key}-card.webp`,
   cardJpg: `/img/site/trades/${key}-card.jpg`,
   poster: `/img/site/trades/${key}-hero.jpg`,

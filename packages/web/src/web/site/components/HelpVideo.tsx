@@ -37,7 +37,7 @@ export function LiteVideo({ video, start = 0, autoplay = false, label }: { video
         />
       ) : (
         <button type="button" className="hv-poster" onClick={() => setPlaying(true)} aria-label={label ?? `Play video: ${video.title} (${clock(video.seconds)})`}>
-          <img src={video.poster} alt="" width={960} height={540} loading="lazy" decoding="async" />
+          <img src={video.poster} alt={`Video: ${video.title}`} width={960} height={540} loading="lazy" decoding="async" />
           <span className="hv-poster__play">
             <PlayIcon size={26} />
           </span>
@@ -54,7 +54,7 @@ export function VideoCard({ video, variant = "card" }: { video: HelpVideo; varia
   return (
     <button type="button" className={`hv-card hv-card--${variant}`} onClick={() => open(video.key)}>
       <span className="hv-card__thumb">
-        <img src={video.poster} alt="" width={960} height={540} loading="lazy" decoding="async" />
+        <img src={video.poster} alt={`Video: ${video.title}`} width={960} height={540} loading="lazy" decoding="async" />
         <span className="hv-card__play" aria-hidden="true">
           <PlayIcon size={variant === "row" ? 14 : 18} />
         </span>

@@ -1,5 +1,5 @@
 import type { LandingPage, TradeContent } from "./landing";
-import { pricingBands, STARTER_PRICE } from "../config";
+import { pricingBands, STARTER_PRICE, tradeAlt } from "../config";
 
 /** Prices in copy come from the pricing config, never typed by hand. */
 const P = STARTER_PRICE;
@@ -26,6 +26,7 @@ const PHONES = "the phones they already carry: the ArrivePing app for iPhone, iP
 const media = (key: string, film = false): TradeContent["media"] => ({
   poster: `/img/site/trades/${key}-hero.jpg`,
   posterWebp: `/img/site/trades/${key}-hero.webp`,
+  alt: tradeAlt[key],
   ...(film ? { film: { large: `/media/trades/${key}-1600.mp4`, small: `/media/trades/${key}-960.mp4` } } : {}),
 });
 
