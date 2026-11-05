@@ -2,8 +2,8 @@
 title: "How Long Does It Take to Set Up Field Service Software?"
 slug: "how-long-to-set-up-field-service-software"
 description: "Setup takes an hour to six months, depending on the product and who does the work. Realistic timelines, what eats the time, and a 30-day rollout plan."
-date: "2026-11-01"
-updated: "2026-11-01"
+date: "2026-11-03"
+updated: "2026-11-03"
 author: "Dan Rosenblat"
 category: "dispatch-scheduling"
 tags: ["field service software", "software implementation", "onboarding", "setup time", "small business software", "dispatch software", "technician app"]
