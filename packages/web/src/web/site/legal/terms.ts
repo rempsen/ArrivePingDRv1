@@ -8,8 +8,9 @@ import type { LegalDoc } from "./types";
  *
  * Text is reproduced from counsel's NVC360 version with one change: the party
  * name "NVC360" is replaced by "ArrivePing" (and nvc360.com by arriveping.com).
- * The legal entity (10161758 Manitoba Ltd. dba NVC360) and contact emails are
- * unchanged. Only links were added. `**bold**` marks text counsel sets in bold.
+ * The legal entity (10161758 Manitoba Ltd. dba NVC360) and support@nvc360.com are
+ * unchanged; the Contact Us inbox is contact@arriveping.com (counsel's legal@
+ * address is not in use). Only links were added. `**bold**` marks counsel's bold.
  */
 export const terms: LegalDoc = {
   eyebrow: "Legal",
@@ -330,7 +331,7 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "**General Inquiries:** [legal@nvc360.com](mailto:legal@nvc360.com)"
+          text: "**General Inquiries:** [contact@arriveping.com](mailto:contact@arriveping.com)"
         },
         {
           type: "p",
