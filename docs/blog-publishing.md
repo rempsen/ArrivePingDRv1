@@ -61,6 +61,8 @@ Two optional frontmatter lines control publishing:
 | `draft: true` | Keeps the file out of the build |
 | A future `date` | Hides the post until the first build on or after that date |
 
+**One post per day.** No two posts share a `date`. That includes scheduled posts, so when a batch has several posts, give each one its own day. Put each post on or before the first social post that links to it. A test enforces this (`src/web/__tests__/blog-one-post-per-day.test.ts`).
+
 ## House rules (what gets cited by Google and AI assistants)
 
 - **Answer first.** Put a 2–3 sentence direct answer near the top, then the detail. Phrase headings the way people search: "How do I…", "What does … cost".
