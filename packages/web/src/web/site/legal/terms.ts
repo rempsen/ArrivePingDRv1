@@ -3,20 +3,22 @@ import type { LegalDoc } from "./types";
 /**
  * ArrivePing Terms of Service — 10161758 Manitoba Ltd. dba NVC360.
  *
- * Source: "ArrivePing_Terms_of_Service_DRAFT.docx" (supplied by Dan Rosenblat,
- * published October 16, 2026).
+ * Source: "DOCS-3353674-v5-Pitblado_Edits_NVC360_Terms_of_Service.DOCX" (final
+ * version approved by legal counsel, last updated September 30, 2026; v5).
  *
- * Text is reproduced exactly from the approved draft; only links were added
- * (email addresses, priv.gc.ca, cross-links between the two documents).
- * `**bold**` marks the lead-in labels the draft sets in bold.
+ * Text is reproduced from counsel's NVC360 version with one change: the party
+ * name "NVC360" is replaced by "ArrivePing" (and nvc360.com by arriveping.com).
+ * The legal entity (10161758 Manitoba Ltd. dba NVC360) and support@nvc360.com are
+ * unchanged; the Contact Us inbox is contact@arriveping.com (counsel's legal@
+ * address is not in use). Only links were added. `**bold**` marks counsel's bold.
  */
 export const terms: LegalDoc = {
   eyebrow: "Legal",
   title: "Terms of Service",
-  updated: "October 16, 2026",
+  updated: "September 30, 2026",
   path: "/terms",
   intro: [
-    "10161758 Manitoba Ltd. dba NVC360 (\"arriveping.com by NVC360\", \"we\", \"us\", or \"our\") provides the arriveping.com by NVC360 platform, mobile app, website (arriveping.com), and any associated services (collectively, the \"Services\") on the following terms and conditions (these \"Terms\"). By accessing or using the Services, you agree to be bound by these Terms and our [Privacy Policy](/privacy). These Terms constitute a legally binding agreement between you and arriveping.com by NVC360. If you are using the Services on behalf of a company or organization, you represent that you have authority to bind that entity to these Terms."
+    "10161758 Manitoba Ltd. dba NVC360 (\"**ArrivePing**\", \"**we**\", \"**us**\", or \"**our**\") provides the ArrivePing platform, mobile app, website (arriveping.com), and any associated services (collectively, the \"**Services**\") on the following terms and conditions (these \"**Terms**\"). By accessing or using the Services, you agree to be bound by these Terms and our [Privacy Policy](/privacy). These Terms constitute a legally binding agreement between you and ArrivePing. If you are using the Services on behalf of a company or organization, you represent that you have authority to bind that entity to these Terms."
   ],
   sections: [
     {
@@ -25,7 +27,7 @@ export const terms: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "arriveping.com by NVC360 provides a cloud-based field operations and client communication platform designed for businesses that deploy field technicians. The Services include:"
+          text: "ArrivePing provides a cloud-based field operations and client communication platform designed for businesses that deploy field technicians. The Services include:"
         },
         {
           type: "ul",
@@ -39,7 +41,7 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "arriveping.com by NVC360 reserves the right to modify, suspend, or discontinue any aspect of the Services at any time with reasonable notice."
+          text: "ArrivePing reserves the right to modify, suspend, or discontinue any aspect of the Services at any time with reasonable notice."
         }
       ]
     },
@@ -63,7 +65,7 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "arriveping.com by NVC360 reserves the right to suspend or terminate accounts that violate these Terms or that we believe have been compromised."
+          text: "ArrivePing reserves the right to suspend or terminate accounts that violate these Terms or that we believe have been compromised."
         }
       ]
     },
@@ -90,7 +92,7 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "**Violation:** Violations of this Section 3 may result in immediate suspension or termination of your account without refund."
+          text: "**Violation**: Violations of this **Section 3** may result in immediate suspension or termination of your account without refund."
         }
       ]
     },
@@ -100,35 +102,35 @@ export const terms: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "Certain features of the arriveping.com by NVC360 platform require a paid subscription. By subscribing, you agree to:"
+          text: "Certain features of the ArrivePing platform require a paid subscription. By subscribing, you agree to:"
         },
         {
           type: "ul",
           items: [
             "Pay all applicable fees as described in your subscription plan.",
             "Provide accurate billing information and maintain valid payment details.",
-            "Authorize arriveping.com by NVC360 to charge your payment method on a recurring basis for your subscription."
+            "Authorize ArrivePing to charge your payment method on a recurring basis for your subscription."
           ]
         },
         {
           type: "p",
-          text: "**Third-Party Payment Processing:** Payment of the subscription fees may be processed by and through a third-party payment processor, which may be made available to you through the Services, or otherwise. The processing of your payment may therefore be conducted by an entity wholly separate from and independent of arriveping.com by NVC360, and we hereby disclaim absolutely any and all liability, whether, direct, indirect, vicarious or otherwise, for the processing of your payment. You acknowledge and agree that we provide access to such third-party payment processors \"as is\" without any warranties, representations or conditions of any kind. Your use of third-party payment processors is entirely at your own discretion, and you should ensure you are familiar with, and approve, the terms on which such services are provided by the relevant third-party payment processors. Your credit card details are subject to the security policies and systems employed by the third-party payment processor, and you are advised to make yourself familiar with such security policies and systems."
+          text: "**Third-Party Payment Processing**: Payment of the subscription fees may be processed by and through a third-party payment processor, which may be made available to you through the Services, or otherwise. The processing of your payment may therefore be conducted by an entity wholly separate from and independent of ArrivePing, and we hereby disclaim absolutely any and all liability, whether, direct, indirect, vicarious or otherwise, for the processing of your payment. You acknowledge and agree that we provide access to such third-party payment processors \"as is\" without any warranties, representations or conditions of any kind. Your use of third-party payment processors is entirely at your own discretion, and you should ensure you are familiar with, and approve, the terms on which such services are provided by the relevant third-party payment processors. Your credit card details are subject to the security policies and systems employed by the third-party payment processor, and you are advised to make yourself familiar with such security policies and systems."
         },
         {
           type: "p",
-          text: "**Chargebacks and Disputes:** You agree to indemnify and hold harmless arriveping.com by NVC360 and its officers, shareholder, directors, subsidiaries, affiliates, employees, partners, representatives, agents, licensors and their respective successors and assigns, against any chargeback costs (plus any related fees) which we are required to pay, as a result of a payment dispute with you or in relation to a payment you have made to us through the Services."
+          text: "**Chargebacks and Disputes**: You agree to indemnify and hold harmless ArrivePing and its officers, shareholder, directors, subsidiaries, affiliates, employees, partners, representatives, agents, licensors and their respective successors and assigns, against any chargeback costs (plus any related fees) which we are required to pay, as a result of a payment dispute with you or in relation to a payment you have made to us through the Services."
         },
         {
           type: "p",
-          text: "**Taxes:** The cost of all applicable taxes arising from your use of the Services shall be added to the fees that you are responsible for paying us."
+          text: "**Taxes**: The cost of all applicable taxes arising from your use of the Services shall be added to the fees that you are responsible for paying us."
         },
         {
           type: "p",
-          text: "**Refunds:** You further understand and agree that fees are generally non-refundable. If arriveping.com by NVC360 discontinues the Services or terminates your account without cause, arriveping.com by NVC360 will refund any pre-paid fees for Services that have not been provided prior to the date of termination."
+          text: "**Refunds**: You further understand and agree that fees are generally non-refundable. If ArrivePing discontinues the Services or terminates your account without cause, ArrivePing will refund any pre-paid fees for Services that have not been provided prior to the date of termination."
         },
         {
           type: "p",
-          text: "**Price Changes:** arriveping.com by NVC360 reserves the right to change subscription pricing with at least 30 days' written notice to you. Continued use after the effective date constitutes acceptance of the new pricing."
+          text: "**Price Changes**: ArrivePing reserves the right to change subscription pricing with at least 30 days' written notice to you. Continued use after the effective date constitutes acceptance of the new pricing."
         }
       ]
     },
@@ -142,11 +144,11 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "The Services, including all updates and enhancements, is protected by Intellectual Property laws, copyright laws and treaties worldwide, and may contain trade secrets of arriveping.com by NVC360. arriveping.com by NVC360 reserves all Intellectual Property rights not expressly granted in these Terms."
+          text: "The Services, including all updates and enhancements, is protected by Intellectual Property laws, copyright laws and treaties worldwide, and may contain trade secrets of ArrivePing. ArrivePing reserves all Intellectual Property rights not expressly granted in these Terms."
         },
         {
           type: "p",
-          text: "**License Grant:** Subject to these Terms, arriveping.com by NVC360 grants you a limited, non-exclusive, non-transferable, revocable license to access and use the Services for your internal business purposes."
+          text: "**License Grant:** Subject to these Terms, ArrivePing grants you a limited, non-exclusive, non-transferable, revocable license to access and use the Services for your internal business purposes."
         },
         {
           type: "p",
@@ -154,7 +156,7 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "**Your Content:** You retain ownership of all data and content you upload to the platform. By uploading content, you grant arriveping.com by NVC360 a limited license to use that content solely to provide the Services to you."
+          text: "**Your Content:** You retain ownership of all data and content you upload to the platform. By uploading content, you grant ArrivePing a limited license to use that content solely to provide the Services to you."
         }
       ]
     },
@@ -168,11 +170,11 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "**Data Portability:** Prior to termination of your account, you may export your own data at any time or, upon request, we will provide you with an export of your data in a portable format within 30 days."
+          text: "**Data Portability**: Prior to termination of your account, you may export your own data at any time or, upon request, we will provide you with an export of your data in a portable format within 30 days."
         },
         {
           type: "p",
-          text: "**Data Deletion:** After account termination, your data may remain in backup or archival systems and will be deleted in the ordinary course of arriveping.com by NVC360's backup retention and overwrite cycles, generally within 90 days after termination, unless arriveping.com by NVC360 is legally required to retain such data for a longer period."
+          text: "**Data Deletion**: After account termination, your data may remain in backup or archival systems and will be deleted in the ordinary course of ArrivePing's backup retention and overwrite cycles, generally within 90 days after termination, unless ArrivePing is legally required to retain such data for a longer period."
         }
       ]
     },
@@ -182,7 +184,7 @@ export const terms: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "Subject to arriveping.com by NVC360's Privacy Policy and the terms of any other agreement between you and arriveping.com by NVC360, each party agrees to keep confidential all non-public information received from the other party that is designated as confidential or that reasonably should be understood to be confidential given the nature of the information. This obligation does not apply to information that:"
+          text: "Subject to ArrivePing's [Privacy Policy](/privacy) and the terms of any other agreement between you and ArrivePing, each party agrees to keep confidential all non-public information received from the other party that is designated as confidential or that reasonably should be understood to be confidential given the nature of the information. This obligation does not apply to information that:"
         },
         {
           type: "ul",
@@ -205,23 +207,23 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "LIMITATION OF LIABILITY: UNDER NO CIRCUMSTANCES SHALL YOU BE ENTITLED TO RECOVER ANY SPECIAL, INCIDENTAL, CONSEQUENTIAL OR INDIRECT DAMAGES FROM US, ARISING DIRECTLY OR INDIRECTLY FROM: (A) ANY BREACH OF THIS AGREEMENT, FUNDAMENTAL OR OTHERWISE; OR (B) ANY OF OUR NEGLIGENCE, ACTS OR OMISSIONS; OR (C) ANY PROVISION, DUTY OR REQUIREMENT OF ANY STATUTE; OR (D) THE CONDUCT, ONLINE OR OFFLINE, OF ANY USER, OR (E) ANY DUTY AT LAW OR IN EQUITY; OR (F) ANY LOSS OF DATA OR OTHER INFORMATION; OR (G) FOR BUSINESS INTERRUPTION; OR (H) FOR PERSONAL INJURY; OR (I) LOSS OF PRIVACY ARISING OUT OF OR IN ANY WAY RELATED TO THE USE OR INABILITY TO USE THE SERVICES; OR (J) LOSS OF PROFITS OR BUSINESS OPPORTUNITIES. UNDER NO CIRCUMSTANCES SHALL OUR LIABILITY TO YOU FOR DIRECT DAMAGES YOU SUFFER ARISING OUT OF, RELATED TO OR CAUSED BY THIS AGREEMENT OR YOUR USE OF THE SERVICES EXCEED A MAXIMUM AMOUNT EQUAL TO THE AMOUNT ACTUALLY PAID BY YOU TO US IN THE PRECEDING 12 MONTHS, OR ONE HUNDRED DOLLARS ($100.00) CAD IF YOU HAVE NOT PURCHASED ANYTHING THROUGH THE SERVICES. YOU ACKNOWLEDGE THAT THESE LIMITATIONS OF LIABILITY CONTAINED IN THIS SECTION 8 REFLECT THE ALLOCATION OF RISK SET FORTH IN THIS AGREEMENT AND THAT WE WOULD NOT ENTER INTO THIS AGREEMENT WITHOUT THESE LIMITATIONS ON LIABILITY."
+          text: "**LIMITATION OF LIABILITY**: UNDER NO CIRCUMSTANCES SHALL YOU BE ENTITLED TO RECOVER ANY SPECIAL, INCIDENTAL, CONSEQUENTIAL OR INDIRECT DAMAGES FROM US, ARISING DIRECTLY OR INDIRECTLY FROM: (A) ANY BREACH OF THIS AGREEMENT, FUNDAMENTAL OR OTHERWISE; OR (B) ANY OF OUR NEGLIGENCE, ACTS OR OMISSIONS; OR (C) ANY PROVISION, DUTY OR REQUIREMENT OF ANY STATUTE; OR (D) THE CONDUCT, ONLINE OR OFFLINE, OF ANY USER, OR (E) ANY DUTY AT LAW OR IN EQUITY; OR (F) ANY LOSS OF DATA OR OTHER INFORMATION; OR (G) FOR BUSINESS INTERRUPTION; OR (H) FOR PERSONAL INJURY; OR (I) LOSS OF PRIVACY ARISING OUT OF OR IN ANY WAY RELATED TO THE USE OR INABILITY TO USE THE SERVICES; OR (J) LOSS OF PROFITS OR BUSINESS OPPORTUNITIES. UNDER NO CIRCUMSTANCES SHALL OUR LIABILITY TO YOU FOR DIRECT DAMAGES YOU SUFFER ARISING OUT OF, RELATED TO OR CAUSED BY THIS AGREEMENT OR YOUR USE OF THE SERVICES EXCEED A MAXIMUM AMOUNT EQUAL TO THE AMOUNT ACTUALLY PAID BY YOU TO US IN THE PRECEDING 12 MONTHS, OR ONE HUNDRED DOLLARS ($100.00) CAD IF YOU HAVE NOT PURCHASED ANYTHING THROUGH THE SERVICES. YOU ACKNOWLEDGE THAT THESE LIMITATIONS OF LIABILITY CONTAINED IN THIS **SECTION 8** REFLECT THE ALLOCATION OF RISK SET FORTH IN THIS AGREEMENT AND THAT WE WOULD NOT ENTER INTO THIS AGREEMENT WITHOUT THESE LIMITATIONS ON LIABILITY."
         },
         {
           type: "p",
-          text: "RELEASE: EXCEPT AS SET OUT IN THIS SECTION 8, YOU AGREE TO RELEASE, REMISE, ACQUIT AND DISCHARGE US FROM ANY CLAIMS, ACTIONS, DEMANDS, COSTS AND EXPENSES OF ANY KIND WHATSOEVER, WHETHER IN CONTRACT, NEGLIGENCE OR TORT, AT LAW OR IN EQUITY, OR BY STATUTE OR OTHERWISE, HOWSOEVER CAUSED, WITH RESPECT TO YOUR USE OF, OR OUR OPERATION OF, THE SERVICES."
+          text: "**RELEASE**: EXCEPT AS SET OUT IN THIS **SECTION 8**, YOU AGREE TO RELEASE, REMISE, ACQUIT AND DISCHARGE US FROM ANY CLAIMS, ACTIONS, DEMANDS, COSTS AND EXPENSES OF ANY KIND WHATSOEVER, WHETHER IN CONTRACT, NEGLIGENCE OR TORT, AT LAW OR IN EQUITY, OR BY STATUTE OR OTHERWISE, HOWSOEVER CAUSED, WITH RESPECT TO YOUR USE OF, OR OUR OPERATION OF, THE SERVICES."
         },
         {
           type: "p",
-          text: "INDEMNITY: YOU AGREE TO INDEMNIFY, SAVE AND HOLD US HARMLESS FROM AND AGAINST ANY CLAIMS, ACTIONS, DEMANDS, JUDGMENTS, AWARDS, DECLARATIONS, ORDERS, SETTLEMENTS, DAMAGES (INCLUDING GENERAL, SPECIAL, PUNITIVE, AGGRAVATED OR EXEMPLARY DAMAGES), LIABILITIES, LOSSES, COSTS, CHARGES, INTEREST AND EXPENSES, OR PROCEEDINGS OF ANY KIND WHATSOEVER WHICH MAY BE INITIATED OR PRESENTED BY ANY OTHER PERSONS, INDIVIDUALS OR OTHER LEGAL ENTITIES, AND WHICH ARISE DIRECTLY OR INDIRECTLY FROM YOUR USE OF THE SERVICES. WITHOUT LIMITING THE GENERALITY OF THE FOREGOING, YOU HEREBY AGREE TO PAY ALL COSTS, FEES AND EXPENSES, ON A SOLICITOR AND OWN CLIENT BASIS, WHICH MAY BE INCURRED BY US, RELATING TO YOUR USE OF THE SERVICES."
+          text: "**INDEMNITY**: YOU AGREE TO INDEMNIFY, SAVE AND HOLD US HARMLESS FROM AND AGAINST ANY CLAIMS, ACTIONS, DEMANDS, JUDGMENTS, AWARDS, DECLARATIONS, ORDERS, SETTLEMENTS, DAMAGES (INCLUDING GENERAL, SPECIAL, PUNITIVE, AGGRAVATED OR EXEMPLARY DAMAGES), LIABILITIES, LOSSES, COSTS, CHARGES, INTEREST AND EXPENSES, OR PROCEEDINGS OF ANY KIND WHATSOEVER WHICH MAY BE INITIATED OR PRESENTED BY ANY OTHER PERSONS, INDIVIDUALS OR OTHER LEGAL ENTITIES, AND WHICH ARISE DIRECTLY OR INDIRECTLY FROM YOUR USE OF THE SERVICES. WITHOUT LIMITING THE GENERALITY OF THE FOREGOING, YOU HEREBY AGREE TO PAY ALL COSTS, FEES AND EXPENSES, ON A SOLICITOR AND OWN CLIENT BASIS, WHICH MAY BE INCURRED BY US, RELATING TO YOUR USE OF THE SERVICES."
         },
         {
           type: "p",
-          text: "SINCE SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OR LIMITATION OF CERTAIN TYPES OF DAMAGES OR LIABILITY, SOME OR ALL OF THE EXCLUSIONS AND LIMITATIONS IN THIS SECTION 8 MAY NOT APPLY TO YOU."
+          text: "SINCE SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OR LIMITATION OF CERTAIN TYPES OF DAMAGES OR LIABILITY, SOME OR ALL OF THE EXCLUSIONS AND LIMITATIONS IN THIS **SECTION 8** MAY NOT APPLY TO YOU."
         },
         {
           type: "p",
-          text: "FOR THE PURPOSE OF THIS SECTION 8, THE TERMS \"WE\", \"US\" AND \"OUR\" SHALL INCLUDE OUR AFFILIATES AND OUR AND OUR AFFILIATES' RESPECTIVE DIRECTORS, OFFICERS, SHAREHOLDERS, EMPLOYEES, AGENTS AND CONTRACTORS."
+          text: "FOR THE PURPOSE OF THIS **SECTION 8**, THE TERMS \"WE\", \"US\" AND \"OUR\" SHALL INCLUDE OUR AFFILIATES AND OUR AND OUR AFFILIATES' RESPECTIVE DIRECTORS, OFFICERS, SHAREHOLDERS, EMPLOYEES, AGENTS AND CONTRACTORS."
         }
       ]
     },
@@ -231,15 +233,15 @@ export const terms: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "NO WARRANTY: EXCEPT AS EXPRESSLY PROVIDED IN THIS AGREEMENT, WE DO NOT MAKE OR GIVE ANY REPRESENTATION, WARRANTY OR CONDITION OF ANY KIND, WHETHER EXPRESS OR IMPLIED, STATUTORY OR OTHERWISE, INCLUDING, WITHOUT LIMITATION, WARRANTIES AS TO UNINTERRUPTED OR ERROR FREE USE, PRIVACY, SECURITY, MERCHANTABILITY, QUALITY, TITLE, NON-INFRINGEMENT OR FITNESS FOR A PARTICULAR PURPOSE, OR THOSE ARISING OUT OF A COURSE OF DEALING OR USAGE OF TRADE. WITHOUT LIMITING THE FOREGOING, WE PROVIDE NO WARRANTY OR UNDERTAKING, AND MAKE NO REPRESENTATION OF ANY KIND: (i) THAT THE SERVICES WILL MEET YOUR REQUIREMENTS, ACHIEVE ANY INTENDED RESULTS, BE COMPATIBLE OR WORK WITH ANY OTHER SOFTWARE, APPLICATIONS, SYSTEMS OR SERVICES, OPERATE WITHOUT INTERRUPTION, MEET ANY PERFORMANCE OR RELIABILITY STANDARDS OR BE ERROR FREE OR THAT ANY ERRORS OR DEFECTS CAN OR WILL BE CORRECTED; (ii) AS TO THE AVAILABILITY OF THE SERVICES; OR (iii) THAT THE SERVICES, ITS SERVERS, THE CONTENT, OR ANY COMMUNICATIONS SENT FROM OR ON BEHALF OF US, ARE FREE OF VIRUSES, SCRIPTS, TROJAN HORSES, WORMS, MALWARE, TIMEBOMBS, OR OTHER HARMFUL COMPONENTS."
+          text: "**NO WARRANTY**: EXCEPT AS EXPRESSLY PROVIDED IN THIS AGREEMENT, WE DO NOT MAKE OR GIVE ANY REPRESENTATION, WARRANTY OR CONDITION OF ANY KIND, WHETHER EXPRESS OR IMPLIED, STATUTORY OR OTHERWISE, INCLUDING, WITHOUT LIMITATION, WARRANTIES AS TO UNINTERRUPTED OR ERROR FREE USE, PRIVACY, SECURITY, MERCHANTABILITY, QUALITY, TITLE, NON-INFRINGEMENT OR FITNESS FOR A PARTICULAR PURPOSE, OR THOSE ARISING OUT OF A COURSE OF DEALING OR USAGE OF TRADE. WITHOUT LIMITING THE FOREGOING, WE PROVIDE NO WARRANTY OR UNDERTAKING, AND MAKE NO REPRESENTATION OF ANY KIND: (i) THAT THE SERVICES WILL MEET YOUR REQUIREMENTS, ACHIEVE ANY INTENDED RESULTS, BE COMPATIBLE OR WORK WITH ANY OTHER SOFTWARE, APPLICATIONS, SYSTEMS OR SERVICES, OPERATE WITHOUT INTERRUPTION, MEET ANY PERFORMANCE OR RELIABILITY STANDARDS OR BE ERROR FREE OR THAT ANY ERRORS OR DEFECTS CAN OR WILL BE CORRECTED; (ii) AS TO THE AVAILABILITY OF THE SERVICES; OR (iii) THAT THE SERVICES, ITS SERVERS, THE CONTENT, OR ANY COMMUNICATIONS SENT FROM OR ON BEHALF OF US, ARE FREE OF VIRUSES, SCRIPTS, TROJAN HORSES, WORMS, MALWARE, TIMEBOMBS, OR OTHER HARMFUL COMPONENTS."
         },
         {
           type: "p",
-          text: "**Use at Your Own Risk:** Access to the Services is provided \"as is\" and \"as available\" and with all faults and defects, and without warranties of any kind, either express or implied. By accessing and using the Services, you acknowledge and agree that it is entirely at your own risk. We are not responsible for your reliance on the Services. While we try to keep the Services available without interruption, we are not responsible for ensuring the Services are available or that they will convey information to anyone, on your behalf."
+          text: "**Use at Your Own Risk**: Access to the Services is provided \"as is\" and \"as available\" and with all faults and defects, and without warranties of any kind, either express or implied. By accessing and using the Services, you acknowledge and agree that it is entirely at your own risk. We are not responsible for your reliance on the Services. While we try to keep the Services available without interruption, we are not responsible for ensuring the Services are available or that they will convey information to anyone, on your behalf."
         },
         {
           type: "p",
-          text: "**Jurisdictions:** Some jurisdictions do not allow the exclusion of certain types of warranties or limitations or applicable statutory rights of a consumer, so some or all of the above exclusions and limitations may not apply to you. But in such a case, the exclusions and limitations set forth in this Section 9 shall be applied to the greatest extent enforceable under applicable law."
+          text: "**Jurisdictions**: Some jurisdictions do not allow the exclusion of certain types of warranties or limitations or applicable statutory rights of a consumer, so some or all of the above exclusions and limitations may not apply to you. But in such a case, the exclusions and limitations set forth in this **Section 9** shall be applied to the greatest extent enforceable under applicable law."
         }
       ]
     },
@@ -253,11 +255,11 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "**By arriveping.com by NVC360:** We may suspend or terminate your account at any time, without cause, upon reasonable notice. If we terminate your account without cause, we will refund you for any pre-paid fees for Services that have not been provided prior to the date of termination. We may also immediately terminate your account for cause if you breach these Terms, fail to pay applicable fees, or if we determine your use poses a security risk. We will provide notice where reasonably practicable."
+          text: "**By ArrivePing:** We may suspend or terminate your account at any time, without cause, upon reasonable notice. If we terminate your account without cause, we will refund you for any pre-paid fees for Services that have not been provided prior to the date of termination. We may also immediately terminate your account for cause if you breach these Terms, fail to pay applicable fees, or if we determine your use poses a security risk. We will provide notice where reasonably practicable."
         },
         {
           type: "p",
-          text: "**Effect of Termination:** Upon termination, your right to use the Services ceases. Sections 4, 5, 6, 7, 8, 9, 11, 15, and this Section 10 of these Terms survive termination."
+          text: "**Effect of Termination:** Upon termination, your right to use the Services ceases. **Sections 4, 5, 6, 7, 8, 9, 11, 15**, and this **Section 10** of these Terms survive termination."
         }
       ]
     },
@@ -291,7 +293,7 @@ export const terms: LegalDoc = {
       blocks: [
         {
           type: "p",
-          text: "arriveping.com by NVC360 reserves the right to modify these Terms at any time. We will provide at least 30 days' notice of material changes via email or a prominent notice on our website. Your continued use of the Services after the effective date of the revised Terms constitutes your acceptance."
+          text: "ArrivePing reserves the right to modify these Terms at any time. We will provide at least 30 days' notice of material changes via email or a prominent notice on our website. Your continued use of the Services after the effective date of the revised Terms constitutes your acceptance."
         },
         {
           type: "p",
@@ -329,7 +331,7 @@ export const terms: LegalDoc = {
         },
         {
           type: "p",
-          text: "**General Inquiries:** [legal@nvc360.com](mailto:legal@nvc360.com)"
+          text: "**General Inquiries:** [contact@arriveping.com](mailto:contact@arriveping.com)"
         },
         {
           type: "p",
