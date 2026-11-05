@@ -464,6 +464,33 @@ describe("taking users off a paid plan mid-period", () => {
     expect((await membership("ua-r2")).status).toBe("active");
   });
 
+  it("if putting the license back fails, they stay scheduled to leave (so nothing is charged later)", async () => {
+    await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
+    const ok = deps.setSeats;
+    deps.setSeats = async () => {
+      throw new Error("stripe down");
+    };
+    try {
+      await expect(keepOnPlan(CO, ADMIN, "ua-r2")).rejects.toThrow("stripe down");
+    } finally {
+      deps.setSeats = ok;
+    }
+    expect((await membership("ua-r2")).seatEndsAt?.getTime()).toBe(periodEnd.getTime());
+    expect(await seats()).toBe(3);
+  });
+
+  it("a scheduled removal is dropped when they're deactivated from People first", async () => {
+    await downsize(CO, ADMIN, { seats: 4, deactivate: ["ua-r2"], reassign: {} });
+    expect((await membership("ua-r2")).seatEndsAt).not.toBeNull();
+    await deactivateUser(CO, ADMIN, "ua-r2", {});
+    const m = await membership("ua-r2");
+    expect(m.status).toBe("disabled");
+    expect(m.seatEndsAt).toBeNull();
+    await reactivateUser(CO, ADMIN, "ua-r2", { addSeat: true });
+    expect(await applyDueSeatEnds(new Date(periodEnd.getTime() + 1000))).toBe(0);
+    expect((await membership("ua-r2")).status).toBe("active");
+  });
+
   it("users added mid-period are picked up and charged for the rest of it", async () => {
     await (db as any).$client.execute({ sql: "UPDATE companies SET billing_seats = 2 WHERE id = ?", args: [CO] });
     expect(await chargeForAddedUsers()).toBeGreaterThanOrEqual(1);
