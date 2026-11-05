@@ -54,6 +54,8 @@ type Summary = {
   paymentMethod: { kind: string; brand: string; last4: string; expMonth: number | null; expYear: number | null; label: string } | null;
   stripeError?: string;
   activatable?: boolean;
+  /** Taken off the plan, still working until the paid period ends. */
+  leaving?: { userId: string; name: string; leavesAt: string }[];
 };
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
@@ -117,8 +119,16 @@ export default function BillingSettingsTab() {
   const extraOffice = s ? Math.max(0, s.activeOffice - s.includedOffice) : 0;
   const who = (n: number) => (extraOffice > 0 ? (n === 1 ? "user" : "users") : (n === 1 ? noun : nounPlural).toLowerCase());
 
+  // Activating: the plan starts with everyone who counts now; fewer means choosing who comes off first.
+  const actBillable = Math.max(1, s?.billableUsers ?? 1);
+  const actSeats = Math.min(actBillable, pendingSeats ?? actBillable);
+  const actNeeded = s && !s.configured ? Math.max(0, s.billableUsers - actSeats) : 0;
   const inTrial = s?.status === "trialing";
   const ended = s?.status === "canceled";
+  // A paid period: adding users is charged now (by the day), removals wait for the period end.
+  const paidPeriod = !!s?.configured && (s.status === "active" || s.status === "past_due");
+  const adding = s ? shownSeats > s.seats : false;
+  const keep = useMutation({ mutationFn: (userId: string) => post<Summary>("keep", { userId }), onSuccess: refresh, onError: (e: Error) => setErr(e.message) });
 
   return (
     <div className="space-y-5">
@@ -159,11 +169,52 @@ export default function BillingSettingsTab() {
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Stat label="Users on the plan" value={String(Math.max(1, s.billableUsers))} sub={`${s.activeDrivers} field · ${s.activeOffice} office (1 included)`} />
-            <Stat label="Monthly total" value={`${money(priceFor(Math.max(1, s.billableUsers)).total)} USD`} sub={priceFor(Math.max(1, s.billableUsers)).breakdown} />
+            <Stat label="Users on the plan" value={String(actSeats)} sub={`${s.activeDrivers} field · ${s.activeOffice} office (1 included)`} />
+            <Stat label="Monthly total" value={`${money(priceFor(actSeats).total)} USD`} sub={priceFor(actSeats).breakdown} />
             <Stat label="First charge" value="Today" sub="Then monthly on this date" />
           </div>
-          <button type="button" onClick={() => setActivate(true)} className="nvc-btn nvc-btn-lg nvc-btn-brand">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-slate-300">Users on the plan:</span>
+            <div className="inline-flex items-center rounded-lg border border-white/10 bg-ink-2">
+              <button
+                type="button"
+                aria-label="Fewer users"
+                onClick={() => setPendingSeats(Math.max(1, actSeats - 1))}
+                className="grid h-9 w-9 place-items-center text-white hover:bg-white/5"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="w-10 text-center font-bold text-white">{actSeats}</span>
+              <button
+                type="button"
+                aria-label="More users"
+                onClick={() => setPendingSeats(Math.min(Math.max(1, s.billableUsers), actSeats + 1))}
+                className="grid h-9 w-9 place-items-center text-white hover:bg-white/5"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {actNeeded > 0 && (
+              <button
+                type="button"
+                onClick={() => setPicker(true)}
+                className="flex h-9 items-center gap-2 rounded-lg bg-white/10 px-3 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                <UserMinus className="h-4 w-4" /> Choose {actNeeded} {actNeeded === 1 ? "user" : "users"} to deactivate
+              </button>
+            )}
+          </div>
+          {actNeeded > 0 && (
+            <p className="text-xs text-white/50">
+              {s.billableUsers} people count towards the plan now. Choose who comes off first; admins are changed from the People page.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => setActivate(true)}
+            disabled={actNeeded > 0}
+            className="nvc-btn nvc-btn-lg nvc-btn-brand disabled:opacity-50"
+          >
             <CreditCard className="h-4 w-4" /> Activate plan
           </button>
           <p className="text-xs text-white/50">
@@ -254,7 +305,17 @@ export default function BillingSettingsTab() {
                       and {s.activeOffice} office {s.activeOffice === 1 ? "user" : "users"} ({s.includedOffice} included)
                     </>
                   )}
-                  . Changes take effect on your next bill; nothing is charged in between.
+                  .{" "}
+                  {paidPeriod ? (
+                    <>
+                      Adding users is charged today for the rest of this billing period, by the day. Taking users off takes effect at the end of the
+                      period you've paid for ({fmtDate(s.nextInvoiceAt)}): they keep working until then, and the lower price starts on that bill.
+                    </>
+                  ) : inTrial ? (
+                    <>Nothing is charged during your trial; your first bill covers the users on your plan when it ends.</>
+                  ) : (
+                    <>Changes take effect on your next bill.</>
+                  )}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <div className="inline-flex items-center rounded-lg border border-white/10 bg-ink-2">
@@ -287,6 +348,11 @@ export default function BillingSettingsTab() {
                     = <span className="font-semibold text-white">{money(preview.total)} / month</span>
                     <span className="text-white/50"> · {preview.breakdown}</span>
                   </span>
+                  {seatsDirty && needed === 0 && paidPeriod && adding && (
+                    <span className="w-full text-xs text-white/50 sm:w-auto">
+                      Charged today: {money(Math.max(0, preview.total - s.monthlyTotal))}/month prorated to {fmtDate(s.nextInvoiceAt)}.
+                    </span>
+                  )}
                   {seatsDirty && needed === 0 && (
                     <button
                       type="button"
@@ -310,8 +376,29 @@ export default function BillingSettingsTab() {
                 {needed > 0 && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-300" /> {s.billableUsers} {s.billableUsers === 1 ? "user counts" : "users count"} towards
-                    your plan. To pay for {shownSeats}, choose which {needed} to deactivate; they keep their history and can be reactivated later.
+                    your plan. To pay for {shownSeats}, choose which {needed} {paidPeriod ? "to take off at the end of this period" : "to deactivate"}; they keep
+                    their history and can be reactivated later.
                   </p>
+                )}
+                {!!s.leaving?.length && (
+                  <div className="mt-3 space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <p className="text-xs font-semibold text-amber-100">Leaving your plan</p>
+                    {s.leaving.map((l) => (
+                      <div key={l.userId} className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-200">
+                        <span>
+                          <span className="font-semibold text-white">{l.name}</span> keeps working until {fmtDate(l.leavesAt)}, then comes off.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => keep.mutate(l.userId)}
+                          disabled={keep.isPending}
+                          className="rounded-lg bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15 disabled:opacity-50"
+                        >
+                          Keep on plan
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -403,6 +490,7 @@ export default function BillingSettingsTab() {
           monthlyTotal={money(preview.total)}
           noun={noun}
           nounPlural={nounPlural}
+          atPeriodEnd={paidPeriod}
           onClose={() => setPicker(false)}
           onDone={() => {
             setPicker(false);

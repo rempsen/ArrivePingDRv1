@@ -19,7 +19,7 @@ const { db } = await import("../../api/database/index");
 const schema = await import("../../api/database/schema");
 const { getTableConfig } = await import("drizzle-orm/pg-core");
 const { eq, and } = await import("drizzle-orm");
-const { openJobsFor, seatCandidates, deactivateUser, reactivateUser, downsize, AccessError, deps } = await import("../user-access");
+const { openJobsFor, seatCandidates, deactivateUser, reactivateUser, downsize, AccessError, deps, keepOnPlan, applyDueSeatEnds, chargeForAddedUsers } = await import("../user-access");
 const { driverSeatCount, billableSeatCounts } = await import("../billing-subscription");
 const { monthlyPrice } = await import("../../web/site/config");
 
@@ -234,8 +234,10 @@ describe("deactivateUser", () => {
 describe("reactivateUser", () => {
   it("restores state", async () => {
     await deactivateUser(CO, ADMIN, "ua-r2", {});
+    // Deactivating freed their license (10 → 9, nothing refunded); 9 still covers them coming back.
+    expect(await seats()).toBe(9);
     const r = await reactivateUser(CO, ADMIN, "ua-r2", {});
-    expect(r.seats).toBe(10);
+    expect(r.seats).toBe(9);
     const m = await membership("ua-r2");
     expect(m.status).toBe("active");
     expect(m.deactivatedAt).toBeNull();
@@ -328,7 +330,7 @@ describe("downsize", () => {
   it("is atomic", async () => {
     // 2 field off: 1 field + 3 office = 3 licenses.
     const r = await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
-    expect(r).toEqual({ seats: 3, deactivated: ["ua-r1", "ua-r2"] });
+    expect(r).toEqual({ seats: 3, deactivated: ["ua-r1", "ua-r2"], leaving: [], leavesAt: null });
     expect((await membership("ua-r1")).status).toBe("disabled");
     expect((await membership("ua-r2")).status).toBe("disabled");
     expect((await booking("bk-1")).riderId).toBe("rd-r3");
@@ -351,7 +353,7 @@ describe("downsize", () => {
   it("an extra office user comes off one license, with their jobs handled like a tech's", async () => {
     // 3 field + 2 office = 4.
     const r = await downsize(CO, ADMIN, { seats: 4, deactivate: ["ua-disp"], reassign: { "ua-disp": null } });
-    expect(r).toEqual({ seats: 4, deactivated: ["ua-disp"] });
+    expect(r).toEqual({ seats: 4, deactivated: ["ua-disp"], leaving: [], leavesAt: null });
     expect((await membership("ua-disp")).status).toBe("disabled");
     expect((await rider("rd-disp")).approval).toBe("suspended");
     expect((await booking("bk-4")).riderId).toBeNull();
@@ -405,5 +407,70 @@ describe("downsize", () => {
     const err = await expectAccessError(downsize(CO, ADMIN, { seats: 1, deactivate: ["ua-r2", "ua-r3"], reassign: {} }), 409, "stale");
     expect(err.meta).toEqual({ activeDrivers: 3, activeOffice: 3, billableUsers: 5, expectedSeats: 3 });
     expect(await seats()).toBe(10);
+  });
+});
+
+describe("taking users off a paid plan mid-period", () => {
+  const periodEnd = new Date(Date.now() + 10 * DAY);
+  const realPeriodEnd = deps.paidPeriodEnd;
+  const realSetSeats = deps.setSeats;
+  const setSeatsCalls: { seats: number; prorate?: boolean }[] = [];
+  beforeEach(() => {
+    setSeatsCalls.length = 0;
+    deps.paidPeriodEnd = async () => periodEnd;
+    deps.setSeats = async (companyId: string, n: number, opts: { prorate?: boolean } = {}) => {
+      setSeatsCalls.push({ seats: n, prorate: opts.prorate });
+      return realSetSeats(companyId, n, opts);
+    };
+  });
+  afterAll(() => {
+    deps.paidPeriodEnd = realPeriodEnd;
+    deps.setSeats = realSetSeats;
+  });
+
+  it("they keep working until the period ends, and stop counting towards the plan now", async () => {
+    const r = await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
+    expect(r).toEqual({ seats: 3, deactivated: [], leaving: ["ua-r1", "ua-r2"], leavesAt: periodEnd.toISOString() });
+    const m1 = await membership("ua-r1");
+    expect(m1.status).toBe("active");
+    expect(m1.seatEndsAt?.getTime()).toBe(periodEnd.getTime());
+    expect(m1.seatEndsReassignTo).toBe("ua-r3");
+    expect((await booking("bk-1")).riderId).toBe("rd-r1"); // still theirs until then
+    expect(await seats()).toBe(3);
+    expect(await billableSeatCounts(CO)).toEqual({ field: 1, office: 3, billable: 3 });
+  });
+
+  it("at the period end they come off and their jobs go where the admin chose", async () => {
+    await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
+    expect(await applyDueSeatEnds(new Date(periodEnd.getTime() - 1000))).toBe(0);
+    expect((await membership("ua-r1")).status).toBe("active");
+    expect(await applyDueSeatEnds(new Date(periodEnd.getTime() + 1000))).toBe(2);
+    const m1 = await membership("ua-r1");
+    expect(m1.status).toBe("disabled");
+    expect(m1.seatEndsAt).toBeNull();
+    expect((await membership("ua-r2")).status).toBe("disabled");
+    expect((await booking("bk-1")).riderId).toBe("rd-r3");
+    expect(await seats()).toBe(3);
+  });
+
+  it("Keep on plan undoes it without a charge (the license is already paid for)", async () => {
+    await downsize(CO, ADMIN, { seats: 3, deactivate: ["ua-r1", "ua-r2"], reassign: { "ua-r1": "ua-r3" } });
+    setSeatsCalls.length = 0;
+    const r = await keepOnPlan(CO, ADMIN, "ua-r2");
+    expect(r.seats).toBe(4);
+    expect(setSeatsCalls).toEqual([{ seats: 4, prorate: false }]);
+    expect((await membership("ua-r2")).seatEndsAt).toBeNull();
+    expect(await applyDueSeatEnds(new Date(periodEnd.getTime() + 1000))).toBe(1); // only ua-r1 leaves
+    expect((await membership("ua-r2")).status).toBe("active");
+  });
+
+  it("users added mid-period are picked up and charged for the rest of it", async () => {
+    await (db as any).$client.execute({ sql: "UPDATE companies SET billing_seats = 2 WHERE id = ?", args: [CO] });
+    expect(await chargeForAddedUsers()).toBeGreaterThanOrEqual(1);
+    expect(setSeatsCalls).toContainEqual({ seats: 5, prorate: undefined });
+    expect(await seats()).toBe(5);
+    setSeatsCalls.length = 0;
+    await chargeForAddedUsers(); // nothing new: no second charge
+    expect(setSeatsCalls.filter((c) => c.seats === 5)).toHaveLength(0);
   });
 });

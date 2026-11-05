@@ -80,6 +80,7 @@ const U = "October 16, 2026";
 const U2 = "October 17, 2026";
 const U3 = "October 18, 2026";
 const U4 = "November 3, 2026";
+const U5 = "November 5, 2026";
 
 export const articles: Article[] = [
   /* ---------------------------------------------------------------- */
@@ -941,16 +942,18 @@ export const articles: Article[] = [
   },
   {
     slug: "add-or-remove-drivers",
-    title: "Add or remove drivers from your plan",
-    summary: "Inviting a technician adds a seat; deactivating one keeps their history and frees the seat.",
-    description: "Inviting a technician adds a seat to your ArrivePing plan. Deactivating one frees the seat, ends their access and keeps their job history.",
+    title: "Add or remove users on your plan",
+    summary: "Adding a user is charged for the rest of the month, by the day. Removing one takes effect when the month you've paid for ends.",
+    description: "How adding or removing technicians and office users changes your ArrivePing bill mid-month: added users are prorated daily; removed users keep working until the paid period ends.",
     category: "billing",
-    updated: U,
-    keywords: ["deactivate", "remove technician", "add technician cost", "cost per technician", "seat count", "downsize", "offboard"],
+    updated: U5,
+    keywords: ["deactivate", "remove technician", "add technician cost", "cost per technician", "seat count", "downsize", "offboard", "prorated", "mid-month", "add user", "remove user"],
     blocks: [
-      { type: "p", text: "**To add:** invite the technician from People → Technicians & Managers. The seat is added to your plan from that point on." },
-      { type: "p", text: "**To remove:** open the technician and choose **Deactivate**. Their jobs, photos and time on site stay in your records, their access ends immediately, and the seat comes off your plan. You can reactivate them later." },
-      { type: "p", text: "If you lower the number of drivers from Setup → Settings → **Billing**, ArrivePing walks you through choosing who comes off the plan so nobody loses access by surprise." },
+      { type: "p", text: "Your plan is priced by users: Starter covers the dispatcher licence and two more users, and each extra technician or office user is one more licence. See [How ArrivePing is priced](/support/pricing-and-seats)." },
+      { type: "p", text: "**Adding a user mid-month:** invite them from People, or raise the number of users in Setup → Settings → **Billing**. You're charged today for the rest of the current billing period, worked out by the day. From your next bill, the new user is part of the normal monthly price." },
+      { type: "p", text: "**Removing a user mid-month:** in Setup → Settings → **Billing**, lower the number of users and choose who comes off. You've already paid for this period, so they keep working until it ends. Then they're deactivated, their open jobs go where you chose, and the lower price starts on that bill. Changed your mind? Choose **Keep on plan** next to their name before then." },
+      { type: "p", text: "**Someone leaves the company:** open them in People and choose **Deactivate** to end their access straight away. Their licence still comes off your plan: nothing is refunded for the current period, and the lower price starts on your next bill. Their jobs, photos and time on site stay in your records, and you can reactivate them later." },
+      { type: "p", text: "During the free trial nothing is charged either way; your first bill covers the users on your plan when the trial ends." },
     ],
   },
   {
@@ -981,7 +984,7 @@ export const articles: Article[] = [
           "**No per-job charge.** Book ten jobs a day or two hundred; the bill is the same. Cancelled, archived and restored jobs don't count for or against anything.",
           "**No caps** on customers, jobs, intake form submissions, photos or reports.",
           "**No platform cut on card payments.** When a customer pays through your own Stripe account, Stripe's processing fee goes to Stripe and ArrivePing takes nothing. See [Take card payments through your own Stripe account](/support/take-payments-with-stripe).",
-          "**A licence you free up stops billing.** Deactivate a technician and their licence comes off your plan; their history stays. See [Add or remove drivers from your plan](/support/add-or-remove-drivers).",
+          "**Adding or removing users mid-month:** an added user is charged for the rest of the month, by the day; a removed user keeps working until the month you've paid for ends, then comes off. See [Add or remove users on your plan](/support/add-or-remove-drivers).",
         ],
       },
       { type: "p", text: "Your current licence count and next invoice are under **Setup → Settings → Billing**." },

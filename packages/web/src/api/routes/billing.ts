@@ -21,7 +21,7 @@ import {
   startActivation,
   completeActivation,
 } from "../../services/billing-subscription";
-import { AccessError, downsize, seatCandidates } from "../../services/user-access";
+import { AccessError, downsize, keepOnPlan, seatCandidates } from "../../services/user-access";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq } from "drizzle-orm";
@@ -78,6 +78,19 @@ export const billingRoutes = new Hono<AppEnv>()
       }
     },
   )
+
+  // Undo a removal before the paid period ends: they stay on the plan.
+  .post("/keep", requireAdmin, jsonBody(z.object({ userId: z.string().min(1).max(80) })), async (c) => {
+    const cid = tenantId(c);
+    const me = c.get("user") as { id: string; role?: string; name?: string };
+    try {
+      await keepOnPlan(cid, me, c.req.valid("json").userId);
+      return c.json(await billingSummary(cid), 200);
+    } catch (e) {
+      if (e instanceof AccessError) return c.json({ code: e.code, message: e.message, meta: e.meta ?? null }, e.status);
+      throw e;
+    }
+  })
 
   .post("/cancel", requireAdmin, async (c) => {
     await cancelAtPeriodEnd(tenantId(c), true);

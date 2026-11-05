@@ -35,7 +35,7 @@
  * the caller as a typed result so the form can show it.
  */
 import type Stripe from "stripe";
-import { and, count, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, notInArray, or } from "drizzle-orm";
 import { db, sdb } from "../api/database";
 import * as schema from "../api/database/schema";
 import { getStripe, stripeEnabled } from "./stripe";
@@ -239,6 +239,7 @@ function fieldSeatWhere(companyId: string) {
     eq(schema.riders.isSample, false), // sample-day techs are never billed
     eq(schema.memberships.role, FIELD_SEAT_ROLE),
     eq(schema.memberships.status, "active"),
+    isNull(schema.memberships.seatEndsAt), // leaving at period end: already off the plan
   );
 }
 const officeSeatJoin = eq(schema.user.id, schema.memberships.userId);
@@ -246,6 +247,7 @@ function officeSeatWhere(companyId: string) {
   return and(
     eq(schema.memberships.companyId, companyId),
     eq(schema.memberships.status, "active"),
+    isNull(schema.memberships.seatEndsAt), // leaving at period end: already off the plan
     inArray(schema.memberships.role, [...OFFICE_SEAT_ROLES]),
     or(isNull(schema.user.role), notInArray(schema.user.role, NON_BILLABLE_USER_ROLES)),
     eq(schema.user.isSample, false),
@@ -387,6 +389,8 @@ export interface BillingSummary {
   stripeError?: string;
   /** No plan yet and one can be started from Settings → Billing (activationBlock is null). */
   activatable: boolean;
+  /** Taken off the plan, still working until the paid period ends. */
+  leaving: { userId: string; name: string; leavesAt: string }[];
 }
 
 function subscriptionItem(sub: Stripe.Subscription) {
@@ -418,6 +422,7 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
     cancelAt: null,
     paymentMethod: null,
     activatable: false,
+    leaving: await leavingPlanList(companyId),
   };
   if (!base.configured || !co?.billingSubscriptionId) {
     base.activatable = (await activationBlock(companyId)) === null;
@@ -470,21 +475,71 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
 }
 
 /** The tenant chooses how many users they pay for. Takes effect on the next invoice (no mid-month proration). */
-export async function setSeats(companyId: string, seats: number): Promise<{ seats: number }> {
+/**
+ * The rules for changing users on a paid plan, mid-period:
+ *  - More users: charged now for the rest of the current period, by the day
+ *    (the proration starts at the beginning of today).
+ *  - Fewer users: nothing is refunded; the lower count bills from the next
+ *    period. People taken off keep working until then (scheduleSeatEnd).
+ * During a free trial nothing is charged either way.
+ * `prorate: false` changes the count without a charge: used to put back a
+ * license that was already paid for this period (undoing a removal).
+ */
+export async function setSeats(companyId: string, seats: number, opts: { prorate?: boolean } = {}): Promise<{ seats: number; charged: boolean }> {
   const n = Math.max(1, Math.min(10_000, Math.floor(seats)));
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   if (!co) throw new Error("Company not found");
+  let charged = false;
   if (co.billingSubscriptionId && stripeEnabled) {
     const stripe = getStripe();
     const sub = await stripe.subscriptions.retrieve(co.billingSubscriptionId);
     const item = subscriptionItem(sub);
-    if (item && !["canceled", "incomplete_expired"].includes(sub.status)) {
-      await stripe.subscriptionItems.update(item.id, { quantity: n, proration_behavior: "none" });
+    if (item && !["canceled", "incomplete_expired"].includes(sub.status) && item.quantity !== n) {
+      const up = n > (item.quantity ?? 0);
+      const paying = sub.status === "active" || sub.status === "past_due";
+      if (up && paying && opts.prorate !== false) {
+        const periodStart = (item as unknown as { current_period_start?: number }).current_period_start ?? (sub as unknown as { current_period_start?: number }).current_period_start ?? 0;
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        await stripe.subscriptionItems.update(item.id, {
+          quantity: n,
+          proration_behavior: "always_invoice",
+          proration_date: Math.max(periodStart, Math.floor(today.getTime() / 1000)),
+        });
+        charged = true;
+      } else {
+        await stripe.subscriptionItems.update(item.id, { quantity: n, proration_behavior: "none" });
+      }
     }
   }
   await db.update(schema.companies).set({ billingSeats: n }).where(eq(schema.companies.id, companyId));
   queueCompanySync(companyId);
-  return { seats: n };
+  return { seats: n, charged };
+}
+
+/** People taken off the plan who keep working until the paid period ends. */
+async function leavingPlanList(companyId: string): Promise<BillingSummary["leaving"]> {
+  const rows = await sdb
+    .select({ userId: schema.user.id, name: schema.user.name, leavesAt: schema.memberships.seatEndsAt })
+    .from(schema.memberships)
+    .innerJoin(schema.user, eq(schema.user.id, schema.memberships.userId))
+    .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.status, "active"), isNotNull(schema.memberships.seatEndsAt)));
+  return rows
+    .map((r) => ({ userId: r.userId, name: r.name, leavesAt: r.leavesAt!.toISOString() }))
+    .sort((a, b) => a.leavesAt.localeCompare(b.leavesAt) || a.name.localeCompare(b.name));
+}
+
+/** End of the period already paid for, when the company has a live paid plan (null otherwise). */
+export async function paidPeriodEnd(companyId: string): Promise<Date | null> {
+  const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  if (!co?.billingSubscriptionId || !stripeEnabled) return null;
+  // In a free trial nothing has been paid, so a removal can take effect now.
+  if (!["active", "past_due"].includes(co.billingStatus)) return null;
+  const sub = await getStripe().subscriptions.retrieve(co.billingSubscriptionId);
+  if (["canceled", "incomplete_expired"].includes(sub.status)) return null;
+  const item = subscriptionItem(sub) as unknown as { current_period_end?: number } | null;
+  const end = item?.current_period_end ?? (sub as unknown as { current_period_end?: number }).current_period_end;
+  return end ? new Date(end * 1000) : null;
 }
 
 /** Cancel at the end of the current period (or the trial): access continues until then, nothing more is charged. */

@@ -228,6 +228,37 @@ describe("tenant self-service", () => {
     expect(co!.billingSeats).toBe(5);
   });
 
+  it("on a paid plan, more users are charged now for the rest of the period, by the day; fewer are not refunded", async () => {
+    const orig = stripeStub.subscriptions.retrieve;
+    const periodStart = Math.floor(Date.now() / 1000) - 20 * 86400;
+    stripeStub.subscriptions.retrieve = async (...args: unknown[]) => (
+      calls.push({ method: "subscriptions.retrieve", args }),
+      { id: "sub_1", customer: "cus_1", status: "active", cancel_at_period_end: false, items: { data: [{ id: "si_1", quantity: 3, current_period_start: periodStart, current_period_end: periodStart + 30 * 86400 }] }, metadata: { companyId: CO } }
+    ) as any;
+    try {
+      calls = [];
+      const r = await setSeats(CO, 4);
+      expect(r.charged).toBe(true);
+      const up = calls.find((c) => c.method === "subscriptionItems.update")!.args[1] as any;
+      expect(up.quantity).toBe(4);
+      expect(up.proration_behavior).toBe("always_invoice");
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      expect(up.proration_date).toBe(Math.floor(today.getTime() / 1000)); // from the start of today
+
+      calls = [];
+      const down = await setSeats(CO, 2);
+      expect(down.charged).toBe(false);
+      expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 2, proration_behavior: "none" });
+
+      calls = [];
+      await setSeats(CO, 5, { prorate: false }); // putting back a license already paid for
+      expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 5, proration_behavior: "none" });
+    } finally {
+      stripeStub.subscriptions.retrieve = orig;
+    }
+  });
+
   it("syncSeats never bills fewer than the chosen seats", async () => {
     await setSeats(CO, 4);
     calls = [];

@@ -65,6 +65,7 @@ const port = Number(process.env.PORT ?? 3000);
 
 // Warm up the Turso connection before serving traffic so the first real user
 // request after a cold start / host resume never races the socket coming up.
+import { applyDueSeatEnds, chargeForAddedUsers } from "./services/user-access";
 import { oncePerTick } from "./services/tick";
 import { sweepLaunch } from "./services/launch-progress";
 import { warmUpDb, pingDb } from "./api/database";
@@ -129,6 +130,17 @@ setInterval(() => {
 setInterval(() => {
   void oncePerTick("sample-day", () => sampleTick());
 }, 60 * 1000);
+
+// Plan changes mid-period (services/user-access.ts): people taken off a paid
+// plan come off when the period they paid for ends, and a plan whose active
+// users outnumber its licenses is raised and charged for the rest of the
+// period, by the day. Both are safe to repeat.
+setInterval(() => {
+  void oncePerTick("billing-seat-changes", async () => {
+    await applyDueSeatEnds();
+    await chargeForAddedUsers();
+  });
+}, 10 * 60 * 1000);
 
 // Auto-poll pending/verifying email sending domains and flip to verified.
 async function pollEmailDomains() {
