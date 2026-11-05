@@ -32,6 +32,7 @@ import { audit } from "../api/lib/audit";
 import { queueCompanySync } from "./hubspot-sync";
 import {
   setSeats,
+  paidPeriodEnd,
   billableSeatCounts,
   billableFromCounts,
   fieldSeatMembers,
@@ -43,7 +44,7 @@ import {
 import { fireEvent } from "./dispatch";
 
 /** Swappable for tests (a Stripe outage is simulated by making setSeats throw). */
-export const deps = { setSeats, fireEvent };
+export const deps = { setSeats, fireEvent, paidPeriodEnd };
 import { monthlyPrice } from "../web/site/config";
 import { log } from "../api/lib/logger";
 
@@ -334,6 +335,20 @@ export async function deactivateUser(companyId: string, actor: Actor, userId: st
     await notifyReassigned([plan]);
     await auditDeactivation(companyId, actor, plan);
   });
+  // Their license comes off the plan. Nothing is refunded: the lower count
+  // bills from the next period (setSeats never charges or credits a decrease).
+  const role = plan.member.membership.role ?? plan.member.user.role;
+  const tookLicense = !plan.member.membership.seatEndsAt && (isFieldSeat(role, plan.member.rider) || isOfficeSeat(role, plan.member.user));
+  if (tookLicense) {
+    try {
+      const [co] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
+      const seats = Math.max(1, co?.seats ?? 1);
+      const { billable } = await billableSeatCounts(companyId);
+      if (seats > Math.max(1, billable)) await deps.setSeats(companyId, seats - 1);
+    } catch (e) {
+      log.warn("user-access: lowering seats after deactivate failed", { companyId, err: (e as Error).message });
+    }
+  }
   return { deactivatedAt: when };
 }
 
@@ -399,7 +414,7 @@ export async function downsize(
   companyId: string,
   actor: Actor,
   input: { seats: number; deactivate: string[]; reassign: Record<string, ReassignTarget> },
-): Promise<{ seats: number; deactivated: string[] }> {
+): Promise<{ seats: number; deactivated: string[]; leaving: string[]; leavesAt: string | null }> {
   const ids = Array.from(new Set(input.deactivate));
   if (!ids.length) throw new AccessError(400, "nothing_to_do", "Choose at least one user to deactivate.");
   const candidates = new Map((await seatCandidates(companyId, actor)).map((c) => [c.userId, c]));
@@ -431,6 +446,27 @@ export async function downsize(
     const reassign = Object.prototype.hasOwnProperty.call(input.reassign, id) ? input.reassign[id] : undefined;
     plans.push(await planDeactivation(companyId, actor, id, reassign, deactivating));
   }
+
+  // On a paid plan the period is already paid for, so the people chosen keep
+  // working until it ends, and the lower count bills from the next period.
+  // (No paid plan yet, or a free trial: they come off now, as before.)
+  const endsAt = await deps.paidPeriodEnd(companyId);
+  if (endsAt) {
+    const { seats } = await deps.setSeats(companyId, input.seats);
+    await tdb(companyId).transaction(async (tx) => {
+      for (const p of plans) {
+        const target = p.toRiderId === undefined ? "" : p.toRiderId === null ? "" : (input.reassign[p.member.user.id] ?? "");
+        await tx
+          .update(schema.memberships)
+          .set({ seatEndsAt: endsAt, seatEndsReassignTo: target, updatedAt: new Date() })
+          .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, p.member.membership.id)));
+      }
+    });
+    await afterCommit(companyId, () =>
+      audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.downsize", entityType: "company", entityId: companyId, summary: `Plan reduced to ${seats} users from ${endsAt.toISOString().slice(0, 10)}`, meta: { seats, leaving: ids, leavesAt: endsAt.toISOString() } }),
+    );
+    return { seats, deactivated: [], leaving: ids, leavesAt: endsAt.toISOString() };
+  }
   // Stripe first, then the database in one transaction. If Stripe refuses,
   // nobody has been deactivated; if the transaction fails, the seat count is
   // put back. Either way the tenant never ends up half-changed.
@@ -451,5 +487,91 @@ export async function downsize(
     for (const p of plans) await auditDeactivation(companyId, actor, p);
     await audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.downsize", entityType: "company", entityId: companyId, summary: `Plan reduced to ${seats} users`, meta: { seats, deactivated: ids } });
   });
-  return { seats, deactivated: ids };
+  return { seats, deactivated: ids, leaving: [], leavesAt: null };
+}
+
+/**
+ * Undo a removal before it happens: they stay on the plan. Their license was
+ * paid for this period already, so putting it back charges nothing now.
+ */
+export async function keepOnPlan(companyId: string, actor: Actor, userId: string): Promise<{ seats: number }> {
+  const t = tdb(companyId);
+  const m = await t.selectOne(schema.memberships, and(eq(schema.memberships.userId, userId), eq(schema.memberships.status, "active")));
+  if (!m?.seatEndsAt) throw new AccessError(409, "not_leaving", "This person isn't leaving the plan.");
+  await t.raw
+    .update(schema.memberships)
+    .set({ seatEndsAt: null, seatEndsReassignTo: null, updatedAt: new Date() })
+    .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, m.id)));
+  const [co] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  let seats = Math.max(1, co?.seats ?? 1);
+  const { billable } = await billableSeatCounts(companyId);
+  if (billable > seats) seats = (await deps.setSeats(companyId, billable, { prorate: false })).seats;
+  await afterCommit(companyId, () =>
+    audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.keep_user", entityType: "user", entityId: userId, summary: "Kept on the plan", meta: { seats } }),
+  );
+  return { seats };
+}
+
+const BILLING_ACTOR: Actor = { id: "system:billing", role: "superadmin", name: "ArrivePing billing" };
+
+/**
+ * Run on a timer: people whose paid period has ended come off (open jobs go
+ * where the admin chose, or back to the board), exactly as a Deactivate.
+ */
+export async function applyDueSeatEnds(now = new Date()): Promise<number> {
+  const due = await sdb.select().from(schema.memberships).where(eq(schema.memberships.status, "active"));
+  let done = 0;
+  for (const m of due) {
+    if (!m.seatEndsAt || m.seatEndsAt.getTime() > now.getTime()) continue;
+    const stored = m.seatEndsReassignTo || null;
+    try {
+      let plan: Plan;
+      try {
+        plan = await planDeactivation(m.companyId, BILLING_ACTOR, m.userId, stored, new Set([m.userId]));
+      } catch (e) {
+        // The chosen person can no longer take the jobs: send them back to the board.
+        if (e instanceof AccessError && e.code.startsWith("reassign_target")) plan = await planDeactivation(m.companyId, BILLING_ACTOR, m.userId, null, new Set([m.userId]));
+        else throw e;
+      }
+      await tdb(m.companyId).transaction(async (tx) => {
+        await applyDeactivation(tx, m.companyId, plan, now, "Removed from the plan");
+        await tx.update(schema.memberships).set({ seatEndsAt: null, seatEndsReassignTo: null }).where(and(eq(schema.memberships.companyId, m.companyId), eq(schema.memberships.id, m.id)));
+      });
+      await afterCommit(m.companyId, async () => {
+        await notifyReassigned([plan]);
+        await auditDeactivation(m.companyId, BILLING_ACTOR, plan);
+      });
+      done++;
+    } catch (e) {
+      // Can't come off (e.g. the last admin): keep them and stop retrying.
+      log.warn("billing seat end: could not remove", { companyId: m.companyId, userId: m.userId, err: (e as Error).message });
+      await sdb.update(schema.memberships).set({ seatEndsAt: null, seatEndsReassignTo: null }).where(eq(schema.memberships.id, m.id));
+    }
+  }
+  return done;
+}
+
+/**
+ * Run on a timer: a paid plan whose active users now outnumber the licenses
+ * (someone joined or was approved mid-period) is raised to cover them and
+ * charged for the rest of the period, by the day.
+ */
+export async function chargeForAddedUsers(): Promise<number> {
+  const cos = await sdb
+    .select({ id: schema.companies.id, seats: schema.companies.billingSeats })
+    .from(schema.companies)
+    .where(inArray(schema.companies.billingStatus, ["active", "past_due"]));
+  let raised = 0;
+  for (const co of cos) {
+    try {
+      const { billable } = await billableSeatCounts(co.id);
+      if (billable > Math.max(1, co.seats ?? 1)) {
+        await deps.setSeats(co.id, billable);
+        raised++;
+      }
+    } catch (e) {
+      log.warn("billing: raising seats failed", { companyId: co.id, err: (e as Error).message });
+    }
+  }
+  return raised;
 }

@@ -168,7 +168,7 @@ describe("POST /billing/downsize", () => {
     expect(((await bad.json()) as { code: string }).code).toBe("reassign_target_deactivated");
     const ok = await call("/billing/downsize", { method: "POST", body: { seats: 1, deactivate: ["uar-r1", "uar-r2"], reassign: { "uar-r1": "uar-r3" } } });
     expect(ok.status).toBe(200);
-    expect((await ok.json()) as object).toEqual({ ok: true, seats: 1, deactivated: ["uar-r1", "uar-r2"] });
+    expect((await ok.json()) as object).toEqual({ ok: true, seats: 1, deactivated: ["uar-r1", "uar-r2"], leaving: [], leavesAt: null });
   });
 });
 

@@ -42,6 +42,7 @@ export function DownsizePicker({
   monthlyTotal,
   noun,
   nounPlural,
+  atPeriodEnd = false,
   onClose,
   onDone,
 }: {
@@ -52,6 +53,11 @@ export function DownsizePicker({
   /** activeDrivers + extra office users: what counts towards the plan now. */
   billableUsers: number;
   nextInvoiceAt: string | null;
+  /**
+   * A paid plan: the period is already paid for, so the people chosen keep
+   * working until it ends and come off then. Otherwise they come off now.
+   */
+  atPeriodEnd?: boolean;
   /** Monthly total at targetSeats, formatted by the caller. */
   monthlyTotal: string;
   noun: string;
@@ -142,16 +148,18 @@ export function DownsizePicker({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" {...dismiss(onClose)}>
-      <DialogPanel onClose={onClose} label={`Choose ${needed} ${who(needed)} to deactivate`} className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-ink-2 shadow-2xl">
+      <DialogPanel onClose={onClose} label={atPeriodEnd ? `Choose ${needed} ${who(needed)} to take off your plan` : `Choose ${needed} ${who(needed)} to deactivate`} className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-ink-2 shadow-2xl">
         <div className="border-b border-white/5 p-6">
           <h3 className="flex items-center gap-2 text-lg font-extrabold text-white">
-            <UserMinus className="h-5 w-5 text-brand" /> Choose {needed} {who(needed)} to deactivate
+            <UserMinus className="h-5 w-5 text-brand" /> Choose {needed} {who(needed)} {atPeriodEnd ? "to take off your plan" : "to deactivate"}
           </h3>
           <p className="mt-1 text-sm text-slate-400">
             You have {activeDrivers} active {unit(activeDrivers)}
             {activeOffice > 0 ? ` and ${activeOffice} office ${activeOffice === 1 ? "user" : "users"} (${includedOffice} included),` : ""} and want to pay
-            for {targetSeats}. Deactivated {extraOffice ? "users" : nounPlural.toLowerCase()} keep their history and can be reactivated later; they
-            can't sign in and don't count towards your bill.
+            for {targetSeats}.{" "}
+            {atPeriodEnd
+              ? `You've already paid for this period, so the people you choose keep working until it ends${billDate}. Then they're deactivated: they keep their history and can be reactivated later.`
+              : `Deactivated ${extraOffice ? "users" : nounPlural.toLowerCase()} keep their history and can be reactivated later; they can't sign in and don't count towards your bill.`}
           </p>
           <p className={cn("mt-3 text-sm font-semibold", selected.length === needed ? "text-emerald-live" : "text-white")}>
             {selected.length} of {needed} selected
@@ -244,10 +252,16 @@ export function DownsizePicker({
               <AlertTriangle className="h-4 w-4" /> {err}
             </p>
           )}
-          {ready && (
+          {ready && !atPeriodEnd && (
             <p className="text-sm text-slate-200">
               Deactivate <span className="font-semibold text-white">{nameList}</span> now. Your plan becomes {targetSeats} {who(targetSeats)}:{" "}
               <span className="font-semibold text-white">{monthlyTotal}/month</span> from your next bill{billDate}. Nothing is charged before then.
+            </p>
+          )}
+          {ready && atPeriodEnd && (
+            <p className="text-sm text-slate-200">
+              <span className="font-semibold text-white">{nameList}</span> keep working until your next bill{billDate}, then come off. Your plan becomes {targetSeats}{" "}
+              {who(targetSeats)}: <span className="font-semibold text-white">{monthlyTotal}/month</span> from that bill. You can change your mind until then.
             </p>
           )}
           {!ready && selected.length === needed && unresolved.length > 0 && (
@@ -264,7 +278,7 @@ export function DownsizePicker({
               className="nvc-btn-primary flex h-10 items-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
             >
               {confirm.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Deactivate {selected.length || needed} and update plan
+              {atPeriodEnd ? `Take ${selected.length || needed} off at the end of this period` : `Deactivate ${selected.length || needed} and update plan`}
             </button>
           </div>
         </div>

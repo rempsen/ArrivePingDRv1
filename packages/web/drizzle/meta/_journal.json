@@ -281,6 +281,13 @@
       "when": 1793464075721,
       "tag": "0039_help_questions",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793912102450,
+      "tag": "0040_membership_seat_ends",
+      "breakpoints": true
     }
   ]
 }

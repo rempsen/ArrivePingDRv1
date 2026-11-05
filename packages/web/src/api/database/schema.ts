@@ -1733,6 +1733,12 @@ export const memberships = pgTable(
     acceptedAt: timestamp("accepted_at", { mode: "date", withTimezone: true }),
     // Set while status === "disabled" by an admin's Deactivate; cleared on Reactivate.
     deactivatedAt: timestamp("deactivated_at", { mode: "date", withTimezone: true }),
+    // Taken off a paid plan mid-period: they keep working until this moment
+    // (the end of the period already paid for), then billing-seat-changes.ts
+    // deactivates them. While set they no longer count towards the plan.
+    seatEndsAt: timestamp("seat_ends_at", { mode: "date", withTimezone: true }),
+    // Where their open jobs go at that moment: a user id, or "" = back to the board.
+    seatEndsReassignTo: text("seat_ends_reassign_to"),
     // Directory: the named property this person (a customer — a resident,
     // tenant or site contact) belongs to at THIS company, and their unit there.
     // Per company on purpose: the same person can be a resident at one
