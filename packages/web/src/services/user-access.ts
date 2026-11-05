@@ -330,7 +330,16 @@ function auditDeactivation(companyId: string, actor: Actor, plan: Plan) {
 export async function deactivateUser(companyId: string, actor: Actor, userId: string, opts: { reassignTo?: ReassignTarget }): Promise<{ deactivatedAt: Date }> {
   const plan = await planDeactivation(companyId, actor, userId, opts.reassignTo, new Set([userId]));
   const when = new Date();
-  await tdb(companyId).transaction((tx) => applyDeactivation(tx, companyId, plan, when));
+  await tdb(companyId).transaction(async (tx) => {
+    await applyDeactivation(tx, companyId, plan, when);
+    // Deactivated now: any removal scheduled for the period end is moot.
+    if (plan.member.membership.seatEndsAt) {
+      await tx
+        .update(schema.memberships)
+        .set({ seatEndsAt: null, seatEndsReassignTo: null })
+        .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, plan.member.membership.id)));
+    }
+  });
   await afterCommit(companyId, async () => {
     await notifyReassigned([plan]);
     await auditDeactivation(companyId, actor, plan);
@@ -452,8 +461,11 @@ export async function downsize(
   // (No paid plan yet, or a free trial: they come off now, as before.)
   const endsAt = await deps.paidPeriodEnd(companyId);
   if (endsAt) {
+    const [before] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
+    const previous = Math.max(1, before?.seats ?? 1);
     const { seats } = await deps.setSeats(companyId, input.seats);
-    await tdb(companyId).transaction(async (tx) => {
+    try {
+      await tdb(companyId).transaction(async (tx) => {
       for (const p of plans) {
         const target = p.toRiderId === undefined ? "" : p.toRiderId === null ? "" : (input.reassign[p.member.user.id] ?? "");
         await tx
@@ -461,7 +473,12 @@ export async function downsize(
           .set({ seatEndsAt: endsAt, seatEndsReassignTo: target, updatedAt: new Date() })
           .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, p.member.membership.id)));
       }
-    });
+      });
+    } catch (e) {
+      // Nobody was scheduled: put the licenses back (already paid for, so no charge).
+      await deps.setSeats(companyId, previous, { prorate: false }).catch((err) => log.warn("user-access: seat revert failed", { companyId, err: (err as Error).message }));
+      throw e;
+    }
     await afterCommit(companyId, () =>
       audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.downsize", entityType: "company", entityId: companyId, summary: `Plan reduced to ${seats} users from ${endsAt.toISOString().slice(0, 10)}`, meta: { seats, leaving: ids, leavesAt: endsAt.toISOString() } }),
     );
@@ -498,14 +515,20 @@ export async function keepOnPlan(companyId: string, actor: Actor, userId: string
   const t = tdb(companyId);
   const m = await t.selectOne(schema.memberships, and(eq(schema.memberships.userId, userId), eq(schema.memberships.status, "active")));
   if (!m?.seatEndsAt) throw new AccessError(409, "not_leaving", "This person isn't leaving the plan.");
-  await t.raw
-    .update(schema.memberships)
-    .set({ seatEndsAt: null, seatEndsReassignTo: null, updatedAt: new Date() })
-    .where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, m.id)));
+  const marker = { seatEndsAt: m.seatEndsAt, seatEndsReassignTo: m.seatEndsReassignTo };
+  const setMarker = (v: { seatEndsAt: Date | null; seatEndsReassignTo: string | null }) =>
+    t.raw.update(schema.memberships).set({ ...v, updatedAt: new Date() }).where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, m.id)));
+  await setMarker({ seatEndsAt: null, seatEndsReassignTo: null });
   const [co] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
   let seats = Math.max(1, co?.seats ?? 1);
-  const { billable } = await billableSeatCounts(companyId);
-  if (billable > seats) seats = (await deps.setSeats(companyId, billable, { prorate: false })).seats;
+  try {
+    const { billable } = await billableSeatCounts(companyId);
+    if (billable > seats) seats = (await deps.setSeats(companyId, billable, { prorate: false })).seats;
+  } catch (e) {
+    // The license couldn't be put back: they're still leaving, so nothing is charged later.
+    await setMarker(marker);
+    throw e;
+  }
   await afterCommit(companyId, () =>
     audit({ companyId, actorId: actor.id, actorName: actor.name, action: "billing.keep_user", entityType: "user", entityId: userId, summary: "Kept on the plan", meta: { seats } }),
   );
@@ -513,6 +536,8 @@ export async function keepOnPlan(companyId: string, actor: Actor, userId: string
 }
 
 const BILLING_ACTOR: Actor = { id: "system:billing", role: "superadmin", name: "ArrivePing billing" };
+/** Removals that can never succeed, so the schedule is dropped instead of retried. */
+const TERMINAL_SEAT_END = new Set(["not_found", "already_deactivated", "self", "superadmin_exempt", "last_admin", "superadmin_required"]);
 
 /**
  * Run on a timer: people whose paid period has ended come off (open jobs go
@@ -543,9 +568,12 @@ export async function applyDueSeatEnds(now = new Date()): Promise<number> {
       });
       done++;
     } catch (e) {
-      // Can't come off (e.g. the last admin): keep them and stop retrying.
-      log.warn("billing seat end: could not remove", { companyId: m.companyId, userId: m.userId, err: (e as Error).message });
-      await sdb.update(schema.memberships).set({ seatEndsAt: null, seatEndsReassignTo: null }).where(eq(schema.memberships.id, m.id));
+      // A removal that can never happen (the last admin, a platform account,
+      // already gone) is cancelled; anything else (a database blip, a job
+      // landing on them mid-way) keeps the schedule and is retried next tick.
+      const terminal = e instanceof AccessError && TERMINAL_SEAT_END.has(e.code);
+      log.warn("billing seat end: could not remove", { companyId: m.companyId, userId: m.userId, err: (e as Error).message, retry: !terminal });
+      if (terminal) await sdb.update(schema.memberships).set({ seatEndsAt: null, seatEndsReassignTo: null }).where(eq(schema.memberships.id, m.id));
     }
   }
   return done;
