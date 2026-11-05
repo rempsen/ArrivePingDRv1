@@ -519,9 +519,10 @@ export async function keepOnPlan(companyId: string, actor: Actor, userId: string
   const setMarker = (v: { seatEndsAt: Date | null; seatEndsReassignTo: string | null }) =>
     t.raw.update(schema.memberships).set({ ...v, updatedAt: new Date() }).where(and(eq(schema.memberships.companyId, companyId), eq(schema.memberships.id, m.id)));
   await setMarker({ seatEndsAt: null, seatEndsReassignTo: null });
-  const [co] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
-  let seats = Math.max(1, co?.seats ?? 1);
+  let seats = 1;
   try {
+    const [co] = await sdb.select({ seats: schema.companies.billingSeats }).from(schema.companies).where(eq(schema.companies.id, companyId));
+    seats = Math.max(1, co?.seats ?? 1);
     const { billable } = await billableSeatCounts(companyId);
     if (billable > seats) seats = (await deps.setSeats(companyId, billable, { prorate: false })).seats;
   } catch (e) {
