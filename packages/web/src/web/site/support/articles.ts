@@ -944,7 +944,7 @@ export const articles: Article[] = [
     slug: "add-or-remove-drivers",
     title: "Add or remove users on your plan",
     summary: "Adding a user is charged for the rest of the month, by the day. Removing one takes effect when the month you've paid for ends.",
-    description: "How adding or removing technicians and office users changes your ArrivePing bill mid-month: added users are prorated daily; removed users keep working until the paid period ends.",
+    description: "How adding or removing technicians and office users changes your ArrivePing bill: added users are prorated daily; removed users keep working until the paid period ends.",
     category: "billing",
     updated: U5,
     keywords: ["deactivate", "remove technician", "add technician cost", "cost per technician", "seat count", "downsize", "offboard", "prorated", "mid-month", "add user", "remove user"],
