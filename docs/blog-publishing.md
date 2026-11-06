@@ -61,7 +61,7 @@ Two optional frontmatter lines control publishing:
 | `draft: true` | Keeps the file out of the build |
 | A future `date` | Hides the post until the first build on or after that date |
 
-**One post per day, at least two a week.** No two posts share a `date`. That includes scheduled posts, so when a batch has several posts, give each one its own day. Every Monday-to-Sunday week from November 9, 2026 has at least two posts, spaced apart (for example Monday and Thursday), and none on the holidays in `content/social/calendar-rules.json`. Put each post on or before the first social post that links to it. A test enforces both rules (`src/web/__tests__/blog-one-post-per-day.test.ts`); it skips the week of the latest scheduled post, which the next batch can still fill.
+**One post per day, at least two a week.** No two posts share a `date`. That includes scheduled posts, so when a batch has several posts, give each one its own day. Every Monday-to-Sunday week from November 9, 2026 has at least two posts, spaced apart (for example Monday and Thursday), and none on the holidays in `content/social/calendar-rules.json`. Put each post on or before the first social post that links to it. A test enforces all three (`src/web/__tests__/blog-one-post-per-day.test.ts`); the weekly check skips the week of the latest scheduled post, which the next batch can still fill.
 
 ## House rules (what gets cited by Google and AI assistants)
 

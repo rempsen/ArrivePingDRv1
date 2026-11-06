@@ -12,6 +12,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const POSTS = join(import.meta.dir, "../site/blog/posts");
+const CALENDAR = join(import.meta.dir, "../../../content/social/calendar-rules.json");
 
 function datedPosts(): { slug: string; date: string }[] {
   return readdirSync(POSTS)
@@ -27,6 +28,15 @@ describe("blog schedule", () => {
     for (const p of datedPosts()) byDate.set(p.date, [...(byDate.get(p.date) ?? []), p.slug]);
     const clashes = [...byDate].filter(([, slugs]) => slugs.length > 1).map(([d, slugs]) => `${d}: ${slugs.sort().join(", ")}`);
     expect(clashes).toEqual([]);
+  });
+
+  it("has no posts on the content calendar's holidays", () => {
+    const { holidays } = JSON.parse(readFileSync(CALENDAR, "utf8")) as { holidays: string[] };
+    expect(holidays.length).toBeGreaterThan(0);
+    const onHolidays = datedPosts()
+      .filter((p) => holidays.includes(p.date))
+      .map((p) => `${p.date}: ${p.slug}`);
+    expect(onHolidays).toEqual([]);
   });
 
   it("reads a date from every post", () => {
