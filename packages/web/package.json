@@ -6,8 +6,9 @@
     ".": "./src/api/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit && vite build",
-    "build:smoke": "tsc --noEmit && vite build && bun run scripts/smoke-build.mjs",
+    "typecheck": "tsc -b --force --noEmit",
+    "build": "bun run typecheck && vite build",
+    "build:smoke": "bun run typecheck && vite build && bun run scripts/smoke-build.mjs",
     "smoke": "bun run scripts/smoke-build.mjs",
     "seo:check": "bun run tools/seo-check.ts",
     "seo:check:live": "bun run tools/seo-check.ts --live",
