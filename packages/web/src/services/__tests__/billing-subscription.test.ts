@@ -3,73 +3,15 @@
  * list, the trial is 30 days on the saved card, and failures come back as
  * results rather than exceptions. Stripe is a stub; no network.
  */
-import { describe, it, expect, beforeEach, beforeAll, afterAll, mock } from "bun:test";
+import { describe, it, expect, beforeEach, beforeAll } from "bun:test";
+import { installStripeStub } from "../../test-support/stripe-stub";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
 
-type Call = { method: string; args: unknown[] };
-let calls: Call[] = [];
-let existingPrice: { id: string } | null = null;
-let setupState: { status: string; customer: string; payment_method: string | null } = { status: "succeeded", customer: "cus_1", payment_method: "pm_1" };
-let subCreateError: string | null = null;
-/** What subscriptions.list returns; a function so a test can change it between the before/after checks. */
-let subList: () => any[] = () => [];
-let subCreateDelay = 0;
-
-const stripeStub = {
-  prices: {
-    list: async (...args: unknown[]) => (calls.push({ method: "prices.list", args }), { data: existingPrice ? [existingPrice] : [] }),
-    create: async (...args: unknown[]) => (calls.push({ method: "prices.create", args }), { id: "price_new" }),
-  },
-  products: { create: async (...args: unknown[]) => (calls.push({ method: "products.create", args }), { id: "prod_new" }) },
-  customers: {
-    create: async (...args: unknown[]) => (calls.push({ method: "customers.create", args }), { id: "cus_1" }),
-    update: async (...args: unknown[]) => (calls.push({ method: "customers.update", args }), {}),
-    retrieve: async (...args: unknown[]) => (calls.push({ method: "customers.retrieve", args }), { id: "cus_1", invoice_settings: { default_payment_method: null } }),
-    listPaymentMethods: async (...args: unknown[]) => (calls.push({ method: "customers.listPaymentMethods", args }), { data: [] }),
-  },
-  setupIntents: {
-    create: async (...args: unknown[]) => (calls.push({ method: "setupIntents.create", args }), { id: "seti_1", client_secret: "seti_1_secret" }),
-    retrieve: async (...args: unknown[]) => (calls.push({ method: "setupIntents.retrieve", args }), { id: "seti_1", ...setupState }),
-  },
-  subscriptionItems: { update: async (...args: unknown[]) => (calls.push({ method: "subscriptionItems.update", args }), {}) },
-  subscriptions: {
-    retrieve: async (...args: unknown[]) => (
-      calls.push({ method: "subscriptions.retrieve", args }),
-      { id: "sub_1", customer: "cus_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 10 * 86400, cancel_at_period_end: false, items: { data: [{ id: "si_1", quantity: 3 }] }, metadata: { companyId: CO } }
-    ),
-    update: async (...args: unknown[]) => (
-      calls.push({ method: "subscriptions.update", args }),
-      { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 10 * 86400, cancel_at_period_end: (args[1] as any)?.cancel_at_period_end ?? false, items: { data: [{ id: "si_1", quantity: 3 }] }, metadata: { companyId: CO } }
-    ),
-    list: async (...args: unknown[]) => (calls.push({ method: "subscriptions.list", args }), { data: subList() }),
-    create: async (...args: unknown[]) => {
-      calls.push({ method: "subscriptions.create", args });
-      if (subCreateDelay) await new Promise((r) => setTimeout(r, subCreateDelay));
-      if (subCreateError) throw new Error(subCreateError);
-      return (args[0] as any)?.trial_period_days === undefined
-        ? { id: "sub_act", status: "active", created: 200, latest_invoice: "in_act", trial_end: null, items: { data: [{ id: "si_act", quantity: (args[0] as any).items[0].quantity }] }, metadata: { companyId: (args[0] as any).metadata.companyId } }
-        : { id: "sub_1", status: "trialing", trial_end: Math.floor(Date.now() / 1000) + 30 * 86400, items: { data: [{ id: "si_1", quantity: 1 }] } };
-    },
-    cancel: async (...args: unknown[]) => (calls.push({ method: "subscriptions.cancel", args }), {}),
-  },
-  invoices: {
-    retrieve: async (...args: unknown[]) => (calls.push({ method: "invoices.retrieve", args }), { id: args[0], payments: { data: [{ payment: { payment_intent: "pi_dup" } }] } }),
-  },
-  refunds: { create: async (...args: unknown[]) => (calls.push({ method: "refunds.create", args }), { id: "re_1" }) },
-};
-
-// mock.module is process-wide and rewrites the module for every importer, so
-// (as payments-webhook.test.ts does) install it only around this file's tests
-// and put the real module back afterwards.
-const realStripe = { ...(await import("../stripe")) };
-beforeAll(() => {
-  mock.module("../stripe", () => ({ ...realStripe, getStripe: () => stripeStub, stripeEnabled: true }));
-});
-afterAll(() => {
-  mock.module("../stripe", () => realStripe);
-});
+const CO = "billtest-co";
+const stripe = installStripeStub({ companyId: CO });
+const { calls } = stripe;
 
 const {
   ensureSubscriptionPrice,
@@ -110,7 +52,6 @@ function ddlFor(table: any): string {
   });
   return `CREATE TABLE IF NOT EXISTS "${cfg.name}" (${cols.join(", ")})`;
 }
-const CO = "billtest-co";
 beforeAll(async () => {
   const sql = (db as any).$client;
   for (const t of [schema.companies, schema.riders, schema.user, schema.memberships]) await sql.execute(ddlFor(t));
@@ -122,12 +63,7 @@ beforeAll(async () => {
 const { monthlyPrice } = await import("../../web/site/config");
 
 beforeEach(() => {
-  calls = [];
-  existingPrice = null;
-  setupState = { status: "succeeded", customer: "cus_1", payment_method: "pm_1" };
-  subCreateError = null;
-  subList = () => [];
-  subCreateDelay = 0;
+  stripe.reset();
   _resetBillingCache();
   delete process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
 });
@@ -149,13 +85,13 @@ describe("ensureSubscriptionPrice", () => {
     const stripeTotal = (n: number) => 49 + Math.max(0, Math.min(n, 29) - 2) * 30 + Math.max(0, n - 29) * 25;
     for (const n of [1, 2, 3, 10, 29, 30, 50, 100]) expect(stripeTotal(n)).toBe(monthlyPrice(n).total);
 
-    calls = [];
+    stripe.clearCalls();
     expect(await ensureSubscriptionPrice()).toBe("price_new");
     expect(calls).toHaveLength(0); // cached
   });
 
   it("finds an existing price by lookup key instead of creating another", async () => {
-    existingPrice = { id: "price_existing" };
+    stripe.existingPrice = { id: "price_existing" };
     expect(await ensureSubscriptionPrice()).toBe("price_existing");
     expect(calls.map((c) => c.method)).toEqual(["prices.list"]);
   });
@@ -179,7 +115,7 @@ describe("signup billing", () => {
   });
 
   it("starts a 30-day trial on the saved card, cancelling if the card goes missing", async () => {
-    existingPrice = { id: "price_existing" };
+    stripe.existingPrice = { id: "price_existing" };
     const r = await startTrialSubscription({ customerId: "cus_1", setupIntentId: "seti_1", companyId: "acme-hvac", companyName: "Acme HVAC" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -199,10 +135,10 @@ describe("signup billing", () => {
   });
 
   it("refuses a setup that isn't finished or isn't this customer's", async () => {
-    setupState = { status: "requires_payment_method", customer: "cus_1", payment_method: null };
+    stripe.setupState = { status: "requires_payment_method", customer: "cus_1", payment_method: null };
     const r1 = await startTrialSubscription({ customerId: "cus_1", setupIntentId: "seti_1", companyId: "x", companyName: "X" });
     expect(r1.ok).toBe(false);
-    setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_9" };
+    stripe.setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_9" };
     const r2 = await startTrialSubscription({ customerId: "cus_1", setupIntentId: "seti_1", companyId: "x", companyName: "X" });
     expect(r2.ok).toBe(false);
     expect(calls.some((c) => c.method === "subscriptions.create")).toBe(false);
@@ -229,14 +165,14 @@ describe("tenant self-service", () => {
   });
 
   it("on a paid plan, more users are charged now for the rest of the period, by the day; fewer are not refunded", async () => {
-    const orig = stripeStub.subscriptions.retrieve;
+    const orig = stripe.client.subscriptions.retrieve;
     const periodStart = Math.floor(Date.now() / 1000) - 20 * 86400;
-    stripeStub.subscriptions.retrieve = async (...args: unknown[]) => (
+    stripe.client.subscriptions.retrieve = async (...args: unknown[]) => (
       calls.push({ method: "subscriptions.retrieve", args }),
       { id: "sub_1", customer: "cus_1", status: "active", cancel_at_period_end: false, items: { data: [{ id: "si_1", quantity: 3, current_period_start: periodStart, current_period_end: periodStart + 30 * 86400 }] }, metadata: { companyId: CO } }
     ) as any;
     try {
-      calls = [];
+      stripe.clearCalls();
       const r = await setSeats(CO, 4);
       expect(r.charged).toBe(true);
       const up = calls.find((c) => c.method === "subscriptionItems.update")!.args[1] as any;
@@ -246,22 +182,22 @@ describe("tenant self-service", () => {
       today.setUTCHours(0, 0, 0, 0);
       expect(up.proration_date).toBe(Math.floor(today.getTime() / 1000)); // from the start of today
 
-      calls = [];
+      stripe.clearCalls();
       const down = await setSeats(CO, 2);
       expect(down.charged).toBe(false);
       expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 2, proration_behavior: "none" });
 
-      calls = [];
+      stripe.clearCalls();
       await setSeats(CO, 5, { prorate: false }); // putting back a license already paid for
       expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 5, proration_behavior: "none" });
     } finally {
-      stripeStub.subscriptions.retrieve = orig;
+      stripe.client.subscriptions.retrieve = orig;
     }
   });
 
   it("syncSeats never bills fewer than the chosen seats", async () => {
     await setSeats(CO, 4);
-    calls = [];
+    stripe.clearCalls();
     const r = await syncSeats(CO); // no active drivers in this db
     expect(r.seats).toBe(4);
     expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 4, proration_behavior: "none" });
@@ -370,7 +306,7 @@ describe("billable licenses", () => {
     await addPerson("lic-admin", "admin");
     await addPerson("lic-disp", "dispatcher");
     await addPerson("lic-mgr", "manager");
-    calls = [];
+    stripe.clearCalls();
     const r = await syncSeats(LIC); // 4 field + (3 office - 1) = 6
     expect(r).toEqual({ seats: 6, updated: true });
     expect(calls.find((c) => c.method === "subscriptionItems.update")!.args[1]).toEqual({ quantity: 6, proration_behavior: "none" });
@@ -452,7 +388,7 @@ describe("activate a plan for a company set up before self-serve signup", () => 
 
   it("leaves no plan behind when the first payment is declined", async () => {
     await startActivation(LEG, {});
-    subCreateError = "Your card was declined.";
+    stripe.subCreateError = "Your card was declined.";
     const r = await completeActivation(LEG, "seti_1");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.message).toContain("declined");
@@ -464,7 +400,7 @@ describe("activate a plan for a company set up before self-serve signup", () => 
 
   it("refuses a card setup that belongs to another customer", async () => {
     await startActivation(LEG, {});
-    setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_x" };
+    stripe.setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_x" };
     expect((await completeActivation(LEG, "seti_1")).ok).toBe(false);
     expect(calls.some((c) => c.method === "subscriptions.create")).toBe(false);
   });
@@ -480,7 +416,7 @@ describe("activation never leaves two plans", () => {
   });
 
   it("links a plan Stripe already holds (e.g. the database write failed last time) instead of charging again", async () => {
-    subList = () => [{ id: "sub_earlier", status: "active", created: 100, items: { data: [{ quantity: 4 }] }, metadata: { companyId: LEG } }];
+    stripe.subList = () => [{ id: "sub_earlier", status: "active", created: 100, items: { data: [{ quantity: 4 }] }, metadata: { companyId: LEG } }];
     const r = await completeActivation(LEG, "seti_1");
     expect(r).toEqual({ ok: true, seats: 4, status: "active" });
     expect(calls.some((c) => c.method === "subscriptions.create")).toBe(false);
@@ -488,11 +424,11 @@ describe("activation never leaves two plans", () => {
   });
 
   it("two confirms at once (two tabs) create one subscription", async () => {
-    subCreateDelay = 20;
+    stripe.subCreateDelay = 20;
     let created = false;
-    subList = () => (created ? [{ id: "sub_act", status: "active", created: 200, items: { data: [{ quantity: 1 }] }, metadata: { companyId: LEG } }] : []);
-    const orig = stripeStub.subscriptions.create;
-    stripeStub.subscriptions.create = async (...a: unknown[]) => {
+    stripe.subList = () => (created ? [{ id: "sub_act", status: "active", created: 200, items: { data: [{ quantity: 1 }] }, metadata: { companyId: LEG } }] : []);
+    const orig = stripe.client.subscriptions.create;
+    stripe.client.subscriptions.create = async (...a: unknown[]) => {
       const r = await orig(...a);
       created = true;
       return r;
@@ -502,13 +438,13 @@ describe("activation never leaves two plans", () => {
       expect(a.ok && b.ok).toBe(true);
       expect(calls.filter((c) => c.method === "subscriptions.create")).toHaveLength(1);
     } finally {
-      stripeStub.subscriptions.create = orig;
+      stripe.client.subscriptions.create = orig;
     }
   });
 
   it("if another server won the race, cancels and refunds the newer plan and keeps the older", async () => {
     let n = 0;
-    subList = () => (n++ === 0 ? [] : [
+    stripe.subList = () => (n++ === 0 ? [] : [
       { id: "sub_other", status: "active", created: 150, items: { data: [{ quantity: 1 }] }, metadata: { companyId: LEG } },
       { id: "sub_act", status: "active", created: 200, items: { data: [{ quantity: 1 }] }, metadata: { companyId: LEG } },
     ]);
