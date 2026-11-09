@@ -49,6 +49,7 @@ import {
   LayoutGrid,
   Sparkles,
   Handshake,
+  ToggleRight,
 } from "lucide-react";
 import { ActAsBanner, StaffBar, useActAsNotice } from "../../components/act-as-banner";
 
@@ -184,6 +185,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     { to: "/admin/mobile-release", label: "Release iOS app", icon: Rocket },
                   ]
                 : []),
+              { to: "/admin/hub/features", label: "Feature Flags", icon: ToggleRight },
             ],
           },
           ...NAV_GROUPS.slice(1),

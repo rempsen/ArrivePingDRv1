@@ -116,7 +116,7 @@ export default function HubOverview() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Shortcut href="/admin/hub/tenants" title="Companies" text="Search, filter and open any account." />
-        <Shortcut href="/admin/hub/features" title="Features" text="Who has what switched on, and why." />
+        <Shortcut href="/admin/hub/features" title="Feature Flags" text="Who has what switched on, and why." />
         <Shortcut href="/admin/analytics" title="Analytics" text="Growth, trials and churn week by week." />
       </div>
     </HubLayout>

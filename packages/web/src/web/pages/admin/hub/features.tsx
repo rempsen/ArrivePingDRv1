@@ -1,5 +1,5 @@
 /**
- * Control Hub → Features: every switch, how many companies have it on, and
+ * Control Hub → Feature Flags: every switch, how many companies have it on, and
  * each company that differs from its default (with who changed it, why and
  * until when). Owners can switch one feature for a whole filtered group, or
  * for specific companies ticked by name.
@@ -30,7 +30,7 @@ export default function HubFeatures() {
     return [...m.entries()];
   }, [q.data]);
   return (
-    <HubLayout title="Features" subtitle="What each switch does, who has it, and every company set differently from its default.">
+    <HubLayout title="Feature Flags" subtitle="What each switch does, who has it, and every company set differently from its default.">
       {q.isPending ? (
         <Skeleton className="h-96 w-full" />
       ) : (

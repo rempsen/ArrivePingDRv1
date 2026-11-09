@@ -23,7 +23,7 @@ export function useHubTenants() {
 const SECTIONS: { to: string; label: string; need?: keyof HubMe["can"] }[] = [
   { to: "/admin/hub", label: "Overview" },
   { to: "/admin/hub/tenants", label: "Companies" },
-  { to: "/admin/hub/features", label: "Features" },
+  { to: "/admin/hub/features", label: "Feature Flags" },
   { to: "/admin/hub/plans", label: "Plans" },
   { to: "/admin/hub/demos", label: "Demos" },
   { to: "/admin/hub/leads", label: "Leads & sales" },
