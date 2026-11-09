@@ -7,7 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowRight, Clock, Inbox, Sparkles } from "lucide-react";
 import { Card, Skeleton, Tile, fmt } from "../analytics-ui";
-import { HubLayout, EmptyNote } from "./hub-ui";
+import { HubLayout, EmptyNote, useHubMe } from "./hub-ui";
+import { StripeCard } from "./stripe-card";
 import { hub, type AttentionItem, type Overview } from "./hub-data";
 
 const SEV: Record<AttentionItem["severity"], { dot: string; label: string }> = {
@@ -18,6 +19,7 @@ const SEV: Record<AttentionItem["severity"], { dot: string; label: string }> = {
 
 export default function HubOverview() {
   const q = useQuery({ queryKey: ["hub", "overview"], queryFn: () => hub<Overview>("/overview"), refetchInterval: 60_000 });
+  const me = useHubMe();
   const k = q.data?.kpis;
   const loading = q.isPending;
   return (
@@ -113,6 +115,12 @@ export default function HubOverview() {
           )}
         </Card>
       </div>
+
+      {me.data?.can.seeAudit && (
+        <div className="mt-6">
+          <StripeCard />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Shortcut href="/admin/hub/tenants" title="Companies" text="Search, filter and open any account." />
