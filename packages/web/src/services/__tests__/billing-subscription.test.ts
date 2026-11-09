@@ -500,7 +500,7 @@ describe("a demo starts the free trial instead of paying now", () => {
 
   it("refuses a card setup that belongs to another customer", async () => {
     await startActivation(DEMO, {});
-    setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_x" };
+    stripe.setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_x" };
     expect((await completeActivation(DEMO, "seti_1", { trial: true })).ok).toBe(false);
     expect(calls.some((c) => c.method === "subscriptions.create")).toBe(false);
   });
