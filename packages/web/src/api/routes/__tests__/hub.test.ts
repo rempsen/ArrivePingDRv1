@@ -239,3 +239,25 @@ describe("staff list", () => {
     expect((await req("GET", "/audit", "sales")).status).toBe(403);
   });
 });
+
+describe("stripe status", () => {
+  it("is for staff and owners, not sales", async () => {
+    expect((await req("GET", "/stripe", "sales")).status).toBe(403);
+    expect((await req("GET", "/stripe", "staff")).status).toBe(200);
+  });
+  it("reports config without a secret, and lists companies failing to pay", async () => {
+    await db.update(schema.companies).set({ billingStatus: "past_due", billingSeats: 3 } as never).where(eq(schema.companies.id, "hub-cust"));
+    await db.update(schema.companies).set({ billingStatus: "past_due" } as never).where(eq(schema.companies.id, "hub-demo"));
+    const res = await req("GET", "/stripe", "owner");
+    const body = (await res.json()) as { configured: boolean; mode: string; pastDue: { id: string; seats: number }[] };
+    // No STRIPE_SECRET_KEY in the test env: off, and no call to Stripe.
+    expect(body.configured).toBe(false);
+    expect(body.mode).toBe("off");
+    // Demos aren't customers, so only the real customer shows.
+    expect(body.pastDue.map((c) => c.id)).toEqual(["hub-cust"]);
+    expect(body.pastDue[0]!.seats).toBe(3);
+    expect(JSON.stringify(body)).not.toContain("sk_");
+    await db.update(schema.companies).set({ billingStatus: "none", billingSeats: 0 } as never).where(eq(schema.companies.id, "hub-cust"));
+    await db.update(schema.companies).set({ billingStatus: "none" } as never).where(eq(schema.companies.id, "hub-demo"));
+  });
+});

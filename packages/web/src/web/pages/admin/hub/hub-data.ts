@@ -230,3 +230,18 @@ export const OFFICE_ROLE_LABEL: Record<string, string> = {
   rider: "Field staff",
   customer: "Client",
 };
+
+export interface StripeStatus {
+  configured: boolean;
+  mode: "live" | "test" | "off";
+  publishableKeyMatchesMode: boolean | null;
+  webhookSecretSet: boolean;
+  connectWebhookSecretSet: boolean;
+  priceOverride: boolean;
+  production: boolean;
+  price: { id: string; active: boolean; lookupKey: string | null; tiers: { upTo: number | null; flat: number | null; unit: number | null }[] } | null;
+  webhooks: { url: string; status: string; events: number }[];
+  stripeError: string | null;
+  pastDue: { id: string; name: string; billingStatus: string; seats: number }[];
+  customersBilled: number;
+}

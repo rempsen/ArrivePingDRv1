@@ -23,6 +23,7 @@ import { requirePlatform, invalidateCompanyCache, _resetCompanyClosedCache } fro
 import { tdb } from "../database/tenant";
 import { atLeast, listStaff, removeStaff, upsertStaff, StaffError, PLATFORM_ROLES, type PlatformRole } from "../../services/platform-staff";
 import { clearFeatureOverride, invalidateFeatures, isFeatureOn, setFeatureOverride } from "../../services/features";
+import { stripeStatus } from "../../services/hub-stripe";
 import { featureSummary, hubOverview, hubTenantDetail, listHubTenants } from "../../services/hub";
 import { ensureLogoPlate } from "../../services/logo-contrast";
 import { listPlatformAudit, platformAudit } from "../../services/platform-audit";
@@ -127,6 +128,9 @@ export const hubRoutes = new Hono<AppEnv>()
     // The audit trail (act-as reasons, changes to customers) is for staff.
     return c.json(atLeast(c.get("platformRole"), "staff") ? o : { ...o, activity: [] });
   })
+
+  // How our own Stripe account is wired and who is failing to pay.
+  .get("/stripe", requirePlatform("staff"), async (c) => c.json(await stripeStatus(), 200))
 
   // ── tenants ────────────────────────────────────────────────────────────
   .get("/tenants", requirePlatform("sales"), async (c) => c.json({ tenants: await listHubTenants(), kinds: TENANT_KINDS.map((k) => ({ id: k, label: TENANT_KIND_LABELS[k] })), plans: Object.values(PLANS).map((p) => ({ id: p.id, label: p.label })) }))
