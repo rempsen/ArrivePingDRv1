@@ -389,6 +389,8 @@ export interface BillingSummary {
   stripeError?: string;
   /** No plan yet and one can be started from Settings → Billing (activationBlock is null). */
   activatable: boolean;
+  /** A demo account that can start the 30-day free trial from Settings → Billing (trialBlock is null). */
+  trialAvailable: boolean;
   /** Taken off the plan, still working until the paid period ends. */
   leaving: { userId: string; name: string; leavesAt: string }[];
 }
@@ -422,10 +424,12 @@ export async function billingSummary(companyId: string): Promise<BillingSummary>
     cancelAt: null,
     paymentMethod: null,
     activatable: false,
+    trialAvailable: false,
     leaving: await leavingPlanList(companyId),
   };
   if (!base.configured || !co?.billingSubscriptionId) {
     base.activatable = (await activationBlock(companyId)) === null;
+    base.trialAvailable = (await trialBlock(companyId)) === null;
     return base;
   }
   try {
@@ -563,16 +567,30 @@ export async function cancelAtPeriodEnd(companyId: string, cancel: boolean): Pro
  * Nothing else about the company changes: its data, people and settings are
  * untouched; only the billing fields are filled in.
  */
-export type ActivationBlock = "stripe_off" | "own_account" | "already_billed" | "not_found";
+export type ActivationBlock = "stripe_off" | "own_account" | "already_billed" | "not_found" | "demo" | "not_demo";
 
-export async function activationBlock(companyId: string): Promise<ActivationBlock | null> {
-  if (!stripeEnabled) return "stripe_off";
-  if (companyId === "default") return "own_account";
+async function planBlock(companyId: string): Promise<{ block: ActivationBlock | null; kind: string | null }> {
+  if (!stripeEnabled) return { block: "stripe_off", kind: null };
+  if (companyId === "default") return { block: "own_account", kind: null };
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
-  if (!co) return "not_found";
+  if (!co) return { block: "not_found", kind: null };
   // A live (or past-due) subscription is managed from the normal Billing tab.
-  if (co.billingSubscriptionId && co.billingStatus !== "canceled") return "already_billed";
-  return null;
+  if (co.billingSubscriptionId && co.billingStatus !== "canceled") return { block: "already_billed", kind: co.kind };
+  return { block: null, kind: co.kind };
+}
+
+/** Why a plan can't be started (charged now) for this company, or null. A demo starts a free trial instead. */
+export async function activationBlock(companyId: string): Promise<ActivationBlock | null> {
+  const { block, kind } = await planBlock(companyId);
+  if (block) return block;
+  return kind === "demo" ? "demo" : null;
+}
+
+/** Why a free trial can't be started for this company, or null. Only a demo can start one from inside the app. */
+export async function trialBlock(companyId: string): Promise<ActivationBlock | null> {
+  const { block, kind } = await planBlock(companyId);
+  if (block) return block;
+  return kind === "demo" ? null : "not_demo";
 }
 
 /** Step 1: a customer for the company (reused if one is on file) and a SetupIntent for the card. */
@@ -624,7 +642,7 @@ async function linkSubscription(companyId: string, sub: Stripe.Subscription): Pr
   const seats = sub.items.data[0]?.quantity ?? 1;
   await db
     .update(schema.companies)
-    .set({ billingSubscriptionId: sub.id, billingStatus: mapStatus(sub.status), billingSeats: seats, billingTrialEndsAt: null, plan: "starter" })
+    .set({ billingSubscriptionId: sub.id, billingStatus: mapStatus(sub.status), billingSeats: seats, billingTrialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000) : null, plan: "starter" })
     .where(eq(schema.companies.id, companyId));
   queueCompanySync(companyId);
   return { ok: true, seats, status: mapStatus(sub.status) };
@@ -665,15 +683,16 @@ const activating = new Map<string, Promise<ActivationResult>>();
  * another; and if two servers still raced, the newer subscription is
  * cancelled and refunded so only the oldest is kept.
  */
-export function completeActivation(companyId: string, setupIntentId: string): Promise<ActivationResult> {
+export function completeActivation(companyId: string, setupIntentId: string, opts: { trial?: boolean } = {}): Promise<ActivationResult> {
+  const trial = opts.trial === true;
   const running = activating.get(companyId);
-  if (running) return running.then((r) => (r.ok ? r : doActivation(companyId, setupIntentId)));
-  const p = doActivation(companyId, setupIntentId).finally(() => activating.delete(companyId));
+  if (running) return running.then((r) => (r.ok ? r : doActivation(companyId, setupIntentId, trial)));
+  const p = doActivation(companyId, setupIntentId, trial).finally(() => activating.delete(companyId));
   activating.set(companyId, p);
   return p;
 }
 
-async function doActivation(companyId: string, setupIntentId: string): Promise<ActivationResult> {
+async function doActivation(companyId: string, setupIntentId: string, trial: boolean): Promise<ActivationResult> {
   const [co] = await db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   if (!co?.billingCustomerId) return { ok: false, message: "Start again: the card form expired." };
   if (co.billingSubscriptionId && co.billingStatus !== "canceled") {
@@ -701,12 +720,20 @@ async function doActivation(companyId: string, setupIntentId: string): Promise<A
         items: [{ price: priceId, quantity: seats }],
         default_payment_method: pm,
         collection_method: "charge_automatically",
-        // Charge now; if the bank declines, Stripe creates no subscription.
-        payment_behavior: "error_if_incomplete",
+        ...(trial
+          ? {
+              // Free for TRIAL_DAYS; if the card is gone by then, Stripe cancels rather than leaving an unpaid account.
+              trial_period_days: TRIAL_DAYS,
+              trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } },
+            }
+          : {
+              // Charge now; if the bank declines, Stripe creates no subscription.
+              payment_behavior: "error_if_incomplete" as const,
+            }),
         proration_behavior: "none",
-        metadata: { companyId, source: "arriveping-activate" },
+        metadata: { companyId, source: trial ? "arriveping-demo-trial" : "arriveping-activate" },
       },
-      { idempotencyKey: `activate-sub-${companyId}-${setupIntentId}` },
+      { idempotencyKey: `${trial ? "trial" : "activate"}-sub-${companyId}-${setupIntentId}` },
     );
   } catch (e) {
     const msg = (e as { message?: string }).message ?? "";

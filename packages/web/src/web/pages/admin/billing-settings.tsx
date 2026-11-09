@@ -54,6 +54,8 @@ type Summary = {
   paymentMethod: { kind: string; brand: string; last4: string; expMonth: number | null; expYear: number | null; label: string } | null;
   stripeError?: string;
   activatable?: boolean;
+  /** A demo account: Billing offers the 30-day free trial instead of activation. */
+  trialAvailable?: boolean;
   /** Taken off the plan, still working until the paid period ends. */
   leaving?: { userId: string; name: string; leavesAt: string }[];
 };
@@ -79,6 +81,7 @@ export default function BillingSettingsTab() {
   const [err, setErr] = useState("");
   const [changeCard, setChangeCard] = useState(false);
   const [activate, setActivate] = useState(false);
+  const [trial, setTrial] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [picker, setPicker] = useState(false);
@@ -90,7 +93,7 @@ export default function BillingSettingsTab() {
       return (await res.json()) as Summary;
     },
   });
-  const s = summary.data;
+  const billing = summary.data;
   const refresh = () => qc.invalidateQueries({ queryKey: ["billing", "summary"] });
 
   const seats = useMutation({
@@ -109,25 +112,25 @@ export default function BillingSettingsTab() {
   const resume = useMutation({ mutationFn: () => post<Summary>("resume"), onSuccess: refresh, onError: (e: Error) => setErr(e.message) });
 
   const [pendingSeats, setPendingSeats] = useState<number | null>(null);
-  const shownSeats = pendingSeats ?? s?.seats ?? 1;
+  const shownSeats = pendingSeats ?? billing?.seats ?? 1;
   const preview = useMemo(() => priceFor(shownSeats), [shownSeats]);
-  const seatsDirty = s ? shownSeats !== s.seats : false;
+  const seatsDirty = billing ? shownSeats !== billing.seats : false;
   // Paying for fewer users than are billable means choosing who comes off.
-  const needed = s ? Math.max(0, s.billableUsers - shownSeats) : 0;
+  const needed = billing ? Math.max(0, billing.billableUsers - shownSeats) : 0;
   // Once there's an extra office user, the people who come off may be office
   // staff too, so say "users" rather than the field-staff noun.
-  const extraOffice = s ? Math.max(0, s.activeOffice - s.includedOffice) : 0;
+  const extraOffice = billing ? Math.max(0, billing.activeOffice - billing.includedOffice) : 0;
   const who = (n: number) => (extraOffice > 0 ? (n === 1 ? "user" : "users") : (n === 1 ? noun : nounPlural).toLowerCase());
 
   // Activating: the plan starts with everyone who counts now; fewer means choosing who comes off first.
-  const actBillable = Math.max(1, s?.billableUsers ?? 1);
+  const actBillable = Math.max(1, billing?.billableUsers ?? 1);
   const actSeats = Math.min(actBillable, pendingSeats ?? actBillable);
-  const actNeeded = s && !s.configured ? Math.max(0, s.billableUsers - actSeats) : 0;
-  const inTrial = s?.status === "trialing";
-  const ended = s?.status === "canceled";
+  const actNeeded = billing && !billing.configured ? Math.max(0, billing.billableUsers - actSeats) : 0;
+  const inTrial = billing?.status === "trialing";
+  const ended = billing?.status === "canceled";
   // A paid period: adding users is charged now (by the day), removals wait for the period end.
-  const paidPeriod = !!s?.configured && (s.status === "active" || s.status === "past_due");
-  const adding = s ? shownSeats > s.seats : false;
+  const paidPeriod = !!billing?.configured && (billing.status === "active" || billing.status === "past_due");
+  const adding = billing ? shownSeats > billing.seats : false;
   const keep = useMutation({ mutationFn: (userId: string) => post<Summary>("keep", { userId }), onSuccess: refresh, onError: (e: Error) => setErr(e.message) });
 
   return (
@@ -152,14 +155,14 @@ export default function BillingSettingsTab() {
         </p>
       )}
 
-      {s && !s.configured && !s.activatable && (
+      {billing && !billing.configured && !billing.activatable && (
         <div className="nvc-card p-5 text-sm text-slate-300">
           This account isn't billed through ArrivePing's self-serve plan (it was set up by our team). Questions about your
           invoice? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
         </div>
       )}
 
-      {s && !s.configured && s.activatable && (
+      {billing && !billing.configured && billing.activatable && (
         <div className="nvc-card space-y-4 p-5 text-sm text-slate-300">
           <div>
             <h3 className="text-base font-bold text-white">Activate your plan</h3>
@@ -169,7 +172,7 @@ export default function BillingSettingsTab() {
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Stat label="Users on the plan" value={String(actSeats)} sub={`${s.activeDrivers} field · ${s.activeOffice} office (1 included)`} />
+            <Stat label="Users on the plan" value={String(actSeats)} sub={`${billing.activeDrivers} field · ${billing.activeOffice} office (1 included)`} />
             <Stat label="Monthly total" value={`${money(priceFor(actSeats).total)} USD`} sub={priceFor(actSeats).breakdown} />
             <Stat label="First charge" value="Today" sub="Then monthly on this date" />
           </div>
@@ -188,7 +191,7 @@ export default function BillingSettingsTab() {
               <button
                 type="button"
                 aria-label="More users"
-                onClick={() => setPendingSeats(Math.min(Math.max(1, s.billableUsers), actSeats + 1))}
+                onClick={() => setPendingSeats(Math.min(Math.max(1, billing.billableUsers), actSeats + 1))}
                 className="grid h-9 w-9 place-items-center text-white hover:bg-white/5"
               >
                 <Plus className="h-4 w-4" />
@@ -206,7 +209,7 @@ export default function BillingSettingsTab() {
           </div>
           {actNeeded > 0 && (
             <p className="text-xs text-white/50">
-              {s.billableUsers} people count towards the plan now. Choose who comes off first; admins are changed from the People page.
+              {billing.billableUsers} people count towards the plan now. Choose who comes off first; admins are changed from the People page.
             </p>
           )}
           <button
@@ -221,6 +224,42 @@ export default function BillingSettingsTab() {
             Questions? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
           </p>
         </div>
+      )}
+
+      {billing && !billing.configured && billing.trialAvailable && (
+        <div className="nvc-card space-y-4 p-5 text-sm text-slate-300">
+          <div>
+            <h3 className="text-base font-bold text-white">Start your 30-day free trial</h3>
+            <p className="mt-1">Demo mode</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat label="Free trial" value="30 days" sub="No charge today" />
+            <Stat label="Then, per month" value={`${money(priceFor(Math.max(1, billing.billableUsers)).total)} USD`} sub={priceFor(Math.max(1, billing.billableUsers)).breakdown} />
+            <Stat label="First charge" value="After 30 days" sub="Then monthly on that date" />
+          </div>
+          <button type="button" onClick={() => setTrial(true)} className="nvc-btn nvc-btn-lg nvc-btn-brand">
+            <CreditCard className="h-4 w-4" /> Start free trial
+          </button>
+          <p className="text-xs text-white/50">
+            Questions? Email <a className="text-cyan-glow underline" href="mailto:contact@nvc360.com">contact@nvc360.com</a>.
+          </p>
+        </div>
+      )}
+
+      {trial && (
+        <CardModal
+          title="Start your free trial"
+          intro="We save your card now and charge nothing for 30 days. You can change the card or cancel from this page."
+          setupPath="trial"
+          confirmPath="trial/confirm"
+          buttonLabel="Start free trial"
+          onClose={() => setTrial(false)}
+          onDone={() => {
+            setTrial(false);
+            // The account is now a customer: access, the demo banner and every sample row on screen change.
+            void qc.invalidateQueries();
+          }}
+        />
       )}
 
       {activate && (
@@ -238,14 +277,14 @@ export default function BillingSettingsTab() {
         />
       )}
 
-      {s?.stripeError && (
+      {billing?.stripeError && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
           We couldn't reach Stripe just now, so the plan and card details below may be out of date. Reload in a moment.
-          <span className="mt-1 block text-xs text-amber-200/70">{s.stripeError}</span>
+          <span className="mt-1 block text-xs text-amber-200/70">{billing.stripeError}</span>
         </div>
       )}
 
-      {s && s.configured && (
+      {billing && billing.configured && (
         <>
           {/* ── Plan ─────────────────────────────────────────────── */}
           <div className="nvc-card space-y-4 p-5">
@@ -253,27 +292,27 @@ export default function BillingSettingsTab() {
               <h3 className="flex items-center gap-2 font-bold text-white">
                 <Users className="h-4 w-4 text-brand" /> Your plan
               </h3>
-              <StatusPill s={s} />
+              <StatusPill billing={billing} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Users on your plan" value={`${s.seats} ${s.seats === 1 ? "user" : "users"}`} />
+              <Stat label="Users on your plan" value={`${billing.seats} ${billing.seats === 1 ? "user" : "users"}`} />
               <Stat
                 label={inTrial ? "First month" : "Monthly cost"}
-                value={inTrial ? "Free" : `${money(s.monthlyTotal)} / month`}
-                sub={inTrial ? `then ${money(s.monthlyTotal)} / month` : s.breakdown}
+                value={inTrial ? "Free" : `${money(billing.monthlyTotal)} / month`}
+                sub={inTrial ? `then ${money(billing.monthlyTotal)} / month` : billing.breakdown}
               />
               <Stat
-                label={s.cancelAtPeriodEnd ? "Access ends" : inTrial ? "Trial ends" : "Next bill"}
-                value={fmtDate(s.cancelAtPeriodEnd ? s.cancelAt : inTrial ? s.trialEndsAt : s.nextInvoiceAt)}
-                sub={inTrial && s.trialDaysLeft != null && !s.cancelAtPeriodEnd ? `${s.trialDaysLeft} days left, nothing charged yet` : undefined}
+                label={billing.cancelAtPeriodEnd ? "Access ends" : inTrial ? "Trial ends" : "Next bill"}
+                value={fmtDate(billing.cancelAtPeriodEnd ? billing.cancelAt : inTrial ? billing.trialEndsAt : billing.nextInvoiceAt)}
+                sub={inTrial && billing.trialDaysLeft != null && !billing.cancelAtPeriodEnd ? `${billing.trialDaysLeft} days left, nothing charged yet` : undefined}
               />
             </div>
 
-            {s.cancelAtPeriodEnd && !ended && (
+            {billing.cancelAtPeriodEnd && !ended && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
                 <span>
-                  Your plan is set to cancel on {fmtDate(s.cancelAt)}. You keep full access until then and won't be charged again.
+                  Your plan is set to cancel on {fmtDate(billing.cancelAt)}. You keep full access until then and won't be charged again.
                 </span>
                 <button
                   type="button"
@@ -297,19 +336,19 @@ export default function BillingSettingsTab() {
                 <p className="text-sm font-semibold text-white">Change how many users you pay for</p>
                 <p className="mt-0.5 text-xs text-white/50">
                   One user per {noun.toLowerCase()} who uses the app. One dispatcher license is included; each extra dispatcher or manager is one
-                  more user, priced like a {noun.toLowerCase()}. You have {s.activeDrivers} active{" "}
-                  {(s.activeDrivers === 1 ? noun : nounPlural).toLowerCase()}
-                  {s.activeOffice > 0 && (
+                  more user, priced like a {noun.toLowerCase()}. You have {billing.activeDrivers} active{" "}
+                  {(billing.activeDrivers === 1 ? noun : nounPlural).toLowerCase()}
+                  {billing.activeOffice > 0 && (
                     <>
                       {" "}
-                      and {s.activeOffice} office {s.activeOffice === 1 ? "user" : "users"} ({s.includedOffice} included)
+                      and {billing.activeOffice} office {billing.activeOffice === 1 ? "user" : "users"} ({billing.includedOffice} included)
                     </>
                   )}
                   .{" "}
                   {paidPeriod ? (
                     <>
                       Adding users is charged today for the rest of this billing period, by the day. Taking users off takes effect at the end of the
-                      period you've paid for ({fmtDate(s.nextInvoiceAt)}): they keep working until then, and the lower price starts on that bill.
+                      period you've paid for ({fmtDate(billing.nextInvoiceAt)}): they keep working until then, and the lower price starts on that bill.
                     </>
                   ) : inTrial ? (
                     <>Nothing is charged during your trial; your first bill covers the users on your plan when it ends.</>
@@ -350,7 +389,7 @@ export default function BillingSettingsTab() {
                   </span>
                   {seatsDirty && needed === 0 && paidPeriod && adding && (
                     <span className="w-full text-xs text-white/50 sm:w-auto">
-                      Charged today: {money(Math.max(0, preview.total - s.monthlyTotal))}/month prorated to {fmtDate(s.nextInvoiceAt)}.
+                      Charged today: {money(Math.max(0, preview.total - billing.monthlyTotal))}/month prorated to {fmtDate(billing.nextInvoiceAt)}.
                     </span>
                   )}
                   {seatsDirty && needed === 0 && (
@@ -375,15 +414,15 @@ export default function BillingSettingsTab() {
                 </div>
                 {needed > 0 && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-300" /> {s.billableUsers} {s.billableUsers === 1 ? "user counts" : "users count"} towards
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-300" /> {billing.billableUsers} {billing.billableUsers === 1 ? "user counts" : "users count"} towards
                     your plan. To pay for {shownSeats}, choose which {needed} {paidPeriod ? "to take off at the end of this period" : "to deactivate"}; they keep
                     their history and can be reactivated later.
                   </p>
                 )}
-                {!!s.leaving?.length && (
+                {!!billing.leaving?.length && (
                   <div className="mt-3 space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
                     <p className="text-xs font-semibold text-amber-100">Leaving your plan</p>
-                    {s.leaving.map((l) => (
+                    {billing.leaving.map((l) => (
                       <div key={l.userId} className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-200">
                         <span>
                           <span className="font-semibold text-white">{l.name}</span> keeps working until {fmtDate(l.leavesAt)}, then comes off.
@@ -410,14 +449,14 @@ export default function BillingSettingsTab() {
               <CreditCard className="h-4 w-4 text-brand" /> Payment method
             </h3>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              {s.paymentMethod ? (
+              {billing.paymentMethod ? (
                 <p className="text-sm text-slate-200">
-                  <span className="font-semibold text-white">{s.paymentMethod.label}</span>
-                  {s.paymentMethod.expMonth && s.paymentMethod.expYear
-                    ? ` · expires ${String(s.paymentMethod.expMonth).padStart(2, "0")}/${s.paymentMethod.expYear}`
+                  <span className="font-semibold text-white">{billing.paymentMethod.label}</span>
+                  {billing.paymentMethod.expMonth && billing.paymentMethod.expYear
+                    ? ` · expires ${String(billing.paymentMethod.expMonth).padStart(2, "0")}/${billing.paymentMethod.expYear}`
                     : ""}
                 </p>
-              ) : s.stripeError ? (
+              ) : billing.stripeError ? (
                 <p className="text-sm text-slate-400">Card details unavailable right now.</p>
               ) : (
                 <p className="text-sm text-amber-300">No card on file. Add one so your plan continues after the trial.</p>
@@ -428,7 +467,7 @@ export default function BillingSettingsTab() {
                   onClick={() => setChangeCard(true)}
                   className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/5"
                 >
-                  {s.paymentMethod ? "Change card" : "Add card"}
+                  {billing.paymentMethod ? "Change card" : "Add card"}
                 </button>
               )}
             </div>
@@ -447,16 +486,16 @@ export default function BillingSettingsTab() {
                 <div className="rounded-xl border border-white/5 bg-ink p-4">
                   <p className="text-sm font-semibold text-white">Cancel my plan</p>
                   <p className="mt-1 text-xs text-white/50">
-                    Stops future charges. You keep full access until {fmtDate(inTrial ? s.trialEndsAt : s.nextInvoiceAt)}, and you can change your
+                    Stops future charges. You keep full access until {fmtDate(inTrial ? billing.trialEndsAt : billing.nextInvoiceAt)}, and you can change your
                     mind any time before then.
                   </p>
                   <button
                     type="button"
-                    disabled={s.cancelAtPeriodEnd}
+                    disabled={billing.cancelAtPeriodEnd}
                     onClick={() => setConfirmCancel(true)}
                     className="mt-3 rounded-lg border border-amber-500/40 px-3 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-500/10 disabled:opacity-40"
                   >
-                    {s.cancelAtPeriodEnd ? "Cancellation scheduled" : "Cancel plan"}
+                    {billing.cancelAtPeriodEnd ? "Cancellation scheduled" : "Cancel plan"}
                   </button>
                 </div>
                 <div className="rounded-xl border border-rose-500/20 bg-ink p-4">
@@ -479,14 +518,14 @@ export default function BillingSettingsTab() {
         </>
       )}
 
-      {picker && s && (
+      {picker && billing && (
         <DownsizePicker
           targetSeats={shownSeats}
-          activeDrivers={s.activeDrivers}
-          activeOffice={s.activeOffice}
-          includedOffice={s.includedOffice}
-          billableUsers={s.billableUsers}
-          nextInvoiceAt={s.cancelAtPeriodEnd ? null : inTrial ? s.trialEndsAt : s.nextInvoiceAt}
+          activeDrivers={billing.activeDrivers}
+          activeOffice={billing.activeOffice}
+          includedOffice={billing.includedOffice}
+          billableUsers={billing.billableUsers}
+          nextInvoiceAt={billing.cancelAtPeriodEnd ? null : inTrial ? billing.trialEndsAt : billing.nextInvoiceAt}
           monthlyTotal={money(preview.total)}
           noun={noun}
           nounPlural={nounPlural}
@@ -508,10 +547,10 @@ export default function BillingSettingsTab() {
           }}
         />
       )}
-      {confirmCancel && s && (
+      {confirmCancel && billing && (
         <ConfirmModal
           title="Cancel your plan?"
-          body={`You'll keep full access until ${fmtDate(inTrial ? s.trialEndsAt : s.nextInvoiceAt)} and won't be charged again. You can undo this any time before then.`}
+          body={`You'll keep full access until ${fmtDate(inTrial ? billing.trialEndsAt : billing.nextInvoiceAt)} and won't be charged again. You can undo this any time before then.`}
           confirmLabel={cancel.isPending ? "Cancelling…" : "Yes, cancel my plan"}
           tone="warn"
           busy={cancel.isPending}
@@ -553,7 +592,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-function StatusPill({ s }: { s: Summary }) {
+function StatusPill({ billing }: { billing: Summary }) {
   const map: Record<Summary["status"], { label: string; cls: string }> = {
     trialing: { label: "Free trial", cls: "border-cyan-500/30 bg-cyan-500/10 text-cyan-200" },
     active: { label: "Active", cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" },
@@ -562,7 +601,7 @@ function StatusPill({ s }: { s: Summary }) {
     canceled: { label: "Ended", cls: "border-white/10 bg-white/5 text-white/60" },
     none: { label: "No plan", cls: "border-white/10 bg-white/5 text-white/60" },
   };
-  const m = map[s.status];
+  const m = map[billing.status];
   return <span className={cn("inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold", m.cls)}>{m.label}</span>;
 }
 

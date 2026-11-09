@@ -31,6 +31,7 @@ const {
   officeRemovable,
   plannedSeatsFor,
   activationBlock,
+  trialBlock,
   startActivation,
   completeActivation,
 } = await import("../billing-subscription");
@@ -458,5 +459,56 @@ describe("activation never leaves two plans", () => {
   it("the Billing summary offers activation only when it can work", async () => {
     expect((await billingSummary(LEG)).activatable).toBe(true);
     expect((await billingSummary("default")).activatable).toBe(false);
+  });
+});
+
+describe("a demo starts the free trial instead of paying now", () => {
+  const DEMO = "trial-demo-co";
+  const row = async () => (await db.select().from(schema.companies).where(eq(schema.companies.id, DEMO)))[0]!;
+  beforeEach(async () => {
+    const sql = (db as any).$client;
+    await sql.execute({ sql: "DELETE FROM companies WHERE id = ?", args: [DEMO] });
+    await sql.execute({ sql: "INSERT INTO companies (id, name, contact_email, plan, kind) VALUES (?,?,?,?,?)", args: [DEMO, "Bow River Heating", "owner@bowriver.test", "pro", "demo"] });
+  });
+
+  it("opens the trial to a demo and closes plain activation, and the reverse for a customer", async () => {
+    expect(await trialBlock(DEMO)).toBeNull();
+    expect(await activationBlock(DEMO)).toBe("demo");
+    expect(await trialBlock("default")).toBe("own_account");
+    const sql = (db as any).$client;
+    await sql.execute({ sql: "DELETE FROM companies WHERE id = ?", args: ["trial-cust-co"] });
+    await sql.execute({ sql: "INSERT INTO companies (id, name, kind) VALUES (?,?,?)", args: ["trial-cust-co", "Real Customer", "customer"] });
+    expect(await trialBlock("trial-cust-co")).toBe("not_demo");
+    expect(await activationBlock("trial-cust-co")).toBeNull();
+  });
+
+  it("starts a 30-day trial with no charge and records when it ends", async () => {
+    await startActivation(DEMO, { email: "owner@bowriver.test", name: "Owner" });
+    const r = await completeActivation(DEMO, "seti_1", { trial: true });
+    expect(r).toMatchObject({ ok: true, status: "trialing" });
+    const sub = calls.find((c) => c.method === "subscriptions.create")!.args[0] as any;
+    expect(sub.trial_period_days).toBe(30);
+    expect(sub.trial_settings).toEqual({ end_behavior: { missing_payment_method: "cancel" } });
+    expect(sub.payment_behavior).toBeUndefined();
+    expect(sub.metadata).toEqual({ companyId: DEMO, source: "arriveping-demo-trial" });
+    const co = await row();
+    expect(co).toMatchObject({ billingSubscriptionId: "sub_1", billingStatus: "trialing", plan: "starter" });
+    const days = (co.billingTrialEndsAt!.getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(29.9);
+    expect(days).toBeLessThan(30.1);
+  });
+
+  it("refuses a card setup that belongs to another customer", async () => {
+    await startActivation(DEMO, {});
+    setupState = { status: "succeeded", customer: "cus_other", payment_method: "pm_x" };
+    expect((await completeActivation(DEMO, "seti_1", { trial: true })).ok).toBe(false);
+    expect(calls.some((c) => c.method === "subscriptions.create")).toBe(false);
+  });
+
+  it("the Billing summary offers the trial to a demo, not activation", async () => {
+    const s = await billingSummary(DEMO);
+    expect(s.trialAvailable).toBe(true);
+    expect(s.activatable).toBe(false);
+    expect((await billingSummary("default")).trialAvailable).toBe(false);
   });
 });

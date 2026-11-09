@@ -12,6 +12,8 @@ import {
   overrideAt,
 } from "../lib/permissions";
 import { tdb } from "../database/tenant";
+import { Err } from "../lib/errors";
+import type { Variables } from "../env";
 import { STAFF_OFFICE_ROLES, permissionFor } from "../lib/office-access";
 import { platformRoleOf, atLeast, type PlatformRole } from "../../services/platform-staff";
 import { noteTenantVisit } from "../../services/platform-audit";
@@ -434,6 +436,17 @@ export function tenantId(c: { get: (k: "companyId") => string | undefined }): st
   const id = c.get("companyId");
   if (!id) throw new Error("tenant_unresolved");
   return id;
+}
+
+/**
+ * The signed-in person for this request, typed. Behind `requireAuth` /
+ * `requireAdmin` there is always one; if a handler is reached without one,
+ * fail closed with a 401 rather than let `null` through.
+ */
+export function sessionUser(c: { get: (k: "user") => Variables["user"] | undefined }): NonNullable<Variables["user"]> {
+  const user = c.get("user");
+  if (!user) throw Err.unauthorized();
+  return user;
 }
 
 /**
