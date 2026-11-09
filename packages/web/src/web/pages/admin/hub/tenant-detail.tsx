@@ -31,7 +31,7 @@ export default function HubTenantDetail() {
   const isSalesOnCustomer = me.data?.role === "sales" && d?.company.kind === "customer";
   const tabs: { value: Tab; label: string }[] = [
     { value: "overview", label: "Overview" },
-    { value: "features", label: "Features" },
+    { value: "features", label: "Feature Flags" },
     ...(isSalesOnCustomer ? [] : [{ value: "people" as Tab, label: "People" }]),
     { value: "settings", label: "Settings" },
     ...(isSalesOnCustomer ? [] : [{ value: "activity" as Tab, label: "Activity" }]),

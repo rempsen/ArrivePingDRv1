@@ -153,7 +153,7 @@ export default function HubLeads() {
             </Card>
             <Card title="Meeting types">
               {!d.salesPack ? (
-                <p className="text-[13px] text-slate-500">The Sales pack is off for ArrivePing. Switch it on under Companies → ArrivePing → Features.</p>
+                <p className="text-[13px] text-slate-500">The Sales pack is off for ArrivePing. Switch it on under Companies → ArrivePing → Feature Flags.</p>
               ) : d.missing.length ? (
                 <div className="space-y-3">
                   <p className="text-[13px] text-slate-400">Add {d.missing.join(", ")} as services in the ArrivePing account so they can be booked.</p>
