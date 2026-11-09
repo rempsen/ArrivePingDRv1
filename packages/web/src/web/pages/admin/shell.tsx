@@ -9,6 +9,7 @@ import { OnboardingChat } from "../../components/onboarding-chat";
 import { TenantSwitcher } from "../../components/tenant-switcher";
 import { GuideProvider } from "../../guide/GuideProvider";
 import { SampleDayBanner } from "../../guide/SampleDayBanner";
+import { DemoTrialBanner } from "../../components/demo-trial-banner";
 import { LaunchChecklistCard } from "../../guide/launch";
 import { GuideButton } from "../../guide/GuideButton";
 import { groupAnchor, navAnchor } from "../../guide/anchors";
@@ -438,6 +439,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <main className="md:pl-[228px]">
         {access?.actingAs ? <ActAsBanner session={access.actingAs} /> : platformRole && !inOwnTenant ? <StaffBar /> : null}
+        <DemoTrialBanner />
         <SampleDayBanner />
         {accessLoading ? (
           <div className="grid min-h-[60vh] place-items-center">

@@ -24,6 +24,12 @@ import { deleteOwnAccount, deletionBlockers } from "../../services/account-delet
 import { AccessError } from "../../services/user-access";
 import { capture } from "../lib/analytics";
 import type { AppEnv } from "../env";
+
+/** customer | demo | test | internal, for the dashboard's demo banner. */
+async function tenantKindOf(companyId: string): Promise<string> {
+  const [co] = await db.select({ kind: schema.companies.kind }).from(schema.companies).where(eq(schema.companies.id, companyId));
+  return co.kind;
+}
 import { jobTechPay } from "../../shared/tech-pay";
 import { round2 } from "../../shared/catalog";
 import { jsonBody } from "../lib/validate";
@@ -230,6 +236,7 @@ export const meRoutes = new Hono<AppEnv>()
       // person's hub role (null for everyone but NVC360 staff), and the
       // act-as session behind this request, if any.
       companyId,
+      tenantKind: await tenantKindOf(companyId),
       features: await enabledFeatures(companyId),
       platformRole: act ? null : (c.get("platformRole") ?? null),
       actingAs: act

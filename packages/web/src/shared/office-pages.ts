@@ -88,6 +88,8 @@ export interface OfficeAccess {
   features?: string[];
   /** The company this request acts as. */
   companyId?: string;
+  /** customer | demo | test | internal: a demo shows the "start your free trial" banner. */
+  tenantKind?: string;
   /** Set while ArrivePing support is signed in as this person (Control Hub act-as). */
   actingAs?: { sessionId: string; actorName: string; targetName: string; companyId: string; reason: string; expiresAt: string } | null;
 }
