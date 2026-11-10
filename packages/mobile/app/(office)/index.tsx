@@ -294,8 +294,8 @@ export default function Today() {
             refreshing={board.isFetching && !board.isLoading}
             onRefresh={() => {
               setNow(new Date());
-              ahead.refetch();
-              return board.refetch();
+              void ahead.refetch();
+              return board.refetch().then(() => undefined);
             }}
             tintColor={C.brand}
           />

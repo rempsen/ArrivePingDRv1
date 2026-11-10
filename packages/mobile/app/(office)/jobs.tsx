@@ -166,7 +166,7 @@ export default function Jobs() {
           data={shown}
           keyExtractor={(j) => j.id}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
-          refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => board.refetch()} tintColor={C.brand} />}
+          refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => void board.refetch()} tintColor={C.brand} />}
           renderItem={({ item }) => <JobRow job={item} techName={techName(item.riderId)} selected={wide && item.id === selectedId} onPress={() => open(item.id)} />}
           ListEmptyComponent={
             <Empty
@@ -175,7 +175,7 @@ export default function Jobs() {
             />
           }
           ListFooterComponent={
-            board.data?.truncated ? <Text style={s.note}>Showing the first {jobs.length}. Open the web console for the full day.</Text> : null
+            board.data?.truncated ? <Text style={s.note}>Showing the first {jobs.length}. Open the web console for the full day.</Text> : undefined
           }
         />
       )}

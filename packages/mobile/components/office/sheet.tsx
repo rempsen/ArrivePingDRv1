@@ -44,7 +44,7 @@ export function Sheet({
 
 const s = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)" },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.55)" },
   sheet: {
     backgroundColor: C.bg2,
     borderTopLeftRadius: R.sheet,

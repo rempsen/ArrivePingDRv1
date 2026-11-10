@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, type GestureResponderEvent } from "react-native";
+import { View, Text, Pressable, StyleSheet, type GestureResponderEvent, type ScrollViewInstance, type ViewInstance } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { DragHandle, type DragCallbacks } from "./drag-handle";
 import { ResizeEdge } from "./resize-edge";
@@ -105,9 +105,9 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   }, [jobs, resize]);
 
   // Drag geometry: the vertical scroll view's window frame plus both offsets.
-  const frameRef = useRef<View>(null);
-  const vRef = useRef<ScrollView>(null);
-  const hRef = useRef<ScrollView>(null);
+  const frameRef = useRef<ViewInstance>(null);
+  const vRef = useRef<ScrollViewInstance>(null);
+  const hRef = useRef<ScrollViewInstance>(null);
   const geom = useRef<TimelineGeom>({ x: 0, y: 0, w: 0, h: 0, scrollX: 0, scrollY: 0 });
   const measured = useRef(false);
   const contentH = useRef(0);

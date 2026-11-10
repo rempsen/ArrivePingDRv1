@@ -39,6 +39,8 @@ import {
   Alert,
   Platform,
   type KeyboardTypeOptions,
+  type ScrollViewInstance,
+  type ViewInstance,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { choosePhotoSource, pickPhoto, type PhotoSource } from "../lib/pick-photo";
@@ -122,7 +124,7 @@ export const JobForm = forwardRef<
     /** The job's photos (["photos", bookingId] query), for thumbnails. */
     photos?: PhotoRef[];
     /** The page ScrollView the form sits in, for scrollToItem. */
-    scrollRef?: RefObject<ScrollView | null>;
+    scrollRef?: RefObject<ScrollViewInstance | null>;
     /** Show answers without letting them change (e.g. a finished job). */
     readOnly?: boolean;
     /** Questions to mark as missing (e.g. from the server's 409). */
@@ -146,7 +148,7 @@ export const JobForm = forwardRef<
     if (highlightKey) setHighlight(new Set(highlightKey.split(",")));
   }, [highlightKey]);
 
-  const itemRefs = useRef(new Map<string, View>());
+  const itemRefs = useRef(new Map<string, ViewInstance>());
   const flushers = useRef(new Map<string, () => Answer | null>());
 
   const mutate = save.mutate;
@@ -175,7 +177,7 @@ export const JobForm = forwardRef<
           const node = itemRefs.current.get(id);
           const sv = scrollRef?.current;
           if (!node || !sv) return;
-          const inner = (sv as any).getInnerViewRef?.() ?? sv.getInnerViewNode();
+          const inner = (sv as any).getInnerViewRef?.() ?? sv.getInnerViewRef();
           if (!inner) return;
           node.measureLayout(
             inner,

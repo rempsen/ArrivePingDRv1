@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  type ScrollViewInstance,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
@@ -177,7 +178,7 @@ export default function JobDetail() {
   const [defUploading, setDefUploading] = useState<string | null>(null);
   // Job forms v2: the page ScrollView (so the form can scroll to a question)
   // and the form itself (flush drafts / ask what's missing before completing).
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const formRef = useRef<JobFormHandle>(null);
   const [formHighlight, setFormHighlight] = useState<string[] | undefined>(undefined);
 

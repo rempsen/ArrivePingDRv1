@@ -9,6 +9,7 @@ import {
   View,
   useWindowDimensions,
   type LayoutChangeEvent,
+  type ViewInstance,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -166,7 +167,7 @@ interface Run {
 }
 
 interface CoachApi {
-  register: (id: AnchorId, node: View | null) => void;
+  register: (id: AnchorId, node: ViewInstance | null) => void;
   /** First run: shows the tour if this technician hasn't seen it at this company. */
   maybeStart: (userId: string) => void;
   /** Profile → "Show me around again". */
@@ -193,7 +194,7 @@ export function useCoach(): CoachApi {
 /** Wrap the control a tip points at. Renders a plain View, so layout is unchanged. */
 export function CoachAnchor({ id, children, style }: { id: AnchorId; children: ReactNode; style?: object }) {
   const { register } = useCoach();
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   useEffect(() => {
     register(id, ref.current);
     return () => register(id, null);
@@ -208,7 +209,7 @@ export function CoachAnchor({ id, children, style }: { id: AnchorId; children: R
 export function CoachProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const anchors = useRef(new Map<AnchorId, View>());
+  const anchors = useRef(new Map<AnchorId, ViewInstance>());
   const [run, setRun] = useState<Run | null>(null);
   const [rect, setRect] = useState<Rect | null>(null);
   const [cardH, setCardH] = useState(0);
@@ -233,7 +234,7 @@ export function CoachProvider({ children }: { children: ReactNode }) {
   const runRef = useRef(run);
   runRef.current = run;
 
-  const register = useCallback((id: AnchorId, node: View | null) => {
+  const register = useCallback((id: AnchorId, node: ViewInstance | null) => {
     if (node) anchors.current.set(id, node);
     else anchors.current.delete(id);
   }, []);

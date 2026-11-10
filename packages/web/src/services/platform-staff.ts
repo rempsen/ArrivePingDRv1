@@ -40,7 +40,7 @@ function breakGlassEmails(): Set<string> {
   return new Set(
     (process.env.PLATFORM_OWNER_EMAILS ?? "")
       .split(",")
-      .map((e) => e.trim().toLowerCase())
+      .map((e: string) => e.trim().toLowerCase())
       .filter(Boolean),
   );
 }

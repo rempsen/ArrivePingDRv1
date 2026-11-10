@@ -62,7 +62,7 @@ function RootLayout() {
                 default -- declaring it here means the bar is correct even on a
                 device whose system theme is light, which is what made the
                 status row unreadable on some testers' phones. */}
-            <StatusBar style="light" backgroundColor={C.bg} />
+            <StatusBar style="light" />
             <OfflineBanner />
             {/* Technician coach marks: above every screen, so a tip can point
                 at a control on a tab or on the job screen. */}

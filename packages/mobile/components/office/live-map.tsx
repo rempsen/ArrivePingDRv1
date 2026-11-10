@@ -74,7 +74,7 @@ export function LiveMap({
         style={StyleSheet.absoluteFill}
         initialRegion={fitRegion([...techPins, ...jobPins], office)}
         userInterfaceStyle="dark"
-        showsPointsOfInterest={false}
+        showsPointsOfInterests={false}
         showsCompass={false}
         onPress={() => onSelect(null)}
         accessibilityLabel="Live map of technicians and jobs"

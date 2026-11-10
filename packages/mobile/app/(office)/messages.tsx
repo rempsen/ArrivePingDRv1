@@ -131,7 +131,7 @@ export default function Messages() {
           data={shown}
           keyExtractor={(t) => t.techId}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
-          refreshControl={<RefreshControl refreshing={inbox.isFetching && !inbox.isLoading} onRefresh={() => inbox.refetch()} tintColor={C.brand} />}
+          refreshControl={<RefreshControl refreshing={inbox.isFetching && !inbox.isLoading} onRefresh={() => void inbox.refetch()} tintColor={C.brand} />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => open(item.techId)}

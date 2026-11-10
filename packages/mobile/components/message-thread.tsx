@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, TextInput, Pressable, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, TextInput, Pressable, StyleSheet, ActivityIndicator, RefreshControl, type ScrollViewInstance } from "react-native";
 import { PaperPlaneRight } from "phosphor-react-native";
 import { C, R, WIDE } from "../lib/theme";
 
@@ -46,7 +46,7 @@ export function MessageThread({
   composerBottom?: number;
 }) {
   const [draft, setDraft] = useState("");
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);

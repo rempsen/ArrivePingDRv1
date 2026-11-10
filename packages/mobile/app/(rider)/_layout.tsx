@@ -135,7 +135,7 @@ export default function RiderLayout() {
                 jobBadge === 1 ? "1 work order to accept or decline" : `${jobBadge} work orders to accept or decline`
               }
             >
-              <Briefcase color={color} size={24} weight={focused ? "fill" : "regular"} />
+              <Briefcase color={color as string} size={24} weight={focused ? "fill" : "regular"} />
             </TabIcon>
           ),
         }}
@@ -149,7 +149,7 @@ export default function RiderLayout() {
               count={msgBadge}
               label={msgBadge === 1 ? "1 unread message" : `${msgBadge} unread messages`}
             >
-              <ChatCircleDots color={color} size={24} weight={focused ? "fill" : "regular"} />
+              <ChatCircleDots color={color as string} size={24} weight={focused ? "fill" : "regular"} />
             </TabIcon>
           ),
         }}
@@ -159,7 +159,7 @@ export default function RiderLayout() {
         options={{
           title: "Earnings",
           tabBarIcon: ({ color, focused }) => (
-            <CurrencyDollar color={color} size={24} weight={focused ? "fill" : "regular"} />
+            <CurrencyDollar color={color as string} size={24} weight={focused ? "fill" : "regular"} />
           ),
         }}
       />
@@ -172,7 +172,7 @@ export default function RiderLayout() {
               count={elsewhereBadge}
               label={`${elsewhereBadge} waiting at another company you work for`}
             >
-              <UserCircle color={color} size={24} weight={focused ? "fill" : "regular"} />
+              <UserCircle color={color as string} size={24} weight={focused ? "fill" : "regular"} />
             </TabIcon>
           ),
         }}
