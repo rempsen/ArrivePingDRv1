@@ -2,7 +2,8 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["bun"]
   },
   "include": ["app", "lib", "components", "assets", "hooks", "env.d.ts"],
   "exclude": ["node_modules", "../web", "../desktop"]
