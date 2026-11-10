@@ -24,8 +24,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#101827"
-      },
-      "edgeToEdgeEnabled": true
+      }
     },
     "extra": {
       "apiUrl": "https://arriveping.com",
@@ -65,11 +64,6 @@
         "tinted": "./assets/icon-tinted.png"
       }
     },
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#070b12"
-    },
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
@@ -80,7 +74,6 @@
     ],
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "plugins": [
       "expo-router",
       [
@@ -125,7 +118,7 @@
         }
       ],
       [
-        "expo-live-activity",
+        "expo-widgets",
         {
           "enablePushNotifications": true
         }
