@@ -56,7 +56,25 @@ function getJwt(): string | null {
 export interface LiveActivityPushPayload {
   /** "update" or "end" */
   event: "update" | "end";
-  contentState: {
+  /**
+   * Props for the app's expo-widgets Live Activity — keep in sync with
+   * `LiveActivityProps` in packages/mobile/lib/live-activity-widget.tsx.
+   */
+  props: {
+    title: string;
+    subtitle: string;
+    /** ETA as epoch milliseconds; omitted when unknown. */
+    etaEndMs?: number;
+    progress: number;
+    done: boolean;
+  };
+  /**
+   * Flat content-state read by app builds that still use expo-live-activity
+   * (before the expo-widgets migration). Merged next to `name`/`props` so one
+   * push serves both app generations — each decoder ignores keys it doesn't
+   * know. Drop this once those builds are gone.
+   */
+  legacy: {
     title: string;
     subtitle?: string;
     timerEndDateInMilliseconds?: number;
@@ -67,10 +85,13 @@ export interface LiveActivityPushPayload {
   };
 }
 
+/** Name the mobile app registers its Live Activity under (`createLiveActivity`). */
+const LIVE_ACTIVITY_NAME = "ArrivePingActivity";
+
 /**
  * Send a Live Activity update to a specific device via APNs.
- * @param pushToken  The activityPushToken received from expo-live-activity
- * @param payload    The content-state payload
+ * @param pushToken  The per-activity push token reported by expo-widgets
+ * @param payload    The activity event and props
  */
 export async function sendLiveActivityUpdate(
   pushToken: string,
@@ -86,7 +107,12 @@ export async function sendLiveActivityUpdate(
     aps: {
       timestamp: Math.floor(Date.now() / 1000),
       event: payload.event,
-      "content-state": payload.contentState,
+      "content-state": {
+        ...payload.legacy,
+        // expo-widgets expects `{ name, props }` with `props` as a JSON string.
+        name: LIVE_ACTIVITY_NAME,
+        props: JSON.stringify(payload.props),
+      },
     },
   });
 
@@ -172,9 +198,17 @@ export async function pushLiveActivityJobUpdate(booking: {
 
   await sendLiveActivityUpdate(token, {
     event: isComplete ? "end" : "update",
-    contentState: {
-      // Brand is carried by the logo badge now — keep in sync with client-side
-      // buildState() in lib/useLiveActivity.ts (no redundant "ArrivePing ·" prefix).
+    // Keep in sync with buildProps() in packages/mobile/lib/useLiveActivity.ts.
+    props: {
+      title: label,
+      subtitle: booking.customerName
+        ? `${booking.customerName} · ${booking.address ?? ""}`
+        : booking.address ?? "",
+      etaEndMs: etaMs,
+      progress: isComplete ? 1 : 0.5,
+      done: isComplete,
+    },
+    legacy: {
       title: label,
       subtitle: booking.customerName
         ? `${booking.customerName} · ${booking.address ?? ""}`
