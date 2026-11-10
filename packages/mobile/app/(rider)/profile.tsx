@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { CalendarBlank, Camera, CaretRight, FileText, Lifebuoy, ShieldCheck, SignOut, Signpost, SquaresFour, Sparkle } from "phosphor-react-native";
+import { CalendarBlank, Camera, CaretRight, FileText, Lifebuoy, PencilSimple, ShieldCheck, SignOut, Signpost, SquaresFour, Sparkle } from "phosphor-react-native";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -22,6 +22,7 @@ import {
   CompanyBadge,
 } from "../../components/company-alert";
 import { DeleteAccountSheet } from "../../components/delete-account-sheet";
+import { VehicleSheet } from "../../components/vehicle-sheet";
 import { Avatar, Button, Card, FullLoader, Row } from "../../components/ui";
 import {
   clearActiveCompany,
@@ -64,6 +65,7 @@ export default function Profile() {
   const { data: session } = authClient.useSession();
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [vehicleOpen, setVehicleOpen] = useState(false);
   const calendarSync = useCalendarSyncSettings();
   const calendarOn =
     !!calendarSync && calendarSync.userId === session?.user?.id;
@@ -495,6 +497,7 @@ export default function Profile() {
           <Text style={s.cardTitle}>Details</Text>
           <Row label="Skill class" value={rider?.skillClass} />
           <Row label="Vehicle" value={rider?.vehicle} />
+          <Row label="Vehicle colour" value={rider?.vehicleColor} />
           <Row
             label="Phone"
             value={(session?.user as any)?.phone || rider?.phone}
@@ -504,6 +507,17 @@ export default function Profile() {
             value={String(rider?.completedJobs ?? 0)}
           />
           <Row label="License plate" value={rider?.licensePlate} />
+          <Pressable
+            onPress={() => setVehicleOpen(true)}
+            style={s.linkRow}
+            accessibilityRole="button"
+            accessibilityLabel="Edit my vehicle"
+            accessibilityHint="Change your vehicle's make and model, colour and license plate"
+          >
+            <PencilSimple color={C.sub} size={18} />
+            <Text style={s.linkTxt}>Edit my vehicle</Text>
+            <CaretRight color={C.muted} size={16} />
+          </Pressable>
         </Card>
 
         <Card>
@@ -584,6 +598,12 @@ export default function Profile() {
         open={deleting}
         onClose={() => setDeleting(false)}
         onDeleted={afterDeleted}
+      />
+      <VehicleSheet
+        open={vehicleOpen}
+        rider={rider}
+        onClose={() => setVehicleOpen(false)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["me"] })}
       />
     </SafeAreaView>
   );
