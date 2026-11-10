@@ -25,7 +25,7 @@
 # Run:    docker run --rm -p 4200:4200 --env-file .env nvc360-web:local
 
 # Pinned to the same Bun version as package.json "packageManager".
-ARG BUN_VERSION=1.3.5
+ARG BUN_VERSION=1.4.4
 
 # ---------------------------------------------------------------------------
 # Stage 1 — dependencies. Cached on the lockfile alone, so source edits do not
