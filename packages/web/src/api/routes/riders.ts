@@ -55,7 +55,11 @@ const riderStatus = z.enum(RIDER_STATUSES, {
 
 /** Self-service heartbeat / status toggle from the mobile app. */
 const RiderSelfPatch = z.object({
+  // The technician's own vehicle. Colour and plate may be blank (a swapped-in
+  // vehicle with no plate on file yet); the make and model may not.
   vehicle: optText(120),
+  vehicleColor: optText(40),
+  licensePlate: optText(32),
   lat: latitude.optional(),
   lng: longitude.optional(),
   status: riderStatus.optional(),
@@ -143,6 +147,8 @@ export const ridersRoutes = new Hono<AppEnv>()
 
     const set: Record<string, unknown> = {};
     if (body.vehicle) set.vehicle = body.vehicle;
+    if (body.vehicleColor !== undefined) set.vehicleColor = body.vehicleColor;
+    if (body.licensePlate !== undefined) set.licensePlate = body.licensePlate.toUpperCase();
     // Any call from the phone means its app is alive.
     set.lastSeenAt = new Date();
     const fixedAt = fixTime(body.fixAt);
