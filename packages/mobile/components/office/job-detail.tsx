@@ -312,7 +312,7 @@ export function JobDetail({
 
           <ScrollView
             contentContainerStyle={[s.content, !twoCol && WIDE]}
-            refreshControl={<RefreshControl refreshing={job.isFetching && !job.isLoading} onRefresh={() => job.refetch()} tintColor={C.brand} />}
+            refreshControl={<RefreshControl refreshing={job.isFetching && !job.isLoading} onRefresh={() => void job.refetch()} tintColor={C.brand} />}
           >
             {twoCol ? (
               <View style={s.cols}>

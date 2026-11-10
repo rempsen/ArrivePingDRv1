@@ -216,7 +216,7 @@ export function AddressSheet({
             </View>
           </Pressable>
         )}
-        ListEmptyComponent={q.trim().length >= 3 && !preds.isLoading ? <Text style={s.hint}>No suggestions. You can still use the address as typed.</Text> : null}
+        ListEmptyComponent={q.trim().length >= 3 && !preds.isLoading ? <Text style={s.hint}>No suggestions. You can still use the address as typed.</Text> : undefined}
       />
     </Sheet>
   );

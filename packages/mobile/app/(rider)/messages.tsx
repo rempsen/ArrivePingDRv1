@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   RefreshControl,
+  type ScrollViewInstance,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -52,7 +53,7 @@ export default function Messages() {
   const labels = dispatchLabels(companyName);
 
   const [draft, setDraft] = useState("");
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   // dispatcher direct thread + current active job thread
   const thread = useQuery({
@@ -169,7 +170,7 @@ export default function Messages() {
           refreshControl={
             <RefreshControl
               refreshing={thread.isRefetching}
-              onRefresh={() => thread.refetch()}
+              onRefresh={() => void thread.refetch()}
               tintColor={C.brand}
             />
           }

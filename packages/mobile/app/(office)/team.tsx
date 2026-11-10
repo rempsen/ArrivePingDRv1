@@ -160,7 +160,7 @@ export default function Team() {
           keyExtractor={(t) => t.id}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
           stickySectionHeadersEnabled={false}
-          refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => board.refetch()} tintColor={C.brand} />}
+          refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => void board.refetch()} tintColor={C.brand} />}
           renderSectionHeader={({ section }) => (
             <View style={s.head}>
               <View style={[s.dot, { backgroundColor: statusColor(section.key) }]} />

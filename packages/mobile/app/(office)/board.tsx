@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, Alert } from "react-native";
+import { View, Text, Pressable, StyleSheet, Alert, type ViewInstance } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Warning, X, Check } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
@@ -113,7 +113,7 @@ export default function Board() {
   // so it moves on the UI thread); the timeline answers "which row, what
   // time" and draws a dashed ghost there. Dropping fills in the same confirm
   // card as tap-to-place.
-  const rootRef = useRef<View>(null);
+  const rootRef = useRef<ViewInstance>(null);
   const tlRef = useRef<TimelineHandle>(null);
   const fx = useSharedValue(0);
   const fy = useSharedValue(0);

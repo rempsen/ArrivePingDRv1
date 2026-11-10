@@ -128,7 +128,7 @@ export function ThreadView({ techId, embedded }: { techId: string; embedded?: bo
             placeholder={`Message ${name.split(" ")[0]}…`}
             sending={send.isPending}
             refreshing={thread.isRefetching}
-            onRefresh={() => thread.refetch()}
+            onRefresh={() => void thread.refetch()}
             onSend={async (body) => {
               try {
                 await send.mutateAsync(body);

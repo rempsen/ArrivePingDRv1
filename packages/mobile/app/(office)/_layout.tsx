@@ -76,7 +76,7 @@ export default function OfficeLayout() {
           name="index"
           options={{
             title: "Today",
-            tabBarIcon: ({ color, focused }) => <House color={color} size={24} weight={focused ? "fill" : "regular"} />,
+            tabBarIcon: ({ color, focused }) => <House color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
         <Tabs.Screen
@@ -84,7 +84,7 @@ export default function OfficeLayout() {
           options={{
             title: "Jobs",
             href: seesJobs ? undefined : null,
-            tabBarIcon: ({ color, focused }) => <ClipboardText color={color} size={24} weight={focused ? "fill" : "regular"} />,
+            tabBarIcon: ({ color, focused }) => <ClipboardText color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
         <Tabs.Screen
@@ -92,7 +92,7 @@ export default function OfficeLayout() {
           options={{
             title: "Board",
             href: seesBoard ? undefined : null,
-            tabBarIcon: ({ color, focused }) => <CalendarBlank color={color} size={24} weight={focused ? "fill" : "regular"} />,
+            tabBarIcon: ({ color, focused }) => <CalendarBlank color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
         <Tabs.Screen
@@ -102,7 +102,7 @@ export default function OfficeLayout() {
             href: seesMessages ? undefined : null,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon count={msgBadge} label={msgBadge === 1 ? "1 unread message" : `${msgBadge} unread messages`}>
-                <ChatCircleDots color={color} size={24} weight={focused ? "fill" : "regular"} />
+                <ChatCircleDots color={color as string} size={24} weight={focused ? "fill" : "regular"} />
               </TabIcon>
             ),
           }}
@@ -112,7 +112,7 @@ export default function OfficeLayout() {
           options={{
             title: "Team",
             href: seesTeam ? undefined : null,
-            tabBarIcon: ({ color, focused }) => <UsersThree color={color} size={24} weight={focused ? "fill" : "regular"} />,
+            tabBarIcon: ({ color, focused }) => <UsersThree color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
       </Tabs>

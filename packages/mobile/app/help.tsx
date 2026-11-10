@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Linking, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Linking, Alert, type ScrollViewInstance } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { fetch as streamFetch } from "expo/fetch";
@@ -26,7 +26,7 @@ export default function HelpScreen() {
   const router = useRouter();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const abort = useRef<AbortController | null>(null);
   // Set synchronously, so a double tap can't start two answers before React re-renders.
   const inFlight = useRef(false);
