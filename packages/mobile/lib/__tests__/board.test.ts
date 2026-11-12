@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addDays, ageLabel, bucketOf, dayKey, jobsForTech, needsAttention, nextUp, tallies } from "../board";
+import { addDays, ageLabel, bucketOf, dayKey, jobTechLabel, jobsForTech, needsAttention, nextUp, tallies } from "../board";
 
 const job = (p: Partial<{ id: string; late: boolean; riderId: string | null; status: string; scheduledAt: string }>) => ({
   id: "j",
@@ -96,5 +96,27 @@ describe("jobsForTech", () => {
   });
   test("a technician with nothing gets an empty list", () => {
     expect(jobsForTech(jobs, "t9")).toEqual([]);
+  });
+});
+
+describe("jobTechLabel", () => {
+  test("an offer that hasn't been answered", () => {
+    expect(jobTechLabel({ assignStatus: "offered", status: "assigned" }, "available").label).toBe("Offered, waiting to accept");
+  });
+
+  test("accepted but not set out reads Accepted, not the technician's Busy", () => {
+    for (const status of ["pending", "confirmed", "assigned"]) {
+      expect(jobTechLabel({ assignStatus: "accepted", status }, "busy")).toEqual({ label: "Accepted", key: "accepted" });
+    }
+  });
+
+  test("once they set out it follows the technician's own status", () => {
+    expect(jobTechLabel({ assignStatus: "accepted", status: "enroute" }, "enroute")).toEqual({ label: "On route", key: "enroute" });
+    expect(jobTechLabel({ assignStatus: "accepted", status: "onsite" }, "onsite").label).toBe("On site");
+  });
+
+  test("not an offer: the technician's status, or Assigned when it's unknown", () => {
+    expect(jobTechLabel({ assignStatus: "none", status: "assigned" }, "available").label).toBe("Available");
+    expect(jobTechLabel({ assignStatus: "none", status: "assigned" }, undefined).label).toBe("Assigned");
   });
 });
