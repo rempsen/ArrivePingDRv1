@@ -54,7 +54,9 @@ export function LiveMap({
   onSelect: (sel: MapSelection) => void;
 }) {
   const ref = useRef<MapView>(null);
-  const [showOffline, setShowOffline] = useState(false);
+  // Off-shift technicians show too (dimmed disc), as on the web map: with everyone off shift the
+  // map used to look empty. The eye button hides them.
+  const [showOffline, setShowOffline] = useState(true);
   const techPins = useMemo(() => visibleTechs(techs, showOffline), [techs, showOffline]);
   const jobPins = useMemo(() => visibleJobs(jobs), [jobs]);
   const fit = () => ref.current?.animateToRegion(fitRegion([...techPins, ...jobPins], office), 400);
