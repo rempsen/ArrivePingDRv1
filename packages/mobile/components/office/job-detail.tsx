@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Linking, RefreshControl, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Phone, MapPin, ChatCircleDots, ChatText, UserSwitch, CalendarBlank, Warning, Envelope, PencilSimple, DotsThree } from "phosphor-react-native";
+import { ArrowLeft, X, Phone, MapPin, ChatCircleDots, ChatText, UserSwitch, CalendarBlank, Warning, Envelope, PencilSimple, DotsThree } from "phosphor-react-native";
 import { Avatar, Button, Card, Empty, FullLoader, StatusBadge } from "../ui";
 import { AssignSheet } from "./assign-sheet";
 import { DatetimeSheet } from "./datetime-sheet";
@@ -41,6 +41,7 @@ export function JobDetail({
   id,
   assign: openAssignParam,
   embedded,
+  onClose,
   onMessageTech,
 }: {
   id: string;
@@ -48,6 +49,8 @@ export function JobDetail({
   assign?: boolean;
   /** Right pane of a split screen: no back button, no top safe-area inset. */
   embedded?: boolean;
+  /** Embedded only: close the pane (the list behind it takes the whole width). */
+  onClose?: () => void;
   /** Where "message the tech" goes; defaults to the full-screen thread route. */
   onMessageTech?: (techId: string) => void;
 }) {
@@ -271,6 +274,12 @@ export function JobDetail({
         <View style={[s.topBar, WIDE]}>
           <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back">
             <ArrowLeft color={C.text} size={22} />
+          </Pressable>
+        </View>
+      ) : onClose ? (
+        <View style={[s.topBar, { justifyContent: "flex-end" }]}>
+          <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close job">
+            <X color={C.sub} size={22} />
           </Pressable>
         </View>
       ) : null}

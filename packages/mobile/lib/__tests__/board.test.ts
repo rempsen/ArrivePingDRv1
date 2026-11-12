@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addDays, ageLabel, bucketOf, dayKey, jobTechLabel, jobsForTech, needsAttention, nextUp, tallies } from "../board";
+import { addDays, ageLabel, bucketOf, dayKey, jobTechLabel, jobsForTech, keepSelection, needsAttention, nextUp, tallies, toggleSelection } from "../board";
 
 const job = (p: Partial<{ id: string; late: boolean; riderId: string | null; status: string; scheduledAt: string }>) => ({
   id: "j",
@@ -118,5 +118,23 @@ describe("jobTechLabel", () => {
   test("not an offer: the technician's status, or Assigned when it's unknown", () => {
     expect(jobTechLabel({ assignStatus: "none", status: "assigned" }, "available").label).toBe("Available");
     expect(jobTechLabel({ assignStatus: "none", status: "assigned" }, undefined).label).toBe("Assigned");
+  });
+});
+
+describe("iPad job selection", () => {
+  test("keeps a selection that is still listed", () => {
+    expect(keepSelection("b", ["a", "b"])).toBe("b");
+  });
+
+  test("clears one that left the list, and never picks for the dispatcher", () => {
+    expect(keepSelection("c", ["a", "b"])).toBeNull();
+    expect(keepSelection(null, ["a", "b"])).toBeNull();
+    expect(keepSelection("a", [])).toBeNull();
+  });
+
+  test("tapping the open job closes the pane; another job switches to it", () => {
+    expect(toggleSelection("a", "a")).toBeNull();
+    expect(toggleSelection("a", "b")).toBe("b");
+    expect(toggleSelection(null, "a")).toBe("a");
   });
 });

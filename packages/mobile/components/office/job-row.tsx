@@ -1,5 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import { Warning } from "phosphor-react-native";
+import { Warning, ArrowsOut } from "phosphor-react-native";
 import { StatusBadge } from "../ui";
 import { C, R, S, fmtTime } from "../../lib/theme";
 import type { OfficeJob } from "../../lib/board";
@@ -14,12 +14,15 @@ export function JobRow({
   job,
   techName,
   onPress,
+  onOpenFull,
   actions,
   selected,
 }: {
   job: OfficeJob;
   techName: string;
   onPress?: () => void;
+  /** iPad: a button on the row that opens the job full screen instead of in the split view. */
+  onOpenFull?: () => void;
   actions?: React.ReactNode;
   /** The row open in an iPad split view's detail pane. */
   selected?: boolean;
@@ -67,12 +70,18 @@ export function JobRow({
         </View>
         {actions ? <View style={s.actions}>{actions}</View> : null}
       </View>
+      {onOpenFull ? (
+        <Pressable onPress={onOpenFull} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Open ${job.customerName || "job"} full screen`} style={s.full}>
+          <ArrowsOut color={C.sub} size={18} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
 
 const s = StyleSheet.create({
   row: { flexDirection: "row", gap: S.md, paddingVertical: S.md, borderBottomWidth: 1, borderBottomColor: C.border },
+  full: { alignSelf: "flex-start", padding: S.xs },
   selected: { backgroundColor: C.bg3, borderRadius: R.card, marginHorizontal: -S.sm, paddingHorizontal: S.sm, borderBottomColor: "transparent" },
   // Wide enough for "12:00 PM" at this weight; 64 wrapped it onto two lines.
   timeCol: { width: 76, alignItems: "flex-start" },

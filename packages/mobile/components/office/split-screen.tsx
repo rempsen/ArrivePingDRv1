@@ -12,10 +12,21 @@ import { useLayout } from "../../lib/use-layout";
  * `empty` when nothing is selected — including when the selection vanished
  * because the job was cancelled or the technician left the roster.
  */
-export function SplitScreen({ list, detail, empty }: { list: React.ReactNode; detail: React.ReactNode | null; empty: React.ReactNode }) {
+export function SplitScreen({
+  list,
+  detail,
+  empty,
+  collapseWhenEmpty,
+}: {
+  list: React.ReactNode;
+  detail: React.ReactNode | null;
+  empty: React.ReactNode;
+  /** With nothing selected, let the list take the whole width instead of showing `empty`. */
+  collapseWhenEmpty?: boolean;
+}) {
   const { wide } = useLayout();
   const insets = useSafeAreaInsets();
-  if (!wide) return <>{list}</>;
+  if (!wide || (collapseWhenEmpty && !detail)) return <>{list}</>;
   // The list's own header pads the top inset; the detail pane has none, so
   // it takes the inset here and its content starts level with the header.
   return (
