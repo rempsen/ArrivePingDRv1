@@ -14,6 +14,7 @@ import { Sheet } from "../../components/office/sheet";
 import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
+import { useManualRefresh } from "../../lib/use-manual-refresh";
 import { useLayout } from "../../lib/use-layout";
 import { useAccess } from "../../lib/use-access";
 import { LIST_PANE_W } from "../../lib/layout";
@@ -44,6 +45,7 @@ export default function Team() {
     router.setParams({ status: undefined, mode: undefined });
   }, [params.status, params.mode, router]);
   const board = useBoard(null);
+  const pull = useManualRefresh(() => board.refetch());
   const now = new Date();
   const { wide } = useLayout();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -156,7 +158,7 @@ export default function Team() {
           keyExtractor={(t) => t.id}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
           stickySectionHeadersEnabled={false}
-          refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => void board.refetch()} tintColor={C.brand} />}
+          refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={C.brand} />}
           renderSectionHeader={({ section }) => (
             <View style={s.head}>
               <View style={[s.dot, { backgroundColor: statusColor(section.key) }]} />

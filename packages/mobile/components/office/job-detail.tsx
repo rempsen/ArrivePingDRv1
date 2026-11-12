@@ -12,6 +12,7 @@ import { C, R, S, WIDE, fmtDate, fmtTime, money } from "../../lib/theme";
 import { parseLineItems, sumLineItems } from "../../lib/line-items";
 import { useAssign } from "./use-assign";
 import { useBooking, useCandidates } from "../../lib/use-booking";
+import { useManualRefresh } from "../../lib/use-manual-refresh";
 import { useBoard } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
 import { useDispatchActions } from "../../lib/use-dispatch-actions";
@@ -54,6 +55,7 @@ export function JobDetail({
   const insets = useSafeAreaInsets();
   const { can } = useAccess();
   const job = useBooking(id);
+  const pull = useManualRefresh(() => job.refetch());
   const board = useBoard(null);
   const actions = useDispatchActions();
   const [assignOpen, setAssignOpen] = useState(false);
@@ -313,7 +315,7 @@ export function JobDetail({
 
           <ScrollView
             contentContainerStyle={[s.content, !twoCol && WIDE]}
-            refreshControl={<RefreshControl refreshing={job.isFetching && !job.isLoading} onRefresh={() => void job.refetch()} tintColor={C.brand} />}
+            refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={C.brand} />}
           >
             {twoCol ? (
               <View style={s.cols}>
