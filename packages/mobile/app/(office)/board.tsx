@@ -352,7 +352,7 @@ export default function Board() {
             bottomPad={place.kind === "idle" ? 0 : 140}
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
             onTapCell={tapCell}
-            onOpenJob={(id) => router.push(`/office/job/${id}`)}
+            onOpenJob={(id) => router.navigate(`/office/job/${id}`)}
             onResize={can("work_orders:edit") ? resizeJob : undefined}
           />
           {board.data?.truncated ? <TruncatedNote /> : null}
@@ -366,7 +366,7 @@ export default function Board() {
             dragFor={dragFor}
             draggingId={dragging?.id ?? null}
             onArm={(job) => dispatch({ type: "arm", jobId: job.id })}
-            onOpenJob={(id) => router.push(`/office/job/${id}`)}
+            onOpenJob={(id) => router.navigate(`/office/job/${id}`)}
           />
         </View>
       )}

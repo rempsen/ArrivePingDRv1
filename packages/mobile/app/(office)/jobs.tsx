@@ -100,8 +100,8 @@ export default function Jobs() {
     setSelectedId((cur) => keepSelection(cur, shownIds));
   }, [shownIds]);
 
-  const open = (id: string) => (wide ? setSelectedId((cur) => toggleSelection(cur, id)) : router.push(`/office/job/${id}`));
-  const openFull = (id: string) => router.push(`/office/job/${id}`);
+  const open = (id: string) => (wide ? setSelectedId((cur) => toggleSelection(cur, id)) : router.navigate(`/office/job/${id}`));
+  const openFull = (id: string) => router.navigate(`/office/job/${id}`);
 
   const list = (
     <View style={s.screen}>
@@ -110,7 +110,7 @@ export default function Jobs() {
         right={
           can("work_orders:create") ? (
             <Pressable
-              onPress={() => router.push("/office/new-job")}
+              onPress={() => router.navigate("/office/new-job")}
               accessibilityRole="button"
               accessibilityLabel="New job"
               style={({ pressed }) => [s.fab, { opacity: pressed ? 0.8 : 1 }]}

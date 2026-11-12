@@ -52,7 +52,7 @@ export default function Team() {
   useEffect(() => {
     if (selectedId && board.data && !board.data.techs.some((t) => t.id === selectedId)) setSelectedId(null);
   }, [selectedId, board.data]);
-  const message = (techId: string) => router.push(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
+  const message = (techId: string) => router.navigate(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
   const [sel, setSel] = useState<MapSelection>(null);
   const { can } = useAccess();
   useEffect(() => {
@@ -195,11 +195,11 @@ export default function Team() {
     // job screen opens underneath it.
     const openJob = (id: string) => {
       setSel(null);
-      router.push(`/office/job/${id}`);
+      router.navigate(`/office/job/${id}`);
     };
     const assignJob = (id: string) => {
       setSel(null);
-      router.push({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
+      router.navigate({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
     };
     // Today's jobs only: the board also carries every waiting job whatever its date.
     const dayJobs = board.data ? onDay(jobs, board.data.day, board.data.tz) : jobs;
@@ -260,7 +260,7 @@ export default function Team() {
   return (
     <SplitScreen
       list={list}
-      detail={selectedId ? <TechDetail techId={selectedId} onMessage={message} onOpenJob={(id) => router.push(`/office/job/${id}`)} /> : null}
+      detail={selectedId ? <TechDetail techId={selectedId} onMessage={message} onOpenJob={(id) => router.navigate(`/office/job/${id}`)} /> : null}
       empty={<EmptyPane icon={<UsersThree color={C.muted} size={32} />} text="Pick a technician" sub="Their day and the ways to reach them open here." />}
     />
   );

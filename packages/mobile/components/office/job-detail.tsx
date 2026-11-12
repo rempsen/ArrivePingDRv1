@@ -227,7 +227,7 @@ export function JobDetail({
             </Text>
           </View>
           <Pressable
-            onPress={() => (onMessageTech ? onMessageTech(b.riderId!) : router.push(`/office/thread/${b.riderId}`))}
+            onPress={() => (onMessageTech ? onMessageTech(b.riderId!) : router.navigate(`/office/thread/${b.riderId}`))}
             accessibilityRole="button"
             accessibilityLabel={`Message ${techName}`}
             style={s.iconBtn}
@@ -316,7 +316,7 @@ export function JobDetail({
             <View style={s.quick}>
               {phone ? <QuickBtn label={`Call ${label}`} onPress={() => Linking.openURL(`tel:${phone}`)} icon={<Phone color={C.text} size={18} />} /> : null}
               {b.customer?.email ? <QuickBtn label={`Email ${label}`} onPress={() => Linking.openURL(`mailto:${b.customer!.email}`)} icon={<Envelope color={C.text} size={18} />} /> : null}
-              {canEdit ? <QuickBtn label="Edit job" onPress={() => router.push(`/office/edit-job/${b.id}`)} icon={<PencilSimple color={C.text} size={18} />} /> : null}
+              {canEdit ? <QuickBtn label="Edit job" onPress={() => router.navigate(`/office/edit-job/${b.id}`)} icon={<PencilSimple color={C.text} size={18} />} /> : null}
               <QuickBtn label="More" onPress={more} icon={<DotsThree color={C.text} size={20} weight="bold" />} />
             </View>
           </View>
