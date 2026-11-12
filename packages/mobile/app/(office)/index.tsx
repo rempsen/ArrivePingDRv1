@@ -14,7 +14,7 @@ import { useStreamHealthy } from "../../lib/use-dispatch-stream";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { onDay } from "../../lib/map-pins";
-import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
+import { TEAM_ALL, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, teamStatusFor, upNext, type Need } from "../../lib/today";
 import { instantFor, jobMinutes, minLabel } from "../../lib/timeline";
 import { partsIn } from "../../lib/when";
 
@@ -222,12 +222,14 @@ export default function Today() {
   const crewCard = (
     <View style={[s.card, s.crewCard]}>
       <View style={{ width: wide ? 110 : undefined }}>
-        <Text style={s.cardTitle}>{wrapped ? "Crew" : "Crew now"}</Text>
+        <Pressable onPress={() => team(TEAM_ALL)} accessibilityRole="button" accessibilityLabel="Show the whole crew" hitSlop={8}>
+          <Text style={s.cardTitle}>{wrapped ? "Crew" : "Crew now"} ›</Text>
+        </Pressable>
         <Text style={s.cardNote}>
           {techs.length} on roster{preview && wrapped ? ` · ${preview.tomorrow.onRoster} tomorrow` : ""}
         </Text>
       </View>
-      <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={team} /> : <Text style={s.cardNote}>No {noun} yet.</Text>}</View>
+      <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={(key) => team(teamStatusFor(key))} /> : <Text style={s.cardNote}>No {noun} yet.</Text>}</View>
     </View>
   );
 

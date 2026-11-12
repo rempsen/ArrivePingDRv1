@@ -17,6 +17,7 @@ import { useBoard } from "../../lib/use-board";
 import { useLayout } from "../../lib/use-layout";
 import { useAccess } from "../../lib/use-access";
 import { LIST_PANE_W } from "../../lib/layout";
+import { TEAM_ALL } from "../../lib/today";
 import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "../../lib/board";
 
 /**
@@ -35,7 +36,7 @@ export default function Team() {
   // picked last.
   useEffect(() => {
     if (!params.status) return;
-    setFilter(params.status);
+    setFilter(params.status === TEAM_ALL ? null : params.status);
     router.setParams({ status: undefined });
   }, [params.status, router]);
   const board = useBoard(null);
