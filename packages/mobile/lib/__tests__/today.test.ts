@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext } from "../today";
+import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, teamStatusFor, TEAM_ALL, upNext } from "../today";
 import type { OfficeTech } from "../board";
 
 const TZ = "America/Winnipeg"; // UTC-5 in late October (CDT)
@@ -200,5 +200,18 @@ describe("revenueOf", () => {
     expect(moneyShort(4200)).toBe("$4.2k");
     expect(moneyShort(4000)).toBe("$4k");
     expect(moneyShort(12_400)).toBe("$12k");
+  });
+});
+
+describe("teamStatusFor", () => {
+  test("Available and Off shift open the whole crew", () => {
+    expect(teamStatusFor("available")).toBe(TEAM_ALL);
+    expect(teamStatusFor("offline")).toBe(TEAM_ALL);
+  });
+
+  test("the busier groups keep their own filter", () => {
+    expect(teamStatusFor("enroute")).toBe("enroute");
+    expect(teamStatusFor("onsite")).toBe("onsite");
+    expect(teamStatusFor("busy")).toBe("busy");
   });
 });
