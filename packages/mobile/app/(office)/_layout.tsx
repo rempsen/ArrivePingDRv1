@@ -57,6 +57,8 @@ export default function OfficeLayout() {
   return (
     <>
       <Tabs
+        // The job, thread and form screens below are hidden tabs, so back returns to where you were.
+        backBehavior="history"
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: C.brand,
@@ -115,6 +117,10 @@ export default function OfficeLayout() {
             tabBarIcon: ({ color, focused }) => <UsersThree color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
+        {/* Full-screen job, thread and the job forms: part of the tabs so the tab bar never disappears. */}
+        {["office/job/[id]", "office/thread/[techId]", "office/new-job", "office/edit-job/[id]"].map((name) => (
+          <Tabs.Screen key={name} name={name} options={{ href: null }} />
+        ))}
       </Tabs>
       <UndoToastHost />
     </>

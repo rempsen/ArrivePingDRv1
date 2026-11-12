@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Linking, RefreshControl, ActivityIndicator } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { ArrowLeft, X, Phone, MapPin, ChatCircleDots, ChatText, UserSwitch, CalendarBlank, Warning, Envelope, PencilSimple, DotsThree } from "phosphor-react-native";
 import { Avatar, Button, Card, Empty, FullLoader, StatusBadge } from "../ui";
@@ -54,7 +54,6 @@ export function JobDetail({
   onMessageTech?: (techId: string) => void;
 }) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { can } = useAccess();
   const job = useBooking(id);
   const board = useBoard(null);
@@ -348,7 +347,7 @@ export function JobDetail({
 
           {/* Fixed action bar: the next thing a dispatcher does with this job. */}
           {!done && (canEdit || canMove || phone) ? (
-            <View style={[s.bar, { paddingBottom: S.md + (embedded ? 0 : insets.bottom) }]}>
+            <View style={[s.bar, { paddingBottom: S.md }]}>
               {canEdit ? (
                 <Button
                   title={techName ? "Reassign" : "Assign a technician"}

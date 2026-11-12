@@ -5,20 +5,20 @@ import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { X, User, Wrench, MapPin, Clock, UserCircle, Lightning } from "phosphor-react-native";
-import { Button } from "../../components/ui";
-import { ClientSheet, ServiceSheet, AddressSheet, TechSheet, Field } from "../../components/office/pickers";
-import { DatetimeSheet } from "../../components/office/datetime-sheet";
-import { PickCard } from "../../components/office/pick-card";
-import { showToast } from "../../components/office/undo-toast";
-import { C, R, S, WIDE } from "../../lib/theme";
-import { useAndroidBottomInset } from "../../lib/bottom-inset";
-import { authHeaders } from "../../lib/auth";
-import { getActiveCompany } from "../../lib/active-company";
-import { useBoard } from "../../lib/use-board";
-import { useServices, type ServiceRow } from "../../lib/use-lookups";
-import { classifyResponse } from "../../lib/dispatch-result";
-import { buildAdminBooking, EMPTY_DRAFT, type DraftErrors, type NewJobDraft, type Priority } from "../../lib/new-job";
-import { asap, fmtInTz } from "../../lib/when";
+import { FocusOnly } from "../../../components/office/focus-only";
+import { Button } from "../../../components/ui";
+import { ClientSheet, ServiceSheet, AddressSheet, TechSheet, Field } from "../../../components/office/pickers";
+import { DatetimeSheet } from "../../../components/office/datetime-sheet";
+import { PickCard } from "../../../components/office/pick-card";
+import { showToast } from "../../../components/office/undo-toast";
+import { C, R, S, WIDE } from "../../../lib/theme";
+import { authHeaders } from "../../../lib/auth";
+import { getActiveCompany } from "../../../lib/active-company";
+import { useBoard } from "../../../lib/use-board";
+import { useServices, type ServiceRow } from "../../../lib/use-lookups";
+import { classifyResponse } from "../../../lib/dispatch-result";
+import { buildAdminBooking, EMPTY_DRAFT, type DraftErrors, type NewJobDraft, type Priority } from "../../../lib/new-job";
+import { asap, fmtInTz } from "../../../lib/when";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const PRIORITIES: Array<{ key: Priority; label: string; color: string }> = [
@@ -34,9 +34,7 @@ const PRIORITIES: Array<{ key: Priority; label: string; color: string }> = [
  * each opening a sheet. Pricing, custom fields and forms stay on the web;
  * the job can be finished there afterwards.
  */
-export default function NewJob() {
-  // Lets the last control scroll clear of Android's navigation bar (lib/bottom-inset-core.ts).
-  const navInset = useAndroidBottomInset();
+function NewJobScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const board = useBoard(null);
@@ -116,7 +114,7 @@ export default function NewJob() {
         </Pressable>
       </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl * 2 + navInset }]} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl * 2 }]} keyboardShouldPersistTaps="handled">
           <PickCard
             icon={<User color={C.brand} size={20} weight="fill" />}
             label="Client"
@@ -243,3 +241,12 @@ const s = StyleSheet.create({
   prioTxt: { color: C.sub, fontSize: 12, fontWeight: "800" },
   foot: { color: C.muted, fontSize: 12, textAlign: "center", lineHeight: 17, marginTop: S.sm },
 });
+
+/** A hidden tab of the office tabs (the tab bar stays visible); unmounts when left, so a new job always opens blank. */
+export default function NewJob() {
+  return (
+    <FocusOnly>
+      <NewJobScreen />
+    </FocusOnly>
+  );
+}
