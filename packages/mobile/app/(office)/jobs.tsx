@@ -10,6 +10,7 @@ import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
 import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard, useDayLoad } from "../../lib/use-board";
+import { useManualRefresh } from "../../lib/use-manual-refresh";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
 import { addDays, bucketOf, NO_JOBS, NO_TECHS, type JobBucket } from "../../lib/board";
@@ -37,6 +38,7 @@ export default function Jobs() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const board = useBoard(day);
+  const pull = useManualRefresh(() => board.refetch());
   // "Today" on the company's clock, learned from the first (day-less) read and
   // kept while the dispatcher browses other days.
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -166,7 +168,7 @@ export default function Jobs() {
           data={shown}
           keyExtractor={(j) => j.id}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
-          refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => void board.refetch()} tintColor={C.brand} />}
+          refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={C.brand} />}
           renderItem={({ item }) => <JobRow job={item} techName={techName(item.riderId)} selected={wide && item.id === selectedId} onPress={() => open(item.id)} />}
           ListEmptyComponent={
             <Empty

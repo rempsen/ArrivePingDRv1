@@ -11,6 +11,7 @@ import { authHeaders } from "../../lib/auth";
 import { useAccess } from "../../lib/use-access";
 import { C, R, S, WIDE } from "../../lib/theme";
 import { useDispatchThreads } from "../../lib/use-threads";
+import { useManualRefresh } from "../../lib/use-manual-refresh";
 import { statusColor } from "../../components/office/tech-row";
 import { ThreadView } from "../../components/office/thread-view";
 import { SplitScreen, EmptyPane } from "../../components/office/split-screen";
@@ -36,6 +37,7 @@ function ago(iso: string | null): string {
 export default function Messages() {
   const router = useRouter();
   const inbox = useDispatchThreads();
+  const pull = useManualRefresh(() => inbox.refetch());
   const { wide } = useLayout();
   const { techId: wanted, broadcast } = useLocalSearchParams<{ techId?: string; broadcast?: string }>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -131,7 +133,7 @@ export default function Messages() {
           data={shown}
           keyExtractor={(t) => t.techId}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
-          refreshControl={<RefreshControl refreshing={inbox.isFetching && !inbox.isLoading} onRefresh={() => void inbox.refetch()} tintColor={C.brand} />}
+          refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} tintColor={C.brand} />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => open(item.techId)}

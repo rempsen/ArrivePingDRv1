@@ -11,6 +11,7 @@ import { useBoard } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
 import { useStreamHealthy } from "../../lib/use-dispatch-stream";
+import { useManualRefresh } from "../../lib/use-manual-refresh";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { onDay } from "../../lib/map-pins";
@@ -56,6 +57,12 @@ export default function Today() {
   const tomorrow = today ? addDays(today, 1) : null;
   // The next six days: tomorrow's preview and "N more unassigned this week".
   const ahead = useBoard(tomorrow, !!tomorrow, 6);
+  // The spinner is for a pull only; the live feed and polling refresh quietly.
+  const pull = useManualRefresh(() => {
+    setNow(new Date());
+    void ahead.refetch();
+    return board.refetch();
+  });
   const noun = board.data?.workerNoun ?? "technicians";
   const one = noun.replace(/s$/, "");
 
@@ -291,12 +298,8 @@ export default function Today() {
         contentContainerStyle={[s.content, { maxWidth: wide ? 1180 : 760 }]}
         refreshControl={
           <RefreshControl
-            refreshing={board.isFetching && !board.isLoading}
-            onRefresh={() => {
-              setNow(new Date());
-              void ahead.refetch();
-              return board.refetch().then(() => undefined);
-            }}
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
             tintColor={C.brand}
           />
         }
