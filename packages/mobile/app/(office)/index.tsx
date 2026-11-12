@@ -92,9 +92,9 @@ export default function Today() {
   const byTech = useMemo(() => new Map([...techs, ...(ahead.data?.techs ?? [])].map((t) => [t.id, t])), [techs, ahead.data]);
 
   // ------------------------------------------------------------ navigation --
-  const openJob = (id: string) => router.push(`/office/job/${id}`);
-  const assign = (id: string) => router.push({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
-  const message = (techId: string) => router.push(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
+  const openJob = (id: string) => router.navigate(`/office/job/${id}`);
+  const assign = (id: string) => router.navigate({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
+  const message = (techId: string) => router.navigate(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
   const jobsAt = (bucket: string, day?: string | null) => router.push({ pathname: "/(office)/jobs", params: { bucket, ...(day ? { day, anchor: today ?? "" } : {}) } });
   const team = (status: string) => router.push({ pathname: "/(office)/team", params: { status } });
   const plan = (day: string | null, view: "day" | "week") =>
@@ -280,7 +280,7 @@ export default function Today() {
       </View>
       {canEdit ? <QuickButton label="Broadcast" wide={wide} icon={<Megaphone color={C.text} size={18} />} onPress={() => router.push({ pathname: "/(office)/messages", params: { broadcast: "1" } })} /> : null}
       <QuickButton label="Map" wide={wide} icon={<MapPin color={C.text} size={18} />} onPress={() => router.push({ pathname: "/(office)/team", params: { mode: "map" } })} />
-      {canCreate ? <QuickButton label="New job" primary wide={wide} icon={<Plus color="#04121c" size={18} weight="bold" />} onPress={() => router.push("/office/new-job")} /> : null}
+      {canCreate ? <QuickButton label="New job" primary wide={wide} icon={<Plus color="#04121c" size={18} weight="bold" />} onPress={() => router.navigate("/office/new-job")} /> : null}
     </View>
   );
 

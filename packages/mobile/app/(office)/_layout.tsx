@@ -117,9 +117,11 @@ export default function OfficeLayout() {
             tabBarIcon: ({ color, focused }) => <UsersThree color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
           }}
         />
-        {/* Full-screen job, thread and the job forms: part of the tabs so the tab bar never disappears. */}
+        {/* Full-screen job, thread and the job forms: part of the tabs so the tab bar never disappears.
+            Not `href: null`: expo-router marks that tab hidden and redirects away when you navigate
+            to it. Instead the screen stays navigable and just draws no button in the tab bar. */}
         {["office/job/[id]", "office/thread/[techId]", "office/new-job", "office/edit-job/[id]"].map((name) => (
-          <Tabs.Screen key={name} name={name} options={{ href: null }} />
+          <Tabs.Screen key={name} name={name} options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }} />
         ))}
       </Tabs>
       <UndoToastHost />
