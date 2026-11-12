@@ -1,44 +1,36 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView from "react-native-maps";
 import { ArrowsOutCardinal, Eye, EyeSlash } from "phosphor-react-native";
-import { C, R, S } from "../../lib/theme";
+import { C, R, S, initials } from "../../lib/theme";
 import type { OfficeJob, OfficeTech } from "../../lib/board";
 import { fitRegion, visibleJobs, visibleTechs, type PinKind } from "../../lib/map-pins";
+import { statusColor } from "./tech-row";
 
 const PIN_COLOR: Record<PinKind, string> = { unassigned: C.red, offered: C.amber, active: C.green, scheduled: C.brand };
 const PIN_LABEL: Record<PinKind, string> = { unassigned: "Unassigned", offered: "Offered", active: "In the field", scheduled: "Scheduled" };
 
-/**
- * Markers are the map's own pins (jobs, tinted by `pinColor`) and small
- * pre-rendered discs (technicians, one per status). Under the New
- * Architecture react-native-maps loses custom <View> marker children after a
- * pan or zoom (react-native-maps #5911 / #5877), which on a dispatch map means
- * jobs and people silently vanishing, so nothing here renders a child view.
- * The technician's initials moved to the selection card; the disc carries the
- * status colour, and a selected disc inverts (white ring, status dot).
- */
-type TechPinStatus = "enroute" | "onsite" | "available" | "busy" | "offline";
-const TECH_PIN: Record<TechPinStatus, { off: number; on: number }> = {
-  enroute: { off: require("../../assets/map/tech-enroute.png"), on: require("../../assets/map/tech-enroute-on.png") },
-  onsite: { off: require("../../assets/map/tech-onsite.png"), on: require("../../assets/map/tech-onsite-on.png") },
-  available: { off: require("../../assets/map/tech-available.png"), on: require("../../assets/map/tech-available-on.png") },
-  busy: { off: require("../../assets/map/tech-busy.png"), on: require("../../assets/map/tech-busy-on.png") },
-  offline: { off: require("../../assets/map/tech-offline.png"), on: require("../../assets/map/tech-offline-on.png") },
-};
-function techPinStatus(status: string): TechPinStatus {
-  if (status === "break") return "busy";
-  return status in TECH_PIN ? (status as TechPinStatus) : "offline";
-}
+const TECH_SIZE = 32;
+const JOB_SIZE = 20;
+/** Pins this far outside the visible map are skipped. */
+const EDGE = 48;
 
 export type MapSelection = { kind: "tech" | "job"; id: string } | null;
 
+type Pin = { key: string; kind: "tech" | "job"; id: string; lat: number; lng: number };
+
 /**
  * Everyone and everything with a position, on Apple Maps: technicians as
- * initials in a status-coloured ring, open jobs as pins coloured by who has
+ * initials in a status-coloured disc, open jobs as dots coloured by who has
  * them. Positions come from the board the tab already holds, which the
- * dispatch stream's `locations` event keeps fresh. Tapping a marker selects
- * it; tapping the map clears the selection.
+ * dispatch stream's `locations` event keeps fresh. Tapping a pin selects it;
+ * tapping the map clears the selection.
+ *
+ * The pins are ordinary views laid over the map, placed with the map's own
+ * `pointForCoordinate`, not native <Marker>s. With the New Architecture on iOS
+ * (react-native-maps 1.29 + React Native 0.88) markers did not draw at all on
+ * the iPad (custom images: #5912; markers lost after the screen is hidden:
+ * #6053; child views: #5911 / #5971). Views can't be lost that way.
  */
 export function LiveMap({
   techs,
@@ -54,7 +46,8 @@ export function LiveMap({
   onSelect: (sel: MapSelection) => void;
 }) {
   const ref = useRef<MapView>(null);
-  const [showOffline, setShowOffline] = useState(false);
+  // Off-shift technicians show too (dimmed), as on the web map; the eye button hides them.
+  const [showOffline, setShowOffline] = useState(true);
   const techPins = useMemo(() => visibleTechs(techs, showOffline), [techs, showOffline]);
   const jobPins = useMemo(() => visibleJobs(jobs), [jobs]);
   const fit = () => ref.current?.animateToRegion(fitRegion([...techPins, ...jobPins], office), 400);
@@ -67,8 +60,53 @@ export function LiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when pins exist
   }, [techPins.length, jobPins.length]);
 
+  const pins = useMemo<Pin[]>(
+    () => [
+      ...jobPins.map((j) => ({ key: `job-${j.id}`, kind: "job" as const, id: j.id, lat: j.lat!, lng: j.lng! })),
+      ...techPins.map((t) => ({ key: `tech-${t.id}`, kind: "tech" as const, id: t.id, lat: t.lat!, lng: t.lng! })),
+    ],
+    [jobPins, techPins],
+  );
+
+  // Screen position of every pin, asked of the map so it always agrees with the tiles.
+  const [pts, setPts] = useState<Record<string, { x: number; y: number }>>({});
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const pinsRef = useRef(pins);
+  pinsRef.current = pins;
+  const busy = useRef(false);
+  const again = useRef(false);
+  const place = useCallback(() => {
+    const map = ref.current;
+    if (!map) return;
+    if (busy.current) {
+      again.current = true;
+      return;
+    }
+    busy.current = true;
+    Promise.all(
+      pinsRef.current.map((p) => map.pointForCoordinate({ latitude: p.lat, longitude: p.lng }).then((pt) => [p.key, pt] as const)),
+    )
+      .then((rows) => setPts(Object.fromEntries(rows)))
+      .catch(() => {})
+      .finally(() => {
+        busy.current = false;
+        if (again.current) {
+          again.current = false;
+          place();
+        }
+      });
+  }, []);
+  // New positions (a technician moved, a job appeared): place them again.
+  const signature = pins.map((p) => `${p.key}:${p.lat},${p.lng}`).join("|");
+  useEffect(() => {
+    place();
+  }, [signature, place]);
+
+  const techById = useMemo(() => new Map(techs.map((t) => [t.id, t])), [techs]);
+  const jobById = useMemo(() => new Map(jobPins.map((j) => [j.id, j])), [jobPins]);
+
   return (
-    <View style={s.wrap}>
+    <View style={s.wrap} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
       <MapView
         ref={ref}
         style={StyleSheet.absoluteFill}
@@ -76,45 +114,55 @@ export function LiveMap({
         userInterfaceStyle="dark"
         showsPointsOfInterests={false}
         showsCompass={false}
+        onMapReady={place}
+        onRegionChange={place}
+        onRegionChangeComplete={place}
         onPress={() => onSelect(null)}
         accessibilityLabel="Live map of technicians and jobs"
-      >
-        {jobPins.map((j) => {
-          const on = selected?.kind === "job" && selected.id === j.id;
+      />
+
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        {pins.map((p) => {
+          const pt = pts[p.key];
+          if (!pt || pt.x < -EDGE || pt.y < -EDGE || pt.x > size.w + EDGE || pt.y > size.h + EDGE) return null;
+          if (p.kind === "job") {
+            const j = jobById.get(p.id);
+            if (!j) return null;
+            const on = selected?.kind === "job" && selected.id === p.id;
+            return (
+              <Pressable
+                key={p.key}
+                onPress={() => onSelect({ kind: "job", id: p.id })}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`${j.customerName || j.title}, ${PIN_LABEL[j.kind]}`}
+                style={[s.job, { left: pt.x - JOB_SIZE / 2, top: pt.y - JOB_SIZE / 2, backgroundColor: on ? C.text : PIN_COLOR[j.kind], borderColor: on ? PIN_COLOR[j.kind] : "#fff" }]}
+              />
+            );
+          }
+          const t = techById.get(p.id);
+          if (!t) return null;
+          const on = selected?.kind === "tech" && selected.id === p.id;
+          const col = statusColor(t.status === "break" ? "busy" : t.status);
           return (
-            <Marker
-              key={`job-${j.id}`}
-              coordinate={{ latitude: j.lat!, longitude: j.lng! }}
-              onPress={(e) => {
-                e.stopPropagation();
-                onSelect({ kind: "job", id: j.id });
-              }}
-              pinColor={on ? C.text : PIN_COLOR[j.kind]}
-              accessibilityLabel={`${j.customerName || j.title}, ${PIN_LABEL[j.kind]}`}
-            />
-          );
-        })}
-        {techPins.map((t) => {
-          const on = selected?.kind === "tech" && selected.id === t.id;
-          const pin = TECH_PIN[techPinStatus(t.status)];
-          return (
-            <Marker
-              key={`tech-${t.id}`}
-              coordinate={{ latitude: t.lat!, longitude: t.lng! }}
-              onPress={(e) => {
-                e.stopPropagation();
-                onSelect({ kind: "tech", id: t.id });
-              }}
-              image={on ? pin.on : pin.off}
-              anchor={{ x: 0.5, y: 0.5 }}
-              centerOffset={{ x: 0, y: 0 }}
-              opacity={t.stale ? 0.6 : 1}
-              zIndex={2}
+            <Pressable
+              key={p.key}
+              onPress={() => onSelect({ kind: "tech", id: p.id })}
+              hitSlop={8}
+              accessibilityRole="button"
               accessibilityLabel={`${t.name}, ${t.status}`}
-            />
+              style={[
+                s.tech,
+                { left: pt.x - TECH_SIZE / 2, top: pt.y - TECH_SIZE / 2, backgroundColor: on ? "#fff" : col, borderColor: on ? col : "#fff", opacity: t.status === "offline" || t.stale ? 0.6 : 1 },
+              ]}
+            >
+              <Text style={[s.techTxt, on && { color: col }]} allowFontScaling={false}>
+                {initials(t.name)}
+              </Text>
+            </Pressable>
           );
         })}
-      </MapView>
+      </View>
 
       <View style={s.controls}>
         <Pressable onPress={fit} accessibilityRole="button" accessibilityLabel="Fit everyone on screen" style={s.ctl}>
@@ -144,6 +192,9 @@ export function LiveMap({
 }
 
 const s = StyleSheet.create({
+  tech: { position: "absolute", width: TECH_SIZE, height: TECH_SIZE, borderRadius: TECH_SIZE / 2, borderWidth: 2, alignItems: "center", justifyContent: "center", zIndex: 2 },
+  techTxt: { color: "#04121c", fontSize: 11, fontWeight: "800" },
+  job: { position: "absolute", width: JOB_SIZE, height: JOB_SIZE, borderRadius: JOB_SIZE / 2, borderWidth: 2, zIndex: 1 },
   wrap: { flex: 1, backgroundColor: C.bg },
   // Top-left: the iPad selection card sits down the right edge.
   controls: { position: "absolute", top: S.md, left: S.md, gap: S.sm },
