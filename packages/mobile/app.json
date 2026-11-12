@@ -67,7 +67,7 @@
     "name": "ArrivePing",
     "slug": "nvc360v4",
     "owner": "nvc360",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "scheme": [
       "arriveping",
       "homeserve"
