@@ -109,7 +109,7 @@ export const entries: KbEntry[] = [
       { label: "Up next", does: "Assigned {jobs} starting in the next 2 hours (or the next few if none), each with the {worker} and On time, ETA N min, On the way, Not on shift, Free ~time, Finishing a job or Unconfirmed. Tap to open." },
       { label: "Plan tomorrow ›", does: "On the Tomorrow card after the day is wrapped. On iPad opens Board in Day view on tomorrow; on a phone opens Jobs → Unassigned for tomorrow." },
       { label: "Tomorrow tiles", does: "Jobs, On roster, Unassigned, Unconfirmed for tomorrow, with the first start time and who is off. Each opens the matching list." },
-      { label: "Dismiss", does: "Closes the one-time \"Dispatch from your phone\" intro card for good on this device." },
+      { label: "Dismiss", does: "Closes the one-time \"Dispatch from your device\" intro card for good on this device." },
     ],
     tasks: [
       {
