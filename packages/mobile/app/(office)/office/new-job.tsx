@@ -89,7 +89,7 @@ function NewJobScreen() {
     if (r.ok) {
       qc.invalidateQueries({ queryKey: ["board", getActiveCompany()] });
       showToast(tech ? `Created and sent to ${tech.name}` : "Created — waiting for a technician");
-      router.replace(`/office/job/${r.job.id}`);
+      router.navigate(`/office/job/${r.job.id}`);
       return;
     }
     if (r.forceable) {

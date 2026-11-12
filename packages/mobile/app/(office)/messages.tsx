@@ -44,11 +44,11 @@ export default function Messages() {
   useEffect(() => {
     if (!wanted) return;
     if (wide) setSelectedId(wanted);
-    else router.push(`/office/thread/${wanted}`);
+    else router.navigate(`/office/thread/${wanted}`);
     // The param is a one-shot request; clear it so a later tab tap doesn't replay it.
     router.setParams({ techId: undefined });
   }, [wanted, wide, router]);
-  const open = (techId: string) => (wide ? setSelectedId(techId) : router.push(`/office/thread/${techId}`));
+  const open = (techId: string) => (wide ? setSelectedId(techId) : router.navigate(`/office/thread/${techId}`));
   // Reading threads needs work_orders:view; sending (broadcast, replies)
   // is a POST on /api/messages and needs work_orders:edit (office-access.ts).
   const { can } = useAccess();
