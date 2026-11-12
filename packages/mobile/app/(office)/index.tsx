@@ -325,10 +325,11 @@ export default function Today() {
               </>
             )}
             {board.data?.truncated ? <Text style={s.note}>Showing the first {jobs.length} jobs. Open the web console for the full day.</Text> : null}
-            <OfficeIntroCard />
           </>
         )}
       </ScrollView>
+      {/* Pinned above the tab bar, not at the end of the scroll, so it is hard to miss. */}
+      {!board.isLoading && !board.isError ? <OfficeIntroCard maxWidth={wide ? 1180 : 760} /> : null}
     </View>
   );
 }

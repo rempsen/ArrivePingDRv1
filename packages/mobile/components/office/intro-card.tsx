@@ -33,17 +33,20 @@ async function markSeen(): Promise<void> {
  * First run of office mode on this device: three lines on what the tabs do,
  * dismissed once. Lighter than the technician coach tour (which walks a
  * practice job) because an office user already knows the console.
+ *
+ * Today pins it just above the tab bar (outside the scrolling content) so it
+ * can't be missed; `maxWidth` keeps it as wide as the content above it.
  */
-export function OfficeIntroCard() {
+export function OfficeIntroCard({ maxWidth }: { maxWidth?: number } = {}) {
   const [show, setShow] = useState(false);
   useEffect(() => {
     seen().then((s) => setShow(!s));
   }, []);
   if (!show) return null;
-  return (
-    <View style={s.card} accessibilityRole="summary">
+  const card = (
+    <View style={[s.card, maxWidth ? s.cardPinned : null, maxWidth ? { maxWidth } : null]} accessibilityRole="summary">
       <View style={s.head}>
-        <Text style={s.title}>Dispatch from your phone</Text>
+        <Text style={s.title}>Dispatch from your device</Text>
         <Pressable
           onPress={() => {
             setShow(false);
@@ -61,6 +64,7 @@ export function OfficeIntroCard() {
       <Line icon={<ChatCircleDots color={C.brand} size={16} weight="fill" />} text="Messages is your inbox with every technician. The megaphone sends one note to the whole team." />
     </View>
   );
+  return maxWidth ? <View style={s.pin}>{card}</View> : card;
 }
 
 function Line({ icon, text }: { icon: React.ReactNode; text: string }) {
@@ -74,6 +78,8 @@ function Line({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 const s = StyleSheet.create({
   card: { backgroundColor: "rgba(14,165,233,0.10)", borderColor: "rgba(14,165,233,0.35)", borderWidth: 1, borderRadius: R.card, padding: S.lg, gap: S.sm, marginBottom: S.lg },
+  pin: { paddingHorizontal: S.lg, paddingBottom: S.sm, alignItems: "center" },
+  cardPinned: { width: "100%", marginBottom: 0 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { color: C.text, fontSize: 15, fontWeight: "800" },
   line: { flexDirection: "row", alignItems: "flex-start", gap: S.sm },
