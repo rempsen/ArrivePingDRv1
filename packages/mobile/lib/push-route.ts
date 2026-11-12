@@ -19,3 +19,13 @@ export function routeForNotification(data: PushData | undefined, mode: "field" |
   if (data.type === "direct_message" || data.type === "broadcast_message") return "/(rider)/messages";
   return null;
 }
+
+/**
+ * How to open a route from a tapped notification. The office job, thread and
+ * form screens and the office tabs live inside the (office) tab navigator,
+ * which focuses a screen with `navigate`; `push` is a stack action. Field
+ * screens are root-Stack screens and still push.
+ */
+export function openActionFor(path: string): "navigate" | "push" {
+  return /^\/(office\/(job|thread|new-job|edit-job)(\/|$)|\(office\)\/)/.test(path) ? "navigate" : "push";
+}
