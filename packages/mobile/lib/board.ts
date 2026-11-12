@@ -174,3 +174,21 @@ export const STATUS_LABEL: Record<string, string> = {
   break: "On break",
   offline: "Off shift",
 };
+
+/** Job statuses before the technician has set out. */
+const NOT_STARTED = ["pending", "confirmed", "assigned"];
+
+/**
+ * What the Technician card on a job says about its technician, and which
+ * status key picks the dot colour. A technician who has accepted but not yet
+ * set out is "Busy" on the Team list (presence), which reads wrong on the job
+ * itself, so there it says "Accepted" until they're on the way.
+ */
+export function jobTechLabel(
+  job: Pick<OfficeJob, "assignStatus" | "status">,
+  techStatus?: string | null,
+): { label: string; key: string } {
+  if (job.assignStatus === "offered") return { label: "Offered, waiting to accept", key: techStatus ?? "offline" };
+  if (job.assignStatus === "accepted" && NOT_STARTED.includes(job.status)) return { label: "Accepted", key: "accepted" };
+  return { label: STATUS_LABEL[techStatus ?? ""] ?? "Assigned", key: techStatus ?? "offline" };
+}

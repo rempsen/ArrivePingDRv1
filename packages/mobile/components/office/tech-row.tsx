@@ -11,6 +11,8 @@ const DOT: Record<string, string> = {
   busy: C.amber,
   break: C.amber,
   offline: C.muted,
+  /** A job whose technician has accepted but not set out yet (job screen only). */
+  accepted: C.brand,
 };
 
 export function statusColor(status: string): string {

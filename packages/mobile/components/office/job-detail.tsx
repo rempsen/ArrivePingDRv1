@@ -16,7 +16,7 @@ import { useBoard } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
 import { useDispatchActions } from "../../lib/use-dispatch-actions";
 import { webUrl } from "../../lib/office-nav";
-import { STATUS_LABEL, TERMINAL, type OfficeTech } from "../../lib/board";
+import { TERMINAL, jobTechLabel, type OfficeTech } from "../../lib/board";
 import { fmtInTz } from "../../lib/when";
 
 const PRIORITY_LABEL: Record<string, string> = { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" };
@@ -205,6 +205,7 @@ export function JobDetail({
       </Card>
     ) : null;
 
+  const techLine = b ? jobTechLabel(b, tech?.status ?? b.rider?.status) : null;
   const techCard = b ? (
     <Card style={unassigned && !done ? s.needsTech : undefined}>
       <Text style={s.cardTitle}>Technician</Text>
@@ -212,12 +213,12 @@ export function JobDetail({
         <View style={s.techRow}>
           <View>
             <Avatar name={techName} photoUrl={b.rider?.photoUrl ?? tech?.photoUrl} color={b.rider?.color ?? tech?.color} size={44} />
-            <View style={[s.dot, { backgroundColor: statusColor(tech?.status ?? b.rider?.status ?? "offline") }]} />
+            <View style={[s.dot, { backgroundColor: statusColor(techLine?.key ?? "offline") }]} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.big}>{techName}</Text>
             <Text style={s.dim}>
-              {b.assignStatus === "offered" ? "Offered, waiting to accept" : (STATUS_LABEL[tech?.status ?? ""] ?? "Assigned")}
+              {techLine?.label}
               {tech?.freeAt && tech.currentJobId !== b.id ? ` · free ~${fmtTime(tech.freeAt)}` : ""}
             </Text>
           </View>
