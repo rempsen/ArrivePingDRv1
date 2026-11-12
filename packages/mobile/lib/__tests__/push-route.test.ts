@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { routeForNotification } from "../push-route";
+import { openActionFor, routeForNotification } from "../push-route";
 
 describe("routeForNotification", () => {
   test("field routes are unchanged", () => {
@@ -22,5 +22,22 @@ describe("offer pushes", () => {
     expect(routeForNotification({ bookingId: "b1", event: "assigned", type: "reminder" }, "field")).toBe("/offer/b1");
     // Office users still land on the office job screen.
     expect(routeForNotification({ bookingId: "b1", event: "assigned" }, "office")).toBe("/office/job/b1");
+  });
+});
+
+describe("openActionFor", () => {
+  test("office screens inside the tabs are navigated to", () => {
+    expect(openActionFor("/office/job/b1")).toBe("navigate");
+    expect(openActionFor("/office/thread/t1")).toBe("navigate");
+    expect(openActionFor("/office/new-job")).toBe("navigate");
+    expect(openActionFor("/office/edit-job/b1")).toBe("navigate");
+    expect(openActionFor("/(office)/messages")).toBe("navigate");
+  });
+
+  test("field screens and the office profile still push", () => {
+    expect(openActionFor("/job/b1")).toBe("push");
+    expect(openActionFor("/offer/b1")).toBe("push");
+    expect(openActionFor("/(rider)/messages")).toBe("push");
+    expect(openActionFor("/office/profile")).toBe("push");
   });
 });
