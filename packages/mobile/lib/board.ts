@@ -164,6 +164,20 @@ export function ageLabel(iso: string | null, now: Date): string {
   return h < 48 ? "yesterday" : `${Math.round(h / 24)} d ago`;
 }
 
+/**
+ * Which job the iPad's detail pane shows. A dispatcher can leave it empty (the
+ * list then fills the width), so nothing is ever auto-picked: a selection that
+ * is no longer in the list simply clears.
+ */
+export function keepSelection(selectedId: string | null, shownIds: readonly string[]): string | null {
+  return selectedId && shownIds.includes(selectedId) ? selectedId : null;
+}
+
+/** Tapping the open job again closes the pane; tapping another one switches to it. */
+export function toggleSelection(selectedId: string | null, tappedId: string): string | null {
+  return selectedId === tappedId ? null : tappedId;
+}
+
 export const STATUS_ORDER: readonly string[] = ["enroute", "onsite", "available", "busy", "break", "offline"];
 
 export const STATUS_LABEL: Record<string, string> = {
