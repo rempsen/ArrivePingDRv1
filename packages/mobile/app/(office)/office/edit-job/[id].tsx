@@ -5,25 +5,25 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { X, User, Wrench, MapPin, Clock, Trash, Plus, Warning } from "phosphor-react-native";
-import { Button, Card, Empty, FullLoader } from "../../../components/ui";
-import { ClientSheet, ServiceSheet, AddressSheet, Field } from "../../../components/office/pickers";
-import { DatetimeSheet } from "../../../components/office/datetime-sheet";
-import { PickCard } from "../../../components/office/pick-card";
-import { CustomFieldInput } from "../../../components/office/field-inputs";
-import { showToast } from "../../../components/office/undo-toast";
-import { C, R, S, WIDE } from "../../../lib/theme";
-import { useAndroidBottomInset } from "../../../lib/bottom-inset";
-import { authHeaders } from "../../../lib/auth";
-import { getActiveCompany } from "../../../lib/active-company";
-import { useBooking, bookingKey } from "../../../lib/use-booking";
-import { useBoard } from "../../../lib/use-board";
-import { useAccess } from "../../../lib/use-access";
-import { classifyResponse } from "../../../lib/dispatch-result";
-import { buildPatch, draftFromBooking, isEmptyPatch, OFFICE_STATUSES, PRIORITIES, setFieldValue, validateEdit, isEditableField, type EditDraft, type EditErrors } from "../../../lib/edit-job";
-import { customLine, sumLineItems, withTotals } from "../../../lib/line-items";
-import { fmtInTz } from "../../../lib/when";
-import { geocodeAddress } from "../../../lib/use-lookups";
-import { IN_FIELD, STATUS_LABEL } from "../../../lib/board";
+import { FocusOnly } from "../../../../components/office/focus-only";
+import { Button, Card, Empty, FullLoader } from "../../../../components/ui";
+import { ClientSheet, ServiceSheet, AddressSheet, Field } from "../../../../components/office/pickers";
+import { DatetimeSheet } from "../../../../components/office/datetime-sheet";
+import { PickCard } from "../../../../components/office/pick-card";
+import { CustomFieldInput } from "../../../../components/office/field-inputs";
+import { showToast } from "../../../../components/office/undo-toast";
+import { C, R, S, WIDE } from "../../../../lib/theme";
+import { authHeaders } from "../../../../lib/auth";
+import { getActiveCompany } from "../../../../lib/active-company";
+import { useBooking, bookingKey } from "../../../../lib/use-booking";
+import { useBoard } from "../../../../lib/use-board";
+import { useAccess } from "../../../../lib/use-access";
+import { classifyResponse } from "../../../../lib/dispatch-result";
+import { buildPatch, draftFromBooking, isEmptyPatch, OFFICE_STATUSES, PRIORITIES, setFieldValue, validateEdit, isEditableField, type EditDraft, type EditErrors } from "../../../../lib/edit-job";
+import { customLine, sumLineItems, withTotals } from "../../../../lib/line-items";
+import { fmtInTz } from "../../../../lib/when";
+import { geocodeAddress } from "../../../../lib/use-lookups";
+import { IN_FIELD, STATUS_LABEL } from "../../../../lib/board";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 const PRIO_COLOR: Record<string, string> = { low: C.sub, normal: C.brand, high: C.amber, urgent: C.red };
@@ -39,9 +39,7 @@ const STATUS_WORD: Record<string, string> = { pending: "Pending", confirmed: "Co
  * double-books the technician) offers "Save anyway". A status change goes
  * through its own endpoint after the patch lands.
  */
-export default function EditJob() {
-  // Lets the last control scroll clear of Android's navigation bar (lib/bottom-inset-core.ts).
-  const navInset = useAndroidBottomInset();
+function EditJobScreen() {
   const router = useRouter();
   const qc = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -204,7 +202,7 @@ export default function EditJob() {
         <Empty icon={<Warning color={C.amber} size={28} />} text="Your role can view this job but not edit it" sub="Ask an admin on your account." />
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl * 2 + navInset }]} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={[s.content, WIDE, { paddingBottom: S.xxl * 2 }]} keyboardShouldPersistTaps="handled">
             {/* The job */}
             <Card>
               <Field label="Title" value={d.title} onChange={(v) => update({ title: v })} placeholder={d.serviceName || "What's the job?"} />
@@ -419,3 +417,13 @@ const s = StyleSheet.create({
   totalVal: { color: C.text, fontSize: 18, fontWeight: "900" },
   foot: { color: C.muted, fontSize: 12, textAlign: "center", lineHeight: 17, marginTop: S.sm },
 });
+
+/** A hidden tab of the office tabs (the tab bar stays visible); unmounts when left, so every visit starts clean. */
+export default function EditJob() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <FocusOnly>
+      <EditJobScreen key={id} />
+    </FocusOnly>
+  );
+}
