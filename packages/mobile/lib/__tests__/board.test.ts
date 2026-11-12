@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addDays, ageLabel, bucketOf, dayKey, jobsForTech, needsAttention, nextUp, tallies } from "../board";
+import { addDays, ageLabel, boardPollMs, bucketOf, dayKey, jobsForTech, needsAttention, nextUp, tallies } from "../board";
 
 const job = (p: Partial<{ id: string; late: boolean; riderId: string | null; status: string; scheduledAt: string }>) => ({
   id: "j",
@@ -96,5 +96,12 @@ describe("jobsForTech", () => {
   });
   test("a technician with nothing gets an empty list", () => {
     expect(jobsForTech(jobs, "t9")).toEqual([]);
+  });
+});
+
+describe("boardPollMs", () => {
+  test("polls faster while the live stream is up, slower while it isn't, never off", () => {
+    expect(boardPollMs(true)).toBe(10_000);
+    expect(boardPollMs(false)).toBe(30_000);
   });
 });

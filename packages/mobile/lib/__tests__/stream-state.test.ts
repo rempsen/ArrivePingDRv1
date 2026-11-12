@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { backoffMs, initialStreamState, streamReducer } from "../stream-state";
+import { backoffMs, initialStreamState, isLive, streamReducer } from "../stream-state";
 
 describe("streamReducer", () => {
   test("two errors in a row mark the stream down", () => {
@@ -28,5 +28,19 @@ describe("streamReducer", () => {
     expect(backoffMs(2)).toBe(2_000);
     expect(backoffMs(4)).toBe(8_000);
     expect(backoffMs(10)).toBe(30_000);
+  });
+});
+
+describe("isLive", () => {
+  test("only an open stream counts as live", () => {
+    expect(isLive(streamReducer(initialStreamState, "open"))).toBe(true);
+  });
+
+  test("connecting, retrying, closed and down are not live", () => {
+    expect(isLive(initialStreamState)).toBe(false);
+    const oneFail = streamReducer(initialStreamState, "error");
+    expect(isLive(oneFail)).toBe(false);
+    expect(isLive(streamReducer(oneFail, "error"))).toBe(false);
+    expect(isLive(streamReducer(streamReducer(initialStreamState, "open"), "close"))).toBe(false);
   });
 });

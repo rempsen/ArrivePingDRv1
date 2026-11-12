@@ -164,6 +164,16 @@ export function ageLabel(iso: string | null, now: Date): string {
   return h < 48 ? "yesterday" : `${Math.round(h / 24)} d ago`;
 }
 
+/**
+ * How often a board query re-reads on its own. The live stream is the fast
+ * path, but it can be down or silently stalled (a proxy that buffers it), so
+ * the board never relies on it alone: every 10 s while the stream is live, 30 s
+ * while it isn't.
+ */
+export function boardPollMs(live: boolean): number {
+  return live ? 10_000 : 30_000;
+}
+
 export const STATUS_ORDER: readonly string[] = ["enroute", "onsite", "available", "busy", "break", "offline"];
 
 export const STATUS_LABEL: Record<string, string> = {

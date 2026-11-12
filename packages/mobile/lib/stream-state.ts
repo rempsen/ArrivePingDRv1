@@ -36,3 +36,13 @@ export function streamReducer(state: StreamState, action: StreamAction): StreamS
 export function backoffMs(failures: number): number {
   return Math.min(30_000, 1_000 * 2 ** Math.max(0, failures - 1));
 }
+
+/**
+ * Is the feed actually delivering? Only once the server's "ready" event has
+ * arrived. "idle" (connecting, between retries, or a connection that opened
+ * but never said ready, e.g. a proxy buffering the stream) is not live, so the
+ * board polls and the Live/Polling badge doesn't claim more than is true.
+ */
+export function isLive(state: StreamState): boolean {
+  return state.status === "open";
+}

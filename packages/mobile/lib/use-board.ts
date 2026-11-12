@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { authHeaders } from "./auth";
 import { getActiveCompany } from "./active-company";
-import type { OfficeJob, OfficeTech } from "./board";
+import { boardPollMs, type OfficeJob, type OfficeTech } from "./board";
 import { useStreamHealthy } from "./use-dispatch-stream";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
@@ -43,16 +43,18 @@ export async function fetchBoard(day: string | null, days = 1): Promise<Board> {
 /**
  * The board for one company-time day. `day` null = today on the company's
  * clock (the server decides, so the app never guesses the timezone before
- * the first response). Polls every 30 s only while the live stream is down.
+ * the first response). The live stream refreshes it instantly; it also polls
+ * (10 s while the stream is live, 30 s while it isn't) so a stalled stream can't
+ * leave a screen stale.
  */
 export function useBoard(day: string | null, enabled = true, days = 1) {
   const company = getActiveCompany();
-  const healthy = useStreamHealthy();
+  const live = useStreamHealthy();
   return useQuery({
     queryKey: boardKey(company, day, days),
     queryFn: () => fetchBoard(day, days),
     staleTime: 10_000,
-    refetchInterval: healthy ? false : 30_000,
+    refetchInterval: boardPollMs(live),
     enabled,
   });
 }

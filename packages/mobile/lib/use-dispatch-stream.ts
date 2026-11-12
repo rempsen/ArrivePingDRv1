@@ -5,13 +5,13 @@ import Constants from "expo-constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { authHeaders, getToken } from "./auth";
 import { getActiveCompany } from "./active-company";
-import { backoffMs, initialStreamState, streamReducer, type StreamState } from "./stream-state";
+import { backoffMs, initialStreamState, isLive, streamReducer, type StreamState } from "./stream-state";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
 
 /**
  * One module-level connection state so any screen can ask "is the live feed
- * up?" — `useBoard` switches to polling while it is down.
+ * up?" — `useBoard` polls less often while it is, and more often while it is not.
  */
 let state: StreamState = initialStreamState;
 const listeners = new Set<() => void>();
@@ -24,7 +24,7 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l);
 }
 export function useStreamHealthy(): boolean {
-  return useSyncExternalStore(subscribe, () => state.status !== "down", () => true);
+  return useSyncExternalStore(subscribe, () => isLive(state), () => true);
 }
 
 type Changed = { techs: string[]; jobs: string[]; all?: boolean };
