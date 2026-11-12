@@ -667,7 +667,8 @@ export const entries: KbEntry[] = [
       { label: "How your pay is calculated", does: "Split into on-site time, mileage, flat per job and per-unit work." },
       { label: "By company", does: "Jobs, pay and rating at each company (when you work for more than one)." },
       { label: "Payouts", does: "Each pay period with net amount and status (paid or pending)." },
-      { label: "Completed {jobs}", does: "Each completed {job} with company, {customer}, date and pay breakdown. Shows QuickBooks bill status where the company pays that way." },
+      { label: "Completed {jobs}", does: "Each completed {job} with company, {customer}, date and pay breakdown. Shows QuickBooks bill status where the company pays that way. Tap one to see exactly how that {job} was paid." },
+      { label: "Export", does: "Sends you a spreadsheet (CSV) of every completed {job} across all your companies, with the pay split, to save or share." },
       { label: "Pull down", does: "Refreshes." },
     ],
     tasks: [
@@ -678,6 +679,11 @@ export const entries: KbEntry[] = [
       {
         q: "How is my pay worked out?",
         steps: ["Tap Earnings", "Read How your pay is calculated", "Scroll to Completed {jobs} for each {job}'s breakdown"],
+      },
+      {
+        q: "How do I get a spreadsheet of my earnings?",
+        steps: ["Tap Earnings", "Tap Export at the top", "Choose where to save or send the file"],
+        note: "The export has your full history, not just the most recent 500 {jobs}.",
       },
       {
         q: "When do I get paid?",

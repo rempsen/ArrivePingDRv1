@@ -1,14 +1,17 @@
-import { useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, FlatList, RefreshControl } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, StyleSheet, FlatList, RefreshControl, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
-import { TrendUp, CheckCircle, Receipt, Star } from "phosphor-react-native";
+import { TrendUp, CheckCircle, Receipt, Star, DownloadSimple } from "phosphor-react-native";
 import Constants from "expo-constants";
 import { authHeaders } from "../../lib/auth";
 import { getActiveCompany } from "../../lib/active-company";
 import { C, R, S, money, fmtDate, WIDE } from "../../lib/theme";
 import { Card, Empty, StatusBadge, ListSkeleton } from "../../components/ui";
 import { useJobNoun } from "../../lib/use-brand";
+import { EarningJobSheet } from "../../components/earning-job-sheet";
+import { exportEarnings } from "../../lib/earnings-export";
+import { fmtHours, paySummary, quickbooksNote, type EarnJob } from "../../lib/earning-job";
 
 const API =
   (Constants.expoConfig?.extra?.apiUrl as string) ?? process.env.EXPO_PUBLIC_API_URL;
@@ -29,32 +32,6 @@ const API =
  * only) and ATTRIBUTES every row: each job and payout carries a company chip,
  * and rating is shown per company because each employer rates separately.
  */
-type EarnJob = {
-  id: string;
-  companyId: string;
-  company: string;
-  title: string;
-  service: string;
-  customerName: string;
-  scheduledAt: number | null;
-  finishedAt: number | null;
-  /** Pre-tax value of the job to the company — NOT what the tech takes home. */
-  price: number;
-  /** Real pay: on-site hours x hourly rate + per-unit pay. */
-  pay: number;
-  onSiteMinutes: number;
-  payRatePerHour: number;
-  hourlyPay: number;
-  unitPay: number;
-  mileagePay?: number;
-  flatPay?: number;
-  /** $0 because the office has not set an hourly rate and there was no unit pay. */
-  unrated: boolean;
-  /** QuickBooks Sync (companies that use it): none | po_open | billed | paid | error. */
-  vendorBillStatus?: string;
-  /** When the company paid this job's bill in QuickBooks, if it has. */
-  subtradePaidAt?: number | null;
-};
 type EarnPayout = {
   id: string;
   companyId: string;
@@ -101,14 +78,6 @@ type Earnings = {
  * than using list order — otherwise a company's colour would change the moment
  * the driver joins another roster.
  */
-/** Minutes -> "1h 45m" / "45m" / "—", for pay lines. */
-function fmtHours(mins: number): string {
-  const n = Math.max(0, Math.round(Number(mins) || 0));
-  if (n === 0) return "0m";
-  const h = Math.floor(n / 60);
-  return h > 0 ? `${h}h ${n % 60}m` : `${n}m`;
-}
-
 const CHIP_COLORS = [C.brand, "#a78bfa", C.amber, "#34d399", "#f472b6", C.cyan];
 function chipColor(companyId: string): string {
   let h = 0;
@@ -130,6 +99,22 @@ function CompanyChip({ companyId, name }: { companyId: string; name: string }) {
 export default function Earnings() {
   const { nounPlural: jobNounPlural } = useJobNoun();
   const activeCompany = getActiveCompany();
+  const [selected, setSelected] = useState<EarnJob | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportErr, setExportErr] = useState("");
+
+  async function onExport() {
+    if (exporting) return;
+    setExporting(true);
+    setExportErr("");
+    try {
+      await exportEarnings();
+    } catch (e: any) {
+      setExportErr(e?.message || "Couldn't export your earnings. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const earnings = useQuery<Earnings>({
     queryKey: ["earnings-all"],
@@ -282,7 +267,25 @@ export default function Earnings() {
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
       <View style={s.header}>
-        <Text style={s.title}>Earnings</Text>
+        <View style={s.titleRow}>
+          <Text style={s.title}>Earnings</Text>
+          <Pressable
+            onPress={onExport}
+            disabled={exporting || earnings.isLoading}
+            style={[s.exportBtn, (exporting || earnings.isLoading) && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Export my earnings as a spreadsheet"
+            accessibilityState={{ disabled: exporting || earnings.isLoading, busy: exporting }}
+          >
+            {exporting ? <ActivityIndicator size="small" color={C.brand} /> : <DownloadSimple color={C.brand} size={16} weight="bold" />}
+            <Text style={s.exportTxt}>Export</Text>
+          </Pressable>
+        </View>
+        {!!exportErr && (
+          <Text style={s.exportErr} accessibilityRole="alert">
+            {exportErr}
+          </Text>
+        )}
         <Text style={s.subtitle}>
           {multi
             ? `All companies you work for${activeName ? ` · on shift at ${activeName}` : ""}`
@@ -319,6 +322,11 @@ export default function Earnings() {
           windowSize={7}
           removeClippedSubviews
           renderItem={({ item: b }) => (
+            <Pressable
+              onPress={() => setSelected(b)}
+              accessibilityRole="button"
+              accessibilityHint="Opens job details"
+            >
             <Card
               accessibilityLabel={`${b.service || b.title || "Job"} for ${b.customerName || "customer"} at ${b.company}, completed ${fmtDate(b.finishedAt ?? b.scheduledAt ?? 0)}, earned ${money(b.pay)}`}
             >
@@ -337,31 +345,26 @@ export default function Earnings() {
                   </Text>
                   {/* Pay breakdown per job, so the number is never a mystery. */}
                   <Text style={s.jobPay} numberOfLines={1}>
-                    {b.hourlyPay > 0
-                      ? `${fmtHours(b.onSiteMinutes)} on site${b.payRatePerHour ? ` @ ${money(b.payRatePerHour)}/h` : ""} = ${money(b.hourlyPay)}`
-                      : b.unrated
-                        ? "No pay rate set — ask the office"
-                        : `${fmtHours(b.onSiteMinutes)} on site`}
-                    {(b.mileagePay ?? 0) > 0 ? ` · mileage ${money(b.mileagePay ?? 0)}` : ""}
-                    {(b.flatPay ?? 0) > 0 ? ` · flat ${money(b.flatPay ?? 0)}` : ""}
-                    {b.unitPay > 0 ? ` · per-unit ${money(b.unitPay)}` : ""}
+                    {paySummary(b)}
                   </Text>
                   {/* Companies that pay subtrades through QuickBooks: the bill's state. */}
-                  {b.vendorBillStatus === "paid" && (
-                    <Text style={s.jobPaid} numberOfLines={1}>
-                      Paid in QuickBooks{b.subtradePaidAt ? ` · ${fmtDate(b.subtradePaidAt)}` : ""}
-                    </Text>
-                  )}
-                  {b.vendorBillStatus === "billed" && (
-                    <Text style={s.jobPay} numberOfLines={1}>Billed in QuickBooks · awaiting payment</Text>
-                  )}
+                  {(() => {
+                    const qb = quickbooksNote(b);
+                    return qb ? (
+                      <Text style={qb.paid ? s.jobPaid : s.jobPay} numberOfLines={1}>
+                        {qb.text}
+                      </Text>
+                    ) : null;
+                  })()}
                 </View>
                 <Text style={s.jobAmt}>{money(b.pay)}</Text>
               </View>
             </Card>
+            </Pressable>
           )}
         />
       )}
+      <EarningJobSheet job={selected} onClose={() => setSelected(null)} />
     </SafeAreaView>
   );
 }
@@ -378,7 +381,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   header: { ...WIDE, paddingHorizontal: 20, paddingTop: 6, paddingBottom: 8 },
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   title: { color: C.text, fontSize: 24, fontWeight: "800" },
+  exportBtn: { flexDirection: "row", alignItems: "center", gap: 6, height: 36, paddingHorizontal: 12, borderRadius: R.pill, borderWidth: 1, borderColor: C.brand },
+  exportTxt: { color: C.brand, fontSize: 13, fontWeight: "700" },
+  exportErr: { color: C.red, fontSize: 12.5, fontWeight: "600", marginTop: 4 },
   subtitle: { color: C.sub, fontSize: 12.5, fontWeight: "600", marginTop: 2 },
   scroll: { ...WIDE, padding: 16, paddingBottom: 40 },
   heroCard: {

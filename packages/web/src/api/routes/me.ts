@@ -31,6 +31,8 @@ async function tenantKindOf(companyId: string): Promise<string> {
   return co.kind;
 }
 import { jobTechPay } from "../../shared/tech-pay";
+import { earningsCsv } from "../lib/earnings-csv";
+import { fileResponse } from "./export";
 import { round2 } from "../../shared/catalog";
 import { jsonBody } from "../lib/validate";
 import { mergeOnboarding, ONBOARDING_MAX_BYTES, parseOnboarding } from "../../shared/onboarding";
@@ -135,6 +137,272 @@ async function countsForCompany(
 }
 
 const guideEventLimit = rateLimit({ limit: 240, windowMs: 60 * 60 * 1000, keyFn: keyByUser, name: "guide-events" });
+
+/**
+ * Everything the earnings screen and the export read: the caller's completed
+ * work across every company they belong to, with their pay worked out.
+ *
+ * `maxJobs` is the ceiling on the returned history. A long-tenured tech across
+ * several rosters could otherwise pull thousands of rows onto a phone. Newest
+ * first, so the cap trims the oldest history, and `truncated` lets the client
+ * say so rather than silently under-reporting. The export passes Infinity.
+ */
+export async function loadEarnings(me: SessionUser, { maxJobs }: { maxJobs: number }) {
+  const memberships = await loadMemberships(me.id);
+  // Superadmins are platform operators with no rider identity to pay.
+  if (memberships.length === 0 || isSuperadmin(me.role)) {
+    return {
+      companies: [],
+      jobs: [],
+      payouts: [],
+      totals: {
+        gross: 0, weekGross: 0, weekJobs: 0, jobsCount: 0, paidNet: 0,
+        pay: 0, weekPay: 0, hourlyPay: 0, unitPay: 0, mileagePay: 0, flatPay: 0, onSiteMinutes: 0,
+      },
+      truncated: false,
+    };
+  }
+
+  const coRows = await db
+    .select()
+    .from(schema.companies)
+    .where(
+      inArray(
+        schema.companies.id,
+        memberships.map((m) => m.companyId),
+      ),
+    );
+  const byId = new Map(coRows.map((r) => [r.id, r]));
+  // A suspended tenant's history is not something the tech can act on, and
+  // its rows may be mid-teardown — same exclusion as the badge endpoint.
+  const usable = memberships.filter((m) => byId.get(m.companyId)?.status !== "suspended");
+
+  type JobRow = {
+    id: string;
+    companyId: string;
+    company: string;
+    title: string;
+    service: string;
+    customerName: string;
+    scheduledAt: number | null;
+    finishedAt: number | null;
+    /** Pre-tax value of the job to the company (context, not take-home pay). */
+    price: number;
+    /** What the tech actually earns: hourly on-site pay + per-unit pay. */
+    pay: number;
+    onSiteMinutes: number;
+    payRatePerHour: number;
+    hourlyPay: number;
+    unitPay: number;
+    mileagePay: number;
+    flatPay: number;
+    paidKm: number;
+    /** $0 because no rate of any kind is set and there was no per-unit pay. */
+    unrated: boolean;
+    /** QuickBooks Sync: none | po_open | billed | paid | error (see bookings.vendorBillStatus). */
+    vendorBillStatus: string;
+    /** When the company paid the tech's bill in QuickBooks (epoch ms), if it has. */
+    subtradePaidAt: number | null;
+  };
+  type PayoutRow = {
+    id: string;
+    companyId: string;
+    company: string;
+    periodStart: number | null;
+    periodEnd: number | null;
+    jobsCount: number;
+    gross: number;
+    net: number;
+    hourlyPay: number;
+    unitPay: number;
+    onSiteMinutes: number;
+    status: string;
+  };
+
+  const perCompany = await Promise.all(
+    usable.map(async (m) => {
+      const companyName = byId.get(m.companyId)?.name ?? m.companyId;
+      const empty = {
+        companyId: m.companyId,
+        company: companyName,
+        rating: null as number | null,
+        jobsCount: 0,
+        gross: 0,
+        pay: 0,
+        hourlyPay: 0,
+        unitPay: 0,
+        onSiteMinutes: 0,
+        jobs: [] as JobRow[],
+        payouts: [] as PayoutRow[],
+      };
+      try {
+        const t = tdb(m.companyId);
+        // Per (user, company) rider row. No rider row = they hold a
+        // non-field role here (office staff at one company, tech at
+        // another), so there is nothing to pay them for.
+        const rider = await t.selectOne(schema.riders, eq(schema.riders.userId, me.id));
+        if (!rider) return empty;
+
+        const completed = await t.select(
+          schema.bookings,
+          and(
+            eq(schema.bookings.riderId, rider.id),
+            eq(schema.bookings.status, "completed"),
+            isNull(schema.bookings.deletedAt),
+            // A practice job is never paid (payouts skip sample jobs too), so it isn't earnings.
+            eq(schema.bookings.isSample, false),
+          ),
+        );
+        const svcIds = [...new Set(completed.map((b) => b.serviceId).filter((v): v is string => !!v))];
+        const svcMap = new Map<string, string>();
+        if (svcIds.length) {
+          const svcs = await t
+            .select(schema.services, inArray(schema.services.id, svcIds))
+            .catch(() => []);
+          svcs.forEach((s) => svcMap.set(s.id, s.name));
+        }
+        // `bookings` has no customer name column — it lives on the GLOBAL
+        // `user` table. One batched query by explicit id list (same pattern
+        // as bookings.ts enrichMany), never a per-row lookup.
+        const custIds = [...new Set(completed.map((b) => b.customerId).filter((v): v is string => !!v))];
+        const custMap = new Map<string, string>();
+        if (custIds.length) {
+          const us = await t
+            .select(schema.user, inArray(schema.user.id, custIds))
+            .catch(() => []);
+          us.forEach((u) => custMap.set(u.id, u.name ?? ""));
+        }
+
+        const jobs: JobRow[] = completed.map((b) => {
+          // Real take-home pay for the job: on-site hours x this tech's hourly
+          // rate + per-unit line pay. Computed with the same shared function as
+          // job completion and payout generation, so the Earnings screen can
+          // never disagree with the cheque.
+          const pay = jobTechPay(b, rider);
+          return {
+          id: b.id,
+          companyId: m.companyId,
+          company: companyName,
+          title: b.title ?? "",
+          service: (b.serviceId ? svcMap.get(b.serviceId) : "") ?? "",
+          customerName: (b.customerId ? custMap.get(b.customerId) : "") ?? "",
+          scheduledAt: b.scheduledAt ? Number(b.scheduledAt) : null,
+          finishedAt: b.finishedAt ? Number(b.finishedAt) : null,
+          pay: pay.techPay,
+          onSiteMinutes: b.onSiteMinutes || 0,
+          payRatePerHour: pay.payRatePerHour,
+          hourlyPay: pay.hourlyPay,
+          unitPay: pay.unitPay,
+          mileagePay: pay.mileagePay,
+          flatPay: pay.flatPay,
+          paidKm: pay.paidKm,
+          unrated: pay.unrated,
+          vendorBillStatus: b.vendorBillStatus ?? "none",
+          subtradePaidAt: b.subtradePaidAt ? Number(b.subtradePaidAt) : null,
+          // Pre-tax job value. `price`/`total` includes the GST/HST the company
+          // collected for the government, so the Earnings screen was showing a
+          // tech $1,130 of "earnings" on a $1,000 job — and payouts are computed
+          // on the pre-tax figure, so the two numbers never reconciled.
+          price: Number(b.subtotal ?? 0) || Math.max(0, Number(b.price ?? 0) - Number(b.taxAmount ?? 0)),
+        };
+        });
+
+        const payoutRows = await t
+          .select(schema.payouts, eq(schema.payouts.riderId, rider.id))
+          .catch(() => []);
+        const payouts: PayoutRow[] = payoutRows.map((p) => ({
+          id: p.id,
+          companyId: m.companyId,
+          company: companyName,
+          periodStart: p.periodStart ? Number(p.periodStart) : null,
+          periodEnd: p.periodEnd ? Number(p.periodEnd) : null,
+          jobsCount: Number(p.jobsCount ?? 0),
+          gross: Number(p.gross ?? 0),
+          net: Number(p.net ?? 0),
+          hourlyPay: Number(p.hourlyPay ?? 0),
+          unitPay: Number(p.unitPay ?? 0),
+          onSiteMinutes: Number(p.onSiteMinutes ?? 0),
+          status: p.status,
+        }));
+
+        return {
+          companyId: m.companyId,
+          company: companyName,
+          // Each employer rates independently — never blend these.
+          rating: rider.rating == null ? null : Number(rider.rating),
+          jobsCount: jobs.length,
+          // `gross` stays the job value (what the company billed); `pay` is what
+          // the tech earns. They are different numbers and must never be mixed.
+          gross: round2(jobs.reduce((s, j) => s + j.price, 0)),
+          pay: round2(jobs.reduce((s, j) => s + j.pay, 0)),
+          hourlyPay: round2(jobs.reduce((s, j) => s + j.hourlyPay, 0)),
+          unitPay: round2(jobs.reduce((s, j) => s + j.unitPay, 0)),
+          onSiteMinutes: Math.round(jobs.reduce((s, j) => s + j.onSiteMinutes, 0) * 10) / 10,
+          jobs,
+          payouts,
+        };
+      } catch (err) {
+        // One broken tenant must not blank out the whole screen — report it
+        // as empty and keep the other companies accurate.
+        console.error(`[me/earnings] company ${m.companyId} failed`, err);
+        return empty;
+      }
+    }),
+  );
+
+  const allJobs = perCompany.flatMap((x) => x.jobs);
+  allJobs.sort(
+    (a, b) => (b.finishedAt ?? b.scheduledAt ?? 0) - (a.finishedAt ?? a.scheduledAt ?? 0),
+  );
+  const truncated = allJobs.length > maxJobs;
+  const jobs = truncated ? allJobs.slice(0, maxJobs) : allJobs;
+
+  const allPayouts = perCompany.flatMap((x) => x.payouts);
+  allPayouts.sort((a, b) => (b.periodEnd ?? 0) - (a.periodEnd ?? 0));
+
+  // Totals are computed over the FULL history, not the capped page, so the
+  // headline numbers stay correct even when the list is trimmed.
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const inWeek = allJobs.filter((j) => (j.finishedAt ?? j.scheduledAt ?? 0) >= weekAgo);
+
+  return {
+    companies: perCompany
+      .map(({ companyId, company, rating, jobsCount, gross, pay, hourlyPay, unitPay, onSiteMinutes }) => ({
+        companyId,
+        company,
+        rating,
+        jobsCount,
+        gross: +gross.toFixed(2),
+        pay,
+        hourlyPay,
+        unitPay,
+        onSiteMinutes,
+      }))
+      .sort((a, b) => a.company.localeCompare(b.company)),
+    jobs,
+    payouts: allPayouts,
+    totals: {
+      // `gross`/`weekGross` = value of the work to the company.
+      // `pay`/`weekPay` = what this tech actually earns. Screens must show pay.
+      gross: +allJobs.reduce((s, j) => s + j.price, 0).toFixed(2),
+      weekGross: +inWeek.reduce((s, j) => s + j.price, 0).toFixed(2),
+      pay: +allJobs.reduce((s, j) => s + j.pay, 0).toFixed(2),
+      weekPay: +inWeek.reduce((s, j) => s + j.pay, 0).toFixed(2),
+      hourlyPay: +allJobs.reduce((s, j) => s + j.hourlyPay, 0).toFixed(2),
+      unitPay: +allJobs.reduce((s, j) => s + j.unitPay, 0).toFixed(2),
+      mileagePay: +allJobs.reduce((s, j) => s + j.mileagePay, 0).toFixed(2),
+      flatPay: +allJobs.reduce((s, j) => s + j.flatPay, 0).toFixed(2),
+      onSiteMinutes: Math.round(allJobs.reduce((s, j) => s + j.onSiteMinutes, 0) * 10) / 10,
+      weekJobs: inWeek.length,
+      jobsCount: allJobs.length,
+      paidNet: +allPayouts
+        .filter((p) => p.status === "paid")
+        .reduce((s, p) => s + p.net, 0)
+        .toFixed(2),
+    },
+    truncated,
+  };
+}
 
 export const meRoutes = new Hono<AppEnv>()
   /**
@@ -405,269 +673,35 @@ export const meRoutes = new Hono<AppEnv>()
    * no meaningful blended number: both are returned per company and the app
    * shows them that way.
    */
+  /**
+   * The same history as `/earnings`, uncapped, as a CSV the tech can keep for
+   * their own records (taxes, invoicing as a contractor). Same safety as
+   * `/earnings`: the caller's own memberships only, nothing taken from the
+   * request but an optional date window and the time zone to print dates in.
+   */
+  .get("/earnings/export", requireAuth, async (c) => {
+    const me = c.get("user") as unknown as SessionUser;
+    const num = (v: string | undefined) => {
+      const n = v ? Number(v) : NaN;
+      if (Number.isFinite(n)) return n;
+      const t = v ? Date.parse(v) : NaN;
+      return Number.isFinite(t) ? t : null;
+    };
+    const from = num(c.req.query("from"));
+    const to = num(c.req.query("to"));
+    const { jobs } = await loadEarnings(me, { maxJobs: Infinity });
+    const inWindow = jobs.filter((j) => {
+      const at = j.finishedAt ?? j.scheduledAt ?? 0;
+      return (from == null || at >= from) && (to == null || at <= to);
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    return fileResponse(earningsCsv(inWindow, c.req.query("tz")), `arriveping-earnings-${stamp}.csv`, "text/csv; charset=utf-8");
+  })
+
   .get("/earnings", requireAuth, async (c) => {
     const me = c.get("user") as unknown as SessionUser;
-
-    /** Ceiling on the returned history. A long-tenured tech across several
-     *  rosters could otherwise pull thousands of rows onto a phone. Newest
-     *  first, so the cap trims the oldest history, and `truncated` lets the
-     *  client say so rather than silently under-reporting. */
-    const MAX_JOBS = 500;
-
-    const memberships = await loadMemberships(me.id);
-    // Superadmins are platform operators with no rider identity to pay.
-    if (memberships.length === 0 || isSuperadmin(me.role)) {
-      return c.json({
-        companies: [],
-        jobs: [],
-        payouts: [],
-        totals: {
-          gross: 0, weekGross: 0, weekJobs: 0, jobsCount: 0, paidNet: 0,
-          pay: 0, weekPay: 0, hourlyPay: 0, unitPay: 0, mileagePay: 0, flatPay: 0, onSiteMinutes: 0,
-        },
-        truncated: false,
-      });
-    }
-
-    const coRows = await db
-      .select()
-      .from(schema.companies)
-      .where(
-        inArray(
-          schema.companies.id,
-          memberships.map((m) => m.companyId),
-        ),
-      );
-    const byId = new Map(coRows.map((r) => [r.id, r]));
-    // A suspended tenant's history is not something the tech can act on, and
-    // its rows may be mid-teardown — same exclusion as the badge endpoint.
-    const usable = memberships.filter((m) => byId.get(m.companyId)?.status !== "suspended");
-
-    type JobRow = {
-      id: string;
-      companyId: string;
-      company: string;
-      title: string;
-      service: string;
-      customerName: string;
-      scheduledAt: number | null;
-      finishedAt: number | null;
-      /** Pre-tax value of the job to the company (context, not take-home pay). */
-      price: number;
-      /** What the tech actually earns: hourly on-site pay + per-unit pay. */
-      pay: number;
-      onSiteMinutes: number;
-      payRatePerHour: number;
-      hourlyPay: number;
-      unitPay: number;
-      mileagePay: number;
-      flatPay: number;
-      paidKm: number;
-      /** $0 because no rate of any kind is set and there was no per-unit pay. */
-      unrated: boolean;
-      /** QuickBooks Sync: none | po_open | billed | paid | error (see bookings.vendorBillStatus). */
-      vendorBillStatus: string;
-      /** When the company paid the tech's bill in QuickBooks (epoch ms), if it has. */
-      subtradePaidAt: number | null;
-    };
-    type PayoutRow = {
-      id: string;
-      companyId: string;
-      company: string;
-      periodStart: number | null;
-      periodEnd: number | null;
-      jobsCount: number;
-      gross: number;
-      net: number;
-      hourlyPay: number;
-      unitPay: number;
-      onSiteMinutes: number;
-      status: string;
-    };
-
-    const perCompany = await Promise.all(
-      usable.map(async (m) => {
-        const companyName = byId.get(m.companyId)?.name ?? m.companyId;
-        const empty = {
-          companyId: m.companyId,
-          company: companyName,
-          rating: null as number | null,
-          jobsCount: 0,
-          gross: 0,
-          pay: 0,
-          hourlyPay: 0,
-          unitPay: 0,
-          onSiteMinutes: 0,
-          jobs: [] as JobRow[],
-          payouts: [] as PayoutRow[],
-        };
-        try {
-          const t = tdb(m.companyId);
-          // Per (user, company) rider row. No rider row = they hold a
-          // non-field role here (office staff at one company, tech at
-          // another), so there is nothing to pay them for.
-          const rider = await t.selectOne(schema.riders, eq(schema.riders.userId, me.id));
-          if (!rider) return empty;
-
-          const completed = await t.select(
-            schema.bookings,
-            and(
-              eq(schema.bookings.riderId, rider.id),
-              eq(schema.bookings.status, "completed"),
-              isNull(schema.bookings.deletedAt),
-              // A practice job is never paid (payouts skip sample jobs too), so it isn't earnings.
-              eq(schema.bookings.isSample, false),
-            ),
-          );
-          const svcIds = [...new Set(completed.map((b) => b.serviceId).filter((v): v is string => !!v))];
-          const svcMap = new Map<string, string>();
-          if (svcIds.length) {
-            const svcs = await t
-              .select(schema.services, inArray(schema.services.id, svcIds))
-              .catch(() => []);
-            svcs.forEach((s) => svcMap.set(s.id, s.name));
-          }
-          // `bookings` has no customer name column — it lives on the GLOBAL
-          // `user` table. One batched query by explicit id list (same pattern
-          // as bookings.ts enrichMany), never a per-row lookup.
-          const custIds = [...new Set(completed.map((b) => b.customerId).filter((v): v is string => !!v))];
-          const custMap = new Map<string, string>();
-          if (custIds.length) {
-            const us = await t
-              .select(schema.user, inArray(schema.user.id, custIds))
-              .catch(() => []);
-            us.forEach((u) => custMap.set(u.id, u.name ?? ""));
-          }
-
-          const jobs: JobRow[] = completed.map((b) => {
-            // Real take-home pay for the job: on-site hours x this tech's hourly
-            // rate + per-unit line pay. Computed with the same shared function as
-            // job completion and payout generation, so the Earnings screen can
-            // never disagree with the cheque.
-            const pay = jobTechPay(b, rider);
-            return {
-            id: b.id,
-            companyId: m.companyId,
-            company: companyName,
-            title: b.title ?? "",
-            service: (b.serviceId ? svcMap.get(b.serviceId) : "") ?? "",
-            customerName: (b.customerId ? custMap.get(b.customerId) : "") ?? "",
-            scheduledAt: b.scheduledAt ? Number(b.scheduledAt) : null,
-            finishedAt: b.finishedAt ? Number(b.finishedAt) : null,
-            pay: pay.techPay,
-            onSiteMinutes: b.onSiteMinutes || 0,
-            payRatePerHour: pay.payRatePerHour,
-            hourlyPay: pay.hourlyPay,
-            unitPay: pay.unitPay,
-            mileagePay: pay.mileagePay,
-            flatPay: pay.flatPay,
-            paidKm: pay.paidKm,
-            unrated: pay.unrated,
-            vendorBillStatus: b.vendorBillStatus ?? "none",
-            subtradePaidAt: b.subtradePaidAt ? Number(b.subtradePaidAt) : null,
-            // Pre-tax job value. `price`/`total` includes the GST/HST the company
-            // collected for the government, so the Earnings screen was showing a
-            // tech $1,130 of "earnings" on a $1,000 job — and payouts are computed
-            // on the pre-tax figure, so the two numbers never reconciled.
-            price: Number(b.subtotal ?? 0) || Math.max(0, Number(b.price ?? 0) - Number(b.taxAmount ?? 0)),
-          };
-          });
-
-          const payoutRows = await t
-            .select(schema.payouts, eq(schema.payouts.riderId, rider.id))
-            .catch(() => []);
-          const payouts: PayoutRow[] = payoutRows.map((p) => ({
-            id: p.id,
-            companyId: m.companyId,
-            company: companyName,
-            periodStart: p.periodStart ? Number(p.periodStart) : null,
-            periodEnd: p.periodEnd ? Number(p.periodEnd) : null,
-            jobsCount: Number(p.jobsCount ?? 0),
-            gross: Number(p.gross ?? 0),
-            net: Number(p.net ?? 0),
-            hourlyPay: Number(p.hourlyPay ?? 0),
-            unitPay: Number(p.unitPay ?? 0),
-            onSiteMinutes: Number(p.onSiteMinutes ?? 0),
-            status: p.status,
-          }));
-
-          return {
-            companyId: m.companyId,
-            company: companyName,
-            // Each employer rates independently — never blend these.
-            rating: rider.rating == null ? null : Number(rider.rating),
-            jobsCount: jobs.length,
-            // `gross` stays the job value (what the company billed); `pay` is what
-            // the tech earns. They are different numbers and must never be mixed.
-            gross: round2(jobs.reduce((s, j) => s + j.price, 0)),
-            pay: round2(jobs.reduce((s, j) => s + j.pay, 0)),
-            hourlyPay: round2(jobs.reduce((s, j) => s + j.hourlyPay, 0)),
-            unitPay: round2(jobs.reduce((s, j) => s + j.unitPay, 0)),
-            onSiteMinutes: Math.round(jobs.reduce((s, j) => s + j.onSiteMinutes, 0) * 10) / 10,
-            jobs,
-            payouts,
-          };
-        } catch (err) {
-          // One broken tenant must not blank out the whole screen — report it
-          // as empty and keep the other companies accurate.
-          console.error(`[me/earnings] company ${m.companyId} failed`, err);
-          return empty;
-        }
-      }),
-    );
-
-    const allJobs = perCompany.flatMap((x) => x.jobs);
-    allJobs.sort(
-      (a, b) => (b.finishedAt ?? b.scheduledAt ?? 0) - (a.finishedAt ?? a.scheduledAt ?? 0),
-    );
-    const truncated = allJobs.length > MAX_JOBS;
-    const jobs = truncated ? allJobs.slice(0, MAX_JOBS) : allJobs;
-
-    const allPayouts = perCompany.flatMap((x) => x.payouts);
-    allPayouts.sort((a, b) => (b.periodEnd ?? 0) - (a.periodEnd ?? 0));
-
-    // Totals are computed over the FULL history, not the capped page, so the
-    // headline numbers stay correct even when the list is trimmed.
-    const weekAgo = Date.now() - 7 * 86_400_000;
-    const inWeek = allJobs.filter((j) => (j.finishedAt ?? j.scheduledAt ?? 0) >= weekAgo);
-
-    return c.json({
-      companies: perCompany
-        .map(({ companyId, company, rating, jobsCount, gross, pay, hourlyPay, unitPay, onSiteMinutes }) => ({
-          companyId,
-          company,
-          rating,
-          jobsCount,
-          gross: +gross.toFixed(2),
-          pay,
-          hourlyPay,
-          unitPay,
-          onSiteMinutes,
-        }))
-        .sort((a, b) => a.company.localeCompare(b.company)),
-      jobs,
-      payouts: allPayouts,
-      totals: {
-        // `gross`/`weekGross` = value of the work to the company.
-        // `pay`/`weekPay` = what this tech actually earns. Screens must show pay.
-        gross: +allJobs.reduce((s, j) => s + j.price, 0).toFixed(2),
-        weekGross: +inWeek.reduce((s, j) => s + j.price, 0).toFixed(2),
-        pay: +allJobs.reduce((s, j) => s + j.pay, 0).toFixed(2),
-        weekPay: +inWeek.reduce((s, j) => s + j.pay, 0).toFixed(2),
-        hourlyPay: +allJobs.reduce((s, j) => s + j.hourlyPay, 0).toFixed(2),
-        unitPay: +allJobs.reduce((s, j) => s + j.unitPay, 0).toFixed(2),
-        mileagePay: +allJobs.reduce((s, j) => s + j.mileagePay, 0).toFixed(2),
-        flatPay: +allJobs.reduce((s, j) => s + j.flatPay, 0).toFixed(2),
-        onSiteMinutes: Math.round(allJobs.reduce((s, j) => s + j.onSiteMinutes, 0) * 10) / 10,
-        weekJobs: inWeek.length,
-        jobsCount: allJobs.length,
-        paidNet: +allPayouts
-          .filter((p) => p.status === "paid")
-          .reduce((s, p) => s + p.net, 0)
-          .toFixed(2),
-      },
-      truncated,
-    });
+    /** Ceiling on the list the app shows; the export (below) reads the full history. */
+    return c.json(await loadEarnings(me, { maxJobs: 500 }));
   })
 
   /**

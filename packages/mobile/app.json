@@ -126,7 +126,8 @@
       "@sentry/react-native",
       "expo-audio",
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      "expo-sharing"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
