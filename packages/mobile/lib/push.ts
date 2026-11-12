@@ -6,7 +6,7 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { api } from "./api";
 import { getToken } from "./auth";
-import { routeForNotification as routeFor } from "./push-route";
+import { openActionFor, routeForNotification as routeFor } from "./push-route";
 import { JOB_OFFER_CATEGORY, OFFER_ACTION, offerPath, offerPushStep, pushAgeMs } from "./offer";
 import { acceptOffer } from "../components/offer-actions";
 import { getActiveCompany, setActiveCompany } from "./active-company";
@@ -167,6 +167,8 @@ export function usePushNotifications() {
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
 
+  // Office screens are tabs (navigate); field screens are root-Stack screens (push).
+  const open = (path: string) => (openActionFor(path) === "navigate" ? router.navigate(path as never) : router.push(path as never));
   const respond = async (response: Notifications.NotificationResponse | null | undefined) => {
     if (!response) return;
     const key = `${response.notification.request.identifier}:${response.actionIdentifier}`;
@@ -190,7 +192,7 @@ export function usePushNotifications() {
         const booking = await acceptOffer(step.bookingId);
         if (booking) qc.setQueryData(["job", step.bookingId], booking);
         qc.invalidateQueries({ queryKey: ["bookings"] });
-        router.push((routing === "office" ? `/office/job/${step.bookingId}` : `/job/${step.bookingId}`) as never);
+        open(routing === "office" ? `/office/job/${step.bookingId}` : `/job/${step.bookingId}`);
       } catch {
         // Taken, changed, another company's job, or offline: the offer screen
         // says which.
@@ -204,7 +206,7 @@ export function usePushNotifications() {
       return;
     }
     if (step.kind === "open" && routing === "field") {
-      router.push(step.path as never);
+      open(step.path);
       return;
     }
     await routeFromNotification(data);
@@ -240,7 +242,7 @@ export function usePushNotifications() {
         return;
       }
     }
-    router.push(to as never);
+    open(to);
   };
 
   useEffect(() => {
