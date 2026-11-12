@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addDays, ageLabel, bucketOf, dayKey, jobsForTech, needsAttention, nextUp, tallies } from "../board";
+import { addDays, ageLabel, bucketOf, dayKey, jobsForTech, keepSelection, needsAttention, nextUp, tallies, toggleSelection } from "../board";
 
 const job = (p: Partial<{ id: string; late: boolean; riderId: string | null; status: string; scheduledAt: string }>) => ({
   id: "j",
@@ -96,5 +96,23 @@ describe("jobsForTech", () => {
   });
   test("a technician with nothing gets an empty list", () => {
     expect(jobsForTech(jobs, "t9")).toEqual([]);
+  });
+});
+
+describe("iPad job selection", () => {
+  test("keeps a selection that is still listed", () => {
+    expect(keepSelection("b", ["a", "b"])).toBe("b");
+  });
+
+  test("clears one that left the list, and never picks for the dispatcher", () => {
+    expect(keepSelection("c", ["a", "b"])).toBeNull();
+    expect(keepSelection(null, ["a", "b"])).toBeNull();
+    expect(keepSelection("a", [])).toBeNull();
+  });
+
+  test("tapping the open job closes the pane; another job switches to it", () => {
+    expect(toggleSelection("a", "a")).toBeNull();
+    expect(toggleSelection("a", "b")).toBe("b");
+    expect(toggleSelection(null, "a")).toBe("a");
   });
 });

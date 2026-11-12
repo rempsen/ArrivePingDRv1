@@ -12,7 +12,7 @@ import { C, R, S, WIDE } from "../../lib/theme";
 import { useBoard, useDayLoad } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
-import { addDays, bucketOf, NO_JOBS, NO_TECHS, type JobBucket } from "../../lib/board";
+import { addDays, bucketOf, keepSelection, NO_JOBS, NO_TECHS, toggleSelection, type JobBucket } from "../../lib/board";
 
 const BUCKETS: Array<{ key: JobBucket; label: string }> = [
   { key: "unassigned", label: "Unassigned" },
@@ -90,25 +90,16 @@ export default function Jobs() {
 
   const jobNoun = board.data?.jobNoun ?? "jobs";
 
-  // A selection that left the board (cancelled elsewhere, other day picked)
-  // clears to the empty pane rather than showing a stale job.
+  // A selection that left the list (cancelled elsewhere, another day, bucket or
+  // search) closes the pane. Nothing is auto-picked: with none open, the list
+  // takes the whole width on an iPad.
+  const shownIds = useMemo(() => shown.map((j) => j.id), [shown]);
   useEffect(() => {
-    if (selectedId && board.data && !board.data.jobs.some((j) => j.id === selectedId)) setSelectedId(null);
-  }, [selectedId, board.data]);
+    setSelectedId((cur) => keepSelection(cur, shownIds));
+  }, [shownIds]);
 
-  // On an iPad the detail pane shouldn't sit empty: open the first job in
-  // the list until the dispatcher picks one.
-  const firstShown = shown[0]?.id;
-  // A bucket, day or search change that hides the open job moves the pane
-  // to the first job still listed (or empties it).
-  useEffect(() => {
-    if (!wide) return;
-    if (selectedId && shown.some((j) => j.id === selectedId)) return;
-    const next = firstShown ?? null;
-    if (next !== selectedId) setSelectedId(next);
-  }, [wide, selectedId, firstShown, shown]);
-
-  const open = (id: string) => (wide ? setSelectedId(id) : router.push(`/office/job/${id}`));
+  const open = (id: string) => (wide ? setSelectedId((cur) => toggleSelection(cur, id)) : router.push(`/office/job/${id}`));
+  const openFull = (id: string) => router.push(`/office/job/${id}`);
 
   const list = (
     <View style={s.screen}>
@@ -167,7 +158,9 @@ export default function Jobs() {
           keyExtractor={(j) => j.id}
           contentContainerStyle={[s.pad, WIDE, { paddingBottom: S.xxl }]}
           refreshControl={<RefreshControl refreshing={board.isFetching && !board.isLoading} onRefresh={() => void board.refetch()} tintColor={C.brand} />}
-          renderItem={({ item }) => <JobRow job={item} techName={techName(item.riderId)} selected={wide && item.id === selectedId} onPress={() => open(item.id)} />}
+          renderItem={({ item }) => (
+            <JobRow job={item} techName={techName(item.riderId)} selected={wide && item.id === selectedId} onPress={() => open(item.id)} onOpenFull={wide ? () => openFull(item.id) : undefined} />
+          )}
           ListEmptyComponent={
             <Empty
               icon={<ClipboardText color={C.muted} size={28} />}
@@ -184,8 +177,9 @@ export default function Jobs() {
 
   return (
     <SplitScreen
+      collapseWhenEmpty
       list={list}
-      detail={selectedId ? <JobDetail key={selectedId} id={selectedId} embedded onMessageTech={(techId) => router.push({ pathname: "/(office)/messages", params: { techId } })} /> : null}
+      detail={selectedId ? <JobDetail key={selectedId} id={selectedId} embedded onClose={() => setSelectedId(null)} onMessageTech={(techId) => router.push({ pathname: "/(office)/messages", params: { techId } })} /> : null}
       empty={<EmptyPane icon={<ClipboardText color={C.muted} size={32} />} text={`Pick a ${jobNoun.replace(/s$/, "")}`} sub="Its details, technician and schedule open here." />}
     />
   );
