@@ -4,7 +4,10 @@ import { Hono } from "hono";
 import { db, sdb } from "../database";
 import * as schema from "../database/schema";
 import { and, eq } from "drizzle-orm";
-import { requireAdmin, tenantId, tx } from "../middleware/auth";
+import { requireAdmin, requireSuperadmin, tenantId, tx } from "../middleware/auth";
+import { audit } from "../lib/audit";
+import { consumeBudget } from "../lib/rate-limit";
+import { maskEmail } from "../lib/mask-email";
 import { auth } from "../auth";
 import { isAdminRole, isSuperadmin, canBeSuperadmin, SUPERADMIN_DOMAINS } from "../lib/permissions";
 import { z } from "zod";
@@ -484,6 +487,37 @@ export const adminRoutes = new Hono<AppEnv>()
       });
     }
     return c.json({ ok: true });
+  })
+  // Email a customer their password-reset link (ArrivePing super admins only).
+  // The customer gets the same branded email as "Forgot password"; nobody here
+  // sees or chooses a password or a link. Customers only — staff keep the
+  // set-password route above. It works for a customer who belongs to several
+  // companies too: the link goes to the account owner's own inbox.
+  .post("/users/:id/send-password-reset", requireSuperadmin, async (c) => {
+    const id = c.req.param("id");
+    const me = c.get("user") as SessionUser;
+    const cid = tenantId(c);
+    const target = await tx(c).selectOne(schema.user, eq(schema.user.id, id));
+    if (!target || !(await isMember(id, cid))) return c.json({ message: "Not found" }, 404);
+    if (target.role !== "customer")
+      return c.json({ message: "Password reset links can only be sent to customers from here." }, 400);
+    if (!target.email)
+      return c.json({ message: "This customer has no email address on file, so there is nowhere to send the link." }, 400);
+    // A few per customer per hour: this must not turn into a way to flood someone's inbox.
+    if (!(await consumeBudget("admin-pw-reset", id, 3, 60 * 60_000)))
+      return c.json({ message: "A reset link was already sent to this customer a few times in the last hour. Ask them to check their inbox and spam." }, 429);
+    const origin = (process.env.WEBSITE_URL || "http://localhost:4200").replace(/\/$/, "");
+    await auth.api.requestPasswordReset({ body: { email: target.email, redirectTo: `${origin}/reset-password` } });
+    await audit({
+      actorId: me.id,
+      actorName: me.name,
+      companyId: cid,
+      action: "password_reset_sent",
+      entityType: "user",
+      entityId: id,
+      summary: `Sent a password reset link to ${maskEmail(target.email)}`,
+    });
+    return c.json({ ok: true, email: maskEmail(target.email) });
   })
   // Self-service: change my own password. Requires the current password to
   // verify identity before swapping in the new one.

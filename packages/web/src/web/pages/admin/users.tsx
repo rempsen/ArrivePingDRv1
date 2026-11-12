@@ -19,6 +19,7 @@ import {
 } from "../../components/modal";
 import { AddressAutocomplete } from "../../components/address-autocomplete";
 import { toast } from "../../components/toast";
+import { useAuth } from "../../hooks/use-auth";
 import { TagPicker } from "../../components/tag-picker";
 import { AttachmentManager } from "../../components/attachment-manager";
 import { CustomFieldsForm } from "../../components/custom-fields";
@@ -1436,6 +1437,26 @@ function ClientDrawer({
     onError: (e: any) => setSaveErr(e.message),
   });
 
+  // ArrivePing super admins can email a customer their password-reset link.
+  const { role } = useAuth();
+  const [confirmReset, setConfirmReset] = useState(false);
+  const sendReset = useMutation({
+    mutationFn: async () => {
+      const res = await (api as any).admin.users[":id"]["send-password-reset"].$post({ param: { id: person!.id } });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { message?: string }).message || "Couldn't send the reset link");
+      return data as { email: string };
+    },
+    onSuccess: (d) => {
+      setConfirmReset(false);
+      toast({ kind: "success", message: `Password reset link sent to ${d.email}` });
+    },
+    onError: (e: Error) => {
+      setConfirmReset(false);
+      setSaveErr(e.message);
+    },
+  });
+
   const bookings = useQuery({
     queryKey: ["admin-bookings"],
     enabled: !!person,
@@ -1539,6 +1560,20 @@ function ClientDrawer({
                   </Field>
                 </div>
               </div>
+
+              {/* --- Account access: ArrivePing super admins only --- */}
+              {isClient && role === "superadmin" && (
+                <div className="space-y-2 border-t border-white/10 pt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account access</p>
+                  <p className="text-xs text-slate-400">
+                    Emails {full.email ? <span className="text-slate-200">{full.email}</span> : "them"} a link to set a new password. It expires in 1 hour.
+                  </p>
+                  <BtnGhost onClick={() => setConfirmReset(true)} disabled={!full.email || sendReset.isPending}>
+                    Send password reset
+                  </BtnGhost>
+                  {!full.email && <p className="text-xs text-amber-400">No email on file — add one above first.</p>}
+                </div>
+              )}
 
               {/* --- Their place (property, community, building, team) and who manages it --- */}
               {isClient && v.enabled && (
@@ -1781,6 +1816,16 @@ function ClientDrawer({
         open={viewJob !== null}
         editBooking={viewJob ?? undefined}
         onClose={() => setViewJob(null)}
+      />
+      <ConfirmModal
+        open={confirmReset}
+        onClose={() => setConfirmReset(false)}
+        onConfirm={() => sendReset.mutate()}
+        title="Send password reset"
+        message={`Email ${user.name ?? "this customer"} (${user.email ?? ""}) a link to set a new password?`}
+        confirmLabel="Send link"
+        danger={false}
+        pending={sendReset.isPending}
       />
     </div>
   );
