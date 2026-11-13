@@ -3,7 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { sdb } from "./database";
-import { sendEmail, emailTemplates, loadEmailBrand } from "../services/email";
+import { sendEmail, emailTemplates, loadEmailBrand, brandCompanyFor } from "../services/email";
 
 export const auth = betterAuth({
   basePath: "/api/auth",
@@ -20,8 +20,9 @@ export const auth = betterAuth({
     // Resend pipeline. Reset link expires in 1 hour.
     resetPasswordTokenExpiresIn: 60 * 60,
     sendResetPassword: async ({ user, url }) => {
-      // Brand every email with the tenant's own logo + name (Grab Brand Assets).
-      const brand = await loadEmailBrand((user as { companyId?: string }).companyId);
+      // Brand every email with the tenant's own logo + name (Grab Brand Assets);
+      // super admins are ArrivePing staff, so theirs is always ArrivePing's.
+      const brand = await loadEmailBrand(brandCompanyFor(user as { role?: string; companyId?: string }));
       const tpl = emailTemplates.passwordReset({ name: user.name, url }, brand);
       await sendEmail({ to: user.email, subject: tpl.subject, html: tpl.html });
     },
