@@ -24,7 +24,7 @@ import { partsIn } from "../../lib/when";
  * calls. Four bands, all derived from the live board (see lib/today.ts):
  *
  *   Day pulse   today's numbers, each a shortcut, over a strip of the day
- *   Crew now    the roster grouped by what each person is doing
+ *   Technicians the roster grouped by what each person is doing (headed with the company's own word)
  *   Needs you   one queue: the reason, and a one-tap fix
  *   Up next     assigned jobs starting soon, with who and how they're doing
  *
@@ -226,8 +226,8 @@ export default function Today() {
   const crewCard = (
     <View style={[s.card, s.crewCard]}>
       <View style={{ width: wide ? 110 : undefined }}>
-        <Pressable onPress={() => team(TEAM_ALL)} accessibilityRole="button" accessibilityLabel="Show the whole crew" hitSlop={8}>
-          <Text style={s.cardTitle}>{wrapped ? "Crew" : "Crew now"} ›</Text>
+        <Pressable onPress={() => team(TEAM_ALL)} accessibilityRole="button" accessibilityLabel={`Show all ${crewMany.toLowerCase()}`} hitSlop={8}>
+          <Text style={s.cardTitle}>{crewMany} ›</Text>
         </Pressable>
         <Text style={s.cardNote}>
           {techs.length} on roster{preview && wrapped ? ` · ${preview.tomorrow.onRoster} tomorrow` : ""}
