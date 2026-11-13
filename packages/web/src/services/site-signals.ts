@@ -100,6 +100,8 @@ function phones(html: string): string[] {
     } catch {
       /* keep as is */
     }
+    // tel:+1-204-555-0100;ext=123 or ",123": the extension is not part of the number.
+    raw = raw.split(/[;,]|\s*(?:ext\.?|x)\s*\d/i)[0]!;
     const digits = raw.replace(/[^\d+]/g, "");
     const n = digits.replace(/\D/g, "").length;
     if (n >= 7 && n <= 15) out.push(digits);

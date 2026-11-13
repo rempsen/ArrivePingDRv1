@@ -49,6 +49,12 @@ describe("extractSignals", () => {
     expect(s.phone).toBeNull();
   });
 
+  test("a phone extension is not part of the number", () => {
+    for (const href of ["tel:+1-204-555-0100;ext=123", "tel:204-555-0100,123", "tel:204-555-0100 ext. 123", "tel:2045550100x123"]) {
+      expect(extractSignals(`<a href="${href}">c</a>`, "https://acme.com/").phone!.replace("+1", "")).toBe("2045550100");
+    }
+  });
+
   test("the homepage wins; later pages only fill gaps", () => {
     const a = extractSignals(`<title>Acme</title>`, "https://acme.com/");
     const b = extractSignals(`<title>Contact | Other Name</title><a href="tel:2045550100">c</a>`, "https://acme.com/contact");
@@ -82,10 +88,11 @@ describe("pickSubpages", () => {
     expect(got).not.toContain("https://isp.test/signup");
   });
 
-  test("takes up to three service pages and eight pages in all", () => {
+  test("never takes more than three service pages", () => {
     const html = Array.from({ length: 12 }, (_, i) => link(`/services/s${i}/`, `Service ${i}`)).join("") + link("/about/", "About") + link("/contact/", "Contact") + link("/team/", "Team") + link("/service-areas/", "Areas");
     const got = pickSubpages(html, "https://acme.test/");
-    expect(got.length).toBe(8);
+    expect(got.length).toBe(7);
+    expect(got.filter((u) => u.includes("/services/")).length).toBe(3);
     expect(got.slice(0, 4)).toEqual(expect.arrayContaining(["https://acme.test/about/", "https://acme.test/team/", "https://acme.test/service-areas/"]));
   });
 

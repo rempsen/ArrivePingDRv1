@@ -649,8 +649,11 @@ export function pickSubpages(html: string, base: string, extraUrls: string[] = [
   const order: PageBucket[] = ["svc", "area", "about", "team", "contact"];
   for (const b of order) if (buckets[b][0]) out.push(buckets[b][0]!);
   for (const u of buckets.svc.slice(1, MAX_SVC_PAGES)) if (!out.includes(u)) out.push(u);
-  // top up from leftover pages if a bucket was empty
-  for (const b of order) for (const u of buckets[b].slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
+  // top up from leftover pages if a bucket was empty (never more service pages)
+  for (const b of order) {
+    if (b === "svc") continue;
+    for (const u of buckets[b].slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
+  }
   return out.slice(0, MAX_SUBPAGES);
 }
 
@@ -679,7 +682,9 @@ async function sitemapPages(base: string): Promise<string[]> {
     const pages = [...top.pages];
     // An index of sitemaps: pages first, never posts or products.
     const kids = top.children
-      .filter((c) => !/post|product|category|tag|author|news|blog|image|video/i.test(c))
+      // "wp-sitemap-posts-page-1.xml" is WordPress's PAGE sitemap: a child that
+      // names pages is kept whatever else its name contains.
+      .filter((c) => /page/i.test(c) || !/post|product|category|tag|author|news|blog|image|video/i.test(c))
       .sort((a, b) => Number(/page/i.test(b)) - Number(/page/i.test(a)))
       .slice(0, 2);
     for (const k of await Promise.all(kids.map(read))) if (k) pages.push(...k.pages);
