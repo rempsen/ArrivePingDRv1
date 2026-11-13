@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { countLabel, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext } from "../today";
+import { countLabel, crewChipSub, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext } from "../today";
 import type { OfficeTech } from "../board";
 
 const TZ = "America/Winnipeg"; // UTC-5 in late October (CDT)
@@ -213,5 +213,35 @@ describe("countLabel", () => {
   test("irregular plurals come from the company's setting", () => {
     expect(countLabel(2, "Crew member", "Crew members")).toBe("2 crew members");
     expect(countLabel(2, "Person", "People")).toBe("2 people");
+  });
+});
+
+describe("crewChipSub", () => {
+  const group = (key: "available" | "enroute" | "onsite" | "busy" | "offline", names: string[], extra: { freeAt?: string | null; etaMins?: number | null } = {}) => ({
+    key,
+    techs: names.map((n, i) => tech({ id: String(i), name: n, status: key })),
+    freeAt: extra.freeAt ?? null,
+    etaMins: extra.etaMins ?? null,
+  });
+
+  test("available: up to three first names, then how many more", () => {
+    expect(crewChipSub(group("available", ["Amy Lee", "Bo Chan"]), TZ)).toBe("Amy, Bo");
+    expect(crewChipSub(group("available", ["Amy", "Bo", "Cy"]), TZ)).toBe("Amy, Bo, Cy");
+    expect(crewChipSub(group("available", ["Amy", "Bo", "Cy", "Di", "Ed"]), TZ)).toBe("Amy, Bo, Cy +2");
+  });
+
+  test("on the way: the next ETA, else the first two names", () => {
+    expect(crewChipSub(group("enroute", ["Amy", "Bo"], { etaMins: 12 }), TZ)).toBe("next ETA 12 min");
+    expect(crewChipSub(group("enroute", ["Amy", "Bo", "Cy"]), TZ)).toBe("Amy, Bo");
+  });
+
+  test("on site and busy: when they free up on the company clock, else the first two names", () => {
+    expect(crewChipSub(group("onsite", ["Amy"], { freeAt: at(10) }), TZ)).toBe("free from 10:00 AM");
+    expect(crewChipSub(group("busy", ["Amy"], { freeAt: at(13, 30) }), TZ)).toBe("free from 1:30 PM");
+    expect(crewChipSub(group("busy", ["Amy", "Bo", "Cy"]), TZ)).toBe("Amy, Bo");
+  });
+
+  test("off shift: the first two names", () => {
+    expect(crewChipSub(group("offline", ["Amy", "Bo", "Cy"]), TZ)).toBe("Amy, Bo");
   });
 });

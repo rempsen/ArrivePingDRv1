@@ -10,7 +10,7 @@
  *   upNext   — assigned jobs starting soon (never a job already in `needs`)
  */
 import { IN_FIELD, TERMINAL, isUnassigned, type OfficeJob, type OfficeTech } from "./board";
-import { durationOf, jobMinutes } from "./timeline";
+import { durationOf, jobMinutes, minLabel } from "./timeline";
 
 type J = Pick<OfficeJob, "id" | "scheduledAt" | "durationMins" | "status" | "riderId" | "assignStatus" | "late">;
 
@@ -131,6 +131,18 @@ export interface CrewGroup {
   freeAt: string | null;
   /** ETA in minutes for a lone tech on the way, from their next job. */
   etaMins: number | null;
+}
+
+/**
+ * The small line under a crew chip: who is free (first names), the next ETA for
+ * people on the way, or when busy and on-site people free up.
+ */
+export function crewChipSub(g: CrewGroup, tz: string): string {
+  const first = (t: OfficeTech) => t.name.split(/\s+/)[0] ?? t.name;
+  const two = g.techs.map(first).slice(0, 2).join(", ");
+  if (g.key === "available") return g.techs.slice(0, 3).map(first).join(", ") + (g.techs.length > 3 ? ` +${g.techs.length - 3}` : "");
+  if (g.key === "enroute") return g.etaMins != null ? `next ETA ${g.etaMins} min` : two;
+  return g.freeAt ? `free from ${minLabel(jobMinutes(g.freeAt, tz).min)}` : two;
 }
 
 /** "1 technician" / "3 technicians": the company's own singular and plural, in lower case like the other chips. */
