@@ -150,8 +150,8 @@ const CREW: Record<CrewGroup["key"], { label: string; color: string }> = {
 };
 
 /**
- * One chip per crew status, plus (optionally) a first chip for the whole crew,
- * e.g. "12 technicians", which opens Team on everybody.
+ * A first chip for the whole crew, e.g. "12 technicians" (opens Team on
+ * everybody), then one chip per crew status.
  */
 export function CrewChips({
   groups,
@@ -162,25 +162,23 @@ export function CrewChips({
   groups: CrewGroup[];
   tz: string;
   onPick: (status: string) => void;
-  all?: { label: string; onPress: () => void };
+  all: { label: string; onPress: () => void };
 }) {
   return (
     <View style={s.chips}>
-      {all ? (
-        <Pressable onPress={all.onPress} accessibilityRole="button" accessibilityLabel={`${all.label}: show everyone`} style={({ pressed }) => [s.chip, { opacity: pressed ? 0.8 : 1 }]}>
-          <View style={s.allIcon}>
-            <UsersThree color={C.text} size={18} />
-          </View>
-          <View style={{ minWidth: 0 }}>
-            <Text style={[s.chipN, { color: C.text }]} numberOfLines={1}>
-              {all.label}
-            </Text>
-            <Text style={s.chipSub} numberOfLines={1}>
-              everyone
-            </Text>
-          </View>
-        </Pressable>
-      ) : null}
+      <Pressable onPress={all.onPress} accessibilityRole="button" accessibilityLabel={`${all.label}: show everyone`} style={({ pressed }) => [s.chip, { opacity: pressed ? 0.8 : 1 }]}>
+        <View style={s.allIcon}>
+          <UsersThree color={C.text} size={18} />
+        </View>
+        <View style={{ minWidth: 0 }}>
+          <Text style={[s.chipN, { color: C.text }]} numberOfLines={1}>
+            {all.label}
+          </Text>
+          <Text style={s.chipSub} numberOfLines={1}>
+            everyone
+          </Text>
+        </View>
+      </Pressable>
       {groups.map((g) => {
         const meta = CREW[g.key];
         const first = (t: OfficeTech) => t.name.split(/\s+/)[0] ?? t.name;
