@@ -357,7 +357,7 @@ export const superadminRoutes = new Hono<AppEnv>()
     // as a tenant yet (we're onboarding). Fall back to a derived slug.
     const companyId = slugify(String(b.companyId ?? b.name ?? "") || website);
     try {
-      const proposal = await scoutBrand(website, companyId || "pending");
+      const proposal = await scoutBrand(website, companyId || "pending", { source: "superadmin" });
       return c.json({ proposal }, 200);
     } catch (e: any) {
       return c.json(

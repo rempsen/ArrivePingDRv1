@@ -122,6 +122,8 @@ export default function HubOverview() {
         </div>
       )}
 
+      {q.data?.scans && q.data.scans.total > 0 && <ScanHealthCard s={q.data.scans} />}
+
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Shortcut href="/admin/hub/tenants" title="Companies" text="Search, filter and open any account." />
         <Shortcut href="/admin/hub/features" title="Feature Flags" text="Who has what switched on, and why." />
@@ -140,5 +142,46 @@ function Shortcut({ href, title, text }: { href: string; title: string; text: st
       </p>
       <p className="mt-1 text-[13px] text-slate-500">{text}</p>
     </Link>
+  );
+}
+
+const FAIL_WORDS: Record<string, string> = { blocked: "refused our visit", unreachable: "could not be reached", timeout: "too slow to answer", invalid_url: "not a web address" };
+
+/** How often the website scan reads the site it is given, and which sites it could not. */
+function ScanHealthCard({ s }: { s: NonNullable<Overview["scans"]> }) {
+  const read = s.ok + s.partial;
+  return (
+    <div className="mt-6">
+      <Card title="Website scans" caption={`Last ${s.days} days, every scan: signup, re-reads and checks.`}>
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div>
+            <p className="text-3xl font-semibold tabular-nums tracking-tight text-white">{s.readPct ?? 0}%</p>
+            <p className="text-[12px] text-slate-500">
+              read the site ({read} of {s.total})
+            </p>
+          </div>
+          <p className="text-[13px] text-slate-300">
+            {s.viaRender} needed the hosted browser. {s.partial} had little on them. {s.failed} could not be read
+            {s.failed
+              ? `: ${Object.entries(s.byReason)
+                  .map(([k, n]) => `${n} ${FAIL_WORDS[k] ?? k}`)
+                  .join(", ")}.`
+              : "."}
+          </p>
+        </div>
+        {s.recentFailures.length > 0 && (
+          <ul className="mt-4 divide-y divide-white/[0.05] border-t border-white/[0.05] text-[12px]">
+            {s.recentFailures.map((f) => (
+              <li key={f.host} className="flex items-center gap-3 py-1.5">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-slate-200">{f.host}</span>
+                <span className="shrink-0 text-slate-500">{FAIL_WORDS[f.status] ?? f.status}</span>
+                <span className="w-20 shrink-0 text-right tabular-nums text-slate-500">{fmt.ago(f.at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
   );
 }

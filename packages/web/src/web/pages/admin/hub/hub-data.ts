@@ -72,6 +72,18 @@ export interface Overview {
     customerUpdates30: number;
   };
   attention: AttentionItem[];
+  /** Website scans in the last 30 days. */
+  scans?: {
+    days: number;
+    total: number;
+    ok: number;
+    partial: number;
+    failed: number;
+    viaRender: number;
+    byReason: Record<string, number>;
+    readPct: number | null;
+    recentFailures: { host: string; status: string; at: string }[];
+  };
   activity: AuditEntry[];
   generatedAt: string;
 }
@@ -147,6 +159,17 @@ export interface TenantDetail {
     allowSupportAccess: boolean;
   };
   summary: HubTenant | null;
+  /** Setup check: how the website scan went and what signup built from it. */
+  setup: {
+    website: string;
+    report: {
+      scan: { status: string; via: "direct" | "render" | null; pagesRead: number };
+      line: string;
+      fromWebsite: string[];
+      starter: string[];
+    } | null;
+    scans: { id: string; host: string; status: string; via: string; httpStatus: number | null; pagesRead: number; ms: number; source: string; createdAt: string }[];
+  };
   /** Setup check: which plate the logo needs (services/logo-contrast.ts). */
   logoCheck: {
     plate: "light" | "dark" | "auto";

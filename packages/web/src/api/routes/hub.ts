@@ -33,6 +33,7 @@ import { createDemo, convertDemo, extendDemo, resetDemo, DemoError, DEMO_DEFAULT
 import { installSalesPack, listLeads, salesReps, salesServices, setLeadStatus, LEAD_STATUSES, SALES_SERVICES, SALES_TENANT } from "../../services/sales-pack";
 import { INDUSTRY_PRESETS } from "../../services/industry-presets";
 import { scoutBrand } from "../../services/brand-scout";
+import { rescanWebsite } from "../../services/rescan";
 import { slugify } from "../../services/company-provisioning";
 import { FEATURES, TENANT_KINDS, TENANT_KIND_LABELS, featureDef, isFeatureKey, type TenantKind } from "../../shared/features";
 import { PLANS, PLAN_IDS } from "../../shared/plans";
@@ -247,6 +248,27 @@ export const hubRoutes = new Hono<AppEnv>()
     return c.json({ ok: true, ...result });
   })
 
+  // Setup check: read the tenant's website again. Fills blanks in their
+  // profile and refreshes the stored pages the assistant and AI writers use.
+  // It never overwrites what they typed and does not rebuild forms, templates
+  // or the catalog. A scan that reads nothing leaves everything as it was.
+  .post("/tenants/:id/rescan", requirePlatform("staff"), async (c) => {
+    const id = c.req.param("id");
+    const co = await companyRow(id);
+    if (!co) return c.json({ message: "No such company" }, 404);
+    const r = await rescanWebsite(id, { source: "superadmin" });
+    await platformAudit({
+      actor: actorOf(c),
+      action: "tenant.rescan",
+      companyId: id,
+      entityType: "settings",
+      entityId: id,
+      summary: r.ok ? `${co.name}: website read again, ${r.pageCount} page${r.pageCount === 1 ? "" : "s"}, filled ${r.filled.length ? r.filled.join(", ") : "nothing new"}` : `${co.name}: website could not be read (${r.error ?? "unknown"})`,
+      meta: { website: r.website, pages: r.pageCount, filled: r.filled },
+    });
+    return c.json({ ok: r.ok, website: r.website, pageCount: r.pageCount, filled: r.filled, message: r.ok ? null : (r.error ?? "The website could not be read.") }, 200);
+  })
+
   // ── features ───────────────────────────────────────────────────────────
   .get("/features", requirePlatform("sales"), async (c) => c.json({ features: await featureSummary() }))
 
@@ -331,7 +353,7 @@ export const hubRoutes = new Hono<AppEnv>()
     // Read the prospect's own website for their logo, colours and words.
     // Best-effort: a demo is still made in our default look if this fails.
     if (b.website && b.scoutBrand) {
-      brand = await scoutBrand(b.website, slugify(`demo-${b.name}`)).catch(() => undefined);
+      brand = await scoutBrand(b.website, slugify(`demo-${b.name}`), { source: "demo" }).catch(() => undefined);
       // A site we couldn't read gives an empty proposal: that is "not branded".
       if (brand && brand.pages.length === 0) brand = undefined;
     }

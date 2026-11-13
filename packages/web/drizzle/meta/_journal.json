@@ -302,6 +302,13 @@
       "when": 1794593918010,
       "tag": "0042_signup_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794595797839,
+      "tag": "0043_scan_runs",
+      "breakpoints": true
     }
   ]
 }

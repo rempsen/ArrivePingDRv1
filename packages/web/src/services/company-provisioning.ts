@@ -588,7 +588,7 @@ export async function scanIfMissing(b: CompanyCreateInput, slug: string): Promis
   const website = String(safe.data);
   try {
     const fresh = await Promise.race([
-      _scan.scoutBrand(website, slug),
+      _scan.scoutBrand(website, slug, { source: "fallback" }),
       new Promise<null>((r) => setTimeout(() => r(null), FALLBACK_SCAN_MS)),
     ]);
     if (!fresh || !fresh.pages.length) {
