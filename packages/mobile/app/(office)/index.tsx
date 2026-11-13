@@ -229,9 +229,6 @@ export default function Today() {
         <Pressable onPress={() => team(TEAM_ALL)} accessibilityRole="button" accessibilityLabel={`Show all ${crewMany.toLowerCase()}`} hitSlop={8}>
           <Text style={s.cardTitle}>{crewMany} ›</Text>
         </Pressable>
-        <Text style={s.cardNote}>
-          {techs.length} on roster{preview && wrapped ? ` · ${preview.tomorrow.onRoster} tomorrow` : ""}
-        </Text>
       </View>
       <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={team} all={{ label: countLabel(techs.length, crewOne, crewMany), onPress: () => team(TEAM_ALL) }} /> : <Text style={s.cardNote}>No {crewMany.toLowerCase()} yet.</Text>}</View>
     </View>
