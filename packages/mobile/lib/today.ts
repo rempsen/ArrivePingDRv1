@@ -133,6 +133,11 @@ export interface CrewGroup {
   etaMins: number | null;
 }
 
+/** "1 technician" / "3 technicians": the company's own singular and plural, in lower case like the other chips. */
+export function countLabel(n: number, singular: string, plural: string): string {
+  return `${n} ${(n === 1 ? singular : plural).toLowerCase()}`;
+}
+
 const CREW_ORDER: CrewKey[] = ["available", "enroute", "onsite", "busy", "offline"];
 
 /** The Team screen's "show everybody" param (no status filter). */
