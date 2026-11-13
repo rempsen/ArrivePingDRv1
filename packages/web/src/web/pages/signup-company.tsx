@@ -401,7 +401,14 @@ export default function SignupCompanyPage() {
       }
       // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
       hubspotIdentify(adminEmail);
-      setProvisionResult((d as any)?.seeded ? { ...(d as any).seeded, setupLines: (d as any).setupLines } : null);
+      // `seeded` is absent when the answer came from the status check after a
+      // slow signup; the summary of what was built is sent either way.
+      const lines = (d as any)?.setupLines as string[] | undefined;
+      setProvisionResult(
+        (d as any)?.seeded || lines?.length
+          ? { forms: 0, templates: 0, services: 0, catalogItems: 0, optionCategories: 0, ...(d as any)?.seeded, setupLines: lines }
+          : null,
+      );
 
       // Sign the new admin in with the credentials they just typed. Reveal
       // the final "all set" line for a beat before handing off to /admin —

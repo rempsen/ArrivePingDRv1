@@ -817,7 +817,7 @@ export async function provisionCompany(
   const customerNoun = str(brand.customerNoun, preset?.customerNoun ?? "Customer");
   // Where each section ends up coming from: a writer marks "website" only
   // when its result really was written from the company's site.
-  const rec = setupRecorder(Boolean(preset));
+  const rec = setupRecorder(Boolean(preset), Boolean(siteExcerpts) || servicesArr.length > 0);
   const scoutInput = {
     built: rec.mark("catalog"),
     builtOptions: rec.mark("options"),

@@ -35,8 +35,14 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
 
 const ORDER: SectionKey[] = ["services", "templates", "forms", "catalog", "options", "notifications"];
 
-/** Collects the writers' marks during provisioning. */
-export function setupRecorder(hasIndustryPreset: boolean) {
+/**
+ * Collects the writers' marks during provisioning.
+ *
+ * `hadSiteContent` is whether the writers were given anything read from the
+ * company's site. A writer that succeeds with no site text has written from
+ * the industry research alone, and that is a starter set whatever it reports.
+ */
+export function setupRecorder(hasIndustryPreset: boolean, hadSiteContent: boolean) {
   const marks: Partial<Record<SectionKey, BuiltFrom>> = {};
   const counts: Partial<Record<SectionKey, number>> = {};
   return {
@@ -51,7 +57,7 @@ export function setupRecorder(hasIndustryPreset: boolean) {
       for (const key of ORDER) {
         const n = counts[key] ?? 0;
         if (n <= 0) continue;
-        sections[key] = { from: marks[key] === "website" ? "website" : hasIndustryPreset ? "industry" : "general", count: n };
+        sections[key] = { from: hadSiteContent && marks[key] === "website" ? "website" : hasIndustryPreset ? "industry" : "general", count: n };
       }
       return { v: 1, scan, sections };
     },

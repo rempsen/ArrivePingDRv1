@@ -163,6 +163,7 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
       name: schema.companies.name,
       trialEndsAt: schema.companies.billingTrialEndsAt,
       provisioningDone: schema.companies.provisioningDone,
+      setupReport: schema.companies.setupReport,
       createdAt: schema.companies.createdAt,
     })
     .from(schema.companies)
@@ -183,6 +184,9 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
         companyName: co.name,
         admin: mine,
         seeded: null,
+        // The first request may have timed out at the proxy: the summary of
+        // what was built still reaches the person through this status check.
+        setupLines: setupLinesOf(co.setupReport),
         trialEndsAt: co.trialEndsAt ? co.trialEndsAt.toISOString() : null,
         alreadyCreated: true,
       },
@@ -1549,4 +1553,9 @@ ${setupSummary(r)
   .join("\n")}
 For anything that is a starter set, treat it as a draft: ask what they actually do and offer to rename, add or remove items.
 `;
+}
+
+function setupLinesOf(raw: unknown): string[] {
+  const r = parseSetupReport(raw);
+  return r ? setupSummary(r) : [];
 }

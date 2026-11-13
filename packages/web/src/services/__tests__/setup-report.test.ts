@@ -12,7 +12,7 @@ const read = { status: "ok", via: "render", pagesRead: 6 } as const;
 
 describe("setupRecorder", () => {
   test("a section is 'website' only when its writer said so", () => {
-    const rec = setupRecorder(true);
+    const rec = setupRecorder(true, true);
     rec.mark("services")("website");
     rec.mark("forms")("starter");
     rec.count("services", 9);
@@ -28,13 +28,24 @@ describe("setupRecorder", () => {
   });
 
   test("without an industry preset, a starter set is 'general'", () => {
-    const rec = setupRecorder(false);
+    const rec = setupRecorder(false, true);
     rec.count("templates", 4);
     expect(rec.report({ status: "none", via: null, pagesRead: 0 }).sections.templates).toEqual({ from: "general", count: 4 });
   });
 
+  test("with nothing read from a site, no section is 'website', whatever a writer reports", () => {
+    const rec = setupRecorder(true, false);
+    rec.mark("notifications")("website");
+    rec.mark("templates")("website");
+    rec.count("notifications", 6);
+    rec.count("templates", 4);
+    const r = rec.report({ status: "none", via: null, pagesRead: 0 });
+    expect(r.sections).toEqual({ templates: { from: "industry", count: 4 }, notifications: { from: "industry", count: 6 } });
+    expect(setupSummary(r).join(" ")).not.toContain("from your website");
+  });
+
   test("a later mark wins (a writer that fell back after trying)", () => {
-    const rec = setupRecorder(true);
+    const rec = setupRecorder(true, true);
     const mark = rec.mark("templates");
     mark("website");
     mark("starter");
@@ -44,7 +55,7 @@ describe("setupRecorder", () => {
 });
 
 describe("summaries", () => {
-  const rec = setupRecorder(true);
+  const rec = setupRecorder(true, true);
   rec.mark("services")("website");
   rec.mark("notifications")("website");
   for (const k of ["services", "templates", "forms", "catalog", "notifications"] as const) rec.count(k, 3);
@@ -59,7 +70,7 @@ describe("summaries", () => {
   });
 
   test("nothing from the website is never worded as if something was", () => {
-    const none = setupRecorder(false);
+    const none = setupRecorder(false, true);
     none.count("templates", 4);
     const lines = setupSummary(none.report({ status: "blocked", via: null, pagesRead: 0 }));
     expect(lines.join(" ")).not.toContain("from your website");
@@ -68,7 +79,7 @@ describe("summaries", () => {
 
   test("for staff: one line that makes a failed scan obvious", () => {
     expect(setupOneLine(r)).toBe("site read (6 pages, hosted browser); from website: services, notifications; starter set: templates, forms, catalog");
-    const blocked = setupRecorder(true);
+    const blocked = setupRecorder(true, true);
     blocked.count("catalog", 10);
     expect(setupOneLine(blocked.report({ status: "blocked", via: null, pagesRead: 0 }))).toStartWith("site NOT read (blocked); from website: nothing;");
   });
