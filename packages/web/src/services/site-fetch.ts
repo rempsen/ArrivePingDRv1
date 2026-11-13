@@ -63,7 +63,7 @@ export function _setSiteFetchForTests(f: FetchFn | null): void {
   fetchImpl = f ?? ((...a) => fetch(...a));
 }
 
-export function renderAvailable(): boolean {
+function canRender(): boolean {
   return Boolean(process.env.FIRECRAWL_API_KEY?.trim());
 }
 
@@ -177,6 +177,8 @@ export interface FetchOptions {
   prefer?: FetchVia;
   /** Skip the thin-page upgrade (sub-pages: a short page is just a short page). */
   allowThin?: boolean;
+  /** Plain files (a sitemap): a direct request or nothing. */
+  noRender?: boolean;
 }
 
 /**
@@ -191,6 +193,7 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<F
     return r;
   };
   const tried: string[] = [];
+  const renderAvailable = () => !opts.noRender && canRender();
 
   if (opts.prefer === "render" && renderAvailable()) {
     tried.push("render");
@@ -235,4 +238,8 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<F
     if (r.reason === "blocked" || r.reason === "timeout") return done({ ...first, detail: `${first.detail}; ${r.detail}`.slice(0, 300) }, tried);
   }
   return done(first, tried);
+}
+
+export function renderAvailable(): boolean {
+  return canRender();
 }

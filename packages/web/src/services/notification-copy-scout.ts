@@ -145,7 +145,7 @@ export async function scoutNotificationCopy(input: NotificationCopyInput): Promi
   const toneLine = preset ? `\nBASELINE TONE FOR THIS INDUSTRY: ${preset.aiTone}` : "";
   const servicesLine = input.services?.length ? input.services.join(", ") : "(unknown)";
   const research = knowledgeBlock(input.knowledge);
-  const site = siteBlock(input.siteExcerpts, 2_500);
+  const site = siteBlock(input.siteExcerpts, 6_000);
   const targetsLine = COPY_TARGETS.map((t) => `${t.event}:${t.recipient}`).join(", ");
   const varsLine = TEMPLATE_VARS.map((v) => `{{${v.key}}} = ${v.label}`).join("\n  ");
 

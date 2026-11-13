@@ -67,7 +67,7 @@ export async function saveSiteCrawl(
   const pages = normalizePages(brand?.pages);
   if (!pages.length) return null;
   const structured = brand?.structured && typeof brand.structured === "object" ? brand.structured : null;
-  const excerpts = typeof brand?.excerpts === "string" && brand.excerpts.trim() ? brand.excerpts.trim().slice(0, 4_000) : buildExcerpts(pages);
+  const excerpts = typeof brand?.excerpts === "string" && brand.excerpts.trim() ? brand.excerpts.trim().slice(0, 16_000) : buildExcerpts(pages);
   // Strip the bulky/transient bits from the stored proposal.
   const { pages: _p, structured: _s, excerpts: _e, warnings: _w, ...rest } = brand ?? {};
   void _p;

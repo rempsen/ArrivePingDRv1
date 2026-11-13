@@ -162,7 +162,7 @@ export const BrandProposal = z
       .max(40)
       .nullable(),
     structured: z.record(z.string(), z.unknown()).nullable(),
-    excerpts: z.string().max(6_000).nullable(),
+    excerpts: z.string().max(16_000).nullable(),
   })
   .partial()
   // brand-scout returns explicit nulls for anything it couldn't read off the
