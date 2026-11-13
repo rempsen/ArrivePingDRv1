@@ -97,7 +97,7 @@ export const entries: KbEntry[] = [
       { label: "Booked today", does: "Tile shown only when today's {jobs} carry prices: money booked today and how much is from finished work. Opens Jobs → Done." },
       { label: "Day timeline", does: "Strip under the tiles: each {job} as a block across the day with a red now-line. Legend: Done, In progress, To start, Unassigned or late, and the busiest hour." },
       { label: "Crew now chips", does: "\"N available\", \"N on the way\", \"N on site\", \"N busy or on break\", \"N off shift\". Tapping one opens Team filtered to that group." },
-      { label: "Crew now / All crew", does: "Tapping the \"Crew now\" heading or the All crew button opens Team showing everybody." },
+      { label: "Everyone chip (e.g. \"12 technicians\")", does: "The first chip in Crew now. Tapping it, or the \"Crew now\" heading, opens Team showing everybody." },
       { label: "Needs you", does: "One queue, worst first: Late, Unassigned, Offered · not accepted, Location stale, Unconfirmed. Tapping a row opens the {job} (or Team for a stale location). Shows 5 items (6 on a wide iPad)." },
       { label: "Message {first name}", does: "On a Needs you row: opens your thread with that {worker} (beside the list on iPad)." },
       { label: "Assign / Reassign", does: "On a Needs you row: opens the {job} with the Assign sheet already open." },
@@ -132,7 +132,7 @@ export const entries: KbEntry[] = [
       },
       {
         q: "How do I see who is available, on the way or on site?",
-        steps: ["Open the Today tab.", "Read the Crew now chips.", "Tap a chip to open Team filtered to that group, or tap All crew to see everybody."],
+        steps: ["Open the Today tab.", "Read the Crew now chips.", "Tap a status chip to open Team filtered to that group, or the first chip (e.g. \"12 technicians\") to see everybody."],
       },
       {
         q: "How do I see where my technicians are on a map?",

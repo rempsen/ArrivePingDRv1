@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { UsersThree } from "phosphor-react-native";
 import { Avatar } from "../ui";
 import { C, R, S } from "../../lib/theme";
 import type { OfficeJob, OfficeTech } from "../../lib/board";
@@ -148,9 +149,38 @@ const CREW: Record<CrewGroup["key"], { label: string; color: string }> = {
   offline: { label: "off shift", color: C.muted },
 };
 
-export function CrewChips({ groups, tz, onPick }: { groups: CrewGroup[]; tz: string; onPick: (status: string) => void }) {
+/**
+ * One chip per crew status, plus (optionally) a first chip for the whole crew,
+ * e.g. "12 technicians", which opens Team on everybody.
+ */
+export function CrewChips({
+  groups,
+  tz,
+  onPick,
+  all,
+}: {
+  groups: CrewGroup[];
+  tz: string;
+  onPick: (status: string) => void;
+  all?: { label: string; onPress: () => void };
+}) {
   return (
     <View style={s.chips}>
+      {all ? (
+        <Pressable onPress={all.onPress} accessibilityRole="button" accessibilityLabel={`${all.label}: show everyone`} style={({ pressed }) => [s.chip, { opacity: pressed ? 0.8 : 1 }]}>
+          <View style={s.allIcon}>
+            <UsersThree color={C.text} size={18} />
+          </View>
+          <View style={{ minWidth: 0 }}>
+            <Text style={[s.chipN, { color: C.text }]} numberOfLines={1}>
+              {all.label}
+            </Text>
+            <Text style={s.chipSub} numberOfLines={1}>
+              everyone
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
       {groups.map((g) => {
         const meta = CREW[g.key];
         const first = (t: OfficeTech) => t.name.split(/\s+/)[0] ?? t.name;
@@ -333,6 +363,7 @@ const s = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: S.sm },
   chip: { flexDirection: "row", alignItems: "center", gap: S.sm, minHeight: 44, paddingLeft: 10, paddingRight: S.md, paddingVertical: 4, borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.bg3, maxWidth: 260 },
   faces: { flexDirection: "row" },
+  allIcon: { width: 28, height: 28, borderRadius: R.pill, alignItems: "center", justifyContent: "center", backgroundColor: C.bg2, borderWidth: 1, borderColor: C.border },
   face: { borderRadius: R.pill, borderWidth: 2, borderColor: C.bg3 },
   chipN: { fontSize: 13, fontWeight: "800" },
   chipSub: { color: C.sub, fontSize: 11 },
