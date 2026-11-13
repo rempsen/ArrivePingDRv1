@@ -55,6 +55,7 @@ import { saveSiteCrawl } from "./site-crawl";
 import { buildExcerpts, scoutBrand } from "./brand-scout";
 import { seedSampleDay } from "./sample-day";
 import { setupRecorder, type SetupReport } from "./setup-report";
+import { recordScanRun } from "./scan-runs";
 import { syncOfficeFromBusinessAddress } from "./company-office";
 
 void _jsonBody; // (import kept intentionally unused-safe; see note above)
@@ -573,7 +574,7 @@ function early<T>(run: () => Promise<T>): () => Promise<T> {
 
 /** How long signup waits for a fallback scan before building from what it has. */
 const FALLBACK_SCAN_MS = 40_000;
-export const _scan = { scoutBrand };
+export const _scan = { scoutBrand, record: recordScanRun };
 
 /** Fill `b.brand` (and an empty industry) from a fresh scan when signup arrived without one. */
 export async function scanIfMissing(b: CompanyCreateInput, slug: string): Promise<"skipped" | "filled" | "empty"> {
@@ -587,10 +588,24 @@ export async function scanIfMissing(b: CompanyCreateInput, slug: string): Promis
   if (!safe.success) return "skipped";
   const website = String(safe.data);
   try {
+    const started = Date.now();
+    // The record of this scan is written HERE, with what signup actually got.
+    // The scan itself may still finish after our deadline, and a late "read"
+    // must not be counted when signup had already built from the starter set.
     const fresh = await Promise.race([
-      _scan.scoutBrand(website, slug, { source: "fallback" }),
+      _scan.scoutBrand(website, slug, { source: "fallback", record: false }),
       new Promise<null>((r) => setTimeout(() => r(null), FALLBACK_SCAN_MS)),
     ]);
+    await _scan.record({
+      website,
+      status: fresh ? fresh.scan.status : "timeout",
+      via: fresh ? fresh.scan.via : null,
+      httpStatus: fresh ? fresh.scan.httpStatus : null,
+      pagesRead: fresh ? fresh.scan.pagesRead : 0,
+      ms: Date.now() - started,
+      source: "fallback",
+      companyId: slug,
+    });
     if (!fresh || !fresh.pages.length) {
       console.warn("[provisioning] fallback scan found nothing", { slug, website, status: fresh?.scan.status ?? "timeout" });
       // Keep WHY it found nothing, for the setup report. Nothing else changes.

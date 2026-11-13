@@ -1281,10 +1281,12 @@ const TextSchema = z.object({
 export async function scoutBrand(
   rawWebsite: string,
   companyId: string,
-  run: { source: ScanSource; companyId?: string } = { source: "signup" },
+  /** `record: false` when the caller writes the scan record itself (it has its own deadline). */
+  run: { source: ScanSource; companyId?: string; record?: boolean } = { source: "signup" },
 ): Promise<BrandProposal> {
   const started = Date.now();
   const proposal = await scoutBrandInner(rawWebsite, companyId);
+  if (run.record === false) return proposal;
   // Every attempt is recorded, read or not (services/scan-runs.ts).
   await recordScanRun({
     website: proposal.website || rawWebsite,
