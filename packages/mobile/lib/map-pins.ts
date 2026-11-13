@@ -88,3 +88,11 @@ export function fitRegion(points: readonly Point[], fallback: Point | null = nul
     longitudeDelta: Math.max(MIN_DELTA, (maxLng - minLng) * 1.4),
   };
 }
+
+/** "Colin Smith" -> "Colin S." for a pin label; a single name stays as is. */
+export function pinLabel(name: string | null | undefined): string {
+  const [first, ...rest] = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!first) return "Technician";
+  const last = rest[rest.length - 1];
+  return last ? `${first} ${last[0]!.toUpperCase()}.` : first;
+}

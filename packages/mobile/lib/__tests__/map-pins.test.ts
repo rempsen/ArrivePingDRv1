@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CONTINENT, fitRegion, onDay, pinKind, visibleJobs, visibleTechs } from "../map-pins";
+import { CONTINENT, fitRegion, onDay, pinKind, pinLabel, visibleJobs, visibleTechs } from "../map-pins";
 
 describe("pinKind", () => {
   test("by who has it and where it is", () => {
@@ -63,5 +63,17 @@ describe("onDay", () => {
       { id: "next-week", scheduledAt: "2026-10-30T14:00:00.000Z" },
     ];
     expect(onDay(jobs, "2026-10-23", "America/Winnipeg").map((j) => j.id)).toEqual(["today"]);
+  });
+});
+
+describe("pinLabel", () => {
+  test("first name and last initial", () => {
+    expect(pinLabel("Colin Smith")).toBe("Colin S.");
+    expect(pinLabel("  maria de la cruz ")).toBe("maria C.");
+  });
+  test("one name, or none", () => {
+    expect(pinLabel("Colin")).toBe("Colin");
+    expect(pinLabel("")).toBe("Technician");
+    expect(pinLabel(null)).toBe("Technician");
   });
 });

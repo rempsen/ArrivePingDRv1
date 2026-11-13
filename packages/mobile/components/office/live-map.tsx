@@ -5,7 +5,7 @@ import { ArrowsOutCardinal, Eye, EyeSlash } from "phosphor-react-native";
 import { C, R, S } from "../../lib/theme";
 import { statusColor } from "./tech-row";
 import type { OfficeJob, OfficeTech } from "../../lib/board";
-import { fitRegion, visibleJobs, visibleTechs, type PinKind } from "../../lib/map-pins";
+import { fitRegion, pinLabel, visibleJobs, visibleTechs, type PinKind } from "../../lib/map-pins";
 
 const PIN_COLOR: Record<PinKind, string> = { unassigned: C.red, offered: C.amber, active: C.green, scheduled: C.brand };
 const PIN_LABEL: Record<PinKind, string> = { unassigned: "Unassigned", offered: "Offered", active: "In the field", scheduled: "Scheduled" };
@@ -94,6 +94,7 @@ export function LiveMap({
                 e.stopPropagation();
                 onSelect({ kind: "tech", id: t.id });
               }}
+              title={pinLabel(t.name)}
               pinColor={on ? C.text : col}
               opacity={t.status === "offline" || t.stale ? 0.6 : 1}
               zIndex={2}
