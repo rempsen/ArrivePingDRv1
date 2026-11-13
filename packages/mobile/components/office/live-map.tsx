@@ -54,7 +54,7 @@ export function LiveMap({
   onSelect: (sel: MapSelection) => void;
 }) {
   const ref = useRef<MapView>(null);
-  const [showOffline, setShowOffline] = useState(false);
+  const [showOffline, setShowOffline] = useState(true); // DIAGNOSTIC BUILD: show off-shift too
   const techPins = useMemo(() => visibleTechs(techs, showOffline), [techs, showOffline]);
   const jobPins = useMemo(() => visibleJobs(jobs), [jobs]);
   const fit = () => ref.current?.animateToRegion(fitRegion([...techPins, ...jobPins], office), 400);
@@ -114,7 +114,18 @@ export function LiveMap({
             />
           );
         })}
+        {/* DIAGNOSTIC: a plain magenta default pin ~50 m north of each drawn technician. */}
+        {techPins.map((t) => (
+          <Marker key={`plain-${t.id}`} coordinate={{ latitude: t.lat! + 0.00045, longitude: t.lng! }} pinColor="#ff00ff" title={`${t.name} (plain pin)`} />
+        ))}
       </MapView>
+
+      {/* DIAGNOSTIC: what the map was given. */}
+      <View style={{ position: "absolute", right: S.md, top: S.md, backgroundColor: "rgba(0,0,0,0.85)", padding: 8, borderRadius: 8, maxWidth: 320 }} pointerEvents="none">
+        <Text style={{ color: "#fff", fontSize: 11 }}>
+          {`NATIVE MARKERS\ntechs ${techs.length} · with position ${techs.filter((t) => t.lat != null && t.lng != null).length} · drawn ${techPins.length}\njobs ${jobs.length} · drawn ${jobPins.length}\n${techPins.map((t) => `${t.name} ${t.status} ${t.lat},${t.lng}`).join("\n")}`}
+        </Text>
+      </View>
 
       <View style={s.controls}>
         <Pressable onPress={fit} accessibilityRole="button" accessibilityLabel="Fit everyone on screen" style={s.ctl}>

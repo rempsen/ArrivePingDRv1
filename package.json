@@ -40,5 +40,8 @@
     "pm2": "^7.0.1",
     "postgres": "^3.4.9",
     "stripe": "^22.2.0"
+  },
+  "patchedDependencies": {
+    "react-native-maps@1.29.11": "patches/react-native-maps@1.29.11.patch"
   }
 }

@@ -1,0 +1,78 @@
+diff --git a/ios/AirMaps/AIRMap.mm b/ios/AirMaps/AIRMap.mm
+index d3b0723f919d3d83456d8d8086a9f30fce7802cc..ec65fbe4d419e3ccc56c050d04c2a501abb7944a 100644
+--- a/ios/AirMaps/AIRMap.mm
++++ b/ios/AirMaps/AIRMap.mm
+@@ -129,7 +129,10 @@ const NSInteger AIRMapMaxZoomLevel = 20;
+     // Our desired API is to pass up markers/overlays as children to the mapview component.
+     // This is where we intercept them and do the appropriate underlying mapview action.
+     if ([subview isKindOfClass:[AIRMapMarker class]]) {
++        AIRMapMarker *dbgMarker = (AIRMapMarker *)subview;
++        NSLog(@"[ARPMAPS] AIRMap insert marker coord=(%f,%f) imageSrc=%@ hasImage=%d delegate=%p mapFrame=%@", dbgMarker.coordinate.latitude, dbgMarker.coordinate.longitude, dbgMarker.imageSrc, dbgMarker.image != nil, self.delegate, NSStringFromCGRect(self.frame));
+         [self addAnnotation:(id <MKAnnotation>) subview];
++        NSLog(@"[ARPMAPS] AIRMap annotations now=%lu", (unsigned long)self.annotations.count);
+     } else if ([subview isKindOfClass:[AIRMapPolyline class]]) {
+         ((AIRMapPolyline *)subview).map = self;
+         [self addOverlay:(id<MKOverlay>)subview];
+diff --git a/ios/AirMaps/AIRMapManager.m b/ios/AirMaps/AIRMapManager.m
+index d03403473e0e4ab4c891709259652a2546d2170f..01019b6ee8bbb160736509d46ba1981216f55690 100644
+--- a/ios/AirMaps/AIRMapManager.m
++++ b/ios/AirMaps/AIRMapManager.m
+@@ -806,7 +806,9 @@ RCT_EXPORT_METHOD(getAddressFromCoordinates:(nonnull NSNumber *)reactTag
+     }
+ 
+     marker.map = mapView;
+-    return [marker getAnnotationView];
++    MKAnnotationView *dbgView = [marker getAnnotationView];
++    NSLog(@"[ARPMAPS] viewForAnnotation coord=(%f,%f) -> %@ image=%d", marker.coordinate.latitude, marker.coordinate.longitude, dbgView ? NSStringFromClass([dbgView class]) : @"nil", dbgView.image != nil);
++    return dbgView;
+ }
+ 
+ static int kDragCenterContext;
+diff --git a/ios/AirMaps/RNMapsMapView.mm b/ios/AirMaps/RNMapsMapView.mm
+index fcee5e2bc0398c8d09e07253e3ce6db5df466978..bcf3004c5ce4c344f76693ee15bfd78e5abb2713 100644
+--- a/ios/AirMaps/RNMapsMapView.mm
++++ b/ios/AirMaps/RNMapsMapView.mm
+@@ -51,6 +51,7 @@ using namespace facebook::react;
+ - (void) prepareForRecycle
+ {
+     [super prepareForRecycle];
++    NSLog(@"[ARPMAPS] MapView prepareForRecycle (view=%p annotations=%lu)", _view, (unsigned long)_view.annotations.count);
+     [_view removeFromSuperview];
+     _view = nil;
+     _legacyMapManager = nil;
+@@ -131,6 +132,7 @@ using namespace facebook::react;
+     _props = defaultProps;
+     _legacyMapManager = [[AIRMapManager alloc] init];
+     _view = (AIRMap *)[_legacyMapManager view];
++    NSLog(@"[ARPMAPS] MapView prepareMapView created AIRMap=%p manager=%p delegate=%p", _view, _legacyMapManager, _view.delegate);
+ 
+     self.contentView = _view;
+ 
+@@ -439,6 +441,7 @@ mapViewEventEmitter->emitterFunction(data);                               \
+ 
+ 
+ - (void)mountChildComponentView:(UIView<RCTComponentViewProtocol> *)childComponentView index:(NSInteger)index{
++    NSLog(@"[ARPMAPS] MapView mountChild class=%@ index=%ld map=%p mapIsNil=%d frame=%@", NSStringFromClass([childComponentView class]), (long)index, _view, _view == nil, NSStringFromCGRect(_view.frame));
+     id<RCTComponent> paperView = [childComponentView getPaperViewFromChildComponentView];
+     if (paperView){
+         [_view insertReactSubview:paperView atIndex:index];
+diff --git a/ios/AirMaps/RNMapsMarkerView.mm b/ios/AirMaps/RNMapsMarkerView.mm
+index be7e91dc6ef5005a68e468f9f223c47c2e095b7f..fda3923f13ec24edefb3a8cc7471db29638f8ee6 100644
+--- a/ios/AirMaps/RNMapsMarkerView.mm
++++ b/ios/AirMaps/RNMapsMarkerView.mm
+@@ -43,6 +43,7 @@ using namespace facebook::react;
+ - (void) prepareForRecycle
+ {
+     [super prepareForRecycle];
++    NSLog(@"[ARPMAPS] Marker prepareForRecycle marker=%p", _view);
+     [_view removeFromSuperview];
+     _view = nil;
+     _legacyMapManager = nil;
+@@ -376,6 +377,7 @@ _view.name = CGPointMake(newViewProps.name.x, newViewProps.name.y); \
+                                                                         newViewProps.coordinate.latitude,
+                                                                         newViewProps.coordinate.longitude);
+         _view.coordinate = coordinates;
++        NSLog(@"[ARPMAPS] Marker updateProps coord=(%f,%f) marker=%p", coordinates.latitude, coordinates.longitude, _view);
+     }
+ 
+ 
