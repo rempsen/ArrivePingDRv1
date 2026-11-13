@@ -96,7 +96,8 @@ export default function Today() {
   const assign = (id: string) => router.push({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
   const message = (techId: string) => router.push(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
   const jobsAt = (bucket: string, day?: string | null) => router.push({ pathname: "/(office)/jobs", params: { bucket, ...(day ? { day, anchor: today ?? "" } : {}) } });
-  const team = (status: string) => router.push({ pathname: "/(office)/team", params: { status } });
+  // Always the list: Team may have been left on the map, and a chip or "All crew" is about people.
+  const team = (status: string) => router.push({ pathname: "/(office)/team", params: { status, mode: "list" } });
   const plan = (day: string | null, view: "day" | "week") =>
     wide ? router.push({ pathname: "/(office)/board", params: { view, ...(day ? { day, anchor: today ?? "" } : {}) } }) : jobsAt("unassigned", day);
   const first = (t?: OfficeTech) => (t ? (t.name.split(/\s+/)[0] ?? t.name) : "");
