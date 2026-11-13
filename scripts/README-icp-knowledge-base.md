@@ -6,7 +6,7 @@ falls back to the generic baseline, silently, with no error.
 
 ## What it is
 
-One row per ICP in the `icp_knowledge_base` table (17 rows today), each holding
+One row per ICP in the `icp_knowledge_base` table (18 rows today), each holding
 a summary, concrete best practices, real workflow notes, terminology, tone and
 notification refinement, compliance considerations, and cited sources — hand
 researched from trade associations, standards bodies and trade publications,
@@ -30,7 +30,7 @@ A missing row is expected and handled — all three degrade to the static
 
 | File | Purpose |
 | --- | --- |
-| `icp-knowledge-base.json` | The committed snapshot of all 17 rows. Source of truth for restores. |
+| `icp-knowledge-base.json` | The committed snapshot of all 18 rows. Source of truth for restores. |
 | `export-icp-knowledge-base.ts` | Read-only. Dumps the live table back into that JSON. |
 | `restore-icp-knowledge-base.ts` | Replays the JSON into any database. Dry run by default. |
 | `seed-icp-knowledge-base.ts` | Historical: the original Wave 1 seed (4 ICPs). |
