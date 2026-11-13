@@ -43,8 +43,8 @@ const STAGE_MS = 7_000;
 function buildStages(website: string | undefined, industryId: string | null | undefined) {
   const domain = website?.trim() ? website.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "") : "";
   return [
-    { Icon: Globe, text: domain ? `Visiting ${domain} for brand assets…` : "Spinning up your workspace…" },
-    { Icon: Sparkles, text: domain ? "Found your logo and colors…" : "Building your brand profile…" },
+    { Icon: Globe, text: domain ? `Using what we read on ${domain}…` : "Spinning up your workspace…" },
+    { Icon: Sparkles, text: "Building your brand profile…" },
     { Icon: BellRing, text: "Setting up branded email & SMS alerts…" },
     { Icon: ClipboardList, text: "Building your intake forms…" },
     { Icon: ListChecks, text: "Creating your work-order templates…" },

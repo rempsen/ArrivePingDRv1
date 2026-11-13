@@ -35,6 +35,7 @@ import { log } from "../api/lib/logger";
 import { formatPhone } from "../api/lib/validate";
 import { INDUSTRY_LABELS } from "./industry-presets";
 import { fetchGoogleReviewMentions, googlePlacesAvailable } from "./review-mentions";
+import { BROWSER_HEADERS, fetchPage, type FetchVia } from "./site-fetch";
 
 export interface BrandProposal {
   website: string;
@@ -96,6 +97,25 @@ export interface BrandProposal {
   // about what this business does and how it talks.
   excerpts: string;
   warnings: string[];
+  /** How the scan itself went, so the UI and staff never mistake a refused or failed scan for a thin site. */
+  scan: ScanOutcome;
+}
+
+/**
+ * - ok           the site was read and the details were extracted
+ * - partial      the site was read, but it had little text or the AI read failed
+ * - blocked      the site refused our visit (and the hosted browser, if configured)
+ * - unreachable  no such site, or it is down
+ * - timeout      the site took too long
+ * - invalid_url  not a web address
+ */
+export type ScanStatus = "ok" | "partial" | "blocked" | "unreachable" | "timeout" | "invalid_url";
+export interface ScanOutcome {
+  status: ScanStatus;
+  /** How the homepage was reached; null when it wasn't. */
+  via: FetchVia | null;
+  httpStatus: number | null;
+  pagesRead: number;
 }
 
 export interface CrawledPage {
@@ -115,8 +135,7 @@ export interface ScoutedTeamMember {
   phone: string | null;
 }
 
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+const UA = BROWSER_HEADERS["user-agent"]!;
 
 /** Normalise a user-typed website into a fetchable absolute URL. */
 export function normalizeUrl(raw: string): string {
@@ -142,22 +161,10 @@ function absolutize(base: string, href: string): string | null {
   }
 }
 
-async function fetchHtml(
-  url: string,
-): Promise<{ html: string; finalUrl: string } | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { "user-agent": UA, accept: "text/html" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    return { html, finalUrl: res.url || url };
-  } catch (e) {
-    log.warn("brand-scout: fetch failed", { url, err: String(e) });
-    return null;
-  }
+/** One page by the fetch ladder (services/site-fetch.ts); null when nothing worked. */
+async function fetchHtml(url: string, prefer?: FetchVia): Promise<{ html: string; finalUrl: string } | null> {
+  const r = await fetchPage(url, { prefer, allowThin: true });
+  return r.ok ? { html: r.html, finalUrl: r.finalUrl } : null;
 }
 
 /**
@@ -791,12 +798,12 @@ function hintsBlock(h: StructuredHints | null): string {
  */
 type FetchedPage = { url: string; title: string; text: string; html: string };
 
-async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS, minChars = 200): Promise<FetchedPage[]> {
+async function crawlSubpages(urls: string[], budgetMs = CRAWL_BUDGET_MS, minChars = 200, via?: FetchVia): Promise<FetchedPage[]> {
   if (!urls.length) return [];
   const budget = new Promise<null>((r) => setTimeout(() => r(null), budgetMs));
   const results = await Promise.all(
     urls.map((u) =>
-      Promise.race([fetchHtml(u), budget]).then((r) =>
+      Promise.race([fetchHtml(u, via), budget]).then((r) =>
         r ? { url: r.finalUrl, title: pageTitle(r.html), html: r.html, text: textSample(r.html).slice(0, SUBPAGE_TEXT_CHARS) } : null,
       ),
     ),
@@ -896,6 +903,7 @@ async function crawlPeoplePages(
   homeHtml: string,
   homeUrl: string,
   level2: FetchedPage[],
+  via?: FetchVia,
 ): Promise<{ teamPages: FetchedPage[]; profilePages: FetchedPage[] }> {
   const seen = new Set<string>([homeUrl, ...level2.map((s) => s.url)]);
   const norm = (u: string) => u.replace(/\/+$/, "");
@@ -922,7 +930,7 @@ async function crawlPeoplePages(
   }
   // shortest path first: a section page beats one of its children here
   hop3.sort((a, b) => a.length - b.length);
-  const teamPages = await crawlSubpages(hop3.slice(0, MAX_TEAM_PAGES), TEAM_HOP_MS, PEOPLE_MIN_CHARS);
+  const teamPages = await crawlSubpages(hop3.slice(0, MAX_TEAM_PAGES), TEAM_HOP_MS, PEOPLE_MIN_CHARS, via);
   for (const p of teamPages) mark(p.url);
 
   // level 4: one page per person, linked from any team-ish page we hold.
@@ -934,7 +942,7 @@ async function crawlPeoplePages(
       if (looksLikeProfile(u, tp.url)) hop4.push(u);
     }
   }
-  const fetched = await crawlSubpages(hop4.slice(0, MAX_PROFILE_PAGES), TEAM_HOP_MS, PEOPLE_MIN_CHARS);
+  const fetched = await crawlSubpages(hop4.slice(0, MAX_PROFILE_PAGES), TEAM_HOP_MS, PEOPLE_MIN_CHARS, via);
   const profilePages = fetched.map((p) => ({ ...p, text: p.text.slice(0, PROFILE_TEXT_CHARS) }));
   return { teamPages, profilePages };
 }
@@ -1224,20 +1232,26 @@ export async function scoutBrand(
     structured: null,
     excerpts: "",
     warnings,
+    scan: { status: "invalid_url", via: null, httpStatus: null, pagesRead: 0 },
   };
   if (!website) {
     warnings.push("Invalid website URL.");
     return empty;
   }
 
-  const page = await fetchHtml(website);
-  if (!page) {
+  const page = await fetchPage(website);
+  if (!page.ok) {
+    empty.scan = { status: page.reason === "not_html" ? "unreachable" : page.reason, via: null, httpStatus: page.status, pagesRead: 0 };
     warnings.push(
-      "Couldn't load the website (it may block bots or be offline). Fill in the brand details manually.",
+      page.reason === "blocked"
+        ? "The website refused our visit. Some sites block automated visitors."
+        : page.reason === "timeout"
+          ? "The website took too long to answer."
+          : "Couldn't open the website. Check the address, or the site may be down.",
     );
     return empty;
   }
-  const { html, finalUrl } = page;
+  const { html, finalUrl, via } = page;
 
   // Item 3: bounded crawl of services / coverage / about pages, in parallel
   // with the screenshot. Sub-page text and any JSON-LD go into ONE text-model
@@ -1245,7 +1259,7 @@ export async function scoutBrand(
   const t0 = Date.now();
   const subpageUrls = pickSubpages(html, finalUrl);
   const shotPromise = screenshot(finalUrl); // runs alongside crawl + text model
-  const subpages = await crawlSubpages(subpageUrls);
+  const subpages = await crawlSubpages(subpageUrls, CRAWL_BUDGET_MS, 200, via);
   const tLevel2 = Date.now() - t0;
 
   // People crawl (2026-10-07, deepened 2026-10-08). Staff names live on
@@ -1257,7 +1271,7 @@ export async function scoutBrand(
   //            plus the contact page if level 2 didn't have one
   //   level 4  individual staff profile pages linked from any team page
   //            (/team/jane-doe, /our-team/mike/) — up to 8, short text each
-  const { teamPages, profilePages } = await crawlPeoplePages(html, finalUrl, subpages);
+  const { teamPages, profilePages } = await crawlPeoplePages(html, finalUrl, subpages, via);
   const tPeople = Date.now() - t0 - tLevel2;
   for (const p of teamPages) subpages.push(p);
   const structured = (() => {
@@ -1294,7 +1308,7 @@ export async function scoutBrand(
     { url: finalUrl, title: pageTitle(html), text: textSample(html).slice(0, PAGE_STORE_CHARS) },
     ...subpages.map((sp) => ({ url: sp.url, title: sp.title, text: textSample(sp.html).slice(0, PAGE_STORE_CHARS) })),
     ...profilePages.map((sp) => ({ url: sp.url, title: sp.title, text: sp.text })),
-  ].slice(0, 20);
+  ].slice(0, PROPOSAL_MAX_PAGES);
   const excerpts = buildExcerpts(pages);
 
   const tModel = Date.now();
@@ -1422,7 +1436,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     teamForMentions,
   );
 
-  return {
+  return fitProposal({
     website: finalUrl,
     companyName: cleanCompanyName(text?.companyName ?? structured?.name ?? null),
     primaryColor: normHex(vision?.primaryColor),
@@ -1461,6 +1475,60 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     structured,
     excerpts,
     warnings,
+    scan: {
+      // Read, but with nothing to show for it: the AI read failed, or the
+      // page has too little text to describe the business.
+      status: !text || pages.reduce((n, p) => n + p.text.length, 0) < 600 ? "partial" : "ok",
+      via,
+      httpStatus: page.status,
+      pagesRead: pages.length,
+    },
+  });
+}
+
+/**
+ * Trim a proposal to what signup accepts (the `BrandProposal` schema in
+ * services/company-provisioning.ts). The signup page posts the proposal back
+ * verbatim after the card is saved, so one over-long field or one page too
+ * many must never be able to reject the signup: a richer site would then be
+ * MORE likely to fail. Contract-tested in __tests__/scan-contract.test.ts.
+ */
+export const PROPOSAL_MAX_PAGES = 40;
+export function fitProposal(p: BrandProposal): BrandProposal {
+  const cut = (v: string | null, n: number) => {
+    const t = (v ?? "").trim();
+    return t ? t.slice(0, n) : null;
+  };
+  const email = (p.email ?? "").trim();
+  return {
+    ...p,
+    website: p.website.slice(0, 300),
+    companyName: cut(p.companyName, 200),
+    workerNoun: cut(p.workerNoun, 40),
+    workerNounPlural: cut(p.workerNounPlural, 40),
+    customerNoun: cut(p.customerNoun, 40),
+    customerNounPlural: cut(p.customerNounPlural, 40),
+    jobNoun: cut(p.jobNoun, 40),
+    jobNounPlural: cut(p.jobNounPlural, 40),
+    tagline: cut(p.tagline, 300),
+    description: cut(p.description, 1_000),
+    hours: cut(p.hours, 300),
+    address: cut(p.address, 300),
+    serviceArea: cut(p.serviceArea, 300),
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) && email.length <= 200 ? email : null,
+    services: p.services.slice(0, 200).map((x) => String(x).slice(0, 200)),
+    teamMembers: p.teamMembers.slice(0, 30).map((m) => ({
+      ...m,
+      name: m.name.slice(0, 80),
+      title: m.title ? m.title.slice(0, 80) : null,
+      email: m.email ? m.email.slice(0, 200) : null,
+      phone: m.phone ? m.phone.slice(0, 40) : null,
+    })),
+    contactEmails: p.contactEmails.slice(0, 20).map((e) => e.slice(0, 200)),
+    mentionedStaff: p.mentionedStaff.slice(0, 20).map((n) => n.slice(0, 60)),
+    googleReviewUrl: p.googleReviewUrl && p.googleReviewUrl.length <= 500 ? p.googleReviewUrl : null,
+    pages: p.pages.slice(0, PROPOSAL_MAX_PAGES).map((pg) => ({ url: pg.url.slice(0, 1_000), title: pg.title.slice(0, 400), text: pg.text.slice(0, 12_000) })),
+    excerpts: p.excerpts.slice(0, 6_000),
   };
 }
 

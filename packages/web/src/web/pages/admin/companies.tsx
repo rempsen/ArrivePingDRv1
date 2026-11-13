@@ -7,7 +7,7 @@ import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../../services/industry-pre
 import { AddressAutocomplete } from "../../components/address-autocomplete";
 import { FullLoader } from "../../components/loader";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../../components/provisioning-progress";
-import { SignupReveal } from "../../components/signup-reveal";
+import { SignupReveal, type ScanFail } from "../../components/signup-reveal";
 import { PageHead } from "./shell";
 import { CompanyFinder, useCompanyFinder } from "../../components/company-finder";
 import {
@@ -125,6 +125,7 @@ export default function CompaniesPage() {
   // AI brand-scout state — null until the site has been scraped (auto, or
   // via the manual "Grab Brand Assets" fallback below).
   const [brand, setBrand] = useState<BrandProposal | null>(null);
+  const [scanFail, setScanFail] = useState<ScanFail | null>(null);
   const [scoutedFor, setScoutedFor] = useState(""); // last website string we actually scouted
   const scoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Delete-company flow — type the exact name to confirm, since this wipes
@@ -248,6 +249,12 @@ export default function CompaniesPage() {
       return d.proposal as BrandProposal;
     },
     onSuccess: (p) => {
+      const status = (p as any).scan?.status as string | undefined;
+      if (status === "blocked" || status === "unreachable" || status === "timeout" || status === "invalid_url") {
+        // Nothing was read: show why, and leave the address re-scannable.
+        setScanFail(status);
+        return;
+      }
       setBrand(p);
       setScoutedFor(form.website.trim());
       // pre-fill contact fields + the AI-suggested ICP from what we learned,
@@ -263,11 +270,12 @@ export default function CompaniesPage() {
         industryOther: f.industryOther || (p.suggestedIndustry === "other" ? p.suggestedIndustryOther || "" : f.industryOther),
       }));
     },
-    onError: (e: any) => setErr(e.message),
+    onError: () => setScanFail("error"),
   });
 
   const startScout = () => {
     setErr("");
+    setScanFail(null);
     setBrand(null);
     setRevealRun((n) => n + 1);
     setStep("reveal");
@@ -643,12 +651,18 @@ export default function CompaniesPage() {
                   site={form.website.trim()}
                   scouting={scout.isPending}
                   brand={brand ? ({ ...brand, companyName: brand.companyName ?? form.name } as any) : null}
-                  error={scout.isError ? (scout.error as any)?.message || "Couldn't read that site" : ""}
+                  fail={scanFail}
                   onConfirm={confirmReveal}
                   onFix={() => setStep("details")}
                   onSkip={skipWebsite}
+                  onRetry={startScout}
+                  onDifferent={() => {
+                    setScanFail(null);
+                    setScoutedFor("");
+                    setStep("site");
+                  }}
                 />
-                {!scout.isPending && (
+                {!scout.isPending && !scanFail && (
                   <button
                     type="button"
                     onClick={() => {

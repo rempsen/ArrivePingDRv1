@@ -35,7 +35,7 @@ export type IndustryPreset = {
   id: string; // slug stored on companies.industry — matches icps.slug in Supabase
   label: string; // human label in dropdowns — matches icps.signup_dropdown_label
   group: string; // dropdown section grouping, e.g. "Building & Renovation"
-  tier: "core" | "outlier" | "alias"; // core = beta-ready; outlier = structural blocker (see rationale); alias = routes to another ICP's template for a clearer signup label
+  tier: "core" | "outlier" | "alias" | "general"; // general = a sensible starting set for a kind of business outside the researched ICP program (added from signup demand, not from the research lanes; kept off the marketing industries list); core = beta-ready; outlier = structural blocker (see rationale); alias = routes to another ICP's template for a clearer signup label
   rank?: number; // Phase 1 ranking (1-17), lower = higher fit
   fitScore?: number; // Phase 1 weighted fit score (0-10)
   aliasOf?: string; // set on tier: "alias" rows — the real ICP id this routes to
@@ -586,7 +586,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "equipment-rental",
     label: "Equipment & Tool Rental",
-    group: "Specialty (Outlier ICPs)",
+    group: "Specialty",
     tier: "outlier",
     rank: 14,
     fitScore: 6.4,
@@ -616,7 +616,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "restoration",
     label: "Fire & Flood Restoration",
-    group: "Specialty (Outlier ICPs)",
+    group: "Specialty",
     tier: "outlier",
     rank: 16,
     fitScore: 5.7,
@@ -652,7 +652,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "sports-organization",
     label: "Sports Clubs & Academies",
-    group: "Specialty (Outlier ICPs)",
+    group: "Specialty",
     tier: "outlier",
     rank: 17,
     fitScore: 4.4,
@@ -731,10 +731,71 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   // their trade; selecting one sets companies.industry to the target ICP's
   // id above. Per Phase 1 dropdown spec — telemetry should track alias
   // selections separately once that plumbing exists (not yet wired).
+  // ─────────────── Telecom, Installation & Field Service (general) ───────────────
+  // NOT part of the 17-ICP research program (no Supabase/Notion slug). Added
+  // 2026-11 because real signups (an internet provider, install crews) had no
+  // home in the list and fell to an empty "Other" workspace. tier "general".
+  {
+    id: "telecom-internet-installation",
+    label: "Telecom, Internet & Cable Installation",
+    group: "Telecom, Installation & Field Service",
+    tier: "general",
+    fitNote:
+      "ArrivePing covers install and service-call scheduling, technician dispatch, arrival notifications, on-site forms with photos and sign-off, and customer history well. It does not do subscriber billing, network monitoring or provisioning of the service itself; those stay in the provider's own systems.",
+    workerNoun: "Installer",
+    workerNounPlural: "Installers",
+    customerNoun: "Subscriber",
+    customerNounPlural: "Subscribers",
+    jobNoun: "Appointment",
+    jobNounPlural: "Appointments",
+    staffFields: ["skillClass", "vehicle", "licensePlate", "address", "payRatePerHour", "skills"],
+    aiTone:
+      "Clear, punctual and plain-spoken. Subscribers mostly want to know when the installer arrives, how long it takes and whether someone must be home. Avoid network jargon unless the customer used it.",
+    notificationGuidance:
+      "Appointment confirmation, a day-before reminder and an on-the-way alert with live arrival time are the essentials. A missed-appointment reschedule link and a post-install check-in are good defaults.",
+    services: [
+      { name: "New Service Installation", category: "Installation", durationMins: 120 },
+      { name: "Fibre Drop / Line Connection", category: "Installation", durationMins: 120 },
+      { name: "Equipment Swap or Upgrade", category: "Service", durationMins: 60 },
+      { name: "Service Call / Troubleshooting", category: "Service", durationMins: 60 },
+      { name: "Site Survey", category: "Survey", durationMins: 45 },
+      { name: "Disconnect / Equipment Pickup", category: "Service", durationMins: 30 },
+    ],
+    templates: ["New Install Work Order", "Service Call / Trouble Ticket", "Site Survey", "Equipment Swap"],
+    categories: ["Installation", "Service", "Survey"],
+  },
+  {
+    id: "field-installation-service",
+    label: "Field Installation, Delivery & Service",
+    group: "Telecom, Installation & Field Service",
+    tier: "general",
+    fitNote:
+      "ArrivePing covers scheduling, crew dispatch, arrival notifications, on-site checklists with photos and customer sign-off. This is a general starting set, so the job types and forms are meant to be renamed to match how the business works.",
+    workerNoun: "Technician",
+    workerNounPlural: "Technicians",
+    customerNoun: "Customer",
+    customerNounPlural: "Customers",
+    jobNoun: "Job",
+    jobNounPlural: "Jobs",
+    aiTone:
+      "Friendly, punctual and practical. Confirm the time window, what the crew will do and anything the customer should prepare.",
+    notificationGuidance:
+      "Booking confirmation, a day-before reminder and an on-the-way alert are the essentials. A completion summary with photos is a good default.",
+    services: [
+      { name: "Installation", category: "Installation", durationMins: 120 },
+      { name: "Delivery", category: "Delivery", durationMins: 45 },
+      { name: "Delivery & Installation", category: "Installation", durationMins: 150 },
+      { name: "Service Call / Repair", category: "Service", durationMins: 60 },
+      { name: "Site Visit / Estimate", category: "Estimate", durationMins: 45 },
+      { name: "Maintenance Visit", category: "Service", durationMins: 60 },
+    ],
+    templates: ["Installation Work Order", "Delivery Confirmation", "Service Call", "Site Visit / Estimate"],
+    categories: ["Installation", "Delivery", "Service", "Estimate"],
+  },
   {
     id: "exteriors",
     label: "Windows & Doors",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "exteriors",
     workerNoun: "Installer",
@@ -752,7 +813,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "exteriors",
     label: "Eavestrough & Gutters",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "exteriors",
     workerNoun: "Installer",
@@ -770,7 +831,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "landscaping-grounds-snow",
     label: "Snow Removal",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "landscaping-grounds-snow",
     workerNoun: "Crew Lead",
@@ -788,7 +849,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "landscaping-grounds-snow",
     label: "Irrigation & Sprinklers",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "landscaping-grounds-snow",
     workerNoun: "Crew Lead",
@@ -806,7 +867,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "landscaping-grounds-snow",
     label: "Fence & Deck",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "landscaping-grounds-snow",
     workerNoun: "Crew Lead",
@@ -824,7 +885,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     id: "electrical",
     label: "Solar & EV Chargers",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "electrical",
     workerNoun: "Electrician",
@@ -848,7 +909,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     // actually is.
     id: "hvac-plumbing",
     label: "Plumbing",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "hvac-plumbing",
     workerNoun: "Technician",
@@ -869,7 +930,7 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
     // service) gets a label that fits, still on the hvac-plumbing catalog.
     id: "hvac-plumbing",
     label: "Mechanical",
-    group: "Aliases (route to a core industry)",
+    group: "More Trades",
     tier: "alias",
     aliasOf: "hvac-plumbing",
     workerNoun: "Technician",
@@ -896,8 +957,9 @@ export const INDUSTRY_GROUPS: string[] = [
   "Grounds, Snow & Trees",
   "Facilities & Property Management",
   "Care & Family Services",
-  "Specialty (Outlier ICPs)",
-  "Aliases (route to a core industry)",
+  "Telecom, Installation & Field Service",
+  "Specialty",
+  "More Trades",
 ];
 
 export function getIndustryPreset(id: string | undefined | null): IndustryPreset | undefined {
