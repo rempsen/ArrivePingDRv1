@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext } from "../today";
+import { countLabel, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext } from "../today";
 import type { OfficeTech } from "../board";
 
 const TZ = "America/Winnipeg"; // UTC-5 in late October (CDT)
@@ -200,5 +200,18 @@ describe("revenueOf", () => {
     expect(moneyShort(4200)).toBe("$4.2k");
     expect(moneyShort(4000)).toBe("$4k");
     expect(moneyShort(12_400)).toBe("$12k");
+  });
+});
+
+describe("countLabel", () => {
+  test("uses the company's singular for one and its plural otherwise", () => {
+    expect(countLabel(1, "Technician", "Technicians")).toBe("1 technician");
+    expect(countLabel(3, "Technician", "Technicians")).toBe("3 technicians");
+    expect(countLabel(0, "Technician", "Technicians")).toBe("0 technicians");
+  });
+
+  test("irregular plurals come from the company's setting", () => {
+    expect(countLabel(2, "Crew member", "Crew members")).toBe("2 crew members");
+    expect(countLabel(2, "Person", "People")).toBe("2 people");
   });
 });

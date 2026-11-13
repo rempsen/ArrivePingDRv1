@@ -8,13 +8,14 @@ import { CrewChips, DayBar, NeedRow, NextRow, Panel, Quiet, Tiles, timeIn, type 
 import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
+import { useWorkerNoun } from "../../lib/use-brand";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
 import { useStreamHealthy } from "../../lib/use-dispatch-stream";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { onDay } from "../../lib/map-pins";
-import { TEAM_ALL, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
+import { TEAM_ALL, countLabel, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
 import { instantFor, jobMinutes, minLabel } from "../../lib/timeline";
 import { partsIn } from "../../lib/when";
 
@@ -57,6 +58,8 @@ export default function Today() {
   // The next six days: tomorrow's preview and "N more unassigned this week".
   const ahead = useBoard(tomorrow, !!tomorrow, 6);
   const noun = board.data?.workerNoun ?? "technicians";
+  // The company's own singular and plural for its crew (Settings), not a guess from the board's word.
+  const { noun: crewOne, nounPlural: crewMany } = useWorkerNoun();
   const one = noun.replace(/s$/, "");
 
   const nowMin = useMemo(() => {
@@ -230,7 +233,7 @@ export default function Today() {
           {techs.length} on roster{preview && wrapped ? ` · ${preview.tomorrow.onRoster} tomorrow` : ""}
         </Text>
       </View>
-      <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={team} all={{ label: `${techs.length} ${techs.length === 1 ? noun.replace(/s$/, "") : noun}`, onPress: () => team(TEAM_ALL) }} /> : <Text style={s.cardNote}>No {noun} yet.</Text>}</View>
+      <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={team} all={{ label: countLabel(techs.length, crewOne, crewMany), onPress: () => team(TEAM_ALL) }} /> : <Text style={s.cardNote}>No {crewMany.toLowerCase()} yet.</Text>}</View>
     </View>
   );
 
