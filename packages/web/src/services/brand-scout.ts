@@ -36,6 +36,7 @@ import { formatPhone } from "../api/lib/validate";
 import { INDUSTRY_LABELS } from "./industry-presets";
 import { fetchGoogleReviewMentions, googlePlacesAvailable } from "./review-mentions";
 import { BROWSER_HEADERS, fetchPage, type FetchVia } from "./site-fetch";
+import { recordScanRun, type ScanSource } from "./scan-runs";
 import { extractSignals, mergeSignals, signalsBlock, sitemapLocs } from "./site-signals";
 
 export interface BrandProposal {
@@ -1278,6 +1279,29 @@ const TextSchema = z.object({
 
 /** Main entry — run the full brand-scout pipeline. */
 export async function scoutBrand(
+  rawWebsite: string,
+  companyId: string,
+  /** `record: false` when the caller writes the scan record itself (it has its own deadline). */
+  run: { source: ScanSource; companyId?: string; record?: boolean } = { source: "signup" },
+): Promise<BrandProposal> {
+  const started = Date.now();
+  const proposal = await scoutBrandInner(rawWebsite, companyId);
+  if (run.record === false) return proposal;
+  // Every attempt is recorded, read or not (services/scan-runs.ts).
+  await recordScanRun({
+    website: proposal.website || rawWebsite,
+    status: proposal.scan.status,
+    via: proposal.scan.via,
+    httpStatus: proposal.scan.httpStatus,
+    pagesRead: proposal.scan.pagesRead,
+    ms: Date.now() - started,
+    source: run.source,
+    companyId: run.companyId,
+  });
+  return proposal;
+}
+
+async function scoutBrandInner(
   rawWebsite: string,
   companyId: string,
 ): Promise<BrandProposal> {

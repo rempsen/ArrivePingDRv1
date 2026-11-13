@@ -13,6 +13,8 @@ import { HUB_SETTINGS } from "../shared/hub-settings";
 import { getIndustryPreset } from "./industry-presets";
 import { resolveLogoPlate } from "./logo-contrast";
 import { getTenantFeatures, allOverrides } from "./features";
+import { scanHealth, scansForCompany } from "./scan-runs";
+import { groupSections, parseSetupReport, SECTION_LABEL, setupOneLine } from "./setup-report";
 import { tenants as analyticsTenants, headline, type Health, type TenantRow } from "./platform-analytics";
 
 const DAY = 86_400_000;
@@ -194,11 +196,12 @@ export async function openLeads() {
 }
 
 export async function hubOverview(now = new Date()) {
-  const [tenants, leads, overrides, recent] = await Promise.all([
+  const [tenants, leads, overrides, recent, scans] = await Promise.all([
     listHubTenants(),
     openLeads(),
     allOverrides().catch(() => []),
     sdb.select().from(schema.platformAudit).orderBy(desc(schema.platformAudit.createdAt)).limit(15).catch(() => []),
+    scanHealth(30, now),
   ]);
   let head: Awaited<ReturnType<typeof headline>> | null = null;
   try {
@@ -226,6 +229,8 @@ export async function hubOverview(now = new Date()) {
     },
     attention: buildAttention({ tenants, leads, overrides, now }),
     activity: recent,
+    /** Website scans in the last 30 days: how many read the site, and which did not. */
+    scans,
     generatedAt: now.toISOString(),
   };
 }
@@ -300,8 +305,26 @@ export async function hubTenantDetail(companyId: string) {
     brandColor: logoRow?.brandColor ?? "",
     name: co.name,
   };
+  // Setup check: how the website scan went and what signup built from it.
+  const website = String((settingsRow as { website?: string } | undefined)?.website ?? "");
+  const report = parseSetupReport(co.setupReport);
+  const grouped = report ? groupSections(report) : null;
+  const setup = {
+    website,
+    /** null for a company created before the record existed. */
+    report: report
+      ? {
+          scan: report.scan,
+          line: setupOneLine(report),
+          fromWebsite: grouped!.website.map((k) => SECTION_LABEL[k]),
+          starter: [...grouped!.industry, ...grouped!.general].map((k) => SECTION_LABEL[k]),
+        }
+      : null,
+    scans: await scansForCompany(companyId, website),
+  };
   return {
     logoCheck,
+    setup,
     company: {
       id: co.id,
       name: co.name,

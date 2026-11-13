@@ -102,7 +102,7 @@ const websiteSource: EnrichmentSource = {
   enabled: () => true,
   async run({ website, companyId }) {
     if (!website) return null;
-    const p: BrandProposal = await scoutBrand(website, companyId);
+    const p: BrandProposal = await scoutBrand(website, companyId, { source: "check", companyId });
     // Same crawl store as "Re-scan website": the newest site_crawls row feeds
     // the concierge and AI writers, so a check keeps it fresh too. Best-effort.
     // A scan that read nothing must not replace the last good crawl.

@@ -3,7 +3,7 @@
  * disagree (the scan returned up to 20 pages, signup accepted 15), so the
  * richest sites were the ones rejected. Whatever the scan returns must parse.
  */
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { BrandProposal, _scan, scanIfMissing } from "../company-provisioning";
 import { fitProposal, PROPOSAL_MAX_PAGES, scoutBrand, type BrandProposal as Proposal } from "../brand-scout";
 
@@ -60,8 +60,15 @@ describe("scan → signup contract", () => {
 
 describe("scanIfMissing", () => {
   const real = _scan.scoutBrand;
+  const realRecord = _scan.record;
+  let recorded: Parameters<typeof _scan.record>[0][] = [];
+  beforeEach(() => {
+    recorded = [];
+    _scan.record = async (r) => void recorded.push(r);
+  });
   afterEach(() => {
     _scan.scoutBrand = real;
+    _scan.record = realRecord;
   });
   const good = (): Proposal => ({
     ...fitProposal(maximal()),
@@ -116,6 +123,36 @@ describe("scanIfMissing", () => {
     expect(await scanIfMissing(b, "vf")).toBe("empty");
     // Nothing is filled in; only the reason is kept, for the setup report.
     expect(b.brand).toEqual({ scan: { status: "blocked", via: null, httpStatus: 403, pagesRead: 0 } });
+  });
+
+  test("the record says what signup got: a scan that outlives the deadline is a timeout", async () => {
+    let asked: unknown;
+    let finish: (p: Proposal) => void = () => {};
+    _scan.scoutBrand = (_w, _c, run) => ((asked = run), new Promise<Proposal>((r) => (finish = r)));
+    const realSetTimeout = globalThis.setTimeout;
+    // Fire the 40 s deadline at once.
+    globalThis.setTimeout = ((fn: () => void) => realSetTimeout(fn, 0)) as typeof setTimeout;
+    try {
+      const b: any = { website: "valleyfiber.ca", industry: "" };
+      expect(await scanIfMissing(b, "vf")).toBe("empty");
+      expect(b.brand.scan.status).toBe("timeout");
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    // The scan was told not to write its own record...
+    expect(asked).toMatchObject({ source: "fallback", record: false });
+    // ...so its late success adds nothing, and the one record is the timeout.
+    finish(good());
+    await new Promise((r) => realSetTimeout(r, 5));
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ status: "timeout", source: "fallback", companyId: "vf", pagesRead: 0 });
+  });
+
+  test("a scan that finishes in time is recorded with its result, against the company", async () => {
+    _scan.scoutBrand = async () => good();
+    await scanIfMissing({ website: "valleyfiber.ca", industry: "" } as any, "vf");
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ status: "ok", via: "direct", source: "fallback", companyId: "vf" });
   });
 
   test("a scan that throws never fails the signup", async () => {

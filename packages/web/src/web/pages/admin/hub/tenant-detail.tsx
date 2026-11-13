@@ -77,7 +77,7 @@ export default function HubTenantDetail() {
           <div className="mb-5">
             <Segmented<Tab> ariaLabel="Company sections" value={tab} onChange={setTab} options={tabs} />
           </div>
-          {tab === "overview" && <OverviewTab d={d} />}
+          {tab === "overview" && <OverviewTab d={d} staff={me.data?.role === "staff" || me.data?.role === "owner"} />}
           {tab === "features" && <FeaturesTab d={d} readOnly={isSalesOnCustomer} />}
           {tab === "people" && <PeopleTab d={d} canActAs={Boolean(me.data?.can.actAs) || (me.data?.role === "sales" && d.company.kind !== "customer")} />}
           {tab === "settings" && <SettingsTab d={d} readOnly={isSalesOnCustomer} />}
@@ -100,7 +100,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function OverviewTab({ d }: { d: TenantDetail }) {
+function OverviewTab({ d, staff }: { d: TenantDetail; staff: boolean }) {
   const s = d.summary;
   const c = d.company;
   return (
@@ -136,6 +136,7 @@ function OverviewTab({ d }: { d: TenantDetail }) {
         </dl>
       </Card>
       <LogoCheckCard d={d} />
+      <WebsiteSetupCard d={d} readOnly={!staff} />
       <Card title="Connected apps">
         {d.integrations.filter((i) => i.status === "connected").length === 0 ? (
           <p className="text-[13px] text-slate-500">None connected.</p>
@@ -206,6 +207,92 @@ function LogoCheckCard({ d }: { d: TenantDetail }) {
           </div>
         </div>
       </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------- website setup -- */
+
+const SCAN_WORDS: Record<string, string> = {
+  ok: "Read",
+  partial: "Read, little on it",
+  blocked: "Refused our visit",
+  unreachable: "Could not be reached",
+  timeout: "Too slow to answer",
+  invalid_url: "Not a web address",
+  none: "No website given",
+  unknown: "Not recorded",
+};
+const scanRead = (status: string) => status === "ok" || status === "partial";
+
+/**
+ * Setup check: was the company's website actually read, and which parts of
+ * their setup came from it. A starter set is fine, but staff should know it
+ * is one before a customer says "it got my services wrong".
+ */
+function WebsiteSetupCard({ d, readOnly }: { d: TenantDetail; readOnly: boolean }) {
+  const qc = useQueryClient();
+  const s = d.setup;
+  const rescan = useMutation({
+    mutationFn: () => hub<{ ok: boolean; pageCount: number; filled: string[]; message: string | null }>(`/tenants/${encodeURIComponent(d.company.id)}/rescan`, { method: "POST" }),
+    onSuccess: (r) => {
+      toast(
+        r.ok
+          ? { kind: "success", message: `Read ${r.pageCount} page${r.pageCount === 1 ? "" : "s"}. ${r.filled.length ? `Filled in: ${r.filled.join(", ")}.` : "Nothing new to fill in."}` }
+          : { kind: "error", message: r.message ?? "The website could not be read." },
+      );
+      void qc.invalidateQueries({ queryKey: ["hub", "tenant", d.company.id] });
+    },
+    onError: () => toast({ kind: "error", message: "Couldn't start the scan." }),
+  });
+  const last = s.scans[0];
+  const status = s.report?.scan.status ?? last?.status ?? (s.website ? "unknown" : "none");
+  const good = scanRead(status);
+  return (
+    <Card title="Website setup" caption="Setup check: was their website read, and what was built from it?">
+      <p className={`text-[13px] ${good ? "text-slate-200" : "text-amber-200"}`}>
+        <span className="font-semibold">{SCAN_WORDS[status] ?? status}</span>
+        {s.website ? ` · ${s.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}` : ""}
+        {s.report && good ? ` · ${s.report.scan.pagesRead} page${s.report.scan.pagesRead === 1 ? "" : "s"}${s.report.scan.via === "render" ? ", through the hosted browser" : ""}` : ""}
+      </p>
+      {s.report ? (
+        <dl className="mt-3 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
+          <div>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Written from their website</dt>
+            <dd className="mt-0.5 text-slate-200">{s.report.fromWebsite.length ? s.report.fromWebsite.join(", ") : "Nothing"}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Starter set</dt>
+            <dd className="mt-0.5 text-slate-200">{s.report.starter.length ? s.report.starter.join(", ") : "Nothing"}</dd>
+          </div>
+        </dl>
+      ) : (
+        <p className="mt-2 text-[12px] text-slate-500">This company was set up before signup recorded where each section came from.</p>
+      )}
+      {s.scans.length > 0 && (
+        <ul className="mt-4 divide-y divide-white/[0.05] border-t border-white/[0.05] text-[12px]">
+          {s.scans.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 py-1.5">
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${scanRead(r.status) ? "bg-emerald-400" : "bg-amber-400"}`} aria-hidden="true" />
+              <span className="w-40 shrink-0 text-slate-300">{SCAN_WORDS[r.status] ?? r.status}</span>
+              <span className="min-w-0 flex-1 truncate text-slate-500">
+                {r.source}
+                {scanRead(r.status) ? ` · ${r.pagesRead} page${r.pagesRead === 1 ? "" : "s"}${r.via === "render" ? " · hosted browser" : ""}` : r.httpStatus ? ` · HTTP ${r.httpStatus}` : ""}
+                {` · ${(r.ms / 1000).toFixed(0)} s`}
+              </span>
+              <span className="shrink-0 tabular-nums text-slate-500">{fmt.ago(r.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!readOnly && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <BtnGhost onClick={() => rescan.mutate()} disabled={!s.website || rescan.isPending}>
+            {rescan.isPending ? "Reading their site…" : "Read their website again"}
+          </BtnGhost>
+          <span className="text-[12px] text-slate-500">Fills blanks in their profile and refreshes what the assistant knows. Never overwrites what they typed; forms, templates and catalog are not rebuilt.</span>
+        </div>
+      )}
     </Card>
   );
 }

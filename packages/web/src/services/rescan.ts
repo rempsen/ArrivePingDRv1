@@ -154,7 +154,7 @@ export async function rescanWebsite(companyId: string, opts: RescanOptions = {})
 
   let proposal: BrandProposal;
   try {
-    proposal = await scoutBrand(website, companyId);
+    proposal = await scoutBrand(website, companyId, { source: opts.source === "superadmin" ? "superadmin" : "rescan", companyId });
   } catch (e: any) {
     return { ...base, error: `Scan failed: ${e?.message ?? "unknown error"}` };
   }

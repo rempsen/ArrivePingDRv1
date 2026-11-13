@@ -1539,6 +1539,33 @@ export const oauthAppCredentials = pgTable("oauth_app_credentials", {
   createdAt: now(),
 });
 
+// One row per website scan, whatever came of it (services/scan-runs.ts). The
+// crawl itself is kept in site_crawls only when something was read; this is
+// the plain record of every attempt, so the share of sites we fail to read is
+// a number someone can look at. `company_id` is "" for a scan made before the
+// company exists (the signup page).
+export const scanRuns = pgTable(
+  "scan_runs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    companyId: text("company_id").notNull().default(""),
+    host: text("host").notNull().default(""),
+    // ok | partial | blocked | unreachable | timeout | invalid_url
+    status: text("status").notNull().default(""),
+    // direct | render | "" (nothing was read)
+    via: text("via").notNull().default(""),
+    httpStatus: integer("http_status"),
+    pagesRead: integer("pages_read").notNull().default(0),
+    ms: integer("ms").notNull().default(0),
+    // signup | fallback | rescan | superadmin | check | demo
+    source: text("source").notNull().default(""),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("scan_runs_created_idx").on(t.createdAt), index("scan_runs_company_idx").on(t.companyId, t.createdAt)],
+);
+
 // A self-serve signup being worked on right now, by card (or by email when
 // there is no card step). The row is the claim: the first request inserts it,
 // any other request on any server sees it and waits, and it is deleted when the
