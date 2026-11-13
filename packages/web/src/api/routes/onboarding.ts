@@ -141,6 +141,36 @@ const onboardingStatusLimiter = rateLimit({
 /** How long a company with no admin yet counts as "still being set up". */
 export const SIGNUP_PENDING_MS = 15 * 60_000;
 
+/**
+ * Signups being worked on right now, by card (or by email when there is no
+ * card step). A company row only exists some seconds into a signup (the trial
+ * is started and the site may be scanned first), so until then a second click,
+ * a second tab or a browser retry saw "nothing here yet" and started a second
+ * company on the same card. The first request claims the key; any other gets
+ * "still being set up" and waits for it.
+ *
+ * In memory: correct for one server process. With more than one, the window
+ * is still closed by the unique company per Stripe customer check that
+ * follows, only later.
+ */
+const signupsInFlight = new Map<string, number>();
+export function signupKey(billingCustomerId: string | null | undefined, adminEmail: string): string {
+  return billingCustomerId ? `cus:${billingCustomerId}` : `email:${adminEmail.trim().toLowerCase()}`;
+}
+export function claimSignup(key: string, now = Date.now()): boolean {
+  const started = signupsInFlight.get(key);
+  if (started !== undefined && now - started < SIGNUP_PENDING_MS) return false;
+  signupsInFlight.set(key, now);
+  return true;
+}
+export function releaseSignup(key: string): void {
+  signupsInFlight.delete(key);
+}
+export function signupInFlight(key: string, now = Date.now()): boolean {
+  const started = signupsInFlight.get(key);
+  return started !== undefined && now - started < SIGNUP_PENDING_MS;
+}
+
 export type SignupState =
   | { kind: "none" }
   | { kind: "pending" }
@@ -287,6 +317,8 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     if (st.kind === "pending") return c.json({ state: "pending", message: PENDING_MESSAGE }, 200);
     if (st.kind === "stalled") return c.json({ state: "stalled", message: STALLED_MESSAGE }, 200);
     if (st.kind === "taken") return c.json({ state: "taken", message: "This card is already used by another ArrivePing company." }, 200);
+    // No company row yet, but a signup for this card is under way.
+    if (signupInFlight(signupKey(billingCustomerId, adminEmail))) return c.json({ state: "pending", message: PENDING_MESSAGE }, 200);
     return c.json({ state: "none" }, 200);
   })
 
@@ -339,6 +371,11 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       if (st.kind === "stalled") return c.json({ code: "signup_stalled", message: STALLED_MESSAGE }, 409);
     }
 
+    // One signup per card (or email) at a time: a double click or a second
+    // tab waits for the first instead of creating a second company.
+    const lockKey = signupKey(billingCustomerId, b.adminEmail);
+    if (!claimSignup(lockKey)) return c.json({ pending: true, message: PENDING_MESSAGE }, 202);
+    try {
     // Self-serve can't be asked to pick another slug on a collision, so take
     // the next free one ("acme-hvac-2") before anything is created.
     const base = slugify(b.slug || b.name);
@@ -439,6 +476,9 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       },
       201,
     );
+    } finally {
+      releaseSignup(lockKey);
+    }
   });
 
 /* -------------------------------------------------------------------------- */

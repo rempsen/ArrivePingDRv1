@@ -16,7 +16,7 @@ process.env.DATABASE_AUTH_TOKEN = "";
 
 const { db } = await import("../../database/index");
 const schema = await import("../../database/schema");
-const { signupState, SIGNUP_PENDING_MS } = await import("../onboarding");
+const { signupState, SIGNUP_PENDING_MS, claimSignup, releaseSignup, signupInFlight, signupKey } = await import("../onboarding");
 
 function colDdl(col: PgColumn, withPk: boolean): string {
   const parts = [`"${col.name}"`, col.getSQLType()];
@@ -75,5 +75,29 @@ describe("signupState", () => {
     expect((await signupState("cus_wip", "pat@example.com", NOW)).kind).toBe("pending");
     expect((await signupState("cus_late", "pat@example.com", NOW)).kind).toBe("pending");
     expect((await signupState("cus_old", "pat@example.com", NOW)).kind).toBe("stalled");
+  });
+});
+
+describe("one signup at a time per card", () => {
+  it("the first request claims the card; a second waits; release frees it", () => {
+    const key = signupKey("cus_lock_1", "a@acme.test");
+    expect(claimSignup(key, 1_000)).toBe(true);
+    expect(claimSignup(key, 2_000)).toBe(false);
+    expect(signupInFlight(key, 2_000)).toBe(true);
+    releaseSignup(key);
+    expect(signupInFlight(key, 2_000)).toBe(false);
+    expect(claimSignup(key, 3_000)).toBe(true);
+    releaseSignup(key);
+  });
+  it("a claim left behind by a crashed request expires", () => {
+    const key = signupKey("cus_lock_2", "a@acme.test");
+    expect(claimSignup(key, 0)).toBe(true);
+    expect(claimSignup(key, SIGNUP_PENDING_MS - 1)).toBe(false);
+    expect(claimSignup(key, SIGNUP_PENDING_MS + 1)).toBe(true);
+    releaseSignup(key);
+  });
+  it("without a card the email is the key, whatever its case", () => {
+    expect(signupKey(null, " Dana@Acme.Test ")).toBe(signupKey(undefined, "dana@acme.test"));
+    expect(signupKey("cus_1", "a@b.co")).not.toBe(signupKey("cus_2", "a@b.co"));
   });
 });

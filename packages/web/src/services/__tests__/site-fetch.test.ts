@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { _setSiteFetchForTests, fetchPage, hostVariant, looksLikeChallenge, visibleTextLength } from "../site-fetch";
 import { scoutBrand } from "../brand-scout";
+import { _setResolverForTests, checkPublicUrl, isPrivateAddress } from "../safe-net";
 
 const page = (words: number) => `<html><head><title>Acme</title></head><body><p>${"word ".repeat(words)}</p></body></html>`;
 const html = (body: string, status = 200) => new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
@@ -147,6 +148,81 @@ describe("fetchPage", () => {
     process.env.FIRECRAWL_API_KEY = "test-key";
     _setSiteFetchForTests(async (u) => (isRender(u) ? render("<html>Access denied</html>", 403) : html("no", 403)));
     expect(await fetchPage("https://wall.test/")).toMatchObject({ ok: false, reason: "blocked" });
+  });
+});
+
+describe("what the scan refuses to fetch", () => {
+  const redirect = (to: string, status = 302) => new Response(null, { status, headers: { location: to } });
+
+  test.each([
+    ["10.0.0.5", true], ["127.0.0.1", true], ["169.254.169.254", true], ["172.16.4.1", true], ["172.32.0.1", false], ["192.168.1.1", true],
+    ["100.64.0.1", true], ["0.0.0.0", true], ["8.8.8.8", false], ["93.184.216.34", false], ["::1", true], ["fd00::1", true], ["fe80::1", true],
+    ["::ffff:10.0.0.1", true], ["::ffff:a00:1", true], ["::ffff:8.8.8.8", false], ["2606:4700::1111", false], ["not-an-ip", true],
+  ])("isPrivateAddress(%s) is %p", (ip, want) => {
+    expect(isPrivateAddress(ip)).toBe(want as boolean);
+  });
+
+  test("a public name that resolves to an internal address", async () => {
+    delete process.env.FIRECRAWL_API_KEY;
+    const calls: string[] = [];
+    _setSiteFetchForTests(async (u) => (calls.push(u), html(page(300))));
+    _setResolverForTests(async () => ["169.254.169.254"]);
+    expect(await fetchPage("https://innocent.test/")).toMatchObject({ ok: false, reason: "unreachable", refused: true });
+    expect(calls).toEqual([]);
+  });
+
+  test("one internal answer among several is enough to refuse", async () => {
+    _setResolverForTests(async () => ["93.184.216.34", "10.1.2.3"]);
+    expect(await checkPublicUrl("https://mixed.test/")).toEqual({ ok: false, why: "private" });
+  });
+
+  test("a public page that redirects to an internal address, with no second try by another route", async () => {
+    process.env.FIRECRAWL_API_KEY = "test-key";
+    const calls: string[] = [];
+    _setSiteFetchForTests(async (u) => {
+      calls.push(u);
+      return u === "https://acme.test/" ? redirect("http://127.0.0.1:4200/api/health") : html(page(300));
+    });
+    expect(await fetchPage("https://acme.test/")).toMatchObject({ ok: false, refused: true });
+    expect(calls).toEqual(["https://acme.test/"]);
+  });
+
+  test("credentials in the address, other schemes and bare names", async () => {
+    for (const u of ["https://user:pw@acme.test/", "ftp://acme.test/", "http://intranet/", "http://db.internal/", "http://[::1]/"]) {
+      expect((await checkPublicUrl(u)).ok).toBe(false);
+    }
+  });
+
+  test("ordinary redirects are followed, and the final address is reported", async () => {
+    delete process.env.FIRECRAWL_API_KEY;
+    _setSiteFetchForTests(async (u) => (u === "http://acme.test/" ? redirect("https://www.acme.test/home", 301) : u === "https://www.acme.test/home" ? html(page(300)) : html("no", 404)));
+    const r = await fetchPage("http://acme.test/");
+    expect(r).toMatchObject({ ok: true, finalUrl: "https://www.acme.test/home" });
+  });
+
+  test("a redirect loop ends", async () => {
+    delete process.env.FIRECRAWL_API_KEY;
+    let n = 0;
+    _setSiteFetchForTests(async (u) => (n++, redirect(u + "x")));
+    expect(await fetchPage("https://loop.test/")).toMatchObject({ ok: false, detail: "too many redirects" });
+    expect(n).toBeLessThan(10);
+  });
+});
+
+describe("reading the page", () => {
+  test("a windows-1252 page keeps its accents", async () => {
+    delete process.env.FIRECRAWL_API_KEY;
+    const bytes = new Uint8Array([...`<html><head><meta charset="windows-1252"></head><body>R`].map((c) => c.charCodeAt(0)).concat([0xe9], [...`paration ${"mot ".repeat(200)}</body></html>`].map((c) => c.charCodeAt(0))));
+    _setSiteFetchForTests(async () => new Response(bytes, { status: 200, headers: { "content-type": "text/html" } }));
+    const r = await fetchPage("https://vieux.test/");
+    expect(r.ok && r.html).toContain("Réparation");
+  });
+
+  test("a page that never ends is cut off", async () => {
+    delete process.env.FIRECRAWL_API_KEY;
+    _setSiteFetchForTests(async () => html(`<html><body>${"word ".repeat(1_400_000)}</body></html>`));
+    const r = await fetchPage("https://huge.test/");
+    expect(r.ok && r.html.length).toBeLessThanOrEqual(3_000_000);
   });
 });
 
