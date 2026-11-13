@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, Pressable, StyleSheet, Linking } from "react-native";
 import { useRouter } from "expo-router";
-import { Warning, Clock, Megaphone, MapPin, Plus, CheckCircle, CalendarBlank } from "phosphor-react-native";
+import { Warning, Clock, Megaphone, MapPin, Plus, CheckCircle, CalendarBlank, UsersThree } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { OfficeIntroCard } from "../../components/office/intro-card";
 import { CrewChips, DayBar, NeedRow, NextRow, Panel, Quiet, Tiles, timeIn, type NeedAction, type Tile } from "../../components/office/today-parts";
-import { Empty, ListSkeleton } from "../../components/ui";
+import { Button, Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
 import { useAccess } from "../../lib/use-access";
@@ -14,7 +14,7 @@ import { useStreamHealthy } from "../../lib/use-dispatch-stream";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { onDay } from "../../lib/map-pins";
-import { TEAM_ALL, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, teamStatusFor, upNext, type Need } from "../../lib/today";
+import { TEAM_ALL, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
 import { instantFor, jobMinutes, minLabel } from "../../lib/timeline";
 import { partsIn } from "../../lib/when";
 
@@ -228,8 +228,13 @@ export default function Today() {
         <Text style={s.cardNote}>
           {techs.length} on roster{preview && wrapped ? ` · ${preview.tomorrow.onRoster} tomorrow` : ""}
         </Text>
+        {techs.length ? (
+          <View style={{ alignSelf: "flex-start", marginTop: S.sm }}>
+            <Button title="All crew" small variant="outline" icon={<UsersThree color={C.text} size={16} />} onPress={() => team(TEAM_ALL)} accessibilityLabel="Show the whole crew" />
+          </View>
+        ) : null}
       </View>
-      <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={(key) => team(teamStatusFor(key))} /> : <Text style={s.cardNote}>No {noun} yet.</Text>}</View>
+      <View style={wide ? { flex: 1, minWidth: 0 } : { width: "100%" }}>{techs.length ? <CrewChips groups={crew} tz={tz} onPick={team} /> : <Text style={s.cardNote}>No {noun} yet.</Text>}</View>
     </View>
   );
 
