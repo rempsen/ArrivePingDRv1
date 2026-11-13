@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { ArrowsOutCardinal, Eye, EyeSlash } from "phosphor-react-native";
 import { C, R, S } from "../../lib/theme";
+import { statusColor } from "./tech-row";
 import type { OfficeJob, OfficeTech } from "../../lib/board";
 import { fitRegion, visibleJobs, visibleTechs, type PinKind } from "../../lib/map-pins";
 
@@ -10,34 +11,21 @@ const PIN_COLOR: Record<PinKind, string> = { unassigned: C.red, offered: C.amber
 const PIN_LABEL: Record<PinKind, string> = { unassigned: "Unassigned", offered: "Offered", active: "In the field", scheduled: "Scheduled" };
 
 /**
- * Markers are the map's own pins (jobs, tinted by `pinColor`) and small
- * pre-rendered discs (technicians, one per status). Under the New
- * Architecture react-native-maps loses custom <View> marker children after a
- * pan or zoom (react-native-maps #5911 / #5877), which on a dispatch map means
- * jobs and people silently vanishing, so nothing here renders a child view.
- * The technician's initials moved to the selection card; the disc carries the
- * status colour, and a selected disc inverts (white ring, status dot).
+ * Every marker is the map's own pin tinted with `pinColor`. Nothing here uses
+ * the `image` prop or child views: under the New Architecture (react-native-maps
+ * 1.29 + React Native 0.88) `image` markers never draw (#5912) and custom child
+ * views are lost after a pan or zoom (#5911 / #5877). Plain tinted pins do draw,
+ * confirmed on the iPad. A selected pin turns white; the technician's name and
+ * status are on the selection card.
  */
-type TechPinStatus = "enroute" | "onsite" | "available" | "busy" | "offline";
-const TECH_PIN: Record<TechPinStatus, { off: number; on: number }> = {
-  enroute: { off: require("../../assets/map/tech-enroute.png"), on: require("../../assets/map/tech-enroute-on.png") },
-  onsite: { off: require("../../assets/map/tech-onsite.png"), on: require("../../assets/map/tech-onsite-on.png") },
-  available: { off: require("../../assets/map/tech-available.png"), on: require("../../assets/map/tech-available-on.png") },
-  busy: { off: require("../../assets/map/tech-busy.png"), on: require("../../assets/map/tech-busy-on.png") },
-  offline: { off: require("../../assets/map/tech-offline.png"), on: require("../../assets/map/tech-offline-on.png") },
-};
-function techPinStatus(status: string): TechPinStatus {
-  if (status === "break") return "busy";
-  return status in TECH_PIN ? (status as TechPinStatus) : "offline";
-}
 
 export type MapSelection = { kind: "tech" | "job"; id: string } | null;
 
 /**
  * Everyone and everything with a position, on Apple Maps: technicians as
- * initials in a status-coloured ring, open jobs as pins coloured by who has
- * them. Positions come from the board the tab already holds, which the
- * dispatch stream's `locations` event keeps fresh. Tapping a marker selects
+ * pins coloured by status, open jobs as pins coloured by who has them.
+ * Positions come from the board the tab already holds, which the dispatch
+ * stream's `locations` event keeps fresh. Tapping a marker selects
  * it; tapping the map clears the selection.
  */
 export function LiveMap({
@@ -54,7 +42,8 @@ export function LiveMap({
   onSelect: (sel: MapSelection) => void;
 }) {
   const ref = useRef<MapView>(null);
-  const [showOffline, setShowOffline] = useState(false);
+  // Off-shift technicians show too (dimmed), as on the web map; the eye button hides them.
+  const [showOffline, setShowOffline] = useState(true);
   const techPins = useMemo(() => visibleTechs(techs, showOffline), [techs, showOffline]);
   const jobPins = useMemo(() => visibleJobs(jobs), [jobs]);
   const fit = () => ref.current?.animateToRegion(fitRegion([...techPins, ...jobPins], office), 400);
@@ -96,7 +85,7 @@ export function LiveMap({
         })}
         {techPins.map((t) => {
           const on = selected?.kind === "tech" && selected.id === t.id;
-          const pin = TECH_PIN[techPinStatus(t.status)];
+          const col = statusColor(t.status === "break" ? "busy" : t.status);
           return (
             <Marker
               key={`tech-${t.id}`}
@@ -105,10 +94,8 @@ export function LiveMap({
                 e.stopPropagation();
                 onSelect({ kind: "tech", id: t.id });
               }}
-              image={on ? pin.on : pin.off}
-              anchor={{ x: 0.5, y: 0.5 }}
-              centerOffset={{ x: 0, y: 0 }}
-              opacity={t.stale ? 0.6 : 1}
+              pinColor={on ? C.text : col}
+              opacity={t.status === "offline" || t.stale ? 0.6 : 1}
               zIndex={2}
               accessibilityLabel={`${t.name}, ${t.status}`}
             />
