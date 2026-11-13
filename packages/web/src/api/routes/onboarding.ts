@@ -18,6 +18,7 @@
  *     first login for every freshly-provisioned tenant (self-serve or
  *     superadmin-built alike — see `companies.onboardingCompletedAt`).
  */
+import { log } from "../lib/logger";
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -236,7 +237,8 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       const proposal = await scoutBrand(website, `pending-${companyId}`);
       return c.json({ proposal }, 200);
     } catch (e: any) {
-      return c.json({ message: `Brand scout failed: ${e?.message ?? "unknown error"}` }, 502);
+      log.error("onboarding scout failed", { website, err: String(e?.message ?? e) });
+      return c.json({ message: "We hit a problem reading that site. Try again, or fill in your details by hand." }, 502);
     }
   })
 
@@ -738,7 +740,13 @@ about capabilities ArrivePing doesn't have.`
             ? `\nPRODUCT FIT FOR THIS INDUSTRY: strong — this is one of the trades ArrivePing's
 templates, catalog and option tiers were built around. Go deep on the
 ICP-specific questions (3-5): every answer should re-tune something seeded.`
-            : ""
+            : industryPreset.tier === "general"
+              ? `\nPRODUCT FIT FOR THIS INDUSTRY: a general starting set, not a deeply
+researched trade. ${industryPreset.fitNote ?? ""}
+Ask 2-3 questions about how THIS business actually runs its jobs, and use the
+answers to rename and re-tune the seeded job types, forms and notifications.
+Say plainly, in one sentence, when something is outside what ArrivePing does.`
+              : ""
         : snap.company.industry === "other"
           ? `\nPRODUCT FIT FOR THIS INDUSTRY: unknown — the tenant chose "Other". Nothing
 industry-specific was seeded, so ask ONE question about what they actually

@@ -159,6 +159,20 @@ export async function rescanWebsite(companyId: string, opts: RescanOptions = {})
     return { ...base, error: `Scan failed: ${e?.message ?? "unknown error"}` };
   }
   base.warnings = proposal.warnings ?? [];
+  // A scan that read nothing is a failure, not "nothing new". Stop before it
+  // replaces the last good crawl (newest wins) with an empty one.
+  const st = proposal.scan?.status;
+  if (st === "blocked" || st === "unreachable" || st === "timeout" || st === "invalid_url") {
+    const why =
+      st === "blocked"
+        ? "The site refused our visit, so nothing was read"
+        : st === "timeout"
+          ? "The site took too long to answer"
+          : st === "invalid_url"
+            ? "The website on file isn't a valid web address"
+            : "We couldn't reach the site. Check the address under Settings, Company";
+    return { ...base, error: `${why}. Your existing setup was left as it is.` };
+  }
   base.pageCount = proposal.pages?.length ?? 0;
   base.website = proposal.website || website;
 

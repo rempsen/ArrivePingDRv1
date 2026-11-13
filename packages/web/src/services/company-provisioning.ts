@@ -52,7 +52,7 @@ import { CATALOG_PRESETS, type CatalogPresetItem } from "./catalog-presets";
 import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-catalog-presets";
 import { scoutStarterCatalog, scoutStarterOptionCatalog } from "./catalog-scout";
 import { saveSiteCrawl } from "./site-crawl";
-import { buildExcerpts } from "./brand-scout";
+import { buildExcerpts, scoutBrand } from "./brand-scout";
 import { seedSampleDay } from "./sample-day";
 import { syncOfficeFromBusinessAddress } from "./company-office";
 
@@ -157,7 +157,9 @@ export const BrandProposal = z
           text: z.string().max(12_000),
         }),
       )
-      .max(15)
+      // Was .max(15) while the scout returned up to 20: the richest sites
+      // were rejected at signup. Now matches PROPOSAL_MAX_PAGES (brand-scout).
+      .max(40)
       .nullable(),
     structured: z.record(z.string(), z.unknown()).nullable(),
     excerpts: z.string().max(6_000).nullable(),
@@ -555,6 +557,49 @@ function early<T>(run: () => Promise<T>): () => Promise<T> {
   return () => p;
 }
 
+/** How long signup waits for a fallback scan before building from what it has. */
+const FALLBACK_SCAN_MS = 40_000;
+export const _scan = { scoutBrand };
+
+/** Fill `b.brand` (and an empty industry) from a fresh scan when signup arrived without one. */
+export async function scanIfMissing(b: CompanyCreateInput, slug: string): Promise<"skipped" | "filled" | "empty"> {
+  const website = String(b.website ?? "").trim();
+  const had = (b.brand ?? {}) as Record<string, unknown>;
+  if (!website || (Array.isArray(had.pages) && had.pages.length > 0)) return "skipped";
+  try {
+    const fresh = await Promise.race([
+      _scan.scoutBrand(website, slug),
+      new Promise<null>((r) => setTimeout(() => r(null), FALLBACK_SCAN_MS)),
+    ]);
+    if (!fresh || !fresh.pages.length) {
+      console.warn("[provisioning] fallback scan found nothing", { slug, website, status: fresh?.scan.status ?? "timeout" });
+      return "empty";
+    }
+    const merged: Record<string, unknown> = { ...fresh };
+    delete merged.warnings;
+    delete merged.scan;
+    for (const [k, v] of Object.entries(had)) {
+      const blank = v == null || v === "" || (Array.isArray(v) && !v.length);
+      if (!blank) merged[k] = v;
+    }
+    const parsed = BrandProposal.safeParse(merged);
+    if (!parsed.success) {
+      console.warn("[provisioning] fallback scan didn't fit the brand schema", { slug, issues: parsed.error.issues.slice(0, 3) });
+      return "empty";
+    }
+    b.brand = parsed.data as CompanyCreateInput["brand"];
+    if (!String(b.industry ?? "").trim() && fresh.suggestedIndustry) {
+      b.industry = fresh.suggestedIndustry;
+      if (fresh.suggestedIndustry === "other" && !String(b.industryOther ?? "").trim()) b.industryOther = fresh.suggestedIndustryOther ?? undefined;
+    }
+    console.info("[provisioning] fallback scan filled the brand", { slug, pages: fresh.pages.length, via: fresh.scan.via });
+    return "filled";
+  } catch (e) {
+    console.error("[provisioning] fallback scan failed", e);
+    return "empty";
+  }
+}
+
 export async function provisionCompany(
   b: CompanyCreateInput,
   actor: ProvisionActor,
@@ -609,6 +654,12 @@ export async function provisionCompany(
     const [u] = await sdb.select().from(schema.user).where(eq(schema.user.email, email));
     if (u) throw Err.conflict(`Email already in use: ${email}`);
   }
+
+  // The signup page's website scan never produced pages (it failed, was
+  // skipped, hit the rate limit, or the tab moved on before it returned), but
+  // we know the website: read it now, so the tenant isn't built from four
+  // typed fields. What the person typed or confirmed always wins.
+  await scanIfMissing(b, slug);
 
   // Primary Industry (ICP) — drives templates + service library presets.
   // "other" is a valid sentinel (no preset fits) paired with a free-text

@@ -7,7 +7,7 @@ import { authClient, captureToken } from "../lib/auth";
 import { Logo } from "../components/brand";
 import { Field, inputCls } from "../components/modal";
 import { ProvisioningProgress, type ProvisioningSeeded } from "../components/provisioning-progress";
-import { SignupReveal } from "../components/signup-reveal";
+import { SignupReveal, findingsOf, scanFailCopy, type ScanFail } from "../components/signup-reveal";
 import { SignupPayment, type BillingIds } from "../components/signup-payment";
 import { hubspotIdentify, openConsent } from "../site/lib/hubspot-tracking";
 import { INDUSTRY_LABELS, INDUSTRY_GROUPS } from "../../services/industry-presets";
@@ -73,6 +73,7 @@ type BrandProposal = {
   suggestedIndustryOther: string | null;
   suggestedIndustryRationale: string | null;
   warnings: string[];
+  scan?: { status: "ok" | "partial" | "blocked" | "unreachable" | "timeout" | "invalid_url"; via: "direct" | "render" | null; httpStatus: number | null; pagesRead: number };
 };
 
 type Step = "site" | "reveal" | "details" | "person" | "payment";
@@ -88,6 +89,8 @@ function looksLikeDomain(v: string): boolean {
 }
 
 const AUTO_SCOUT_DEBOUNCE_MS = 900;
+/** Longer than the server's own worst case (homepage, render, sub-pages, AI). */
+const SCOUT_CLIENT_TIMEOUT_MS = 100_000;
 
 export default function SignupCompanyPage() {
   const [step, setStep] = useState<Step>("site");
@@ -120,7 +123,7 @@ export default function SignupCompanyPage() {
 
   const [brand, setBrand] = useState<BrandProposal | null>(null);
   const [scouting, setScouting] = useState(false);
-  const [scoutErr, setScoutErr] = useState("");
+  const [scanFail, setScanFail] = useState<ScanFail | null>(null);
   // Key for the reveal component so a re-scan restarts its show from the top.
   const [revealRun, setRevealRun] = useState(0);
   const [scoutedFor, setScoutedFor] = useState(""); // last website string we actually scouted
@@ -171,23 +174,39 @@ export default function SignupCompanyPage() {
 
   async function runScout(site: string) {
     setScouting(true);
-    setScoutErr("");
+    setScanFail(null);
     setBrand(null);
     setRevealRun((n) => n + 1);
     setStep("reveal");
+    // The server works to its own deadlines; this only stops a dead
+    // connection from leaving the person on "Reading your site" forever.
+    const abort = new AbortController();
+    const giveUp = setTimeout(() => abort.abort(), SCOUT_CLIENT_TIMEOUT_MS);
     try {
-      const res = await (api.public as any).onboarding.scout.$post({
-        json: { website: site, name: name || undefined },
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error((d as any)?.message || "Couldn't read that site");
+      const res = await (api.public as any).onboarding.scout.$post(
+        { json: { website: site, name: name || undefined } },
+        { init: { signal: abort.signal } },
+      );
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setScanFail(res.status === 400 ? "invalid_url" : "error");
+        return;
+      }
       const p = d.proposal as BrandProposal;
+      const status = p.scan?.status;
+      if (status === "blocked" || status === "unreachable" || status === "timeout" || status === "invalid_url") {
+        // Nothing was read: this is "no scan", not "a thin site". Leaving
+        // scoutedFor unset lets Try again run the same address.
+        setScanFail(status);
+        return;
+      }
       setBrand(p);
       setScoutedFor(site);
       applyPrefill(p);
-    } catch (e: any) {
-      setScoutErr(e.message || "Couldn't read that site — you can still sign up and fill this in yourself.");
+    } catch {
+      setScanFail(abort.signal.aborted ? "timeout" : "error");
     } finally {
+      clearTimeout(giveUp);
       setScouting(false);
     }
   }
@@ -209,7 +228,7 @@ export default function SignupCompanyPage() {
   function skipWebsite() {
     if (timerRef.current) clearTimeout(timerRef.current);
     setNoWebsite(true);
-    setScoutErr("");
+    setScanFail(null);
     setStep("details");
   }
 
@@ -230,6 +249,10 @@ export default function SignupCompanyPage() {
     setDetailsErr("");
     if (!name.trim()) {
       setDetailsErr("We need your company name to set up your account.");
+      return;
+    }
+    if (!industry) {
+      setDetailsErr("Pick the kind of business you run. Choose Other if nothing fits.");
       return;
     }
     if (industry === "other" && !industryOther.trim()) {
@@ -419,6 +442,8 @@ export default function SignupCompanyPage() {
   const fromSite = (field: "name" | "phone" | "address" | "email", cur: string) =>
     !!brand && !!cur && cur === prefilledRef.current[field];
 
+  // The reveal opened the site but came back with nothing to show.
+  const revealEmpty = !!brand && findingsOf(brand).length === 0;
   const found = [brand?.companyName, brand?.phone, brand?.address, brand?.email, brand?.suggestedIndustry].filter(Boolean).length;
 
   return (
@@ -432,12 +457,12 @@ export default function SignupCompanyPage() {
           <div>
             <h1 className="font-display text-2xl font-bold leading-tight tracking-tight xl:text-3xl">
               Give us your website.
-              <br /> <span className="text-glow text-cyan-glow">We'll set up the rest.</span>
+              <br /> <span className="text-glow text-cyan-glow">We'll build your setup from it.</span>
             </h1>
             <p className="mt-4 max-w-sm text-sm text-slate-400">
               We read your site for your name, phone, address, brand and services,
-              then preload your catalog, forms and notifications — before you've
-              even picked a password.
+              then preload your catalog, forms and notifications. You confirm
+              what we found.
             </p>
             <div className="mt-8 space-y-3">
               {[
@@ -455,14 +480,14 @@ export default function SignupCompanyPage() {
             </div>
           </div>
           <p className="text-xs text-slate-600">
-            Trusted by HVAC, plumbing, electrical & facilities teams.
+            Built for field service, installation and delivery teams.
           </p>
         </div>
       </div>
 
       {/* form */}
-      <div className="flex items-center justify-center px-5 py-10">
-        <div className="w-full max-w-xl">
+      <div className="flex min-w-0 items-center justify-center px-5 py-10">
+        <div className="w-full min-w-0 max-w-xl">
           <div className="mb-6 md:hidden">
             <Logo light />
           </div>
@@ -543,10 +568,10 @@ export default function SignupCompanyPage() {
               {step === "reveal" && (
                 <>
                   <h2 className="font-display text-3xl font-bold tracking-tight text-white">
-                    {scouting || !brand ? "Reading your site" : `Hello, ${brand.companyName || name || "there"}`}
+                    {(scanFail || revealEmpty) && !scouting ? "Let's set up your company" : scouting || !brand ? "Reading your site" : brand.companyName || name ? `Hello, ${brand.companyName || name}` : "Here's what we found"}
                   </h2>
                   <p className="mt-1 text-slate-400">
-                    {scouting || !brand ? "We're setting up your workspace from what's already on your website." : "Here's what we learned about you."}
+                    {scanFail && !scouting ? "We couldn't read your website this time. Pick how you'd like to continue." : revealEmpty && !scouting ? "Your website didn't give us your details, so we'll ask you for the basics." : scouting || !brand ? "We're setting up your workspace from what's already on your website." : "Here's what we learned about you."}
                   </p>
                   <div className="mt-5">
                     <SignupReveal
@@ -554,13 +579,20 @@ export default function SignupCompanyPage() {
                       site={website.trim()}
                       scouting={scouting}
                       brand={brand}
-                      error={scoutErr}
+                      fail={scanFail}
                       onConfirm={confirmReveal}
                       onFix={() => setStep("details")}
                       onSkip={skipWebsite}
+                      onRetry={() => runScout(website.trim())}
+                      onDifferent={() => {
+                        setScanFail(null);
+                        setScoutedFor("");
+                        setWebsite("");
+                        setStep("site");
+                      }}
                     />
                   </div>
-                  {!scouting && (
+                  {!scouting && !scanFail && (
                     <button
                       type="button"
                       onClick={() => {
@@ -587,8 +619,8 @@ export default function SignupCompanyPage() {
                       ? found >= 4
                         ? "Check it over and fix anything that's off."
                         : found > 0
-                          ? "We got some of it — fill in the rest below."
-                          : "Your site didn't give us much — fill in the basics below."
+                          ? "We got some of it. Fill in the rest below."
+                          : "We couldn't find your details on the site. Fill in the basics below."
                       : "Just the basics. You can change any of this later."}
                   </p>
 
@@ -624,7 +656,7 @@ export default function SignupCompanyPage() {
                             ))}
                           </optgroup>
                         ))}
-                        <option value="other">Other — describe it below…</option>
+                        <option value="other">Other (describe it below)</option>
                       </select>
                       {brand?.suggestedIndustry && industry === brand.suggestedIndustry && (
                         <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] text-cyan-300">
@@ -754,7 +786,9 @@ export default function SignupCompanyPage() {
                         </button>
                       )}
                     </div>
-                    {scoutErr && <p className="text-xs text-amber-400">{scoutErr}</p>}
+                    {scanFail && !scouting && website.trim() && (
+                      <p className="text-xs text-amber-400">{scanFailCopy(scanFail, website.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).title}. You can still fill this in by hand.</p>
+                    )}
                   </form>
                 </>
               )}
@@ -928,8 +962,9 @@ function StepDots({ step }: { step: Step }) {
           >
             {i < idx ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
           </span>
-          <span className={i === idx ? "text-white" : "text-slate-500"}>{s.label}</span>
-          {i < steps.length - 1 && <span className="h-px w-5 bg-white/10" />}
+          {/* On a phone only the current step is named, so the row fits. */}
+          <span className={i === idx ? "whitespace-nowrap text-white" : "hidden whitespace-nowrap text-slate-500 sm:inline"}>{s.label}</span>
+          {i < steps.length - 1 && <span className="h-px w-3 bg-white/10 sm:w-5" />}
         </li>
       ))}
     </ol>

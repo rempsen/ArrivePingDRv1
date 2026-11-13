@@ -105,10 +105,13 @@ const websiteSource: EnrichmentSource = {
     const p: BrandProposal = await scoutBrand(website, companyId);
     // Same crawl store as "Re-scan website": the newest site_crawls row feeds
     // the concierge and AI writers, so a check keeps it fresh too. Best-effort.
-    try {
-      await saveSiteCrawl(companyId, p as unknown as Record<string, any>, "rescan");
-    } catch (e) {
-      console.error("[company-check] site-crawl save failed", e);
+    // A scan that read nothing must not replace the last good crawl.
+    if (p.pages.length > 0) {
+      try {
+        await saveSiteCrawl(companyId, p as unknown as Record<string, any>, "rescan");
+      } catch (e) {
+        console.error("[company-check] site-crawl save failed", e);
+      }
     }
     return {
       source: "Website",

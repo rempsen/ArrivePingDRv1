@@ -332,6 +332,8 @@ export const hubRoutes = new Hono<AppEnv>()
     // Best-effort: a demo is still made in our default look if this fails.
     if (b.website && b.scoutBrand) {
       brand = await scoutBrand(b.website, slugify(`demo-${b.name}`)).catch(() => undefined);
+      // A site we couldn't read gives an empty proposal: that is "not branded".
+      if (brand && brand.pages.length === 0) brand = undefined;
     }
     try {
       const demo = await createDemo({ name: b.name, industry: b.industry, city: b.city, website: b.website, days: b.days, brand: brand as never, actor });

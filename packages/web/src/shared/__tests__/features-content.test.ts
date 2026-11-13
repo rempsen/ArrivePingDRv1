@@ -35,7 +35,7 @@ describe("features page content", () => {
     expect(featuresMeta.path).toBe("/features");
   });
   it("lists exactly the 18 researched industries, with their workflows", () => {
-    const presets = INDUSTRY_PRESETS.filter((p) => p.tier !== "alias");
+    const presets = INDUSTRY_PRESETS.filter((p) => p.tier === "core" || p.tier === "outlier");
     expect(industries.length).toBe(18);
     expect(industries.map((i) => i.id)).toEqual(presets.map((p) => p.id));
     for (const i of industries) {

@@ -14,6 +14,8 @@ import {
   Mail,
   Search,
   X,
+  RefreshCw,
+  PencilLine,
 } from "lucide-react";
 import { INDUSTRY_LABELS } from "../../services/industry-presets";
 
@@ -46,6 +48,31 @@ export type RevealBrand = {
   suggestedIndustryRationale: string | null;
   warnings: string[];
 };
+
+/**
+ * Why a scan produced nothing. The first four come from the server
+ * (`proposal.scan.status`); "error" is our own failure (network, 5xx).
+ * A refused or unreachable site must never be shown as a thin one.
+ */
+export type ScanFail = "blocked" | "unreachable" | "timeout" | "invalid_url" | "error";
+
+export function scanFailCopy(fail: ScanFail, host: string): { title: string; body: string } {
+  switch (fail) {
+    case "blocked":
+      return {
+        title: `We couldn't open ${host}`,
+        body: "The site's security settings turned our visit away. Nothing is wrong with your site, and you can still set up in about a minute.",
+      };
+    case "unreachable":
+      return { title: `We couldn't find ${host}`, body: "Check the address for typos. If it's right, the site may be down at the moment." };
+    case "timeout":
+      return { title: `${host} took too long to answer`, body: "It may just be slow right now. Trying again often works." };
+    case "invalid_url":
+      return { title: "That doesn't look like a web address", body: "Try something like yourcompany.com." };
+    default:
+      return { title: `We hit a problem reading ${host}`, body: "That one is on us, not your site. Trying again often works." };
+  }
+}
 
 /** What the scout is doing, in the order it actually works. Each stage shows
  * for its `ms` before the next starts; the last one holds until the result. */
@@ -179,18 +206,23 @@ export function SignupReveal({
   site,
   scouting,
   brand,
-  error,
+  fail,
   onConfirm,
   onFix,
   onSkip,
+  onRetry,
+  onDifferent,
 }: {
   site: string;
   scouting: boolean;
   brand: RevealBrand | null;
-  error: string;
+  /** Set when the scan failed outright; `brand` is then null. */
+  fail: ScanFail | null;
   onConfirm: () => void;
   onFix: () => void;
   onSkip: () => void;
+  onRetry: () => void;
+  onDifferent: () => void;
 }) {
   const [stage, setStage] = useState(0);
   const [startedAt] = useState(() => Date.now());
@@ -225,14 +257,27 @@ export function SignupReveal({
   const host = site.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   const allShown = ready && shown >= findings.length;
 
-  if (error && !scouting && !brand) {
+  if (fail && !scouting && !brand) {
+    const copy = scanFailCopy(fail, host || "that site");
     return (
-      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
-        <p className="font-semibold text-amber-200">We couldn't read {host}</p>
-        <p className="mt-1 text-sm text-amber-300/90">{error}</p>
-        <button type="button" onClick={onSkip} className="mt-3 text-sm font-semibold text-amber-200 underline">
-          Fill in my details by hand instead
-        </button>
+      <div role="alert" className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
+        <p className="font-display text-lg font-bold text-amber-100">{copy.title}</p>
+        <p className="mt-1 text-sm text-amber-200/90">{copy.body}</p>
+        <div className="mt-4 space-y-2">
+          {fail !== "invalid_url" && (
+            <button type="button" onClick={onRetry} className="nvc-btn nvc-btn-lg nvc-btn-brand w-full">
+              <RefreshCw className="h-4 w-4" /> Try again
+            </button>
+          )}
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={onDifferent} className="nvc-btn w-full whitespace-nowrap border border-white/15 text-slate-100 hover:bg-white/5">
+              <Globe className="h-4 w-4" /> Use a different address
+            </button>
+            <button type="button" onClick={onSkip} className="nvc-btn w-full whitespace-nowrap border border-white/15 text-slate-100 hover:bg-white/5">
+              <PencilLine className="h-4 w-4" /> Enter my details
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -277,7 +322,7 @@ export function SignupReveal({
         <div className="space-y-3">
           {findings.length === 0 && (
             <div className="rounded-2xl border border-white/10 bg-ink-2 p-5 text-sm text-slate-300">
-              Your site didn't give us much to go on. No problem: the next screen takes a minute to fill in.
+              We opened {host}, but couldn't find your company details on it. The next screen takes a minute to fill in.
             </div>
           )}
           {findings.slice(0, shown).map((f, i) => (
