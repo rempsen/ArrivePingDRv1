@@ -17,6 +17,7 @@
     "logo:check": "bun --env-file=../../.env run tools/logo-plate-check.ts",
     "ask:eval": "bun run tools/guide-ask-eval.ts",
     "directory-ask:eval": "bun run tools/directory-ask-eval.ts",
+    "scan:eval": "bun run tools/scan-eval.ts",
     "dev": "vite --host",
     "start": "bun src/server.ts",
     "lint": "cd ../.. && oxlint packages/web --deny-warnings --no-error-on-unmatched-pattern",
