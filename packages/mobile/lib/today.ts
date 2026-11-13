@@ -135,16 +135,13 @@ export interface CrewGroup {
 
 const CREW_ORDER: CrewKey[] = ["available", "enroute", "onsite", "busy", "offline"];
 
-/** The Team screen's "show everybody" param (no status filter). */
-export const TEAM_ALL = "all";
-
 /**
- * Where a Today crew chip sends the dispatcher on Team. Available and Off shift
- * open the whole crew (a filtered list surprised people); the busier groups
- * still land on their own filter.
+ * Where a Today crew chip sends the dispatcher on Team: `null` is everybody.
+ * Available and Off shift open the whole crew (a filtered list surprised
+ * people); the busier groups still land on their own filter.
  */
-export function teamStatusFor(key: CrewKey | string): string {
-  return key === "available" || key === "offline" ? TEAM_ALL : key;
+export function teamStatusFor(key: CrewKey | string): string | null {
+  return key === "available" || key === "offline" ? null : key;
 }
 
 export function crewGroups(techs: readonly OfficeTech[], jobs: readonly Pick<OfficeJob, "id" | "etaMins">[]): CrewGroup[] {

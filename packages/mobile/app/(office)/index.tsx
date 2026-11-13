@@ -14,7 +14,8 @@ import { useStreamHealthy } from "../../lib/use-dispatch-stream";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { onDay } from "../../lib/map-pins";
-import { TEAM_ALL, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, teamStatusFor, upNext, type Need } from "../../lib/today";
+import { requestTeamFilter } from "../../lib/team-filter";
+import { crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, teamStatusFor, upNext, type Need } from "../../lib/today";
 import { instantFor, jobMinutes, minLabel } from "../../lib/timeline";
 import { partsIn } from "../../lib/when";
 
@@ -96,7 +97,12 @@ export default function Today() {
   const assign = (id: string) => router.push({ pathname: "/office/job/[id]", params: { id, assign: "1" } });
   const message = (techId: string) => router.push(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
   const jobsAt = (bucket: string, day?: string | null) => router.push({ pathname: "/(office)/jobs", params: { bucket, ...(day ? { day, anchor: today ?? "" } : {}) } });
-  const team = (status: string) => router.push({ pathname: "/(office)/team", params: { status } });
+  // `null` opens Team on everybody, a status opens that filter, and no argument just opens Team
+  // as the dispatcher left it.
+  const team = (status?: string | null) => {
+    if (status !== undefined) requestTeamFilter(status);
+    router.push("/(office)/team");
+  };
   const plan = (day: string | null, view: "day" | "week") =>
     wide ? router.push({ pathname: "/(office)/board", params: { view, ...(day ? { day, anchor: today ?? "" } : {}) } }) : jobsAt("unassigned", day);
   const first = (t?: OfficeTech) => (t ? (t.name.split(/\s+/)[0] ?? t.name) : "");
@@ -222,7 +228,7 @@ export default function Today() {
   const crewCard = (
     <View style={[s.card, s.crewCard]}>
       <View style={{ width: wide ? 110 : undefined }}>
-        <Pressable onPress={() => team(TEAM_ALL)} accessibilityRole="button" accessibilityLabel="Show the whole crew" hitSlop={8}>
+        <Pressable onPress={() => team(null)} accessibilityRole="button" accessibilityLabel="Show the whole crew" hitSlop={8}>
           <Text style={s.cardTitle}>{wrapped ? "Crew" : "Crew now"} ›</Text>
         </Pressable>
         <Text style={s.cardNote}>
@@ -240,7 +246,7 @@ export default function Today() {
       ) : (
         needs.slice(0, SHOW).map((n) => {
           const r = needRow(n);
-          return <NeedRow key={n.key} {...r} onOpen={n.jobId ? () => openJob(n.jobId!) : n.techId ? () => team("") : undefined} />;
+          return <NeedRow key={n.key} {...r} onOpen={n.jobId ? () => openJob(n.jobId!) : n.techId ? () => team() : undefined} />;
         })
       )}
       {needs.length > SHOW || later > 0 ? (

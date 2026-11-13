@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, SectionList, RefreshControl, StyleSheet, Pressable } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { UsersThree, Warning, MapTrifold, ListBullets, ArrowSquareOut, UserSwitch } from "phosphor-react-native";
 import { OfficeHeader } from "../../components/office/header";
 import { TechRow, statusColor } from "../../components/office/tech-row";
@@ -17,7 +17,7 @@ import { useBoard } from "../../lib/use-board";
 import { useLayout } from "../../lib/use-layout";
 import { useAccess } from "../../lib/use-access";
 import { LIST_PANE_W } from "../../lib/layout";
-import { TEAM_ALL } from "../../lib/today";
+import { takeTeamFilterRequest } from "../../lib/team-filter";
 import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "../../lib/board";
 
 /**
@@ -27,18 +27,18 @@ import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "
  */
 export default function Team() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ status?: string; mode?: string }>();
-  const [filter, setFilter] = useState<string | null>(params.status ?? null);
-  // Tab screens stay mounted, so a later tap on a Today tile or Crew row
-  // arrives as a new param on the same screen. The param is consumed and
-  // cleared, so tapping the same tile twice (with a chip change in between)
-  // still lands on that status, and a plain tab tap keeps whatever chip was
-  // picked last.
-  useEffect(() => {
-    if (!params.status) return;
-    setFilter(params.status === TEAM_ALL ? null : params.status);
-    router.setParams({ status: undefined });
-  }, [params.status, router]);
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [filter, setFilter] = useState<string | null>(null);
+  // Tab screens stay mounted, so a tap on a Today tile or Crew row arrives while
+  // this screen already exists. Today leaves a one-shot request (lib/team-filter.ts)
+  // that is taken when the screen gains focus: `null` is everybody, a status is
+  // that filter, and a plain tab tap (no request) keeps whatever chip was picked last.
+  useFocusEffect(
+    useCallback(() => {
+      const request = takeTeamFilterRequest();
+      if (request) setFilter(request.status);
+    }, []),
+  );
   const board = useBoard(null);
   const now = new Date();
   const { wide } = useLayout();
