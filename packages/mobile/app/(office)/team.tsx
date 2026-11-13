@@ -17,7 +17,7 @@ import { useBoard } from "../../lib/use-board";
 import { useLayout } from "../../lib/use-layout";
 import { useAccess } from "../../lib/use-access";
 import { LIST_PANE_W } from "../../lib/layout";
-import { TEAM_ALL } from "../../lib/today";
+import { teamRequestFromParams, type TeamMode } from "../../lib/team-filter";
 import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "../../lib/board";
 
 /**
@@ -28,17 +28,21 @@ import { STATUS_LABEL, STATUS_ORDER, NO_JOBS, NO_TECHS, type OfficeTech } from "
 export default function Team() {
   const router = useRouter();
   const params = useLocalSearchParams<{ status?: string; mode?: string }>();
-  const [filter, setFilter] = useState<string | null>(params.status ?? null);
-  // Tab screens stay mounted, so a later tap on a Today tile or Crew row
-  // arrives as a new param on the same screen. The param is consumed and
-  // cleared, so tapping the same tile twice (with a chip change in between)
-  // still lands on that status, and a plain tab tap keeps whatever chip was
-  // picked last.
+  // Today opens Team with a request in the params (lib/team-filter.ts): which status chip, and
+  // whether to show the list or the map.
+  const [filter, setFilter] = useState<string | null>(() => teamRequestFromParams(params)?.filter ?? null);
+  // List | Map. The map fills the screen; what's tapped opens in a card on an iPad or a sheet on a phone.
+  const [mode, setMode] = useState<TeamMode>(() => teamRequestFromParams(params)?.mode ?? "list");
+  // Tab screens stay mounted, so a later tap on Today arrives as new params on this same screen.
+  // They are applied once and cleared, so tapping the same chip twice (with a change in between)
+  // still lands on it, and a plain tab tap keeps whatever chip and view were last picked.
   useEffect(() => {
-    if (!params.status) return;
-    setFilter(params.status === TEAM_ALL ? null : params.status);
-    router.setParams({ status: undefined });
-  }, [params.status, router]);
+    const request = teamRequestFromParams({ status: params.status, mode: params.mode });
+    if (!request) return;
+    if (request.filter !== undefined) setFilter(request.filter);
+    if (request.mode) setMode(request.mode);
+    router.setParams({ status: undefined, mode: undefined });
+  }, [params.status, params.mode, router]);
   const board = useBoard(null);
   const now = new Date();
   const { wide } = useLayout();
@@ -47,15 +51,6 @@ export default function Team() {
     if (selectedId && board.data && !board.data.techs.some((t) => t.id === selectedId)) setSelectedId(null);
   }, [selectedId, board.data]);
   const message = (techId: string) => router.push(wide ? { pathname: "/(office)/messages", params: { techId } } : `/office/thread/${techId}`);
-  // List | Map. The map fills the screen; what's tapped opens in a card on
-  // an iPad or a sheet on a phone.
-  const [mode, setMode] = useState<"list" | "map">("list");
-  // Today's "Map" button opens the map here (one-shot, cleared).
-  useEffect(() => {
-    if (params.mode !== "map" && params.mode !== "list") return;
-    setMode(params.mode);
-    router.setParams({ mode: undefined });
-  }, [params.mode, router]);
   const [sel, setSel] = useState<MapSelection>(null);
   const { can } = useAccess();
   useEffect(() => {
