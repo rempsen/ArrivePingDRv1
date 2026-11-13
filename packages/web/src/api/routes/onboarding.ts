@@ -19,6 +19,7 @@
  *     superadmin-built alike — see `companies.onboardingCompletedAt`).
  */
 import { log } from "../lib/logger";
+import { parseSetupReport, setupOneLine, setupSummary } from "../../services/setup-report";
 import type { AppEnv } from "../env";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -162,6 +163,7 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
       name: schema.companies.name,
       trialEndsAt: schema.companies.billingTrialEndsAt,
       provisioningDone: schema.companies.provisioningDone,
+      setupReport: schema.companies.setupReport,
       createdAt: schema.companies.createdAt,
     })
     .from(schema.companies)
@@ -182,6 +184,9 @@ export async function signupState(billingCustomerId: string, adminEmail: string,
         companyName: co.name,
         admin: mine,
         seeded: null,
+        // The first request may have timed out at the proxy: the summary of
+        // what was built still reaches the person through this status check.
+        setupLines: setupLinesOf(co.setupReport),
         trialEndsAt: co.trialEndsAt ? co.trialEndsAt.toISOString() : null,
         alreadyCreated: true,
       },
@@ -417,6 +422,7 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       adminEmail: b.adminEmail,
       adminPhone: String(b.adminPhone ?? ""),
       trialEndsAt: billing?.ok ? billing.trialEndsAt : null,
+      setup: setupOneLine(result.setupReport),
     }).catch((e) => console.error("[onboarding] signup notification failed", e));
     // 4) mirror the new tenant into HubSpot as Company + Contact + Deal (never blocks)
     void syncCompanyToHubspot(companyId).catch(() => {});
@@ -427,6 +433,8 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
         companyName: result.company.name,
         admin: result.admin,
         seeded: result.seeded,
+        // What came from their website and what is a starter set, in plain words.
+        setupLines: setupSummary(result.setupReport),
         trialEndsAt: billing?.ok ? billing.trialEndsAt.toISOString() : null,
       },
       201,
@@ -982,7 +990,7 @@ PEOPLE FOUND ON THEIR WEBSITE (from the Team/About/Contact pages — these are
 staff names the scrape found, NOT customers; offer to set them up in Part
 2b):
 ${snap.roster.scouted.length ? snap.roster.scouted.map((m) => `- ${m.name}${m.title ? ` — ${m.title}` : ""}${m.role && m.role !== "other" ? ` (looks like: ${m.role})` : ""}${m.email ? `, ${m.email}` : ""}${m.phone ? `, ${m.phone}` : ""}`).join("\n") : "(none found — ask them to paste their list)"}${Array.isArray(q.scoutedEmails) && q.scoutedEmails.length ? `\nGeneral emails seen on the site (may help guess a login address): ${q.scoutedEmails.join(", ")}` : ""}${snap.roster.mentioned.length ? `\nNames YOUR CUSTOMERS mention in testimonials on the site (first names only, probably staff — NOT confirmed): ${snap.roster.mentioned.join(", ")}. In step 2b, if the Team/About list above is empty or short, say something like "your reviews mention ${snap.roster.mentioned.slice(0, 3).join(", ")} — are they on the team?" and let them confirm before adding anyone.` : ""}
-
+${setupBlock(snap.company.setupReport)}
 WHAT'S ALREADY BUILT FOR THIS TENANT (the concrete surface your ICP-specific
 questions should tune — see step (a) above):
 - Work-order templates seeded: ${snap.structure.templates.length ? snap.structure.templates.join("; ") : "(none yet)"}
@@ -1525,3 +1533,29 @@ correction like that — it reads like you weren't listening.`;
       });
     },
   );
+
+/** Concierge prompt block: where each seeded section came from, so it never claims a starter set was read off their site. */
+function setupBlock(raw: unknown): string {
+  const r = parseSetupReport(raw);
+  if (!r) return "";
+  const read = r.scan.status === "ok" || r.scan.status === "partial";
+  const scan =
+    r.scan.status === "none"
+      ? "They gave no website."
+      : read
+        ? `Their website was read (${r.scan.pagesRead} page${r.scan.pagesRead === 1 ? "" : "s"}${r.scan.status === "partial" ? ", but it had little on it" : ""}).`
+        : "Their website could NOT be read at signup, so nothing below came from it. Do not say or imply that you read their site. Ask them for the basics instead.";
+  return `
+WHERE THE SETUP CAME FROM (be honest about this; never describe a starter set as "from your website"):
+${scan}
+${setupSummary(r)
+  .map((l) => `- ${l}`)
+  .join("\n")}
+For anything that is a starter set, treat it as a draft: ask what they actually do and offer to rename, add or remove items.
+`;
+}
+
+function setupLinesOf(raw: unknown): string[] {
+  const r = parseSetupReport(raw);
+  return r ? setupSummary(r) : [];
+}

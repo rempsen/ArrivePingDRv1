@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "setup_report" text DEFAULT '' NOT NULL;

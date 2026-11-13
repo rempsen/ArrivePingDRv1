@@ -114,7 +114,8 @@ describe("scanIfMissing", () => {
     _scan.scoutBrand = async () => ({ ...good(), pages: [], scan: { status: "blocked", via: null, httpStatus: 403, pagesRead: 0 } });
     const b: any = { website: "valleyfiber.ca", industry: "" };
     expect(await scanIfMissing(b, "vf")).toBe("empty");
-    expect(b.brand).toBeUndefined();
+    // Nothing is filled in; only the reason is kept, for the setup report.
+    expect(b.brand).toEqual({ scan: { status: "blocked", via: null, httpStatus: 403, pagesRead: 0 } });
   });
 
   test("a scan that throws never fails the signup", async () => {

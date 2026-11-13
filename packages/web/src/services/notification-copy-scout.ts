@@ -30,7 +30,7 @@ import { log } from "../api/lib/logger";
 import type { NvcEvent, Recipient } from "./dispatch";
 import { TEMPLATE_VARS } from "./dispatch";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock, SCOUT_REASONING_TIMEOUT_MS } from "./scout-prompt";
+import { siteBlock, SCOUT_REASONING_TIMEOUT_MS, type BuiltMark } from "./scout-prompt";
 
 export interface IcpKnowledgeForCopy {
   summary?: string | null;
@@ -40,6 +40,8 @@ export interface IcpKnowledgeForCopy {
 }
 
 export interface NotificationCopyInput {
+  /** Told when the result was written from the company's own website (otherwise it is the starter set). */
+  built?: BuiltMark;
   name: string;
   industry?: string | null;
   industryOther?: string | null;
@@ -205,6 +207,7 @@ Keep every message specific to this business and this industry's real tone — n
       log.warn("notification-copy-scout: model returned no usable copy; falling back to generic", { company: input.name });
       return {};
     }
+    input.built?.("website");
     return map;
   } catch (e) {
     log.warn("notification-copy-scout: generation failed; falling back to generic", {

@@ -54,6 +54,7 @@ import { scoutStarterCatalog, scoutStarterOptionCatalog } from "./catalog-scout"
 import { saveSiteCrawl } from "./site-crawl";
 import { buildExcerpts, scoutBrand } from "./brand-scout";
 import { seedSampleDay } from "./sample-day";
+import { setupRecorder, type SetupReport } from "./setup-report";
 import { syncOfficeFromBusinessAddress } from "./company-office";
 
 void _jsonBody; // (import kept intentionally unused-safe; see note above)
@@ -163,6 +164,17 @@ export const BrandProposal = z
       .nullable(),
     structured: z.record(z.string(), z.unknown()).nullable(),
     excerpts: z.string().max(16_000).nullable(),
+    // How the scan went (brand-scout's ScanOutcome). Informational only: it
+    // feeds the setup report, so a malformed one is dropped, never a 400.
+    scan: z
+      .object({
+        status: z.enum(["ok", "partial", "blocked", "unreachable", "timeout", "invalid_url"]),
+        via: z.enum(["direct", "render"]).nullable().catch(null),
+        httpStatus: z.number().nullable().catch(null),
+        pagesRead: z.number().int().min(0).max(1000).catch(0),
+      })
+      .nullable()
+      .catch(null),
   })
   .partial()
   // brand-scout returns explicit nulls for anything it couldn't read off the
@@ -501,6 +513,8 @@ export interface ProvisionResult {
     /** The sample day (services/sample-day.ts) was laid out. */
     sampleDay: boolean;
   };
+  /** How the scan went and where each seeded section came from. */
+  setupReport: SetupReport;
 }
 
 /**
@@ -579,11 +593,12 @@ export async function scanIfMissing(b: CompanyCreateInput, slug: string): Promis
     ]);
     if (!fresh || !fresh.pages.length) {
       console.warn("[provisioning] fallback scan found nothing", { slug, website, status: fresh?.scan.status ?? "timeout" });
+      // Keep WHY it found nothing, for the setup report. Nothing else changes.
+      b.brand = { ...had, scan: fresh?.scan ?? { status: "timeout", via: null, httpStatus: null, pagesRead: 0 } } as CompanyCreateInput["brand"];
       return "empty";
     }
     const merged: Record<string, unknown> = { ...fresh };
     delete merged.warnings;
-    delete merged.scan;
     for (const [k, v] of Object.entries(had)) {
       const blank = v == null || v === "" || (Array.isArray(v) && !v.length);
       if (!blank) merged[k] = v;
@@ -800,7 +815,12 @@ export async function provisionCompany(
   // waits, since it names the services the library section inserts.
   const workerNoun = str(brand.workerNoun, preset?.workerNoun ?? "Technician");
   const customerNoun = str(brand.customerNoun, preset?.customerNoun ?? "Customer");
+  // Where each section ends up coming from: a writer marks "website" only
+  // when its result really was written from the company's site.
+  const rec = setupRecorder(Boolean(preset), Boolean(siteExcerpts) || servicesArr.length > 0);
   const scoutInput = {
+    built: rec.mark("catalog"),
+    builtOptions: rec.mark("options"),
     name,
     industry: resolvedIndustry || null,
     industryOther: resolvedIndustry === "other" ? industryOther : null,
@@ -827,6 +847,7 @@ export async function provisionCompany(
       brandColor: str(brand.primaryColor, "#06B6D4"),
       siteExcerpts,
       knowledge: icpKnowledge,
+      built: rec.mark("notifications"),
     }),
   );
   const tplsP = early(() =>
@@ -842,6 +863,7 @@ export async function provisionCompany(
       brandColor: str(brand.primaryColor, "#06B6D4"),
       siteExcerpts,
       knowledge: icpKnowledge,
+      built: rec.mark("templates"),
     }),
   );
   const servicesP = wantServices
@@ -855,6 +877,7 @@ export async function provisionCompany(
           website: str(b.website) || null,
           siteExcerpts,
           knowledge: icpKnowledge,
+          built: rec.mark("services"),
         }),
       )
     : null;
@@ -990,6 +1013,7 @@ export async function provisionCompany(
       siteExcerpts,
       knowledge: icpKnowledge,
       library: seededLibrary,
+      built: rec.mark("forms"),
     });
     const brandColor = str(brand.primaryColor, "#06B6D4");
     const logoUrl = str(brand.logoUrl);
@@ -1142,6 +1166,29 @@ export async function provisionCompany(
   });
 
   // Last step: the company is finished. Self-serve signup polls for this.
+  // What was built and from what. Best-effort: never fails a signup.
+  rec.count("services", servicesSeeded);
+  rec.count("templates", templatesSeeded);
+  rec.count("forms", formsSeeded);
+  rec.count("catalog", catalogSeeded);
+  rec.count("options", optionCategoriesSeeded);
+  // Messages are always seeded; only the branded ones were written for them.
+  rec.count("notifications", Math.max(notificationCopyBranded, 1));
+  const scanned = (brand.scan ?? null) as { status?: string; via?: string | null; pagesRead?: number } | null;
+  const pagesRead = Array.isArray(brand.pages) ? brand.pages.length : 0;
+  const setupReport = rec.report(
+    !str(b.website)
+      ? { status: "none", via: null, pagesRead: 0 }
+      : scanned?.status
+        ? { status: scanned.status as SetupReport["scan"]["status"], via: (scanned.via as "direct" | "render" | null) ?? null, pagesRead: scanned.pagesRead ?? pagesRead }
+        : { status: pagesRead ? "ok" : "unknown", via: null, pagesRead },
+  );
+  await db
+    .update(schema.companies)
+    .set({ setupReport: JSON.stringify(setupReport) })
+    .where(eq(schema.companies.id, slug))
+    .catch((e) => console.error("[provisioning] setup report save failed", e));
+
   if (opts?.billing) await db.update(schema.companies).set({ provisioningDone: true }).where(eq(schema.companies.id, slug));
 
   const [row] = await db.select().from(schema.companies).where(eq(schema.companies.id, slug));
@@ -1162,5 +1209,6 @@ export async function provisionCompany(
       crawlSaved,
       sampleDay,
     },
+    setupReport,
   };
 }

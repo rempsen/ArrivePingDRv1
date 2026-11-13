@@ -288,6 +288,13 @@
       "when": 1793912102450,
       "tag": "0040_membership_seat_ends",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794589680418,
+      "tag": "0041_company_setup_report",
+      "breakpoints": true
     }
   ]
 }

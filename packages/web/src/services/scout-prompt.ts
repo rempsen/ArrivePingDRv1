@@ -39,3 +39,13 @@ export function sourcePriority(hasSite: boolean, presetFirst: string, what: stri
   if (!hasSite) return presetFirst;
   return `SOURCE PRIORITY: the company's OWN WEBSITE excerpts above are the primary driver of ${what} — name the services THEY actually list (their wording, not the preset's), mirror the specific claims they make (24/7, free estimates, financing, licensed & insured, family-owned, brands carried, years in business) and match their voice. The PRIMARY INDUSTRY (ICP) preset and tone guidance are the FALLBACK for anything the site doesn't cover. Never invent a service or claim the website doesn't make.`;
 }
+
+/**
+ * Where a seeded section came from. A writer calls its `built` mark with
+ * "website" only when its result was actually written from the company's own
+ * site; a section nobody marked is the starter set (industry preset or
+ * generic). Recorded on the company (services/setup-report.ts) so the product
+ * never claims "built from your website" for a preset.
+ */
+export type BuiltFrom = "website" | "starter";
+export type BuiltMark = (from: BuiltFrom) => void;

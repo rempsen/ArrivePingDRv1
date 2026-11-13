@@ -25,7 +25,7 @@ import { z } from "zod";
 import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock, SCOUT_TIMEOUT_MS } from "./scout-prompt";
+import { siteBlock, SCOUT_TIMEOUT_MS, type BuiltMark } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 export interface ScoutedService {
@@ -35,6 +35,8 @@ export interface ScoutedService {
 }
 
 export interface ServiceScoutInput {
+  /** Told when the result was written from the company's own website (otherwise it is the starter set). */
+  built?: BuiltMark;
   name: string;
   industry?: string | null;
   industryOther?: string | null;
@@ -129,6 +131,7 @@ ${site ? "SOURCE PRIORITY: the website excerpts above are the primary source —
       });
       return presetServices;
     }
+    input.built?.("website");
     return out;
   } catch (e) {
     log.warn("service-scout: model call failed; using preset fallback", {
