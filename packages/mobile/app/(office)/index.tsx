@@ -8,6 +8,7 @@ import { CrewChips, DayBar, NeedRow, NextRow, Panel, Quiet, Tiles, timeIn, type 
 import { Empty, ListSkeleton } from "../../components/ui";
 import { C, R, S } from "../../lib/theme";
 import { useBoard } from "../../lib/use-board";
+import { TEAM_ALL } from "../../lib/team-filter";
 import { useWorkerNoun } from "../../lib/use-brand";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
@@ -15,7 +16,7 @@ import { useStreamHealthy } from "../../lib/use-dispatch-stream";
 import { TWO_COLUMN_MIN } from "../../lib/layout";
 import { addDays, ageLabel, NO_JOBS, NO_TECHS, type OfficeJob, type OfficeTech } from "../../lib/board";
 import { onDay } from "../../lib/map-pins";
-import { TEAM_ALL, countLabel, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
+import { countLabel, crewGroups, dayAhead, hourRange, moneyShort, needsYou, pulseBlocks, pulseOf, revenueOf, upNext, type Need } from "../../lib/today";
 import { instantFor, jobMinutes, minLabel } from "../../lib/timeline";
 import { partsIn } from "../../lib/when";
 

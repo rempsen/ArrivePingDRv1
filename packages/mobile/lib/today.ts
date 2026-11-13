@@ -140,9 +140,6 @@ export function countLabel(n: number, singular: string, plural: string): string 
 
 const CREW_ORDER: CrewKey[] = ["available", "enroute", "onsite", "busy", "offline"];
 
-/** The Team screen's "show everybody" param (no status filter). */
-export const TEAM_ALL = "all";
-
 export function crewGroups(techs: readonly OfficeTech[], jobs: readonly Pick<OfficeJob, "id" | "etaMins">[]): CrewGroup[] {
   const by = new Map<CrewKey, OfficeTech[]>();
   for (const t of techs) {
