@@ -83,6 +83,15 @@ describe("scanIfMissing", () => {
     expect(await scanIfMissing({ name: "X" } as any, "x")).toBe("skipped");
   });
 
+  test("never fetches a private, loopback or non-web address", async () => {
+    let called = 0;
+    _scan.scoutBrand = async () => (called++, good());
+    for (const website of ["http://127.0.0.1:4200/api/health", "http://10.0.0.5/", "http://169.254.169.254/latest/meta-data", "localhost", "javascript:alert(1)", "file:///etc/passwd"]) {
+      expect(await scanIfMissing({ website } as any, "x")).toBe("skipped");
+    }
+    expect(called).toBe(0);
+  });
+
   test("fills the brand and a blank industry from a server-side scan", async () => {
     _scan.scoutBrand = async () => good();
     const b: any = { website: "valleyfiber.ca", industry: "", brand: undefined };

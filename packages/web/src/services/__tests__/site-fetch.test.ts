@@ -118,6 +118,20 @@ describe("fetchPage", () => {
     expect(calls.some(isRender)).toBe(false);
   });
 
+  test("a bot check served as HTTP 200 is blocked, not a page", async () => {
+    delete process.env.FIRECRAWL_API_KEY;
+    _setSiteFetchForTests(async () => html(`<html><title>Just a moment...</title><body>Checking your browser</body></html>`));
+    expect(await fetchPage("https://wall.test/")).toMatchObject({ ok: false, reason: "blocked", status: 200 });
+    expect(await fetchPage("https://wall.test/about", { allowThin: true })).toMatchObject({ ok: false, reason: "blocked" });
+  });
+
+  test("a bot check is replaced by the rendered page when that gets through", async () => {
+    process.env.FIRECRAWL_API_KEY = "test-key";
+    _setSiteFetchForTests(async (u) => (isRender(u) ? render(page(300)) : html(`<html><title>Just a moment...</title><body>Checking your browser</body></html>`)));
+    const r = await fetchPage("https://wall.test/");
+    expect(r.ok && r.via).toBe("render");
+  });
+
   test("a PDF is not a page, and is not sent to the hosted browser", async () => {
     process.env.FIRECRAWL_API_KEY = "test-key";
     const calls: string[] = [];

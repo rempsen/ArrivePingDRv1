@@ -211,12 +211,18 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<F
   }
 
   if (first.ok) {
-    const thin = !opts.allowThin && (visibleTextLength(first.html) < THIN_TEXT_CHARS || looksLikeChallenge(first.html));
-    if (!thin || !renderAvailable() || tried.includes("render")) return done(first, tried);
-    tried.push("render");
-    const r = await render(first.finalUrl);
-    // Keep the rendered page only when it actually shows more.
-    if (r.ok && visibleTextLength(r.html) > visibleTextLength(first.html)) return done(r, tried);
+    // A bot check served with HTTP 200 is a refusal, not a page. A short page
+    // is only worth rendering for the homepage (sub-pages: short is short).
+    const challenge = looksLikeChallenge(first.html);
+    const thin = challenge || (!opts.allowThin && visibleTextLength(first.html) < THIN_TEXT_CHARS);
+    if (!thin) return done(first, tried);
+    if (renderAvailable() && !tried.includes("render")) {
+      tried.push("render");
+      const r = await render(first.finalUrl);
+      // Keep the rendered page only when it actually shows more.
+      if (r.ok && !looksLikeChallenge(r.html) && visibleTextLength(r.html) > visibleTextLength(first.html)) return done(r, tried);
+    }
+    if (challenge) return done({ ok: false, reason: "blocked", status: first.status, detail: "bot check page" }, tried);
     return done(first, tried);
   }
 

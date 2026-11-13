@@ -563,9 +563,15 @@ export const _scan = { scoutBrand };
 
 /** Fill `b.brand` (and an empty industry) from a fresh scan when signup arrived without one. */
 export async function scanIfMissing(b: CompanyCreateInput, slug: string): Promise<"skipped" | "filled" | "empty"> {
-  const website = String(b.website ?? "").trim();
+  const typed = String(b.website ?? "").trim();
   const had = (b.brand ?? {}) as Record<string, unknown>;
-  if (!website || (Array.isArray(had.pages) && had.pages.length > 0)) return "skipped";
+  if (!typed || (Array.isArray(had.pages) && had.pages.length > 0)) return "skipped";
+  // `website` on this body is display text. The server is about to FETCH it,
+  // so it must pass the same check as the scan route (no loopback, private or
+  // link-local addresses, http(s) only).
+  const safe = websiteUrlSchema.safeParse(typed);
+  if (!safe.success) return "skipped";
+  const website = String(safe.data);
   try {
     const fresh = await Promise.race([
       _scan.scoutBrand(website, slug),
