@@ -34,9 +34,9 @@ describe("features page content", () => {
     expect(nav.some((n) => n.label === "Features" && n.href === "/features")).toBe(true);
     expect(featuresMeta.path).toBe("/features");
   });
-  it("lists exactly the 18 researched industries, with their workflows", () => {
+  it("lists exactly the 19 researched industries, with their workflows", () => {
     const presets = INDUSTRY_PRESETS.filter((p) => p.tier === "core" || p.tier === "outlier");
-    expect(industries.length).toBe(18);
+    expect(industries.length).toBe(19);
     expect(industries.map((i) => i.id)).toEqual(presets.map((p) => p.id));
     for (const i of industries) {
       const p = presets.find((x) => x.id === i.id)!;

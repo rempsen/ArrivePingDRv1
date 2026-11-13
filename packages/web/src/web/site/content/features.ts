@@ -143,7 +143,7 @@ export const chapters: Chapter[] = [
     promise: "You do not begin with a blank screen.",
     tiles: [
       { icon: "spark", title: "Four AI-built workflows", text: "Everyone who signs up gets at least four workflows generated from their own website." },
-      { icon: "book", title: "18 industries of know-how", text: "Best practices and workflows from the NVC360 and ArrivePing research on 18 industries, built in." },
+      { icon: "book", title: "19 industries of know-how", text: "Best practices and workflows from the NVC360 and ArrivePing research on 19 industries, built in." },
       { icon: "import", title: "Bring your customers and team", text: "Upload the customer list or technician roster you already have as a CSV or Excel file, or fill in our template, and everyone is added at once. Or send us the file and we import it for you." },
     ],
   },
@@ -227,7 +227,7 @@ export const jobPhotos = [
 ] as const;
 
 /**
- * The 18 industries with researched best practices and pre-built workflows,
+ * The 19 industries with researched best practices and pre-built workflows,
  * mirrored from services/industry-presets.ts (core and specialty presets, not
  * the alias rows). A test keeps the two in step.
  */
@@ -251,4 +251,5 @@ export const industries: Industry[] = [
   { id: "restoration", label: "Fire & Flood Restoration", group: "Specialty services", workflows: ["Emergency Response", "Mitigation → Rebuild Handoff", "Drying Log", "Deductible / AR Chase"] },
   { id: "sports-organization", label: "Sports Clubs & Academies", group: "Specialty services", workflows: ["Session Schedule", "Program Calendar", "Coach Certification Tracking"] },
   { id: "childcare-babysitting", label: "Childcare & Babysitting", group: "Care & Family Services", workflows: ["Babysitting Booking", "Family Intake & Meet-and-Greet", "Care Notes & Handoff Report", "Recurring Care Schedule", "Incident / Health Report"] },
+  { id: "telecom-internet-installation", label: "Telecom, Internet & Cable Installation", group: "Telecom, Installation & Field Service", workflows: ["New Install Work Order", "Service Call / Trouble Ticket", "Site Survey & Drop Path", "Drop Bury & Restoration", "Equipment Swap or Upgrade", "Disconnect & Equipment Recovery"] },
 ];

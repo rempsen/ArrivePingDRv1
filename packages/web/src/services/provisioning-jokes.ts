@@ -30,6 +30,7 @@ export const PROVISIONING_JOKES: Record<string, string> = {
   "restoration": "Running the dehumidifiers one more cycle…",
   "sports-organization": "Lacing up before the whistle blows…",
   "childcare-babysitting": "Making sure I've got my comfortable shoes for this one…",
+  "telecom-internet-installation": "Checking the light levels before I call it done…",
   other: "Putting the finishing touches exactly where they belong…",
 };
 
