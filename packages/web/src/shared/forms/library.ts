@@ -2000,9 +2000,17 @@ const telecomFibreInstall: LibraryTemplate = {
       type: "single_choice",
       label: "Drop to the building",
       required: true,
-      options: ["In place and tested", "Built today — aerial", "Built today — buried", "Temporary drop laid", "Not possible today"],
+      options: [
+        "In place and tested",
+        "Built today — aerial",
+        "Built today — buried",
+        "Temporary drop laid",
+        "No drop needed — fixed wireless",
+        "Not possible today",
+      ],
       display: "dropdown",
       flagOn: ["Temporary drop laid", "Not possible today"],
+      showIf: { itemId: "adult_home", op: "is", value: "yes" },
     },
     {
       id: "drop_blocker",
@@ -2019,9 +2027,26 @@ const telecomFibreInstall: LibraryTemplate = {
       help: "Show the customer where the line enters and where the equipment will sit before drilling.",
       required: true,
       flagOn: ["no"],
+      showIf: { itemId: "adult_home", op: "is", value: "yes" },
+    },
+    {
+      id: "install_today",
+      type: "yes_no",
+      label: "Is the install going ahead today?",
+      help: "Answer No if nobody is home or the drop is not possible. The rest of the form is skipped and the office is flagged.",
+      required: true,
+      flagOn: ["no"],
+    },
+    {
+      id: "no_install_reason",
+      type: "long_text",
+      label: "Why not, and what happens next?",
+      help: "Who you called, how long you waited, what has to happen before the next visit.",
+      required: true,
+      showIf: { itemId: "install_today", op: "is", value: "no" },
     },
 
-    { id: "s_install", type: "section", label: "Installation" },
+    { id: "s_install", type: "section", label: "Installation", showIf: { itemId: "install_today", op: "is", value: "yes" } },
     {
       id: "steps",
       type: "checklist",
@@ -2044,7 +2069,7 @@ const telecomFibreInstall: LibraryTemplate = {
       options: ["Mesh node", "Set-top box", "Phone adapter", "Battery backup", "Extra Ethernet run"],
     },
 
-    { id: "s_test", type: "section", label: "Testing" },
+    { id: "s_test", type: "section", label: "Testing", showIf: { itemId: "install_today", op: "is", value: "yes" } },
     {
       id: "light_level",
       type: "number",
@@ -2074,7 +2099,7 @@ const telecomFibreInstall: LibraryTemplate = {
     },
     { id: "install_photo", type: "photo", label: "Entry point, terminal and router", required: true, minPhotos: 3 },
 
-    { id: "s_handover", type: "section", label: "Handover" },
+    { id: "s_handover", type: "section", label: "Handover", showIf: { itemId: "install_today", op: "is", value: "yes" } },
     {
       id: "handover",
       type: "checklist",
