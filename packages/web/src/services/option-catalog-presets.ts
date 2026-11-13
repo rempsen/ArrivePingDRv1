@@ -399,4 +399,38 @@ export const OPTION_CATALOG_PRESETS: Record<string, OptionCategoryPreset[]> = {
       ],
     },
   ],
+
+  // ───────────────────────── Telecom / ISP installation (ICP #19, added 2026-11-13) ─────────────────────────
+  // Grounded in Claude Projects/NVC360-Hub/ICPs/19-telecom-internet-installation/
+  // 04-NVC360-App-Customization.md. These are the three choices a subscriber
+  // actually makes at order time; deltas are starting points to tune.
+  "telecom-internet-installation": [
+    {
+      name: "Wi-Fi Coverage",
+      description: "What the technician sets up inside the home. Most early-life trouble calls are Wi-Fi coverage, not the line.",
+      tiers: [
+        { tierLabel: "Good", name: "Standard Router", description: "Provider router placed at the entry point; covers a typical bungalow or apartment.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Better", name: "Router + 1 Mesh Node", description: "Adds one mesh node for a second floor or a far bedroom, placed and tested by the technician.", priceDelta: 180, isDefault: false },
+        { tierLabel: "Best", name: "Whole-Home Mesh (3 nodes)", description: "Coverage walk-through, three nodes placed and tested room by room, including garage or shop.", priceDelta: 420, isDefault: false },
+      ],
+    },
+    {
+      name: "Drop Type",
+      description: "How the line gets from the road or pole to the building. Buried drops need utility locates first and wait for thawed ground.",
+      tiers: [
+        { tierLabel: "Standard", name: "Aerial Drop", description: "Overhead line from the pole to the building, up to the standard length.", priceDelta: 0, isDefault: true },
+        { tierLabel: "Buried", name: "Buried Drop, Standard Run", description: "Direct-buried line on the surveyed path, with lawn restoration.", priceDelta: 250, isDefault: false },
+        { tierLabel: "Long Run", name: "Buried in Conduit / Long Run", description: "Conduit under a driveway or a long rural laneway; priced after the site survey.", priceDelta: 650, isDefault: false },
+      ],
+    },
+    {
+      name: "Inside Wiring",
+      description: "Wired connections beyond the router, run by the technician during the install.",
+      tiers: [
+        { tierLabel: "None", name: "Wi-Fi Only", description: "No extra wired runs.", priceDelta: 0, isDefault: true },
+        { tierLabel: "One Run", name: "One Ethernet Run", description: "One wired run to a home office, TV or mesh node.", priceDelta: 95, isDefault: false },
+        { tierLabel: "Three Runs", name: "Three Ethernet Runs", description: "Up to three wired runs with wall plates, tested end to end.", priceDelta: 250, isDefault: false },
+      ],
+    },
+  ],
 };

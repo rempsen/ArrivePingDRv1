@@ -747,7 +747,10 @@ about capabilities ArrivePing doesn't have.`
           : industryPreset.tier === "core"
             ? `\nPRODUCT FIT FOR THIS INDUSTRY: strong — this is one of the trades ArrivePing's
 templates, catalog and option tiers were built around. Go deep on the
-ICP-specific questions (3-5): every answer should re-tune something seeded.`
+ICP-specific questions (3-5): every answer should re-tune something seeded.${industryPreset.fitNote ? `
+Scope to stay inside: ${industryPreset.fitNote}
+If the user asks for something outside that scope, say so plainly in one
+sentence and move on.` : ""}`
             : industryPreset.tier === "general"
               ? `\nPRODUCT FIT FOR THIS INDUSTRY: a general starting set, not a deeply
 researched trade. ${industryPreset.fitNote ?? ""}

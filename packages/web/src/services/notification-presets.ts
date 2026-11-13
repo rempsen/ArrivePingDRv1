@@ -81,6 +81,24 @@ const TRUST_FIRST_CARE: OverrideMap = {
   "released:office": { sms: true },
 };
 
+/**
+ * Appointment-window installs where the customer has to be home (internet,
+ * TV and phone installs and repairs). The failure this guards against is the
+ * technician arriving to an empty house, so every "when are we coming"
+ * moment goes by SMS: booked, moved, cancelled. En route, arrived and running
+ * late are already SMS in the base matrix. The office hears by SMS when a
+ * technician declines or releases, because a subscriber is waiting at home.
+ * Source: ICP #19 research, 03-Workflows-and-Best-Practices.md (appointment
+ * booking and windows; dispatch and routing).
+ */
+const HOME_APPOINTMENT_WINDOW: OverrideMap = {
+  "created:client": { sms: true },
+  "rescheduled:client": { sms: true },
+  "cancelled:client": { sms: true },
+  "declined:office": { sms: true },
+  "released:office": { sms: true },
+};
+
 /** Storm/weather-triggered crew coordination: office/dispatcher needs an immediate heads-up too. */
 const STORM_CREW_ALERT: OverrideMap = {
   "created:office": { sms: true },
@@ -105,6 +123,9 @@ export const NOTIFICATION_OVERRIDES: Record<string, OverrideMap> = {
 
   // Care & family services (added 2026-10-01)
   "childcare-babysitting": TRUST_FIRST_CARE,
+
+  // Telecom / ISP installation (ICP #19, added 2026-11-13)
+  "telecom-internet-installation": HOME_APPOINTMENT_WINDOW,
 
   "home-builder-developer": LONG_CYCLE_PROJECT,
   "design-build": LONG_CYCLE_PROJECT,

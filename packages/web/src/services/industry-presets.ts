@@ -17,10 +17,13 @@
 // slugs without updating Supabase + Notion + this file together.
 //
 // 13 core ICPs (workflow shape is product-ready today) + 4 outliers
-// (structural blocker exists — see each preset's `tier`/notes) + 6 alias
-// rows that route to a core ICP's template for dropdown clarity without
-// becoming a 18th/19th ICP. The "Other / General Home Services" catch-all
-// is a hardcoded dropdown option in the New Company form, not a preset row.
+// (structural blocker exists — see each preset's `tier`/notes) from the
+// approved Phase 1 list, plus two researched extensions added afterwards:
+// #18 childcare (2026-10-01) and #19 telecom / ISP installation (2026-11-13,
+// Drive folder `19-telecom-internet-installation`). Alias rows route to a
+// core ICP's template for dropdown clarity without becoming an ICP of their
+// own. The "Other / General Home Services" catch-all is a hardcoded dropdown
+// option in the New Company form, not a preset row.
 //
 // This is the foundation for deeper per-ICP customization: the goal is that
 // once a tenant identifies their website + company name + ICP, the whole
@@ -36,7 +39,7 @@ export type IndustryPreset = {
   label: string; // human label in dropdowns — matches icps.signup_dropdown_label
   group: string; // dropdown section grouping, e.g. "Building & Renovation"
   tier: "core" | "outlier" | "alias" | "general"; // general = a sensible starting set for a kind of business outside the researched ICP program (added from signup demand, not from the research lanes; kept off the marketing industries list); core = beta-ready; outlier = structural blocker (see rationale); alias = routes to another ICP's template for a clearer signup label
-  rank?: number; // Phase 1 ranking (1-17), lower = higher fit
+  rank?: number; // Phase 1 ranking (1-17) or extension number (18, 19); lower = higher fit
   fitScore?: number; // Phase 1 weighted fit score (0-10)
   aliasOf?: string; // set on tier: "alias" rows — the real ICP id this routes to
   rationale?: string; // one-line "why this ICP" from Phase 1 research, shown to superadmins
@@ -731,38 +734,62 @@ export const INDUSTRY_PRESETS: IndustryPreset[] = [
   // their trade; selecting one sets companies.industry to the target ICP's
   // id above. Per Phase 1 dropdown spec — telemetry should track alias
   // selections separately once that plumbing exists (not yet wired).
-  // ─────────────── Telecom, Installation & Field Service (general) ───────────────
-  // NOT part of the 17-ICP research program (no Supabase/Notion slug). Added
-  // 2026-11 because real signups (an internet provider, install crews) had no
-  // home in the list and fell to an empty "Other" workspace. tier "general".
+  // ─────────────── Telecom, Installation & Field Service ───────────────
+  // telecom-internet-installation is researched ICP #19 (2026-11-13): slug
+  // matches icps.slug in Supabase, the Notion ICP Registry row and the Drive
+  // folder Claude Projects/NVC360-Hub/ICPs/19-telecom-internet-installation/.
+  // It began on 2026-11-13 as a thin "general" row because real signups (an
+  // internet provider, install crews) had no home in the list; the slug is
+  // unchanged so nothing already stored on companies.industry moves.
+  // field-installation-service below is still a "general" starting set with
+  // no research lane behind it.
   {
     id: "telecom-internet-installation",
     label: "Telecom, Internet & Cable Installation",
     group: "Telecom, Installation & Field Service",
-    tier: "general",
+    tier: "core",
+    rank: 19,
+    fitScore: 6.9,
+    rationale:
+      "The cleanest test of the arrival half of the product: a subscriber takes time off to be home for an install, and the provider pays for every visit where nobody answers the door. Regional providers and their install contractors schedule from billing systems that rarely show the subscriber where the technician is. Warm signal (a provider signup and an advisor-led introduction), no delivered revenue yet. ArrivePing sits beside the billing and network systems, not in place of them.",
     fitNote:
-      "ArrivePing covers install and service-call scheduling, technician dispatch, arrival notifications, on-site forms with photos and sign-off, and customer history well. It does not do subscriber billing, network monitoring or provisioning of the service itself; those stay in the provider's own systems.",
-    workerNoun: "Installer",
-    workerNounPlural: "Installers",
+      "ArrivePing covers install and service-call scheduling, technician dispatch by skill and distance, arrival notifications with a live ETA, on-site checklists with photos and sign-off, and a service history for each address. It does not do subscriber billing, network monitoring, provisioning of the service itself, or outside-plant construction management; those stay in the provider's own systems.",
+    workerNoun: "Technician",
+    workerNounPlural: "Technicians",
     customerNoun: "Subscriber",
     customerNounPlural: "Subscribers",
     jobNoun: "Appointment",
     jobNounPlural: "Appointments",
     staffFields: ["skillClass", "vehicle", "licensePlate", "address", "payRatePerHour", "skills"],
     aiTone:
-      "Clear, punctual and plain-spoken. Subscribers mostly want to know when the installer arrives, how long it takes and whether someone must be home. Avoid network jargon unless the customer used it.",
+      "Clear, punctual and plain-spoken. Someone took time off work to be home for this visit, so lead with the arrival window, the technician's name, how long it takes and whether an adult must be home. Say what the customer should have ready (where they want the modem, a clear path to it, pets put away). Avoid network jargon unless the customer used it, and never promise a speed or an activation time the office has not confirmed.",
     notificationGuidance:
-      "Appointment confirmation, a day-before reminder and an on-the-way alert with live arrival time are the essentials. A missed-appointment reschedule link and a post-install check-in are good defaults.",
+      "Appointment confirmation by text, a day-before reminder, and the on-the-way alert with live arrival time are the essentials: the most common reason an install fails is that nobody was home. A moved or cancelled appointment must reach the subscriber by text, not only email. Running-late texts stay on. After the visit, email a completion summary so the subscriber has their equipment and Wi-Fi details in writing. The office should hear by text when a technician declines or releases an appointment, because a subscriber is already waiting at home.",
     services: [
-      { name: "New Service Installation", category: "Installation", durationMins: 120 },
-      { name: "Fibre Drop / Line Connection", category: "Installation", durationMins: 120 },
-      { name: "Equipment Swap or Upgrade", category: "Service", durationMins: 60 },
-      { name: "Service Call / Troubleshooting", category: "Service", durationMins: 60 },
-      { name: "Site Survey", category: "Survey", durationMins: 45 },
+      { name: "Fibre Install (Drop in Place)", category: "Installation", durationMins: 120 },
+      { name: "Fibre Install with New Drop", category: "Installation", durationMins: 180 },
+      { name: "Fixed Wireless Install", category: "Installation", durationMins: 150 },
+      { name: "TV / Set-Top Box Install", category: "Installation", durationMins: 60 },
+      { name: "Home Phone (VoIP) Install", category: "Installation", durationMins: 45 },
+      { name: "Whole-Home Wi-Fi / Mesh Setup", category: "Installation", durationMins: 60 },
+      { name: "Business Install", category: "Installation", durationMins: 180 },
+      { name: "Site Survey / Drop Path Check", category: "Survey", durationMins: 45 },
+      { name: "Drop Bury & Lawn Restoration", category: "Drop Construction", durationMins: 90 },
+      { name: "Service Call / Trouble Ticket", category: "Service", durationMins: 60 },
+      { name: "Fibre Cut / Outage Repair", category: "Service", durationMins: 120 },
+      { name: "Equipment Swap or Upgrade", category: "Service", durationMins: 45 },
+      { name: "Move / Transfer of Service", category: "Service", durationMins: 90 },
       { name: "Disconnect / Equipment Pickup", category: "Service", durationMins: 30 },
     ],
-    templates: ["New Install Work Order", "Service Call / Trouble Ticket", "Site Survey", "Equipment Swap"],
-    categories: ["Installation", "Service", "Survey"],
+    templates: [
+      "New Install Work Order",
+      "Service Call / Trouble Ticket",
+      "Site Survey & Drop Path",
+      "Drop Bury & Restoration",
+      "Equipment Swap or Upgrade",
+      "Disconnect & Equipment Recovery",
+    ],
+    categories: ["Installation", "Service", "Survey", "Drop Construction"],
   },
   {
     id: "field-installation-service",

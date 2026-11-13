@@ -86,7 +86,7 @@ function JobPhotos() {
   );
 }
 
-/** The 18 industries, and the workflows each one starts with. */
+/** The 19 industries, and the workflows each one starts with. */
 function IndustryPicker() {
   const [id, setId] = useState("hvac-plumbing");
   const ind = industries.find((x) => x.id === id) ?? industries[0];
