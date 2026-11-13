@@ -17,7 +17,7 @@
  * the failure rate can be measured.
  */
 import { log } from "../api/lib/logger";
-import { checkPublicUrl, _setResolverForTests } from "./safe-net";
+import { checkPublicUrl, pinnedGet, _setResolverForTests } from "./safe-net";
 
 export type FetchFailure =
   /** The site answered with a refusal (401/403/429/503) or cut the connection. */
@@ -70,9 +70,12 @@ const REFUSAL_STATUS = new Set([401, 403, 406, 429, 503]);
 
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 let fetchImpl: FetchFn = (...a) => fetch(...a);
+/** True while a test has swapped the network out: page requests then go through `fetchImpl` too. */
+let stubbed = false;
 /** Tests swap the network out. */
 export function _setSiteFetchForTests(f: FetchFn | null): void {
   fetchImpl = f ?? ((...a) => fetch(...a));
+  stubbed = Boolean(f);
   // A stubbed network has no DNS either: made-up hosts resolve to a public
   // address unless the test installs its own resolver afterwards.
   _setResolverForTests(f ? async () => ["93.184.216.34"] : null);
@@ -171,7 +174,11 @@ async function direct(url: string): Promise<FetchResult> {
         const detail = safe.why === "private" ? "private or internal address" : safe.why === "not_web" ? "not a web address" : "no such host";
         return { ok: false, reason: "unreachable", status: null, detail: hop ? `redirect to ${detail}` : detail, refused: safe.why !== "no_such_host" };
       }
-      const res = await fetchImpl(at, { headers: BROWSER_HEADERS, redirect: "manual", signal });
+      // Connect to the address that was just checked, not to whatever the
+      // name answers a moment later (safe-net.ts `pinnedGet`).
+      const res = stubbed
+        ? await fetchImpl(at, { headers: BROWSER_HEADERS, redirect: "manual", signal })
+        : await pinnedGet(at, safe.addresses, { headers: BROWSER_HEADERS, signal, maxBytes: MAX_HTML_BYTES });
       const status = res.status;
       if (status >= 300 && status < 400 && status !== 304) {
         const to = res.headers.get("location");

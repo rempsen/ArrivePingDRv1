@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, beforeAll } from "bun:test";
 import { getTableConfig, PgTable, type PgColumn } from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL = ":memory:";
 process.env.DATABASE_AUTH_TOKEN = "";
@@ -79,23 +80,45 @@ describe("signupState", () => {
 });
 
 describe("one signup at a time per card", () => {
-  it("the first request claims the card; a second waits; release frees it", () => {
+  beforeAll(async () => {
+    await ensureTable(schema.signupClaims as unknown as PgTable);
+  });
+  // What a second server process sees: the database row, with no local memory of the claim.
+  const row = async (key: string) => (await db.select().from(schema.signupClaims).where(eq(schema.signupClaims.key, key)))[0];
+
+  it("the first request claims the card; a second waits; release frees it", async () => {
     const key = signupKey("cus_lock_1", "a@acme.test");
-    expect(claimSignup(key, 1_000)).toBe(true);
-    expect(claimSignup(key, 2_000)).toBe(false);
-    expect(signupInFlight(key, 2_000)).toBe(true);
-    releaseSignup(key);
-    expect(signupInFlight(key, 2_000)).toBe(false);
-    expect(claimSignup(key, 3_000)).toBe(true);
-    releaseSignup(key);
+    expect(await claimSignup(key, 1_000)).toBe(true);
+    expect(await claimSignup(key, 2_000)).toBe(false);
+    expect(await signupInFlight(key, 2_000)).toBe(true);
+    await releaseSignup(key);
+    expect(await signupInFlight(key, 2_000)).toBe(false);
+    expect(await row(key)).toBeUndefined();
+    expect(await claimSignup(key, 3_000)).toBe(true);
+    await releaseSignup(key);
   });
-  it("a claim left behind by a crashed request expires", () => {
-    const key = signupKey("cus_lock_2", "a@acme.test");
-    expect(claimSignup(key, 0)).toBe(true);
-    expect(claimSignup(key, SIGNUP_PENDING_MS - 1)).toBe(false);
-    expect(claimSignup(key, SIGNUP_PENDING_MS + 1)).toBe(true);
-    releaseSignup(key);
+
+  it("a claim made by another server process is honoured", async () => {
+    const key = signupKey("cus_other_process", "a@acme.test");
+    const now = Date.now();
+    await db.insert(schema.signupClaims).values({ key, claimedAt: new Date(now - 5_000) });
+    expect(await claimSignup(key, now)).toBe(false);
+    expect(await signupInFlight(key, now)).toBe(true);
+    // ...and is left alone: the other process still owns it.
+    expect(new Date((await row(key))!.claimedAt).getTime()).toBe(now - 5_000);
+    await db.delete(schema.signupClaims).where(eq(schema.signupClaims.key, key));
   });
+
+  it("a claim left behind by a crashed request is taken over once it is stale", async () => {
+    const key = signupKey("cus_crashed", "a@acme.test");
+    const now = Date.now();
+    await db.insert(schema.signupClaims).values({ key, claimedAt: new Date(now - SIGNUP_PENDING_MS - 1_000) });
+    expect(await signupInFlight(key, now)).toBe(false);
+    expect(await claimSignup(key, now)).toBe(true);
+    expect(new Date((await row(key))!.claimedAt).getTime()).toBe(now);
+    await releaseSignup(key);
+  });
+
   it("without a card the email is the key, whatever its case", () => {
     expect(signupKey(null, " Dana@Acme.Test ")).toBe(signupKey(undefined, "dana@acme.test"));
     expect(signupKey("cus_1", "a@b.co")).not.toBe(signupKey("cus_2", "a@b.co"));

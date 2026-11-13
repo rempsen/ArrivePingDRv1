@@ -295,6 +295,13 @@
       "when": 1794589680418,
       "tag": "0041_company_setup_report",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794593918010,
+      "tag": "0042_signup_claims",
+      "breakpoints": true
     }
   ]
 }

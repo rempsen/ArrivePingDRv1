@@ -1539,6 +1539,16 @@ export const oauthAppCredentials = pgTable("oauth_app_credentials", {
   createdAt: now(),
 });
 
+// A self-serve signup being worked on right now, by card (or by email when
+// there is no card step). The row is the claim: the first request inserts it,
+// any other request on any server sees it and waits, and it is deleted when the
+// signup ends. A claim older than the pending window is treated as abandoned.
+// See api/routes/onboarding.ts `claimSignup`.
+export const signupClaims = pgTable("signup_claims", {
+  key: text("key").primaryKey(),
+  claimedAt: timestamp("claimed_at", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+});
+
 export const companies = pgTable("companies", {
   id: text("id").primaryKey(), // slug, e.g. "acme-hvac" — used as companyId everywhere
   name: text("name").notNull(),
