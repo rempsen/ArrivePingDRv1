@@ -1,0 +1,15 @@
+{
+  "_readme": "The reference set for the website scan. Add real customer and prospect sites here, 20 to 30 of them, across industries and including ones that scanned badly. Only `url` is required. Add `expect` for anything you know to be true (name, phone, industry id from the signup dropdown, a few services the site clearly offers): the score then checks the scan against it instead of only checking that something was found. Run with: bun run scan:eval",
+  "sites": [
+    {
+      "url": "valleyfiber.ca",
+      "note": "The site that started this work: it refused a plain request (2026-11-13).",
+      "expect": {
+        "name": "Valley Fiber",
+        "phone": "1-800-958-5698",
+        "industry": "telecom-internet-installation",
+        "services": ["Fiber Internet", "Wireless Internet", "Business"]
+      }
+    }
+  ]
+}
