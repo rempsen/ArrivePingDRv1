@@ -29,7 +29,16 @@ const arg = (name: string) => {
 const base = (arg("base") ?? "https://arriveping.com").replace(/\/$/, "");
 const only = arg("only");
 const out = arg("out");
-const min = arg("min") ? Number(arg("min")) : null;
+// --min is the gate: a value that is not a number must stop the run, not pass it.
+let min: number | null = null;
+if (args.includes("--min")) {
+  const raw = arg("min");
+  min = raw === undefined || raw.trim() === "" ? Number.NaN : Number(raw);
+  if (!Number.isFinite(min) || min < 0 || min > 100) {
+    console.error(`--min needs a number from 0 to 100 (got ${raw === undefined ? "nothing" : `"${raw}"`}).`);
+    process.exit(2);
+  }
+}
 const file = arg("sites") ?? new URL("./scan-eval-sites.json", import.meta.url).pathname;
 
 const all = (JSON.parse(readFileSync(file, "utf8")) as { sites: Site[] }).sites;

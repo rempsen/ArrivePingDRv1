@@ -55,6 +55,25 @@ export interface ScanScore {
 const DEFAULT_COLOR = "#06b6d4";
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, " ").trim();
 const digits = (s: string) => s.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+/** Words a legal name carries that say nothing about which company it is. */
+const NAME_NOISE = new Set(["the", "ltd", "limited", "inc", "incorporated", "corp", "corporation", "co", "company", "llc", "llp", "ltee", "enr"]);
+const nameCore = (s: string) =>
+  norm(s)
+    .split(" ")
+    .filter((w) => w && !NAME_NOISE.has(w))
+    .join(" ");
+/**
+ * The same company: equal once legal suffixes are dropped, or the scan's
+ * name carries the whole expected name ("Valley Fiber Ltd. | Winkler").
+ * A fragment of it ("Fiber") is not the name.
+ */
+export function sameName(got: string, expected: string): boolean {
+  const g = nameCore(got);
+  const e = nameCore(expected);
+  if (!g || !e) return false;
+  // Spacing alone is not a difference: "ValleyFiber" is "Valley Fiber".
+  return g === e || g.replace(/ /g, "") === e.replace(/ /g, "") || ` ${g} `.includes(` ${e} `);
+}
 const has = (v: unknown) => typeof v === "string" && v.trim().length > 0;
 
 export function scoreScan(p: ScoredScan, truth: SiteTruth = {}): ScanScore {
@@ -71,7 +90,7 @@ export function scoreScan(p: ScoredScan, truth: SiteTruth = {}): ScanScore {
 
   // Identity: name 10, phone 5, email 3, address 4, description 3
   if (has(p.companyName)) {
-    if (truth.name && !norm(p.companyName!).includes(norm(truth.name)) && !norm(truth.name).includes(norm(p.companyName!))) {
+    if (truth.name && !sameName(p.companyName!, truth.name)) {
       areas.identity += 3;
       missing.push(`name is "${p.companyName}", expected "${truth.name}"`);
     } else areas.identity += 10;

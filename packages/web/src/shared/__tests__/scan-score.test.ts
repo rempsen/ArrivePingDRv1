@@ -1,6 +1,6 @@
 /** The rubric the reference set is scored with (tools/scan-eval.ts). */
 import { describe, expect, test } from "bun:test";
-import { AREA_MAX, scoreScan, summarizeSet } from "../scan-score";
+import { AREA_MAX, sameName, scoreScan, summarizeSet } from "../scan-score";
 
 const full = {
   scan: { status: "ok", via: "render", pagesRead: 6 },
@@ -45,6 +45,18 @@ describe("scoreScan", () => {
     expect(wrong.areas.identity).toBe(13);
     expect(wrong.areas.industry).toBe(0);
     expect(wrong.missing).toEqual(expect.arrayContaining(['name is "Home", expected "Valley Fiber"', "phone is 204-555-0100, expected 1-800-958-5698", 'industry is "other", expected "telecom-internet-installation"']));
+  });
+
+  test("a fragment of the name is not the name", () => {
+    expect(sameName("Valley Fiber", "Valley Fiber")).toBe(true);
+    expect(sameName("Valley Fiber Ltd.", "Valley Fiber")).toBe(true);
+    expect(sameName("Valley Fiber", "The Valley Fiber Company Inc.")).toBe(true);
+    expect(sameName("Valley Fiber | Rural Internet", "Valley Fiber")).toBe(true);
+    expect(sameName("Fiber", "Valley Fiber")).toBe(false);
+    expect(sameName("Valley", "Valley Fiber")).toBe(false);
+    expect(sameName("ValleyFiber", "Valley Fiber")).toBe(true);
+    expect(sameName("Ltd.", "Acme Ltd.")).toBe(false);
+    expect(scoreScan({ ...full, companyName: "Fiber" }, { name: "Valley Fiber" }).areas.identity).toBe(18);
   });
 
   test("the fallback colour and 'other' are not counted as finds", () => {
