@@ -25,7 +25,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { db, sdb } from "../database";
 import { auth } from "../auth";
@@ -140,6 +140,66 @@ const onboardingStatusLimiter = rateLimit({
 
 /** How long a company with no admin yet counts as "still being set up". */
 export const SIGNUP_PENDING_MS = 15 * 60_000;
+
+/**
+ * One signup per card (or per email when there is no card step) at a time.
+ *
+ * A company row only exists some seconds into a signup (the trial is started
+ * and the site may be scanned first), so until then a second click, a second
+ * tab or a browser retry saw "nothing here yet" and started a second company
+ * on the same card. Worse, if that second attempt then failed, its cleanup
+ * cancelled the subscription both shared.
+ *
+ * The claim is a row in `signup_claims`, so it holds across server processes:
+ * the insert either wins or finds a live claim. A map in this process is
+ * checked first (no round trip for a plain double click) and is the fallback
+ * if the database refuses, so a claim problem can never block a signup.
+ */
+const signupsInFlight = new Map<string, number>();
+export function signupKey(billingCustomerId: string | null | undefined, adminEmail: string): string {
+  return billingCustomerId ? `cus:${billingCustomerId}` : `email:${adminEmail.trim().toLowerCase()}`;
+}
+const liveLocally = (key: string, now: number) => {
+  const started = signupsInFlight.get(key);
+  return started !== undefined && now - started < SIGNUP_PENDING_MS;
+};
+export async function claimSignup(key: string, now = Date.now()): Promise<boolean> {
+  if (liveLocally(key, now)) return false;
+  try {
+    const claimedAt = new Date(now);
+    const won = await db
+      .insert(schema.signupClaims)
+      .values({ key, claimedAt })
+      .onConflictDoUpdate({
+        target: schema.signupClaims.key,
+        set: { claimedAt },
+        // Take over only a claim its owner abandoned (a crashed request).
+        setWhere: lt(schema.signupClaims.claimedAt, new Date(now - SIGNUP_PENDING_MS)),
+      })
+      .returning({ key: schema.signupClaims.key });
+    if (!won.length) return false;
+  } catch (e) {
+    log.error("signup claim: database refused; holding the claim in this process only", { err: String(e) });
+  }
+  signupsInFlight.set(key, now);
+  return true;
+}
+export async function releaseSignup(key: string): Promise<void> {
+  signupsInFlight.delete(key);
+  await db
+    .delete(schema.signupClaims)
+    .where(eq(schema.signupClaims.key, key))
+    .catch((e) => log.error("signup claim: release failed; it expires on its own", { err: String(e) }));
+}
+export async function signupInFlight(key: string, now = Date.now()): Promise<boolean> {
+  if (liveLocally(key, now)) return true;
+  try {
+    const [row] = await db.select({ at: schema.signupClaims.claimedAt }).from(schema.signupClaims).where(eq(schema.signupClaims.key, key));
+    return Boolean(row && now - new Date(row.at).getTime() < SIGNUP_PENDING_MS);
+  } catch {
+    return false;
+  }
+}
 
 export type SignupState =
   | { kind: "none" }
@@ -287,6 +347,8 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
     if (st.kind === "pending") return c.json({ state: "pending", message: PENDING_MESSAGE }, 200);
     if (st.kind === "stalled") return c.json({ state: "stalled", message: STALLED_MESSAGE }, 200);
     if (st.kind === "taken") return c.json({ state: "taken", message: "This card is already used by another ArrivePing company." }, 200);
+    // No company row yet, but a signup for this card is under way.
+    if (await signupInFlight(signupKey(billingCustomerId, adminEmail))) return c.json({ state: "pending", message: PENDING_MESSAGE }, 200);
     return c.json({ state: "none" }, 200);
   })
 
@@ -339,6 +401,11 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       if (st.kind === "stalled") return c.json({ code: "signup_stalled", message: STALLED_MESSAGE }, 409);
     }
 
+    // One signup per card (or email) at a time: a double click or a second
+    // tab waits for the first instead of creating a second company.
+    const lockKey = signupKey(billingCustomerId, b.adminEmail);
+    if (!(await claimSignup(lockKey))) return c.json({ pending: true, message: PENDING_MESSAGE }, 202);
+    try {
     // Self-serve can't be asked to pick another slug on a collision, so take
     // the next free one ("acme-hvac-2") before anything is created.
     const base = slugify(b.slug || b.name);
@@ -439,6 +506,9 @@ export const onboardingPublicRoutes = new Hono<AppEnv>()
       },
       201,
     );
+    } finally {
+      await releaseSignup(lockKey);
+    }
   });
 
 /* -------------------------------------------------------------------------- */

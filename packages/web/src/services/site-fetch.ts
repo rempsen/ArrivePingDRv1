@@ -17,6 +17,7 @@
  * the failure rate can be measured.
  */
 import { log } from "../api/lib/logger";
+import { checkPublicUrl, pinnedGet, _setResolverForTests } from "./safe-net";
 
 export type FetchFailure =
   /** The site answered with a refusal (401/403/429/503) or cut the connection. */
@@ -31,7 +32,14 @@ export type FetchVia = "direct" | "render";
 
 export type FetchResult =
   | { ok: true; html: string; finalUrl: string; via: FetchVia; status: number }
-  | { ok: false; reason: FetchFailure; status: number | null; detail: string };
+  | {
+      ok: false;
+      reason: FetchFailure;
+      status: number | null;
+      detail: string;
+      /** We declined to request this address at all (internal, not a web address). Never retried another way. */
+      refused?: boolean;
+    };
 
 /** A current desktop Chrome, with the headers a real one sends on a first visit. */
 export const BROWSER_HEADERS: Record<string, string> = {
@@ -51,6 +59,10 @@ const DIRECT_TIMEOUT_MS = 15_000;
 const RENDER_TIMEOUT_MS = 45_000;
 /** Largest page we keep; a homepage is rarely over 1 MB of HTML. */
 const MAX_HTML_CHARS = 3_000_000;
+/** Most we download for one page before hanging up. */
+const MAX_HTML_BYTES = 5_000_000;
+/** Redirects followed by hand, each one checked before it is requested. */
+const MAX_REDIRECTS = 6;
 /** Under this much visible text, a page is a shell worth rendering. */
 export const THIN_TEXT_CHARS = 400;
 
@@ -58,9 +70,59 @@ const REFUSAL_STATUS = new Set([401, 403, 406, 429, 503]);
 
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
 let fetchImpl: FetchFn = (...a) => fetch(...a);
+/** True while a test has swapped the network out: page requests then go through `fetchImpl` too. */
+let stubbed = false;
 /** Tests swap the network out. */
 export function _setSiteFetchForTests(f: FetchFn | null): void {
   fetchImpl = f ?? ((...a) => fetch(...a));
+  stubbed = Boolean(f);
+  // A stubbed network has no DNS either: made-up hosts resolve to a public
+  // address unless the test installs its own resolver afterwards.
+  _setResolverForTests(f ? async () => ["93.184.216.34"] : null);
+}
+
+/**
+ * The page's text, at most MAX_HTML_BYTES of it, in the page's own encoding
+ * (older sites are still windows-1252; read as UTF-8 their accents turn to
+ * question marks and "Réparation" stops matching anything).
+ */
+async function readBody(res: Response): Promise<string> {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = res.body?.getReader();
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      size += value.byteLength;
+      if (size >= MAX_HTML_BYTES) {
+        await reader.cancel().catch(() => {});
+        break;
+      }
+    }
+  }
+  const bytes = new Uint8Array(Math.min(size, MAX_HTML_BYTES));
+  let at = 0;
+  for (const c of chunks) {
+    const part = c.subarray(0, bytes.byteLength - at);
+    bytes.set(part, at);
+    at += part.byteLength;
+    if (at >= bytes.byteLength) break;
+  }
+  const header = /charset\s*=\s*["']?([\w-]+)/i.exec(res.headers.get("content-type") ?? "")?.[1];
+  const sniff = new TextDecoder("latin1").decode(bytes.subarray(0, 2_048));
+  const meta = /<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(sniff)?.[1];
+  for (const label of [header, meta, "utf-8"]) {
+    if (!label) continue;
+    try {
+      return new TextDecoder(label).decode(bytes);
+    } catch {
+      /* unknown label: try the next */
+    }
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 function canRender(): boolean {
@@ -101,15 +163,46 @@ function classifyError(e: unknown): { reason: FetchFailure; detail: string } {
 
 async function direct(url: string): Promise<FetchResult> {
   try {
-    const res = await fetchImpl(url, { headers: BROWSER_HEADERS, redirect: "follow", signal: AbortSignal.timeout(DIRECT_TIMEOUT_MS) });
-    const status = res.status;
-    if (!res.ok) {
-      return { ok: false, reason: REFUSAL_STATUS.has(status) ? "blocked" : "unreachable", status, detail: `HTTP ${status}` };
+    // One deadline for the whole chain, redirects included.
+    const signal = AbortSignal.timeout(DIRECT_TIMEOUT_MS);
+    let at = url;
+    for (let hop = 0; ; hop++) {
+      // Every hop is checked before it is requested: the first address was
+      // validated as text only, and a public page can redirect anywhere.
+      const safe = await checkPublicUrl(at);
+      if (!safe.ok) {
+        const detail = safe.why === "private" ? "private or internal address" : safe.why === "not_web" ? "not a web address" : "no such host";
+        return { ok: false, reason: "unreachable", status: null, detail: hop ? `redirect to ${detail}` : detail, refused: safe.why !== "no_such_host" };
+      }
+      // Connect to the address that was just checked, not to whatever the
+      // name answers a moment later (safe-net.ts `pinnedGet`).
+      const res = stubbed
+        ? await fetchImpl(at, { headers: BROWSER_HEADERS, redirect: "manual", signal })
+        : await pinnedGet(at, safe.addresses, { headers: BROWSER_HEADERS, signal, maxBytes: MAX_HTML_BYTES });
+      const status = res.status;
+      if (status >= 300 && status < 400 && status !== 304) {
+        const to = res.headers.get("location");
+        await res.body?.cancel().catch(() => {});
+        if (!to || hop >= MAX_REDIRECTS) return { ok: false, reason: "unreachable", status, detail: to ? "too many redirects" : "redirect without a location" };
+        try {
+          at = new URL(to, at).toString();
+        } catch {
+          return { ok: false, reason: "unreachable", status, detail: "bad redirect" };
+        }
+        continue;
+      }
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => {});
+        return { ok: false, reason: REFUSAL_STATUS.has(status) ? "blocked" : "unreachable", status, detail: `HTTP ${status}` };
+      }
+      const type = (res.headers.get("content-type") ?? "").toLowerCase();
+      if (type && !/html|xml|text\/plain/.test(type)) {
+        await res.body?.cancel().catch(() => {});
+        return { ok: false, reason: "not_html", status, detail: type.slice(0, 80) };
+      }
+      const html = (await readBody(res)).slice(0, MAX_HTML_CHARS);
+      return { ok: true, html, finalUrl: at, via: "direct", status };
     }
-    const type = (res.headers.get("content-type") ?? "").toLowerCase();
-    if (type && !/html|xml|text\/plain/.test(type)) return { ok: false, reason: "not_html", status, detail: type.slice(0, 80) };
-    const html = (await res.text()).slice(0, MAX_HTML_CHARS);
-    return { ok: true, html, finalUrl: res.url || url, via: "direct", status };
   } catch (e) {
     return { ok: false, status: null, ...classifyError(e) };
   }
@@ -120,6 +213,10 @@ async function render(url: string): Promise<FetchResult> {
   const key = process.env.FIRECRAWL_API_KEY?.trim();
   if (!key) return { ok: false, reason: "unreachable", status: null, detail: "render not configured" };
   try {
+    // The hosted browser runs outside our network, but an internal address
+    // is still never ours to hand to anyone.
+    const safe = await checkPublicUrl(url);
+    if (!safe.ok && safe.why !== "no_such_host") return { ok: false, reason: "unreachable", status: null, detail: "not a public web address", refused: true };
     const res = await fetchImpl("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -203,6 +300,8 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<F
 
   tried.push("direct");
   let first = await direct(url);
+
+  if (!first.ok && first.refused) return done(first, tried);
 
   if (!first.ok && first.reason === "unreachable" && first.status === null) {
     const alt = hostVariant(url);
