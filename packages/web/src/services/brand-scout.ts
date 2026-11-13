@@ -36,6 +36,7 @@ import { formatPhone } from "../api/lib/validate";
 import { INDUSTRY_LABELS } from "./industry-presets";
 import { fetchGoogleReviewMentions, googlePlacesAvailable } from "./review-mentions";
 import { BROWSER_HEADERS, fetchPage, type FetchVia } from "./site-fetch";
+import { extractSignals, mergeSignals, signalsBlock, sitemapLocs } from "./site-signals";
 
 export interface BrandProposal {
   website: string;
@@ -506,12 +507,16 @@ function textSample(html: string): string {
 
 // ── Item 3: bounded crawl + schema.org ─────────────────────────────────
 
-const MAX_SUBPAGES = 5;
+const MAX_SUBPAGES = 8;
+/** Service pages are what the writers need most: a site may contribute this many. */
+const MAX_SVC_PAGES = 3;
 const SUBPAGE_TEXT_CHARS = 5_000;
 /** Per-page cap for what we persist in site_crawls (the model sees less). */
 const PAGE_STORE_CHARS = 6_000;
 /** Target size of the `excerpts` digest handed to downstream writers. */
-const EXCERPT_CHARS = 3_000;
+const EXCERPT_CHARS = 12_000;
+/** Pages that contribute to the digest. */
+const EXCERPT_PAGES = 8;
 /** Hard wall-clock cap on the whole sub-page crawl (runs in parallel). */
 const CRAWL_BUDGET_MS = 22_000;
 
@@ -519,17 +524,46 @@ const CRAWL_BUDGET_MS = 22_000;
  * Score a link by how likely it is to hold services / coverage / about
  * content. Higher = fetch first. 0 = ignore.
  */
+/** Lower-case, accents removed: "À propos" and "a-propos" read the same. */
+const plain = (v: string) => v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// Page kinds, in English, French, Spanish and German. Canadian sites are
+// often French-first, and a section named "Résidentiel" is a services page.
+const SKIP_RE =
+  /gallery|galerie|estimate|quote|soumission|schedule|book|careers?|carrieres?|jobs?|emplois?|blog|news|nouvelles|review|testimonial|temoignages?|privacy|confidentialite|terms|conditions|login|connexion|sign-?up|sign-?in|register|inscription|portal|my-account|account|pay-?bill|checkout|cart|refer|panier|faq|coupon|financing|financement|sitemap|search|tag\/|category\/|author\//;
+const SVC_RE =
+  /\b(services?|what-we-do|our-work|solutions|offerings|pricing|rates|plans|packages|products|nos-services|prestations|produits|forfaits|tarifs|servicios|productos|planes|precios|leistungen|produkte|preise)\b/;
+// How a business that sells to two kinds of customer names its two halves.
+const SEGMENT_RE = /\b(residential|commercial|business|industrial|enterprise|home|residentiel|affaires|entreprises?|hogar|empresas|privatkunden|geschaeftskunden|internet|install(ation|ations)?|repairs?|maintenance)\b/;
+const AREA_RE =
+  /\b(service-?areas?|areas?-(we-)?serve|coverage|locations?|where-we-work|cities|availability|secteurs?(-desservis)?|zones?-desservies|territoire|couverture|cobertura|zonas|ubicaciones|einsatzgebiete?|standorte)\b/;
+const TEAM_PAGE_RE =
+  /\b(team|our-team|meet-the-team|meet|staff|our-people|people|crew|technicians|leadership|equipe|notre-equipe|equipo|nuestro-equipo|unser-team)\b/;
+const ABOUT_RE =
+  /\b(about|about-us|our-story|who-we-are|company|a-propos|qui-sommes-nous|notre-histoire|entreprise|sobre-nosotros|quienes-somos|nosotros|ueber-uns|uber-uns|unternehmen)\b/;
+const CONTACT_RE = /\b(contact|contact-us|get-in-touch|reach-us|contactez-nous|nous-joindre|nous-contacter|contacto|contactanos|kontakt)\b/;
+
+type PageBucket = "svc" | "area" | "about" | "team" | "contact";
+function bucketOf(hay: string): PageBucket | null {
+  if (AREA_RE.test(hay)) return "area";
+  if (TEAM_PAGE_RE.test(hay)) return "team";
+  if (CONTACT_RE.test(hay)) return "contact";
+  if (ABOUT_RE.test(hay)) return "about";
+  if (SVC_RE.test(hay) || SEGMENT_RE.test(hay)) return "svc";
+  return null;
+}
+
 function subpageScore(path: string, anchorText: string): number {
-  const hay = `${path} ${anchorText}`.toLowerCase();
+  // Hyphens and slashes both separate words: /nos-services/ and "Nos services".
+  const hay = plain(`${path} ${anchorText}`).replace(/[\s_]+/g, "-");
   // pages that match a keyword but never hold the content we want
-  if (/gallery|estimate|quote|schedule|book|careers?|jobs?|blog|news|review|testimonial|privacy|terms|login|cart|faq|coupon|financing/.test(hay)) return 0;
-  if (/\b(service|services|what-we-do|our-work|solutions|offerings|pricing|rates)\b/.test(hay)) return 3;
-  if (/\b(service-?areas?|areas?-(we-)?serve|coverage|locations?|where-we-work|cities)\b/.test(hay)) return 3;
+  if (SKIP_RE.test(hay)) return 0;
+  if (SVC_RE.test(hay) || AREA_RE.test(hay)) return 3;
   // team / staff pages name the people we want to put on the roster
-  if (/\b(team|our-team|meet-the-team|meet|staff|our-people|people|crew|technicians|leadership)\b/.test(hay)) return 3;
-  if (/\b(about|about-us|our-story|who-we-are|company)\b/.test(hay)) return 2;
-  // contact pages carry the office email/phone and often the owner's name
-  if (/\b(contact|contact-us|get-in-touch|reach-us)\b/.test(hay)) return 2;
+  if (TEAM_PAGE_RE.test(hay)) return 3;
+  // about pages carry the story; contact pages the office email/phone
+  if (ABOUT_RE.test(hay) || CONTACT_RE.test(hay)) return 2;
+  if (SEGMENT_RE.test(hay)) return 2;
   return 0;
 }
 
@@ -537,7 +571,7 @@ function subpageScore(path: string, anchorText: string): number {
  * Pick up to MAX_SUBPAGES same-origin links worth a second fetch. Skips the
  * homepage, fragments, files, mailto/tel, and anything on another host.
  */
-export function pickSubpages(html: string, base: string): string[] {
+export function pickSubpages(html: string, base: string, extraUrls: string[] = []): string[] {
   let origin: string;
   let basePath: string;
   try {
@@ -573,34 +607,90 @@ export function pickSubpages(html: string, base: string): string[] {
     if (!score) continue;
     scored.set(key, Math.max(scored.get(key) ?? 0, score));
   }
-  // Prefer variety: at most one services page, one coverage page, one about
-  // page, one team page, one contact page — a site with 12 service sub-pages
+  // Pages the homepage doesn't link in plain HTML (JavaScript menus) but the
+  // site's own sitemap lists. A linked page keeps its (anchor-informed) score.
+  for (const raw of extraUrls) {
+    let u: URL;
+    try {
+      u = new URL(raw);
+    } catch {
+      continue;
+    }
+    if (u.origin !== origin) continue;
+    if (/\.(pdf|jpe?g|png|gif|svg|webp|zip|docx?|xlsx?|mp4|xml)$/i.test(u.pathname)) continue;
+    const path = u.pathname.replace(/\/+$/, "") || "/";
+    if (path === basePath || path === "/") continue;
+    // A sitemap lists every post and product: only shallow pages are sections.
+    if (path.split("/").filter(Boolean).length > 2) continue;
+    u.hash = "";
+    u.search = "";
+    const key = u.toString();
+    if (scored.has(key)) continue;
+    const score = subpageScore(path, "");
+    if (score) scored.set(key, score);
+  }
+  // Prefer variety: a few services pages, one coverage page, one about page,
+  // one team page, one contact page. A site with 12 service sub-pages
   // shouldn't eat the whole budget.
-  const buckets: Record<string, string[]> = { svc: [], area: [], about: [], team: [], contact: [] };
+  const buckets: Record<PageBucket, string[]> = { svc: [], area: [], about: [], team: [], contact: [] };
   // highest score first; within a score, shortest path first so a section
   // landing page (/services/) beats one of its children (/services/drains).
   const ordered = [...scored.entries()].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length);
-  for (const [url, score] of ordered) {
-    const p = url.toLowerCase();
-    const bucket = /area|serve|coverage|location|cities|where-we-work/.test(p)
-      ? "area"
-      : /team|staff|meet|people|crew|technicians|leadership/.test(p)
-        ? "team"
-        : /contact|get-in-touch|reach-us/.test(p)
-          ? "contact"
-          : /about|story|who-we-are|company/.test(p)
-            ? "about"
-            : "svc";
-    buckets[bucket]!.push(url);
-    void score;
+  for (const [url] of ordered) {
+    let path = url;
+    try {
+      path = new URL(url).pathname;
+    } catch {
+      /* keep the whole string */
+    }
+    buckets[bucketOf(plain(path)) ?? "svc"].push(url);
   }
   const out: string[] = [];
-  const order = ["svc", "area", "about", "team", "contact"];
-  for (const b of order) if (buckets[b]![0]) out.push(buckets[b]![0]);
-  // top up from leftover pages if a bucket was empty
-  for (const b of order)
-    for (const u of buckets[b]!.slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
+  const order: PageBucket[] = ["svc", "area", "about", "team", "contact"];
+  for (const b of order) if (buckets[b][0]) out.push(buckets[b][0]!);
+  for (const u of buckets.svc.slice(1, MAX_SVC_PAGES)) if (!out.includes(u)) out.push(u);
+  // top up from leftover pages if a bucket was empty (never more service pages)
+  for (const b of order) {
+    if (b === "svc") continue;
+    for (const u of buckets[b].slice(1)) if (out.length < MAX_SUBPAGES && !out.includes(u)) out.push(u);
+  }
   return out.slice(0, MAX_SUBPAGES);
+}
+
+/** How long the scan waits on the sitemap before going on without it. */
+const SITEMAP_MS = 6_000;
+
+/**
+ * Section pages from the site's own sitemap. Only fetched when the homepage's
+ * plain links didn't yield enough (menus drawn by JavaScript, a splash page).
+ */
+async function sitemapPages(base: string): Promise<string[]> {
+  let origin: string;
+  try {
+    origin = new URL(base).origin;
+  } catch {
+    return [];
+  }
+  const read = async (url: string) => {
+    // Always a direct request: a sitemap is a plain file, never worth a render.
+    const r = await fetchPage(url, { allowThin: true, noRender: true });
+    return r.ok ? sitemapLocs(r.html, origin) : null;
+  };
+  const work = (async () => {
+    const top = await read(`${origin}/sitemap.xml`);
+    if (!top) return [];
+    const pages = [...top.pages];
+    // An index of sitemaps: pages first, never posts or products.
+    const kids = top.children
+      // "wp-sitemap-posts-page-1.xml" is WordPress's PAGE sitemap: a child that
+      // names pages is kept whatever else its name contains.
+      .filter((c) => /page/i.test(c) || !/post|product|category|tag|author|news|blog|image|video/i.test(c))
+      .sort((a, b) => Number(/page/i.test(b)) - Number(/page/i.test(a)))
+      .slice(0, 2);
+    for (const k of await Promise.all(kids.map(read))) if (k) pages.push(...k.pages);
+    return pages.slice(0, 1_000);
+  })();
+  return Promise.race([work.catch(() => [] as string[]), new Promise<string[]>((r) => setTimeout(() => r([]), SITEMAP_MS))]);
 }
 
 export interface StructuredHints {
@@ -950,17 +1040,12 @@ async function crawlPeoplePages(
 function pageKind(url: string): "home" | "svc" | "about" | "area" | "team" | "contact" | "other" {
   let p = "";
   try {
-    p = new URL(url).pathname.toLowerCase().replace(/\/+$/, "");
+    p = plain(new URL(url).pathname).replace(/\/+$/, "");
   } catch {
     return "other";
   }
-  if (!p || p === "/" || /^\/(index|home)(\.\w+)?$/.test(p)) return "home";
-  if (/area|serve|coverage|location|cities|where-we-work/.test(p)) return "area";
-  if (/team|staff|meet|people|crew|technicians|leadership/.test(p)) return "team";
-  if (/contact|get-in-touch|reach-us/.test(p)) return "contact";
-  if (/about|story|who-we-are|company/.test(p)) return "about";
-  if (/service|what-we-do|our-work|solutions|offerings|pricing|rates/.test(p)) return "svc";
-  return "other";
+  if (!p || p === "/") return "home";
+  return bucketOf(p) ?? "other";
 }
 
 /**
@@ -975,7 +1060,7 @@ export function buildExcerpts(pages: CrawledPage[], max = EXCERPT_CHARS): string
   const ordered = [...pages]
     .filter((p) => p.text.trim().length > 80)
     .sort((a, b) => rank[pageKind(a.url)] - rank[pageKind(b.url)])
-    .slice(0, 4);
+    .slice(0, EXCERPT_PAGES);
   if (!ordered.length) return "";
   // services + about get a bigger share than the rest
   const weights = ordered.map((p) => (["svc", "about"].includes(pageKind(p.url)) ? 2 : 1));
@@ -1122,7 +1207,7 @@ const TextSchema = z.object({
   jobNounPlural: z.string().describe("Plural of jobNoun").nullable(),
   services: z
     .array(z.string())
-    .describe("Up to 8 services they offer")
+    .describe("Every distinct service or product line they offer, named the way the site names it, most important first. Up to 40. One short name each, no descriptions, no duplicates.")
     .default([]),
   hours: z.string().describe("Business hours as plain text").nullable(),
   serviceArea: z
@@ -1257,8 +1342,12 @@ export async function scoutBrand(
   // with the screenshot. Sub-page text and any JSON-LD go into ONE text-model
   // call — no extra model round-trips.
   const t0 = Date.now();
-  const subpageUrls = pickSubpages(html, finalUrl);
   const shotPromise = screenshot(finalUrl); // runs alongside crawl + text model
+  let subpageUrls = pickSubpages(html, finalUrl);
+  if (subpageUrls.length < 4) {
+    const listed = await sitemapPages(finalUrl);
+    if (listed.length) subpageUrls = pickSubpages(html, finalUrl, listed);
+  }
   const subpages = await crawlSubpages(subpageUrls, CRAWL_BUDGET_MS, 200, via);
   const tLevel2 = Date.now() - t0;
 
@@ -1273,7 +1362,15 @@ export async function scoutBrand(
   //            (/team/jane-doe, /our-team/mike/) — up to 8, short text each
   const { teamPages, profilePages } = await crawlPeoplePages(html, finalUrl, subpages, via);
   const tPeople = Date.now() - t0 - tLevel2;
-  for (const p of teamPages) subpages.push(p);
+  // The people crawl can land on a page the section crawl already read
+  // (a redirect, a trailing slash): one copy of each.
+  const seenPage = new Set(subpages.map((p) => p.url.replace(/\/+$/, "")));
+  for (const p of teamPages) {
+    const key = p.url.replace(/\/+$/, "");
+    if (seenPage.has(key) || key === finalUrl.replace(/\/+$/, "")) continue;
+    seenPage.add(key);
+    subpages.push(p);
+  }
   const structured = (() => {
     let h = extractJsonLd(html, finalUrl);
     for (const sp of subpages) {
@@ -1299,6 +1396,10 @@ export async function scoutBrand(
     ms: { level2: tLevel2, people: tPeople },
   });
 
+  // What the markup states outright (name tag, phone/email links, footer),
+  // homepage first. Used as hints for the AI read and as the fallback for it.
+  const signals = mergeSignals([extractSignals(html, finalUrl), ...subpages.map((sp) => extractSignals(sp.html, sp.url))]);
+
   const subpageBlock =
     subpages.map((sp) => `\n\nSUB-PAGE (${sp.url}):\n${sp.text}`).join("") +
     profilePages.map((sp) => `\n\nSTAFF PROFILE PAGE (${sp.url}):\n${sp.text}`).join("");
@@ -1322,7 +1423,7 @@ export async function scoutBrand(
 ALLOWED INDUSTRY CATEGORIES (pick the single best fit, or "other" if genuinely none fit):
 ${INDUSTRY_LABELS.map((i) => `- ${i.id}: ${i.label}`).join("\n")}
 
-${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
+${hintsBlock(structured)}${signalsBlock(signals)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     }),
   ]);
 
@@ -1417,11 +1518,11 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
 
   // Deterministic fallback: anything the model left null that the site's
   // own JSON-LD states outright.
-  const services = text?.services?.length ? text.services : structured?.services.slice(0, 8) ?? [];
+  const services = (text?.services?.length ? text.services : structured?.services ?? []).slice(0, 40);
 
   // Item F.2 — Google reviews are where crews actually get named. Optional
   // (needs GOOGLE_MAPS_API_KEY), best-effort, one request, ~1s.
-  const bizName = structured?.name || text?.tagline?.split(/[|–—-]/)[0]?.trim() || hostOf(finalUrl);
+  const bizName = structured?.name || signals.name || text?.tagline?.split(/[|–—-]/)[0]?.trim() || hostOf(finalUrl);
   const reviews = googlePlacesAvailable()
     ? await fetchGoogleReviewMentions({
         name: bizName,
@@ -1438,7 +1539,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
 
   return fitProposal({
     website: finalUrl,
-    companyName: cleanCompanyName(text?.companyName ?? structured?.name ?? null),
+    companyName: cleanCompanyName(text?.companyName ?? structured?.name ?? null) ?? signals.name,
     primaryColor: normHex(vision?.primaryColor),
     accentColor: normHex(vision?.accentColor),
     logoUrl: hosted?.url ?? null,
@@ -1450,7 +1551,7 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     jobNoun: text?.jobNoun ?? null,
     jobNounPlural: text?.jobNounPlural ?? null,
     tagline: text?.tagline ?? null,
-    description: text?.companyDescription ?? structured?.description ?? null,
+    description: text?.companyDescription ?? structured?.description ?? signals.description,
     // CompanyCreateBody caps brand.serviceArea at 300 chars; the crawl can
     // now surface long "areas we serve" lists, so clamp here rather than fail
     // signup validation downstream.
@@ -1458,8 +1559,8 @@ ${hintsBlock(structured)}HOMEPAGE TEXT:\n${textSample(html)}${subpageBlock}`,
     services,
     hours: text?.hours ?? structured?.hours ?? null,
     address: pickAddress(text?.address, structured?.address),
-    email: text?.email ?? structured?.email ?? null,
-    phone: formatPhone(text?.phone ?? structured?.phone ?? null),
+    email: text?.email ?? structured?.email ?? signals.email,
+    phone: formatPhone(text?.phone ?? structured?.phone ?? null) ?? formatPhone(signals.phone),
     socials,
     suggestedIndustry: text?.suggestedIndustry ?? null,
     suggestedIndustryOther: text?.suggestedIndustryOther ?? null,
@@ -1528,7 +1629,7 @@ export function fitProposal(p: BrandProposal): BrandProposal {
     mentionedStaff: p.mentionedStaff.slice(0, 20).map((n) => n.slice(0, 60)),
     googleReviewUrl: p.googleReviewUrl && p.googleReviewUrl.length <= 500 ? p.googleReviewUrl : null,
     pages: p.pages.slice(0, PROPOSAL_MAX_PAGES).map((pg) => ({ url: pg.url.slice(0, 1_000), title: pg.title.slice(0, 400), text: pg.text.slice(0, 12_000) })),
-    excerpts: p.excerpts.slice(0, 6_000),
+    excerpts: p.excerpts.slice(0, 16_000),
   };
 }
 

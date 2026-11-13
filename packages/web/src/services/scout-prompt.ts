@@ -9,7 +9,8 @@
  * their voice) instead of only a 2-4 sentence summary.
  */
 
-export const SITE_BLOCK_CHARS = 3_500;
+/** The writers get the whole digest (services, about, home, coverage), not a 3,500-character slice of it. */
+export const SITE_BLOCK_CHARS = 12_000;
 
 /**
  * How long one signup writer may take before it gives up and the caller uses
