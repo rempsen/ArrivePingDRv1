@@ -4,7 +4,7 @@ import { Avatar } from "../ui";
 import { C, R, S } from "../../lib/theme";
 import type { OfficeJob, OfficeTech } from "../../lib/board";
 import type { BlockKind, CrewGroup, Pulse } from "../../lib/today";
-import { hourRange } from "../../lib/today";
+import { crewChipSub, hourRange } from "../../lib/today";
 import { jobMinutes, minLabel } from "../../lib/timeline";
 
 /**
@@ -181,17 +181,7 @@ export function CrewChips({
       </Pressable>
       {groups.map((g) => {
         const meta = CREW[g.key];
-        const first = (t: OfficeTech) => t.name.split(/\s+/)[0] ?? t.name;
-        const sub =
-          g.key === "available"
-            ? g.techs.slice(0, 3).map(first).join(", ") + (g.techs.length > 3 ? ` +${g.techs.length - 3}` : "")
-            : g.key === "enroute"
-              ? g.etaMins != null
-                ? `next ETA ${g.etaMins} min`
-                : g.techs.map(first).slice(0, 2).join(", ")
-              : g.freeAt
-                ? `free from ${timeIn(g.freeAt, tz)}`
-                : g.techs.map(first).slice(0, 2).join(", ");
+        const sub = crewChipSub(g, tz);
         return (
           <Pressable
             key={g.key}
