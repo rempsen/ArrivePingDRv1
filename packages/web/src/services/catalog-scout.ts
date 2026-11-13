@@ -32,10 +32,14 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { CATALOG_PRESETS, type CatalogPresetItem } from "./catalog-presets";
 import { OPTION_CATALOG_PRESETS, type OptionCategoryPreset } from "./option-catalog-presets";
-import { siteBlock, SCOUT_TIMEOUT_MS } from "./scout-prompt";
+import { siteBlock, SCOUT_TIMEOUT_MS, type BuiltMark } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 export interface CatalogScoutInput {
+  /** Told when the result was written from the company's own website (otherwise it is the starter set). */
+  built?: BuiltMark;
+  /** The same, for the option/tier groups. */
+  builtOptions?: BuiltMark;
   name: string;
   industry?: string | null;
   industryOther?: string | null;
@@ -122,6 +126,23 @@ function skuFor(prefix: string, name: string, taken: Set<string>): string {
  * untouched preset (or [] when there is no preset and nothing to build from)
  * on any failure or guardrail trip.
  */
+/** The marker every price the scan made up must carry. */
+export const ESTIMATE_LABEL = "(estimated, verify pricing)";
+
+/**
+ * A row the scan ADDED has a cost the model estimated, not one from our
+ * pricing research or from the company. The prompt asks for a label; this
+ * makes sure it is there, once, in one spelling.
+ */
+export function estimateLabelled(description: string): string {
+  const base = description
+    .trim()
+    .replace(/\s*\(estimated\s*[—–,-]?\s*verify pricing\)\.?\s*$/i, "")
+    .trim()
+    .slice(0, 500 - ESTIMATE_LABEL.length - 1);
+  return base ? `${base} ${ESTIMATE_LABEL}` : ESTIMATE_LABEL;
+}
+
 export async function scoutStarterCatalog(input: CatalogScoutInput): Promise<CatalogPresetItem[]> {
   const preset: CatalogPresetItem[] = (input.industry && CATALOG_PRESETS[input.industry]) || [];
   if (!hasScrapeSignal(input)) return preset;
@@ -149,7 +170,7 @@ ${presetLines.length ? presetLines.join("\n") : "(no preset for this industry �
 Return an EDIT LIST:
 - keep: every preset row that applies to this business. Rename rows to the company's own wording when their website uses a different name for the same thing (e.g. "Furnace Tune-Up" → "Annual Furnace Maintenance" if that's what they call it). Leave name/description null when the preset wording is fine.
 - drop: rows that clearly do not apply given what the site says they do (e.g. drop new-construction rows if they only advertise repair; drop commercial rows for a residential-only shop). Be conservative — when in doubt, keep. Never drop more than about a third of the list.
-- add: things they advertise that the preset has NO row for (a named service, a product line, a specialty). ${preset.length ? "Up to 6 additions." : "Build 8-12 rows that cover their advertised services, each a realistic bookable/quotable line."} Give each a realistic Canadian wholesale cost and markup for that trade, and END its description with " (estimated — verify pricing)".
+- add: things they advertise that the preset has NO row for (a named service, a product line, a specialty). ${preset.length ? "Up to 6 additions." : "Build 8-12 rows that cover their advertised services, each a realistic bookable/quotable line."} Give each a realistic Canadian wholesale cost and markup for that trade, and END its description with " (estimated, verify pricing)".
 - Reuse existing category names where they fit so the catalog stays grouped.
 - Assembly rows: keep them unless one of their components is dropped.`,
     });
@@ -193,7 +214,7 @@ Return an EDIT LIST:
         name,
         sku: skuFor(skuPrefix, name, takenSkus),
         category: (a.category || "General").trim().slice(0, 80),
-        description: a.description.trim().slice(0, 500),
+        description: estimateLabelled(a.description),
         unit: (a.unit || "each").trim().slice(0, 40),
         unitCost: Math.round(a.unitCost * 100) / 100,
         markupPct: Math.round(a.markupPct),
@@ -208,6 +229,7 @@ Return an EDIT LIST:
       log.warn("catalog-scout: too few rows after tailoring; using preset", { company: input.name, rows: out.length });
       return preset;
     }
+    input.built?.("website");
     return out;
   } catch (e) {
     log.warn("catalog-scout: model call failed; using preset", {
@@ -332,6 +354,7 @@ Return an EDIT LIST:
       log.warn("catalog-scout: too few option groups after tailoring; using preset", { company: input.name, groups: out.length });
       return preset;
     }
+    input.builtOptions?.("website");
     return out;
   } catch (e) {
     log.warn("catalog-scout: option model call failed; using preset", {

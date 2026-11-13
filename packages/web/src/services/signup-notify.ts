@@ -22,6 +22,8 @@ export interface SignupNotice {
   adminEmail: string;
   adminPhone: string;
   trialEndsAt: Date | null;
+  /** How the website scan went and what was built from it (services/setup-report.ts). */
+  setup?: string;
 }
 
 const APP_URL = (process.env.APP_URL ?? "https://arriveping.com").replace(/\/$/, "");
@@ -51,6 +53,8 @@ export function signupRows(n: SignupNotice): [string, string][] {
     [`Trial ends (${TRIAL_DAYS} days)`, fmtDate(n.trialEndsAt)],
     ["Admin", `${APP_URL}/admin/companies`],
   ];
+  // After "Admin": the Slack layout reads the first eight rows by position.
+  if (n.setup) rows.push(["Setup", n.setup]);
   return rows;
 }
 
@@ -70,6 +74,7 @@ export async function postSlack(n: SignupNotice, fetchImpl: typeof fetch = fetch
         type: "section",
         fields: rows.slice(0, 7).map(([k, v]) => ({ type: "mrkdwn", text: `*${k}*\n${v}` })),
       },
+      ...(n.setup ? [{ type: "context", elements: [{ type: "mrkdwn", text: `${/NOT read/.test(n.setup) ? ":warning: " : ""}*Setup:* ${n.setup}`.slice(0, 2900) }] }] : []),
       {
         type: "actions",
         elements: [

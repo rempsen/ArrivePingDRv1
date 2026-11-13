@@ -401,7 +401,7 @@ export default function SignupCompanyPage() {
       }
       // Tie the marketing-site visits that led here to the new HubSpot contact (only with cookie consent).
       hubspotIdentify(adminEmail);
-      setProvisionResult((d as any)?.seeded ?? null);
+      setProvisionResult((d as any)?.seeded ? { ...(d as any).seeded, setupLines: (d as any).setupLines } : null);
 
       // Sign the new admin in with the credentials they just typed. Reveal
       // the final "all set" line for a beat before handing off to /admin —

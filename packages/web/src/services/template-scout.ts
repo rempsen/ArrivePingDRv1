@@ -31,7 +31,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { log } from "../api/lib/logger";
 import { EMPTY_RATE_MODEL, type RateModel } from "../shared/pricing";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock, sourcePriority, SCOUT_TIMEOUT_MS } from "./scout-prompt";
+import { siteBlock, sourcePriority, SCOUT_TIMEOUT_MS, type BuiltMark } from "./scout-prompt";
 
 /** Field types supported by the builder canvas (mirror builder.tsx PALETTE). */
 const FIELD_TYPES = [
@@ -83,6 +83,8 @@ export interface IcpKnowledge {
 }
 
 export interface TemplateScoutInput {
+  /** Told when the result was written from the company's own website (otherwise it is the starter set). */
+  built?: BuiltMark;
   name: string;
   industry?: string | null; // ICP preset id — primary driver of template intent
   industryOther?: string | null; // free-text business type when industry === "other"
@@ -399,8 +401,10 @@ Tailor everything to ${input.name}'s actual line of work. Each template must ser
         company: input.name,
         got: templates.length,
       });
+      input.built?.("website");
       return padToMinimum(templates, input);
     }
+    input.built?.("website");
     return templates;
   } catch (e) {
     log.warn("template-scout: generation failed; using fallback", {

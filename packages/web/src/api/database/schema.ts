@@ -1594,6 +1594,11 @@ export const companies = pgTable("companies", {
   // by provisionCompany's last step. The signup status check reads it (not a
   // billing field, which Stripe webhooks write at any time).
   provisioningDone: boolean("provisioning_done").notNull().default(true),
+  // What signup built and from what (services/setup-report.ts): how the
+  // website scan went, and for each seeded section whether it was written from
+  // the company's own site or is the starter set. JSON; "" for tenants
+  // provisioned before this existed.
+  setupReport: text("setup_report").notNull().default(""),
   // HubSpot CRM mirror (services/hubspot-sync.ts): the Company and Deal that
   // represent this tenant in NVC360's HubSpot, the fingerprint of what was
   // last pushed (so unchanged tenants cost no API calls) and when. NULL id =

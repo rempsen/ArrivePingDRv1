@@ -30,6 +30,8 @@ import { provisioningJoke } from "../../services/provisioning-jokes";
  */
 
 export type ProvisioningSeeded = {
+  /** What came from their website and what is a starter set (server-written sentences). */
+  setupLines?: string[];
   forms: number;
   templates: number;
   services: number;
@@ -56,15 +58,15 @@ function buildStages(website: string | undefined, industryId: string | null | un
 }
 
 function finalLine(result: ProvisioningSeeded | null): string {
-  if (!result) return "All set — your workspace is ready.";
+  if (!result) return "All set. Your workspace is ready.";
   const bits: string[] = [];
   if (result.forms) bits.push(`${result.forms} intake form${result.forms === 1 ? "" : "s"}`);
   if (result.templates) bits.push(`${result.templates} work-order template${result.templates === 1 ? "" : "s"}`);
   if (result.catalogItems) bits.push(`${result.catalogItems} catalog item${result.catalogItems === 1 ? "" : "s"}`);
   if (result.optionCategories) bits.push(`${result.optionCategories} pricing tier${result.optionCategories === 1 ? "" : "s"}`);
   if (result.notificationCopyBranded) bits.push("branded alerts");
-  if (!bits.length) return "All set — your workspace is ready.";
-  return `All set — seeded ${bits.join(", ")}.`;
+  if (!bits.length) return "All set. Your workspace is ready.";
+  return `All set: ${bits.join(", ")}.`;
 }
 
 export function ProvisioningProgress({
@@ -160,8 +162,15 @@ export function ProvisioningProgress({
           </div>
         );
       })}
+      {done && !!result?.setupLines?.length && (
+        <ul className="space-y-1 px-3 pt-2 text-xs text-slate-400">
+          {result.setupLines.map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+      )}
       {!done && visibleCount >= stages.length && (
-        <p className="px-3 pt-1 text-xs text-slate-600">Almost there — finishing touches…</p>
+        <p className="px-3 pt-1 text-xs text-slate-600">Almost there. Finishing touches…</p>
       )}
     </div>
   );

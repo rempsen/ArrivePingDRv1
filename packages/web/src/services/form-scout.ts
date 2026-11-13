@@ -26,7 +26,7 @@ import { gateway, MODELS } from "../api/agent/gateway";
 import { INTAKE_FIELD_CATALOG } from "../api/routes/forms";
 import { log } from "../api/lib/logger";
 import { getIndustryPreset } from "./industry-presets";
-import { siteBlock, sourcePriority, SCOUT_TIMEOUT_MS } from "./scout-prompt";
+import { siteBlock, sourcePriority, SCOUT_TIMEOUT_MS, type BuiltMark } from "./scout-prompt";
 import type { IcpKnowledge } from "./template-scout";
 
 /** Render an IcpKnowledge block for prompt injection, or "" when empty. */
@@ -82,6 +82,8 @@ export interface LibraryService {
 }
 
 export interface FormScoutInput {
+  /** Told when the result was written from the company's own website (otherwise it is the starter set). */
+  built?: BuiltMark;
   name: string;
   // Primary Industry (ICP) preset id — same driver template-scout uses.
   // Previously this scout got NO industry context at all; now the same
@@ -405,6 +407,7 @@ Tailor everything to ${input.name}'s actual line of work. Avoid generic duplicat
       seen.add(s);
     }
 
+    input.built?.("website");
     return forms;
   } catch (e) {
     log.warn("form-scout: generation failed; using fallback", {
