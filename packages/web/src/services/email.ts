@@ -161,6 +161,21 @@ export async function resolveFromAddress(companyId: string): Promise<SenderIdent
  * email identity (logo/color), falling back to the company_settings brand, then
  * to the ArrivePing default. Safe to call with undefined — returns the default.
  */
+/** ArrivePing's own company record (the platform tenant). */
+export const PLATFORM_COMPANY_ID = "default";
+
+/**
+ * Which company's brand an email about a user's OWN account (password reset,
+ * welcome / set-password) should carry. Super admins are ArrivePing staff, so
+ * theirs is always ArrivePing, even if their user row points at a customer
+ * company (Dan's reset arrived BMD-branded in Nov 2026 for that reason).
+ * Everyone else gets their own company's brand.
+ */
+export function brandCompanyFor(user: { role?: string | null; companyId?: string | null }): string | undefined {
+  if (user.role === "superadmin") return PLATFORM_COMPANY_ID;
+  return user.companyId ?? undefined;
+}
+
 export async function loadEmailBrand(companyId?: string): Promise<TenantEmailBrand> {
   if (!companyId) return FALLBACK_BRAND;
   try {

@@ -26,7 +26,7 @@ import { log } from "../api/lib/logger";
 import { ROLE_LABELS } from "../api/lib/permissions";
 import { parseOnboarding } from "../shared/onboarding";
 import { isUndeliverableEmail } from "../shared/sample-contact";
-import { emailTemplates, loadEmailBrand, resolveFromAddress, sendEmail } from "./email";
+import { brandCompanyFor, emailTemplates, loadEmailBrand, resolveFromAddress, sendEmail } from "./email";
 
 const DAY = 86_400_000;
 export const WELCOME_LINK_DAYS = 7;
@@ -150,7 +150,9 @@ export async function sendWelcome(
     // A platform operator (superadmin) adding someone isn't who the person knows.
     const inviterName = inviter && inviter.role !== "superadmin" ? (inviter.name || "").trim() || null : null;
     const roleLabel = kind === "field" ? await workerNoun(a.companyId) : ROLE_LABELS[membership.role] || "team member";
-    const [brand, sender, link] = await Promise.all([loadEmailBrand(a.companyId), resolveFromAddress(a.companyId), setPasswordLink(a.userId, kind)]);
+    // A super admin's own account mail is ArrivePing-branded (brandCompanyFor).
+    const brandCompany = user.role === "superadmin" ? brandCompanyFor(user) ?? a.companyId : a.companyId;
+    const [brand, sender, link] = await Promise.all([loadEmailBrand(brandCompany), resolveFromAddress(brandCompany), setPasswordLink(a.userId, kind)]);
 
     const mail = emailTemplates.welcome(
       {
