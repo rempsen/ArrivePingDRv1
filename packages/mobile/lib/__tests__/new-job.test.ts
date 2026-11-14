@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildAdminBooking, EMPTY_DRAFT, validateDraft, type NewJobDraft } from "../new-job";
+import { buildAdminBooking, EMPTY_DRAFT, pickClient, validateDraft, type NewJobDraft } from "../new-job";
 
 const now = new Date("2026-10-21T15:07:00.000Z");
 
@@ -73,5 +73,30 @@ describe("buildAdminBooking", () => {
   test("returns errors instead of a body when incomplete", () => {
     const r = buildAdminBooking({ ...full, address: "" }, now);
     expect(r).toEqual({ ok: false, errors: { address: "Enter the address" } });
+  });
+});
+
+describe("pickClient", () => {
+  const pat = { kind: "existing" as const, id: "cu_1", name: "Pat", lastAddress: "1 Pat St" };
+  const sam = { kind: "existing" as const, id: "cu_2", name: "Sam", lastAddress: "2 Sam Ave" };
+  const bare = { kind: "existing" as const, id: "cu_3", name: "Bo" };
+  const base = { ...EMPTY_DRAFT, lat: 1, lng: 2 };
+
+  test("fills an empty address from the client", () => {
+    expect(pickClient(base, pat)).toEqual({ action: "replace", address: "1 Pat St" });
+  });
+  test("swaps the previous client's own address without asking", () => {
+    expect(pickClient({ ...base, client: pat, address: "1 Pat St" }, sam)).toEqual({ action: "replace", address: "2 Sam Ave" });
+  });
+  test("asks before replacing an address the dispatcher typed", () => {
+    expect(pickClient({ ...base, address: "9 Elm Rd" }, pat)).toEqual({ action: "ask", address: "1 Pat St" });
+    expect(pickClient({ ...base, client: pat, address: "9 Elm Rd" }, sam)).toEqual({ action: "ask", address: "2 Sam Ave" });
+  });
+  test("keeps a typed address when the client has none, or the same one", () => {
+    expect(pickClient({ ...base, address: "9 Elm Rd" }, bare)).toEqual({ action: "set" });
+    expect(pickClient({ ...base, address: " 1 Pat St " }, pat)).toEqual({ action: "set" });
+  });
+  test("picking the same client again changes nothing", () => {
+    expect(pickClient({ ...base, client: pat, address: "9 Elm Rd" }, pat)).toEqual({ action: "set" });
   });
 });
