@@ -1,7 +1,7 @@
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { House, ClipboardText, ChatCircleDots, UsersThree, CalendarBlank } from "phosphor-react-native";
+import { House, ClipboardText, ChatCircleDots, UsersThree, CalendarBlank, Question } from "phosphor-react-native";
 import { C } from "../../lib/theme";
 import { useAccess } from "../../lib/use-access";
 import { useLayout } from "../../lib/use-layout";
@@ -24,6 +24,7 @@ import { TAB_BAR_CONTENT, useBottomBarPadding } from "../../lib/bottom-inset";
  * server enforces the same permissions on every call regardless.
  */
 export default function OfficeLayout() {
+  const router = useRouter();
   const { can, isLoading } = useAccess();
   const { wide } = useLayout();
   // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
@@ -115,6 +116,21 @@ export default function OfficeLayout() {
             title: "Team",
             href: seesTeam ? undefined : null,
             tabBarIcon: ({ color, focused }) => <UsersThree color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
+          }}
+        />
+        <Tabs.Screen
+          name="ask"
+          options={{
+            title: "Ask",
+            tabBarAccessibilityLabel: "Ask ArrivePing",
+            tabBarIcon: ({ color, focused }) => <Question color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
+          }}
+          listeners={{
+            // Same page as Profile → Ask ArrivePing, opened over the tabs.
+            tabPress: (e) => {
+              e.preventDefault();
+              router.push("/help");
+            },
           }}
         />
         {/* Full-screen job, thread and the job forms: part of the tabs so the tab bar never disappears.
