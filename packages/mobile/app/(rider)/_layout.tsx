@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from "expo-router";
+import { Tabs } from "expo-router";
 import { useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +21,6 @@ import { useCalendarAutoSync } from "../../lib/calendar-sync";
 import { TAB_BAR_CONTENT, useBottomBarPadding } from "../../lib/bottom-inset";
 
 export default function RiderLayout() {
-  const router = useRouter();
   // Above Android's navigation bar when the phone shows one (lib/bottom-inset-core.ts).
   const tabBarPad = useBottomBarPadding(28, 8);
   // Rider's own status drives whether native background GPS tracking runs at
@@ -185,13 +184,6 @@ export default function RiderLayout() {
           title: "Ask",
           tabBarAccessibilityLabel: "Ask ArrivePing",
           tabBarIcon: ({ color, focused }) => <Question color={color as string} size={24} weight={focused ? "fill" : "regular"} />,
-        }}
-        listeners={{
-          // Same page as Profile → Ask ArrivePing, opened over the tabs.
-          tabPress: (e) => {
-            e.preventDefault();
-            router.push("/help");
-          },
         }}
       />
     </Tabs>

@@ -549,7 +549,7 @@ export default function Profile() {
         </Card>
 
         <Card>
-          <Pressable onPress={() => router.push("/help")} style={s.linkRow} accessibilityRole="button" accessibilityLabel="Ask ArrivePing">
+          <Pressable onPress={() => router.navigate("/ask")} style={s.linkRow} accessibilityRole="button" accessibilityLabel="Ask ArrivePing">
             <Sparkle color={C.brand} size={18} weight="fill" />
             <Text style={s.linkTxt}>Ask ArrivePing</Text>
             <CaretRight color={C.muted} size={16} />

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Linking, Alert, type ScrollViewInstance } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 import { fetch as streamFetch } from "expo/fetch";
 import Constants from "expo-constants";
-import { ArrowLeft, Sparkle, PaperPlaneRight, BookOpen, PlayCircle, Lifebuoy, ThumbsUp, ThumbsDown } from "phosphor-react-native";
+import { Sparkle, PaperPlaneRight, BookOpen, PlayCircle, Lifebuoy, ThumbsUp, ThumbsDown } from "phosphor-react-native";
 import { authHeaders } from "../lib/auth";
 import { C, R, S, WIDE } from "../lib/theme";
 import { answerBlocks, boldSpans, HELP_LIMITS, sseParser, type HelpAction } from "../lib/help-ask-core";
@@ -20,10 +19,9 @@ const SUGGESTED = ["How do I reschedule a job?", "Why does the app need my locat
  * Ask ArrivePing: how-to questions answered as numbered steps naming the
  * real buttons (POST /api/help/ask). The server knows from the sign-in
  * whether this is an office person or a technician and answers for their
- * side of the app. Opened from Profile → Ask ArrivePing.
+ * side of the app. The Ask tab, also reached from Profile → Ask ArrivePing; the tab bar stays visible.
  */
-export default function HelpScreen() {
-  const router = useRouter();
+export function HelpScreen() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
   const scroll = useRef<ScrollViewInstance>(null);
@@ -103,13 +101,9 @@ export default function HelpScreen() {
   }
 
   return (
-    <SafeAreaView style={s.screen} edges={["top", "bottom"]}>
+    <SafeAreaView style={s.screen} edges={["top"]}>
       <View style={[s.topBar, WIDE]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back">
-          <ArrowLeft color={C.text} size={22} />
-        </Pressable>
         <Text style={s.topTitle}>Ask ArrivePing</Text>
-        <View style={{ width: 22 }} />
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView ref={scroll} contentContainerStyle={[s.content, WIDE]} keyboardShouldPersistTaps="handled" onContentSizeChange={() => turns.length && scroll.current?.scrollToEnd({ animated: true })}>
@@ -234,7 +228,7 @@ function ActionBtn({ icon, label, onPress, primary }: { icon: React.ReactNode; l
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: S.lg, paddingVertical: S.md },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: S.lg, paddingVertical: S.md },
   topTitle: { color: C.text, fontSize: 17, fontWeight: "800" },
   content: { padding: S.lg, gap: S.md, paddingBottom: S.xl },
   intro: { alignItems: "center", gap: S.sm, paddingTop: S.xl },
