@@ -176,21 +176,23 @@ export function HelpScreen() {
           )}
           {turns.length > 0 ? <Text style={s.fine}>Answers are written by AI from ArrivePing's own screens and guides.</Text> : null}
         </ScrollView>
-        <View style={[s.bar, WIDE]}>
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder={turns.length ? "Ask a follow-up…" : "Ask a question…"}
-            placeholderTextColor={C.muted}
-            style={s.input}
-            maxLength={HELP_LIMITS.question}
-            returnKeyType="send"
-            onSubmitEditing={() => ask(q)}
-            accessibilityLabel="Your question"
-          />
-          <Pressable onPress={() => ask(q)} disabled={!q.trim() || busy} style={[s.send, (!q.trim() || busy) && { opacity: 0.4 }]} accessibilityRole="button" accessibilityLabel="Ask">
-            <PaperPlaneRight color="#04121c" size={18} weight="fill" />
-          </Pressable>
+        <View style={s.barWrap}>
+          <View style={[s.bar, WIDE]}>
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder={turns.length ? "Ask a follow-up…" : "Ask a question…"}
+              placeholderTextColor={C.muted}
+              style={s.input}
+              maxLength={HELP_LIMITS.question}
+              returnKeyType="send"
+              onSubmitEditing={() => ask(q)}
+              accessibilityLabel="Your question"
+            />
+            <Pressable onPress={() => ask(q)} disabled={!q.trim() || busy} style={[s.send, (!q.trim() || busy) && { opacity: 0.4 }]} accessibilityRole="button" accessibilityLabel="Ask">
+              <PaperPlaneRight color="#04121c" size={18} weight="fill" />
+            </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -267,7 +269,9 @@ const s = StyleSheet.create({
   actionTxt: { color: C.text, fontSize: 14, fontWeight: "600" },
   voteRow: { flexDirection: "row", alignItems: "center", gap: S.md },
   fine: { color: C.muted, fontSize: 12, textAlign: "center" },
-  bar: { flexDirection: "row", gap: S.sm, paddingHorizontal: S.lg, paddingVertical: S.sm, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg2 },
+  // Full-bleed strip so the border and background reach the screen edges; the row inside keeps the content width.
+  barWrap: { borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.bg2 },
+  bar: { flexDirection: "row", gap: S.sm, paddingHorizontal: S.lg, paddingVertical: S.sm },
   input: { flex: 1, minHeight: 44, borderRadius: R.control, borderWidth: 1, borderColor: C.border, color: C.text, paddingHorizontal: S.md, fontSize: 16 },
   send: { width: 44, height: 44, borderRadius: R.control, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
 });
