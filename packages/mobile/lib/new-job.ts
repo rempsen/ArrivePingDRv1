@@ -102,3 +102,25 @@ export function buildAdminBooking(d: NewJobDraft, now: Date, opts: { force?: boo
   if (opts.force) body.force = true;
   return { ok: true, body };
 }
+
+/** What picking `next` as the client does to the address already on the draft. */
+export type ClientPick = { action: "set" } | { action: "replace"; address: string } | { action: "ask"; address: string };
+
+const addressOf = (c: DraftClient | null) => (c?.kind === "existing" ? (c.lastAddress ?? "").trim() : "");
+
+/**
+ * Picking the same client changes nothing. A different client replaces the
+ * address only when it was empty or just the previous client's own (so it
+ * isn't someone's typing); an address the dispatcher entered themselves is
+ * kept, or, when the new client has a different address on file, asked about.
+ */
+export function pickClient(d: NewJobDraft, next: DraftClient): ClientPick {
+  const prev = d.client;
+  const same = prev && prev.kind === next.kind && (next.kind !== "existing" || (prev.kind === "existing" && prev.id === next.id));
+  if (same) return { action: "set" };
+  const typed = d.address.trim();
+  const onFile = addressOf(next);
+  if (!typed || typed === addressOf(prev)) return { action: "replace", address: onFile };
+  if (!onFile || onFile === typed) return { action: "set" };
+  return { action: "ask", address: onFile };
+}

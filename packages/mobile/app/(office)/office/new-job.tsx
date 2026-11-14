@@ -17,7 +17,7 @@ import { getActiveCompany } from "../../../lib/active-company";
 import { useBoard } from "../../../lib/use-board";
 import { useServices, type ServiceRow } from "../../../lib/use-lookups";
 import { classifyResponse } from "../../../lib/dispatch-result";
-import { buildAdminBooking, EMPTY_DRAFT, type DraftErrors, type NewJobDraft, type Priority } from "../../../lib/new-job";
+import { buildAdminBooking, EMPTY_DRAFT, pickClient, type DraftErrors, type NewJobDraft, type Priority } from "../../../lib/new-job";
 import { asap, fmtInTz } from "../../../lib/when";
 
 const API = ((Constants.expoConfig?.extra?.apiUrl as string) ?? "").replace(/\/$/, "");
@@ -189,12 +189,19 @@ function NewJobScreen() {
         open={sheet === "client"}
         onClose={() => setSheet(null)}
         onPick={(c) => {
-          // A different client means a different place: replace the address
-          // (and drop the old coordinates) rather than keep the previous one.
-          const changed = !d.client || d.client.kind !== c.kind || (c.kind === "existing" && d.client.kind === "existing" && d.client.id !== c.id);
-          const prefill = c.kind === "existing" ? (c.lastAddress ?? "") : "";
-          patch(changed ? { client: c, address: prefill, lat: null, lng: null } : { client: c });
+          const pick = pickClient(d, c);
+          if (pick.action === "replace") patch({ client: c, address: pick.address, lat: null, lng: null });
+          else patch({ client: c });
           setSheet(null);
+          // iOS drops an alert raised while the sheet is still dismissing.
+          if (pick.action === "ask") {
+            setTimeout(() => {
+              Alert.alert("Use the client's address?", `${c.name} has ${pick.address} on file. Replace ${d.address.trim()}?`, [
+                { text: "Keep mine", style: "cancel" },
+                { text: "Replace", onPress: () => patch({ address: pick.address, lat: null, lng: null }) },
+              ]);
+            }, 400);
+          }
         }}
       />
       <ServiceSheet open={sheet === "service"} value={d.serviceId} onClose={() => setSheet(null)} onPick={pickService} />
